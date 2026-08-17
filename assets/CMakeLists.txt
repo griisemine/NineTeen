@@ -24,12 +24,19 @@ file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 # `--textures=` fait de la moindre faute de frappe dans un nom d'image une erreur
 # de build, là où elle se serait vue à l'exécution sous forme de substitut
 # procédural noyé dans le journal.
+# Le nombre de textures d'origine, compté ici plutôt qu'écrit à la main : c'est ce
+# qui fait qu'une image qui cesserait d'être employée casse le build au lieu de
+# disparaître du décor en silence.
+file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+list(LENGTH _room_textures ROOM_TEXTURE_COUNT)
+
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
             "${GEN}/scene/salle.lights.json" "${GEN}/scene/salle.scene.json"
     COMMAND roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
                     "${GEN}/scene/salle.gltf"
                     "--textures=${SRC_ROOM}/textures"
+                    "--expect-textures=${ROOM_TEXTURE_COUNT}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM

@@ -42,6 +42,8 @@
 #define RG_MAX_TEXTURES    64
 #define RG_MAX_LIGHTS     128        /* NS_MAX_LIGHTS */
 #define RG_MAX_OBJECTS   1024        /* NS_MAX_OBJECTS */
+#define RG_MAX_CABINETS    24        /* NS_MAX_CABINETS */
+#define RG_MAX_POIS        32        /* NS_MAX_POI */
 #define RG_MAX_TRIANGLES 250000
 
 /* Angles de lissage. Une arête sous ce seuil est adoucie, au-dessus elle reste
@@ -64,6 +66,34 @@ typedef struct rg_light {
     float panel_size[2];    /* emprise du luminaire dans la trame, en mètres */
 } rg_light;
 
+/*
+ * Une borne, telle qu'elle sera **déclarée** au moteur.
+ *
+ * Aujourd'hui le moteur devine tout cela : l'écran par des fractions inventées de
+ * la boîte englobante (centre 31 cm trop bas), l'orientation par le barycentre du
+ * troupeau de bornes, l'affectation des jeux par un tri en X puis Z qui ne colle
+ * pas aux images peintes sur les marquees. Trois déductions, trois erreurs.
+ */
+typedef struct rg_cabinet {
+    char  name[64];
+    char  game[32];
+    char  difficulty[16];
+    int   slot;
+    float bounds_min[3], bounds_max[3];
+    float screen_center[3];
+    float screen_normal[3];
+    float screen_size[2];       /* largeur et hauteur utiles de la dalle */
+    float player_anchor[3];
+    bool  attract;
+} rg_cabinet;
+
+typedef struct rg_poi {
+    char    name[64];
+    char    kind[24];
+    ns_aabb bounds;
+    float   anchor[3];
+} rg_poi;
+
 typedef struct rg_builder {
     tool_vec verts;         /* gltf_vertex — un seul pool, partagé (cf. gltf_write.h) */
     tool_vec meshes;        /* gltf_mesh */
@@ -82,10 +112,22 @@ typedef struct rg_builder {
     rg_light lights[RG_MAX_LIGHTS];
     size_t   light_count;
 
+    rg_cabinet cabinets[RG_MAX_CABINETS];
+    size_t     cabinet_count;
+
+    rg_poi pois[RG_MAX_POIS];
+    size_t poi_count;
+
     size_t triangle_count;
     ns_aabb bounds;
+    /* Emprise du dernier objet émis. Sert aux props qui déclarent un point
+     * d'intérêt : son volume est celui de sa géométrie, pas une boîte réécrite à
+     * la main dans la description — c'est précisément le genre de doublon qui
+     * finit par mentir. */
+    ns_aabb last_bounds;
 
     const char *texture_dir;    /* pour vérifier l'existence, NULL si non fourni */
+    int expect_textures;        /* < 0 : pas de contrôle de couverture */
 } rg_builder;
 
 static int material_index(const rg_builder *b, const char *name, const char *used_by)
@@ -160,7 +202,8 @@ static void emit_object(rg_builder *b, const char *name, geo_mesh *m, float smoo
     mesh->prim_count = prims.count;
 
     b->triangle_count += geo_mesh_tri_count(m);
-    b->bounds = ns_aabb_union(b->bounds, geo_mesh_bounds(m));
+    b->last_bounds = geo_mesh_bounds(m);
+    b->bounds = ns_aabb_union(b->bounds, b->last_bounds);
 
     if (b->meshes.count > RG_MAX_OBJECTS) {
         tool_fatalf("plus de %d objets : le moteur en tient %d (NS_MAX_OBJECTS)",
@@ -653,6 +696,425 @@ static void parse_mouldings(rg_builder *b, const tool_json *doc, const tool_json
 }
 
 /* ========================================================================== */
+/* Bornes d'arcade                                                            */
+/* ========================================================================== */
+
+/*
+ * La borne mérite un générateur à elle : elle est répétée dix-neuf fois, elle
+ * porte l'écran — la seule surface du décor dont la géométrie doit être exacte,
+ * puisqu'un jeu s'y affichera — et sa silhouette est ce qui fait lire la salle
+ * comme une salle d'arcade.
+ *
+ * **Cotes réelles**, et c'est un changement visible qu'il vaut mieux annoncer que
+ * laisser découvrir : 0,72 x 1,86 x 0,88 m. Le modèle de 2020 mélangeait deux
+ * échelles — ses bornes faisaient 2,39 m dans une salle de 2,92 m, soit des
+ * bornes de géant ou un plafond de cave. On garde l'échelle de l'architecture et
+ * on redimensionne les bornes ; elles paraîtront donc plus petites par rapport à
+ * la salle qu'à l'origine, et le hall y gagne le dégagement demandé.
+ *
+ * Repère local : la borne regarde +Z, son socle est en Y = 0, et elle est centrée
+ * en X. Le placement se fait ensuite par un lacet, comme pour tout le reste.
+ */
+#define RG_CAB_W  0.72f
+#define RG_CAB_H  1.86f
+#define RG_CAB_D  0.88f
+
+static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
+                          const tool_json_value *e, const char *owner,
+                          float screen_local[3], float screen_size[2])
+{
+    char m_body[64], m_screen[64], m_marquee[64], m_panel[64], m_trim[64];
+    tool_json_get_string(doc, e, "materialBody", m_body, sizeof m_body);
+    tool_json_get_string(doc, e, "screen", m_screen, sizeof m_screen);
+    tool_json_get_string(doc, e, "marquee", m_marquee, sizeof m_marquee);
+    tool_json_get_string(doc, e, "materialPanel", m_panel, sizeof m_panel);
+    tool_json_get_string(doc, e, "materialTrim", m_trim, sizeof m_trim);
+
+    const int body   = material_index(b, m_body, owner);
+    const int screen = material_index(b, m_screen, owner);
+    const int marq   = material_index(b, m_marquee[0] ? m_marquee : m_body, owner);
+    const int panel  = material_index(b, m_panel[0] ? m_panel : m_body, owner);
+    const int trim   = material_index(b, m_trim[0] ? m_trim : m_body, owner);
+
+    const geo_uv uv_body = material_uv(b, body);
+    const geo_uv uv_trim = material_uv(b, trim);
+    const float hw = RG_CAB_W * 0.5f, hd = RG_CAB_D * 0.5f;
+
+    /* --- caisson, socle en retrait, couronnement -------------------------- */
+    geo_mesh part; geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(RG_CAB_W, RG_CAB_H - 0.10f, RG_CAB_D), 0.012f,
+            GEO_FACE_NO_BOTTOM, &uv_body, body);
+    geo_xform x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(0.0f, 0.10f, 0.0f);
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    /* Le socle est en retrait de 3 cm : c'est l'ombre de ce retrait qui fait
+     * qu'une borne « pose » sur le sol au lieu d'y être posée. */
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.06f, 0.10f, RG_CAB_D - 0.06f), 0.006f,
+            GEO_FACE_SIDES, &uv_trim, trim);
+    x = GEO_XFORM_IDENTITY;
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    /* --- marquee ---------------------------------------------------------- */
+    /* Légèrement en saillie et incliné : un marquee est une boîte lumineuse
+     * rapportée, pas une décalcomanie. */
+    geo_panel(out, ns_v3_make(0.0f, 1.66f, hd + 0.013f),
+              ns_v3_make(0.0f, 0.10f, 1.0f), ns_v3_make(1, 0, 0),
+              RG_CAB_W - 0.06f, 0.30f, 0.0f, 0.0f, 1.0f, 1.0f, marq);
+
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.04f, 0.34f, 0.055f), 0.006f,
+            GEO_FACE_ALL & ~GEO_FACE_PZ, &uv_trim, trim);
+    x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(0.0f, 1.49f, hd - 0.012f);
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    /* --- écran ------------------------------------------------------------ */
+    /*
+     * **La seule surface dont la géométrie doit être juste.** Elle est déclarée
+     * au moteur, coordonnées comprises, et c'est ce qui remplace les fractions
+     * inventées de `load_cabinet_assignment` — lesquelles plaçaient le centre de
+     * l'écran 31 cm trop bas et large de 1,1 unité.
+     *
+     * Inclinée de 10° vers l'arrière, comme une vraie dalle d'arcade, et à
+     * 1,22 m : la hauteur d'yeux d'un joueur debout de 1,70 m qui regarde
+     * légèrement vers le bas.
+     */
+    const float sw = 0.56f, sh = 0.42f;
+    const float sy = 1.22f, sz = hd - 0.055f;
+    const float tilt = 10.0f * NS_DEG2RAD;
+    const ns_v3 snormal = ns_v3_make(0.0f, sinf(tilt), cosf(tilt));
+
+    geo_panel(out, ns_v3_make(0.0f, sy, sz), snormal, ns_v3_make(1, 0, 0),
+              sw, sh, 0.0f, 0.0f, 1.0f, 1.0f, screen);
+
+    screen_local[0] = 0.0f; screen_local[1] = sy; screen_local[2] = sz;
+    screen_size[0] = sw; screen_size[1] = sh;
+
+    /* Cadre de la dalle : quatre plats qui enferment l'écran. Sans eux l'image
+     * flotte sur le caisson et la borne perd son épaisseur. */
+    const float bez = 0.035f;
+    const struct { float cx, cy, w, h; } bezel[4] = {
+        {  0.0f, sy + sh * 0.5f + bez * 0.5f, sw + bez * 2.0f, bez },
+        {  0.0f, sy - sh * 0.5f - bez * 0.5f, sw + bez * 2.0f, bez },
+        { -(sw * 0.5f + bez * 0.5f), sy, bez, sh },
+        {  (sw * 0.5f + bez * 0.5f), sy, bez, sh },
+    };
+    for (int i = 0; i < 4; ++i) {
+        geo_mesh_init(&part);
+        geo_box(&part, ns_v3_make(bezel[i].w, bezel[i].h, 0.05f), 0.004f,
+                GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_trim, trim);
+        x = GEO_XFORM_IDENTITY;
+        /* Les plats suivent l'inclinaison de la dalle. */
+        x.origin = ns_v3_make(bezel[i].cx,
+                              bezel[i].cy - bezel[i].h * 0.5f,
+                              sz - 0.025f + (bezel[i].cy - sy) * tanf(tilt));
+        x.pitch = -tilt;
+        geo_mesh_append(out, &part, &x, -1);
+        geo_mesh_free(&part);
+    }
+
+    /* --- panneau de commande, joystick, boutons --------------------------- */
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.02f, 0.055f, 0.30f), 0.010f,
+            GEO_FACE_NO_BOTTOM, &uv_trim, panel);
+    x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(0.0f, 0.93f, hd + 0.10f);
+    x.pitch = 9.0f * NS_DEG2RAD;
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    /* Le dessous du panneau, qui le rattache au caisson : un porte-à-faux nu se
+     * voit tout de suite. */
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.06f, 0.16f, 0.22f), 0.008f,
+            GEO_FACE_SIDES | GEO_FACE_NY, &uv_body, body);
+    x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(0.0f, 0.78f, hd + 0.06f);
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    const int stick_mat = material_index(b, m_trim[0] ? m_trim : m_body, owner);
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(0.05f, 0.085f, 0.05f), 0.012f, GEO_FACE_NO_BOTTOM,
+            &uv_trim, stick_mat);
+    x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(-0.20f, 0.97f, hd + 0.10f);
+    x.roll = 0.16f;
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    for (int i = 0; i < 4; ++i) {
+        geo_mesh_init(&part);
+        geo_box(&part, ns_v3_make(0.038f, 0.016f, 0.038f), 0.007f,
+                GEO_FACE_NO_BOTTOM, &uv_trim, panel);
+        x = GEO_XFORM_IDENTITY;
+        x.origin = ns_v3_make(0.02f + (float)(i % 2) * 0.075f,
+                              0.958f + (float)(i / 2) * 0.004f,
+                              hd + 0.045f + (float)(i / 2) * 0.075f);
+        x.pitch = 9.0f * NS_DEG2RAD;
+        geo_mesh_append(out, &part, &x, -1);
+        geo_mesh_free(&part);
+    }
+
+    /* --- trappe à jetons -------------------------------------------------- */
+    geo_mesh_init(&part);
+    geo_box(&part, ns_v3_make(0.20f, 0.26f, 0.03f), 0.005f,
+            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_trim, trim);
+    x = GEO_XFORM_IDENTITY;
+    x.origin = ns_v3_make(0.0f, 0.44f, hd - 0.005f);
+    geo_mesh_append(out, &part, &x, -1);
+    geo_mesh_free(&part);
+
+    (void)hw;
+}
+
+static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_value *root)
+{
+    const tool_json_value *list = tool_json_get(doc, root, "cabinets");
+    const int count = tool_json_array_count(doc, list);
+
+    for (int i = 0; i < count; ++i) {
+        const tool_json_value *e = tool_json_at(doc, list, i);
+
+        /* 64 octets, la taille de `ns_cabinet.name` : un nom tronqué ici ne
+         * correspondrait plus à celui du maillage glTF, et le moteur ne pourrait
+         * plus relier la borne à sa géométrie — en silence. */
+        char name[64];
+        tool_json_get_string(doc, e, "name", name, sizeof name);
+        if (!name[0]) tool_fatalf("une borne sans nom (entrée %d)", i);
+        if (b->cabinet_count >= RG_MAX_CABINETS) {
+            tool_fatalf("plus de %d bornes : le moteur en tient %d (NS_MAX_CABINETS)",
+                        RG_MAX_CABINETS, RG_MAX_CABINETS);
+        }
+
+        float at[3];
+        tool_json_get_vec3(doc, e, "at", at, 0.0f);
+        const float yaw_deg = tool_json_get_float(doc, e, "yaw", 0.0f);
+        const float yaw = yaw_deg * NS_DEG2RAD;
+
+        float screen_local[3], screen_size[2];
+        geo_mesh local; geo_mesh_init(&local);
+        build_cabinet(b, &local, doc, e, name, screen_local, screen_size);
+
+        geo_xform x = GEO_XFORM_IDENTITY;
+        x.origin = ns_v3_make(at[0], at[1], at[2]);
+        x.yaw = yaw;
+
+        geo_mesh placed; geo_mesh_init(&placed);
+        geo_mesh_append(&placed, &local, &x, -1);
+        geo_mesh_free(&local);
+        emit_object(b, name, &placed, RG_SMOOTH_HARD);
+
+        /* Report du repère local vers le monde. Le lacet suit la convention de
+         * `geo_xform` : X' = X cos + Z sin, Z' = -X sin + Z cos. */
+        const float c = cosf(yaw), s = sinf(yaw);
+        rg_cabinet *cab = &b->cabinets[b->cabinet_count];
+        memset(cab, 0, sizeof *cab);
+        snprintf(cab->name, sizeof cab->name, "%s", name);
+        tool_json_get_string(doc, e, "game", cab->game, sizeof cab->game);
+        tool_json_get_string(doc, e, "difficulty", cab->difficulty, sizeof cab->difficulty);
+        if (!cab->game[0]) {
+            tool_fatalf("la borne « %s » ne dit pas à quoi elle joue — c'est "
+                        "précisément ce que le moteur devinait de travers", name);
+        }
+        cab->slot = (int)tool_json_get_float(doc, e, "slot", (float)b->cabinet_count);
+        cab->attract = tool_json_get_bool(doc, e, "attract", true);
+
+        cab->bounds_min[0] = b->last_bounds.min.x;
+        cab->bounds_min[1] = b->last_bounds.min.y;
+        cab->bounds_min[2] = b->last_bounds.min.z;
+        cab->bounds_max[0] = b->last_bounds.max.x;
+        cab->bounds_max[1] = b->last_bounds.max.y;
+        cab->bounds_max[2] = b->last_bounds.max.z;
+
+        cab->screen_center[0] = at[0] + screen_local[0] * c + screen_local[2] * s;
+        cab->screen_center[1] = at[1] + screen_local[1];
+        cab->screen_center[2] = at[2] - screen_local[0] * s + screen_local[2] * c;
+        cab->screen_normal[0] = s;
+        cab->screen_normal[1] = 0.0f;
+        cab->screen_normal[2] = c;
+        cab->screen_size[0] = screen_size[0];
+        cab->screen_size[1] = screen_size[1];
+
+        /* Où se plante le joueur : 70 cm devant l'écran, pieds au sol. Assez près
+         * pour que le bras atteigne le bouton en A7, assez loin pour ne pas
+         * traverser le panneau de commande, qui déborde déjà de 25 cm. */
+        cab->player_anchor[0] = cab->screen_center[0] + cab->screen_normal[0] * 0.70f;
+        cab->player_anchor[1] = at[1];
+        cab->player_anchor[2] = cab->screen_center[2] + cab->screen_normal[2] * 0.70f;
+
+        b->cabinet_count++;
+    }
+}
+
+/* ========================================================================== */
+/* Objets composés : mobilier, agencements, décor                             */
+/* ========================================================================== */
+
+/*
+ * Un « prop » est un objet nommé fait de plusieurs morceaux, placé et pivoté
+ * d'un bloc. Billard, comptoir, bureau, canapés, cabines de toilettes,
+ * distributeur, jukebox, affiches, enseignes : tout cela est une composition de
+ * boîtes et de panneaux, et n'a pas besoin d'un générateur dédié par meuble.
+ *
+ * Le compromis est assumé : un générateur par meuble donnerait de plus belles
+ * formes, mais vingt générateurs paramétrés une seule fois chacun sont vingt
+ * fois plus de code que de résultat. Les formes qui méritent vraiment un
+ * générateur — la borne d'arcade, le plafond — en ont un.
+ *
+ * Les coordonnées des morceaux sont LOCALES au prop : on décrit le meuble à
+ * l'origine, une fois, puis on le pose. C'est ce qui rend une description
+ * relisable, et ce qui permet de déplacer un meuble sans recalculer dix lignes.
+ */
+static void emit_prop_parts(rg_builder *b, const tool_json *doc, const tool_json_value *e,
+                            geo_mesh *out, const char *owner)
+{
+    const tool_json_value *parts = tool_json_get(doc, e, "parts");
+    const int count = tool_json_array_count(doc, parts);
+    if (count <= 0) tool_fatalf("« %s » n'a aucun morceau (\"parts\")", owner);
+
+    for (int i = 0; i < count; ++i) {
+        const tool_json_value *p = tool_json_at(doc, parts, i);
+
+        char mat_name[64];
+        tool_json_get_string(doc, p, "material", mat_name, sizeof mat_name);
+        const int mat = material_index(b, mat_name, owner);
+
+        char type[16];
+        tool_json_get_string(doc, p, "type", type, sizeof type);
+        if (!type[0]) snprintf(type, sizeof type, "box");
+
+        float at[3];
+        tool_json_get_vec3(doc, p, "at", at, 0.0f);
+        const float yaw   = tool_json_get_float(doc, p, "yaw", 0.0f) * NS_DEG2RAD;
+        const float pitch = tool_json_get_float(doc, p, "pitch", 0.0f) * NS_DEG2RAD;
+        const float roll  = tool_json_get_float(doc, p, "roll", 0.0f) * NS_DEG2RAD;
+
+        geo_uv uv = material_uv(b, mat);
+        const float over = tool_json_get_float(doc, p, "uvMetres", 0.0f);
+        if (over > 0.0f) uv = geo_uv_tile(over);
+
+        geo_mesh piece; geo_mesh_init(&piece);
+
+        if (strcmp(type, "box") == 0) {
+            float size[3];
+            if (tool_json_get_floats(doc, p, "size", size, 3, 0.0f) != 3) {
+                tool_fatalf("« %s », morceau %d : pas de taille [x, y, z]", owner, i);
+            }
+            uint32_t faces = GEO_FACE_ALL;
+            char mask[16];
+            tool_json_get_string(doc, p, "faces", mask, sizeof mask);
+            if (strcmp(mask, "sides") == 0)         faces = GEO_FACE_SIDES;
+            else if (strcmp(mask, "noBottom") == 0) faces = GEO_FACE_NO_BOTTOM;
+            geo_box(&piece, ns_v3_make(size[0], size[1], size[2]),
+                    tool_json_get_float(doc, p, "chamfer", 0.008f), faces, &uv, mat);
+        } else if (strcmp(type, "panel") == 0) {
+            float size[2];
+            if (tool_json_get_floats(doc, p, "size", size, 2, 0.0f) != 2) {
+                tool_fatalf("« %s », morceau %d : pas de taille [largeur, hauteur]", owner, i);
+            }
+            /* Le panneau est décrit dans son plan local (normale +Z, droite +X)
+             * puis orienté par la transformation, comme tout le reste. Son UV est
+             * explicite : une affiche n'a pas droit à la répétition.
+             *
+             * `tool_json_get_floats` garnit TOUTES les composantes du repli avant
+             * de chercher la clé — c'est ce qui permet de distinguer « absent » de
+             * « présent mais court ». Écrire directement dans `rect` écrasait donc
+             * le rectangle par défaut (0,0,1,1) par (0,0,0,0) dès que la clé
+             * manquait, et les huit affiches échantillonnaient un unique texel :
+             * elles sortaient en aplats pâles, ce que la cible d'albédo a montré
+             * du premier coup. */
+            float rect[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+            float given[4];
+            if (tool_json_get_floats(doc, p, "uvRect", given, 4, 0.0f) == 4) {
+                memcpy(rect, given, sizeof rect);
+            }
+            geo_panel(&piece, ns_v3_zero(), ns_v3_make(0, 0, 1), ns_v3_make(1, 0, 0),
+                      size[0], size[1], rect[0], rect[1], rect[2], rect[3], mat);
+        } else {
+            tool_fatalf("« %s », morceau %d : type « %s » inconnu (box, panel)",
+                        owner, i, type);
+        }
+
+        geo_xform x = GEO_XFORM_IDENTITY;
+        x.origin = ns_v3_make(at[0], at[1], at[2]);
+        x.yaw = yaw; x.pitch = pitch; x.roll = roll;
+        geo_mesh_append(out, &piece, &x, -1);
+        geo_mesh_free(&piece);
+    }
+}
+
+static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_value *root)
+{
+    const tool_json_value *list = tool_json_get(doc, root, "props");
+    const int count = tool_json_array_count(doc, list);
+
+    for (int i = 0; i < count; ++i) {
+        const tool_json_value *e = tool_json_at(doc, list, i);
+
+        /* 60 octets : `instance_name` peut y ajouter un suffixe « _12 », et le
+         * tout doit tenir dans les 64 de `ns_poi.name` sans être tronqué. */
+        char base_name[56];
+        tool_json_get_string(doc, e, "name", base_name, sizeof base_name);
+        if (!base_name[0]) tool_fatalf("un objet sans nom (entrée %d de \"props\")", i);
+
+        float at[3];
+        tool_json_get_vec3(doc, e, "at", at, 0.0f);
+        const float yaw = tool_json_get_float(doc, e, "yaw", 0.0f);
+
+        const rg_repeat rep = read_repeat(doc, e);
+        for (int k = 0; k < rep.count; ++k) {
+            geo_mesh local; geo_mesh_init(&local);
+            emit_prop_parts(b, doc, e, &local, base_name);
+
+            geo_xform x = GEO_XFORM_IDENTITY;
+            x.origin = ns_v3_make(at[0] + rep.step.x * (float)k,
+                                  at[1] + rep.step.y * (float)k,
+                                  at[2] + rep.step.z * (float)k);
+            x.yaw = (yaw + rep.yaw_step * (float)k) * NS_DEG2RAD;
+
+            geo_mesh placed; geo_mesh_init(&placed);
+            geo_mesh_append(&placed, &local, &x, -1);
+            geo_mesh_free(&local);
+
+            /* 64 octets, comme `ns_poi.name` : un nom tronqué ici désignerait un
+             * lieu que le moteur ne saurait plus rattacher à sa géométrie. */
+            char name[64];
+            instance_name(name, sizeof name, base_name, k, rep.count);
+            emit_object(b, name, &placed, RG_SMOOTH_HARD);
+
+            /* Un point d'intérêt déclaré : le moteur cessera de repérer le
+             * billard et le canapé en cherchant des sous-chaînes dans les noms de
+             * nœuds du glTF. */
+            char poi_kind[24];
+            tool_json_get_string(doc, e, "poi", poi_kind, sizeof poi_kind);
+            if (poi_kind[0]) {
+                if (b->poi_count >= RG_MAX_POIS) {
+                    tool_fatalf("plus de %d points d'intérêt (NS_MAX_POI)", RG_MAX_POIS);
+                }
+                rg_poi *poi = &b->pois[b->poi_count++];
+                memset(poi, 0, sizeof *poi);
+                snprintf(poi->name, sizeof poi->name, "%s", name);
+                snprintf(poi->kind, sizeof poi->kind, "%s", poi_kind);
+                float anchor[3];
+                tool_json_get_vec3(doc, e, "anchor", anchor, 0.0f);
+                /* L'ancre est locale au meuble, comme ses morceaux. */
+                const float c = cosf(x.yaw), s = sinf(x.yaw);
+                poi->anchor[0] = x.origin.x + anchor[0] * c + anchor[2] * s;
+                poi->anchor[1] = x.origin.y + anchor[1];
+                poi->anchor[2] = x.origin.z - anchor[0] * s + anchor[2] * c;
+                poi->bounds = b->last_bounds;
+            }
+        }
+    }
+}
+
+/* ========================================================================== */
 /* Plafond en dalles                                                          */
 /* ========================================================================== */
 
@@ -982,10 +1444,59 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
         }
         fprintf(f, " }%s\n", (i + 1 < view_count) ? "," : "");
     }
+    fprintf(f, "  ],\n");
+
+    /*
+     * Les bornes, DÉCLARÉES. C'est le bloc qui supprime trois heuristiques d'un
+     * coup : les fractions inventées de la boîte englobante pour situer l'écran,
+     * le barycentre du troupeau pour deviner vers où une borne regarde, et le tri
+     * en X puis Z pour affecter les jeux. Aucune ne pouvait être juste, parce
+     * qu'aucune n'avait l'information.
+     */
+    fprintf(f, "  \"cabinets\": [\n");
+    for (size_t i = 0; i < b->cabinet_count; ++i) {
+        const rg_cabinet *c = &b->cabinets[i];
+        fprintf(f, "    { \"name\": \"%s\", \"slot\": %d, \"game\": \"%s\", "
+                   "\"difficulty\": \"%s\", \"attract\": %s,\n",
+                c->name, c->slot, c->game, c->difficulty[0] ? c->difficulty : "normal",
+                c->attract ? "true" : "false");
+        fprintf(f, "      \"bboxMin\": [%.4f, %.4f, %.4f], "
+                   "\"bboxMax\": [%.4f, %.4f, %.4f],\n",
+                (double)c->bounds_min[0], (double)c->bounds_min[1], (double)c->bounds_min[2],
+                (double)c->bounds_max[0], (double)c->bounds_max[1], (double)c->bounds_max[2]);
+        fprintf(f, "      \"screenCenter\": [%.4f, %.4f, %.4f], "
+                   "\"screenNormal\": [%.4f, %.4f, %.4f], "
+                   "\"screenWidth\": %.4f, \"screenHeight\": %.4f,\n",
+                (double)c->screen_center[0], (double)c->screen_center[1],
+                (double)c->screen_center[2],
+                (double)c->screen_normal[0], (double)c->screen_normal[1],
+                (double)c->screen_normal[2],
+                (double)c->screen_size[0], (double)c->screen_size[1]);
+        fprintf(f, "      \"playerAnchor\": [%.4f, %.4f, %.4f] }%s\n",
+                (double)c->player_anchor[0], (double)c->player_anchor[1],
+                (double)c->player_anchor[2],
+                (i + 1 < b->cabinet_count) ? "," : "");
+    }
+    fprintf(f, "  ],\n");
+
+    /* Les lieux du décor, déclarés eux aussi. Le moteur les repérait en cherchant
+     * des sous-chaînes dans les noms de nœuds du glTF — une seconde analyse du
+     * fichier, dont le champ `bounds` n'était d'ailleurs jamais rempli. */
+    fprintf(f, "  \"pois\": [\n");
+    for (size_t i = 0; i < b->poi_count; ++i) {
+        const rg_poi *p = &b->pois[i];
+        fprintf(f, "    { \"name\": \"%s\", \"kind\": \"%s\", "
+                   "\"boundsMin\": [%.3f, %.3f, %.3f], "
+                   "\"boundsMax\": [%.3f, %.3f, %.3f], "
+                   "\"anchor\": [%.3f, %.3f, %.3f] }%s\n",
+                p->name, p->kind,
+                (double)p->bounds.min.x, (double)p->bounds.min.y, (double)p->bounds.min.z,
+                (double)p->bounds.max.x, (double)p->bounds.max.y, (double)p->bounds.max.z,
+                (double)p->anchor[0], (double)p->anchor[1], (double)p->anchor[2],
+                (i + 1 < b->poi_count) ? "," : "");
+    }
     fprintf(f, "  ]\n}\n");
     fclose(f);
-
-    (void)b;
 }
 
 /* ========================================================================== */
@@ -996,18 +1507,28 @@ static void usage(void)
 {
     fprintf(stderr,
         "usage : roomgen <salle.room.json> <sortie.gltf> [--textures=REP]\n"
+        "                [--expect-textures=N]\n"
         "\n"
-        "  --textures=REP  vérifie que chaque texture nommée existe dans REP.\n"
-        "                  Sans cette option, une faute de frappe se découvre à\n"
-        "                  l'exécution, sous forme de substitut procédural.\n");
+        "  --textures=REP        vérifie que chaque texture nommée existe dans REP.\n"
+        "                        Sans cette option, une faute de frappe se découvre\n"
+        "                        à l'exécution, en substitut procédural.\n"
+        "  --expect-textures=N   exige que la salle en référence exactement N.\n"
+        "                        CMake y met le nombre de fichiers réellement\n"
+        "                        présents : une texture d'origine qui cesserait\n"
+        "                        d'être employée casse alors le build au lieu de\n"
+        "                        disparaître du décor sans un mot.\n");
     exit(2);
 }
 
 int main(int argc, char **argv)
 {
     const char *in_path = NULL, *out_path = NULL, *texture_dir = NULL;
+    int expect_textures = -1;
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--textures=", 11) == 0) texture_dir = argv[i] + 11;
+        else if (strncmp(argv[i], "--expect-textures=", 18) == 0) {
+            expect_textures = atoi(argv[i] + 18);
+        }
         else if (argv[i][0] == '-') usage();
         else if (!in_path) in_path = argv[i];
         else if (!out_path) out_path = argv[i];
@@ -1038,6 +1559,7 @@ int main(int argc, char **argv)
     tool_vec_init(&b.prim_blocks, sizeof(geo_primitives));
     b.bounds = ns_aabb_empty();
     b.texture_dir = texture_dir;
+    b.expect_textures = expect_textures;
 
     const tool_json_value *room = tool_json_get(&doc, root, "room");
     if (!room) tool_fatalf("%s : pas de bloc \"room\"", in_path);
@@ -1054,8 +1576,26 @@ int main(int argc, char **argv)
     parse_ceilings(&b, &doc, root);
     parse_boxes(&b, &doc, root);
     parse_mouldings(&b, &doc, root);
+    parse_cabinets(&b, &doc, root);
+    parse_props(&b, &doc, root);
 
     if (b.meshes.count == 0) tool_fatalf("%s : la description ne produit aucun objet", in_path);
+
+    /*
+     * Couverture des textures d'origine.
+     *
+     * Les 58 images de 2020 sont ce qui garde la même salle : c'est le seul
+     * élément du décor qui n'a pas été réécrit. En référencer 57 signifierait
+     * qu'un pan du décor a disparu — et c'est exactement le genre de perte qui ne
+     * se remarque pas sur une capture, puisqu'il n'y a rien à voir là où il n'y a
+     * plus rien.
+     */
+    if (b.expect_textures >= 0 && (int)b.texture_count != b.expect_textures) {
+        tool_fatalf("la salle référence %zu textures, il en existe %d dans le "
+                    "dossier d'origine : soit une image a cessé d'être employée, "
+                    "soit une a été ajoutée sans être placée",
+                    b.texture_count, b.expect_textures);
+    }
 
     gltf_scene scene;
     memset(&scene, 0, sizeof scene);
@@ -1084,9 +1624,10 @@ int main(int argc, char **argv)
     write_scene_json(&doc, root, &b, annex);
 
     tool_infof("salle : %zu objets, %zu triangles, %zu sommets, %zu matériaux, "
-               "%zu textures, %zu lumières",
+               "%zu textures, %zu lumières, %zu bornes, %zu lieux",
                b.meshes.count, b.triangle_count, b.verts.count,
-               b.material_count, b.texture_count, b.light_count);
+               b.material_count, b.texture_count, b.light_count,
+               b.cabinet_count, b.poi_count);
     tool_infof("emprise : (%.2f %.2f %.2f) à (%.2f %.2f %.2f) m, binaire %zu octets",
                (double)b.bounds.min.x, (double)b.bounds.min.y, (double)b.bounds.min.z,
                (double)b.bounds.max.x, (double)b.bounds.max.y, (double)b.bounds.max.z,

@@ -148,6 +148,7 @@ typedef struct ns_cabinet {
     ns_aabb bounds;
     ns_v3   screen_center;       /* point d'où part la lumière de l'écran */
     ns_v3   screen_normal;       /* vers où la borne regarde */
+    float   screen_width, screen_height;  /* dalle utile, en mètres */
     ns_v3   player_anchor;       /* où se place le joueur pour jouer */
     bool    attract;
 } ns_cabinet;
@@ -288,6 +289,19 @@ typedef struct ns_scene {
     float player_yaw;
     bool  has_player_start;
     bool  has_declared_room_bounds;
+    /*
+     * Vrai quand le fichier de scène décrit lui-même ses bornes et ses lieux. Les
+     * heuristiques correspondantes ne tournent alors pas du tout : elles ne sont
+     * pas « corrigées » par la donnée déclarée, elles ne s'exécutent pas. C'est ce
+     * qui garantit qu'une valeur devinée ne peut pas se glisser dans un champ que
+     * personne n'a rempli.
+     *
+     * Faux pour la salle de 2020, qui n'a que son OBJ à offrir : l'ancien chemin
+     * reste vivant derrière ce drapeau, ce qui permet de comparer les deux salles
+     * dans le même binaire.
+     */
+    bool  has_declared_cabinets;
+    bool  has_declared_pois;
 
     ns_viewpoint viewpoints[NS_MAX_VIEWPOINTS];
     uint32_t     viewpoint_count;

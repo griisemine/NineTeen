@@ -76,6 +76,58 @@ static int32_t load_one(ns_rhi *r, ns_scene *s, uint32_t *cursor,
 static void add_cabinet_screen_lights(ns_scene *s);
 static void detect_points_of_interest(ns_scene *s, const char *gltf_logical);
 
+/*
+ * Nature d'un lieu, depuis son nom.
+ *
+ * Deux appelants aux exigences opposées, et c'est pour cela que la table est ici
+ * plutôt que dans l'un des deux : la salle reconstruite passe une nature
+ * **déclarée**, qu'on veut voir refusée si elle est mal orthographiée ; l'ancien
+ * chemin passe un nom de nœud glTF où l'on cherche une sous-chaîne, faute de
+ * mieux. Une seule liste de vocabulaire, deux façons de l'interroger.
+ */
+static ns_poi_kind ns_poi_kind_from_name(const char *name)
+{
+    static const struct { const char *token; ns_poi_kind kind; } table[] = {
+        { "billiard",    NS_POI_BILLIARD },
+        { "billard",     NS_POI_BILLIARD },
+        { "sofa",        NS_POI_SOFA },
+        { "canape",      NS_POI_SOFA },
+        { "bar",         NS_POI_BAR },
+        { "accueil",     NS_POI_BAR },
+        { "radio",       NS_POI_RADIO },
+        { "toilette",    NS_POI_TOILETS },
+        { "toilettes",   NS_POI_TOILETS },
+        { "toilets",     NS_POI_TOILETS },
+        { "lavabo",      NS_POI_TOILETS },
+        { "porte",       NS_POI_EXIT },
+        { "exit",        NS_POI_EXIT },
+        { "leaderboard", NS_POI_LEADERBOARD },
+        { "classement",  NS_POI_LEADERBOARD },
+    };
+    if (!name || !name[0]) return NS_POI_NONE;
+    for (size_t t = 0; t < SDL_arraysize(table); ++t) {
+        if (SDL_strcasecmp(name, table[t].token) == 0) return table[t].kind;
+    }
+    return NS_POI_NONE;
+}
+
+static ns_poi_kind ns_poi_kind_in_name(const char *name)
+{
+    static const struct { const char *token; ns_poi_kind kind; } table[] = {
+        { "billiard", NS_POI_BILLIARD }, { "billard", NS_POI_BILLIARD },
+        { "sofa", NS_POI_SOFA },         { "canape", NS_POI_SOFA },
+        { "bar_", NS_POI_BAR },          { "accueil", NS_POI_BAR },
+        { "radio", NS_POI_RADIO },       { "toilette", NS_POI_TOILETS },
+        { "lavabo", NS_POI_TOILETS },    { "porte", NS_POI_EXIT },
+        { "exit", NS_POI_EXIT },
+    };
+    if (!name) return NS_POI_NONE;
+    for (size_t t = 0; t < SDL_arraysize(table); ++t) {
+        if (SDL_strcasestr(name, table[t].token)) return table[t].kind;
+    }
+    return NS_POI_NONE;
+}
+
 /* ========================================================================== */
 /* Lumières et bornes (fichiers JSON annexes)                                 */
 /* ========================================================================== */
@@ -252,9 +304,91 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
         s->viewpoint_count++;
     }
 
-    NS_INFO("scène déclarée : %.3f unité/m, %u point(s) de vue%s",
+    /*
+     * Les bornes, telles que la salle les déclare.
+     *
+     * Ce bloc remplace trois déductions, et il faut être précis sur ce qu'elles
+     * coûtaient : les fractions inventées de la boîte englobante plaçaient le
+     * centre de l'écran ~31 cm trop bas ; l'orientation venait du barycentre du
+     * troupeau de bornes, donc une borne isolée regardait n'importe où ; et
+     * l'affectation des jeux suivait un tri en X puis Z qui ne correspondait pas
+     * aux images peintes sur les marquees.
+     */
+    const ns_json_value *cabs = ns_json_get(&doc, root, "cabinets");
+    const int cab_count = ns_json_array_count(&doc, cabs);
+    if (cab_count > 0) {
+        s->cabinet_count = 0;
+        for (int i = 0; i < cab_count && s->cabinet_count < NS_MAX_CABINETS; ++i) {
+            const ns_json_value *e = ns_json_at(&doc, cabs, i);
+            ns_cabinet *c = &s->cabinets[s->cabinet_count];
+            SDL_zerop(c);
+
+            ns_json_get_string(&doc, e, "name", c->name, sizeof c->name);
+            ns_json_get_string(&doc, e, "game", c->game, sizeof c->game);
+            ns_json_get_string(&doc, e, "difficulty", c->difficulty, sizeof c->difficulty);
+            c->slot = (int)ns_json_get_float(&doc, e, "slot", (float)i);
+            c->attract = ns_json_get_bool(&doc, e, "attract", true);
+
+            float v[3];
+            ns_json_get_vec3(&doc, e, "bboxMin", v, 0.0f);
+            c->bounds.min = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "bboxMax", v, 0.0f);
+            c->bounds.max = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "screenCenter", v, 0.0f);
+            c->screen_center = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "screenNormal", v, 0.0f);
+            c->screen_normal = ns_v3_norm(ns_v3_make(v[0], v[1], v[2]));
+            ns_json_get_vec3(&doc, e, "playerAnchor", v, 0.0f);
+            c->player_anchor = ns_v3_make(v[0], v[1], v[2]);
+
+            /* Deux scalaires plutôt qu'un couple : le lecteur du moteur n'a que
+             * `vec3`, et lui faire lire un tableau de deux éléments demanderait
+             * une API de plus pour économiser une ligne. */
+            c->screen_width  = ns_json_get_float(&doc, e, "screenWidth", 0.0f);
+            c->screen_height = ns_json_get_float(&doc, e, "screenHeight", 0.0f);
+
+            s->cabinet_count++;
+        }
+        s->has_declared_cabinets = true;
+    }
+
+    const ns_json_value *pois = ns_json_get(&doc, root, "pois");
+    const int poi_count = ns_json_array_count(&doc, pois);
+    if (poi_count > 0) {
+        s->poi_count = 0;
+        for (int i = 0; i < poi_count && s->poi_count < NS_MAX_POI; ++i) {
+            const ns_json_value *e = ns_json_at(&doc, pois, i);
+            ns_poi *p = &s->pois[s->poi_count];
+            SDL_zerop(p);
+
+            ns_json_get_string(&doc, e, "name", p->name, sizeof p->name);
+            char kind[24];
+            ns_json_get_string(&doc, e, "kind", kind, sizeof kind);
+            p->kind = ns_poi_kind_from_name(kind);
+            if (p->kind == NS_POI_NONE) {
+                NS_WARN("lieu « %s » de nature inconnue (« %s ») : ignoré", p->name, kind);
+                continue;
+            }
+
+            float v[3];
+            ns_json_get_vec3(&doc, e, "boundsMin", v, 0.0f);
+            p->bounds.min = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "boundsMax", v, 0.0f);
+            p->bounds.max = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "anchor", v, 0.0f);
+            p->anchor = ns_v3_make(v[0], v[1], v[2]);
+
+            s->poi_count++;
+        }
+        s->has_declared_pois = true;
+    }
+
+    NS_INFO("scène déclarée : %.3f unité/m, %u point(s) de vue%s, %u borne(s), "
+            "%u lieu(x)",
             (double)s->units_per_metre, s->viewpoint_count,
-            s->has_declared_room_bounds ? ", emprise jouable déclarée" : "");
+            s->has_declared_room_bounds ? ", emprise jouable déclarée" : "",
+            s->has_declared_cabinets ? s->cabinet_count : 0u,
+            s->has_declared_pois ? s->poi_count : 0u);
     ns_arena_restore(&s->arena, mark);
 }
 
@@ -737,16 +871,32 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
     logical_sibling(gltf_logical, annex, sibling, sizeof sibling);
     load_lights(out, sibling);
 
-    logical_sibling(gltf_logical, "cabinets.json", sibling, sizeof sibling);
-    load_cabinet_assignment(out, sibling);
-    add_cabinet_screen_lights(out);
-    detect_points_of_interest(out, gltf_logical);
-
-    /* Le fichier de scène passe en dernier : ce qu'il déclare prime sur ce que
-     * les étapes précédentes ont déduit. */
+    /*
+     * Le fichier de scène passe AVANT les déductions, et non après.
+     *
+     * L'ordre inverse — deviner puis écraser — laisse chaque champ que la
+     * déclaration ne mentionne pas garni d'une valeur devinée, sans qu'on puisse
+     * dire lequel. C'est comme ça qu'une orientation d'écran calculée par
+     * barycentre survit dans une salle qui déclare pourtant la sienne. Ici, quand
+     * la salle se décrit, les heuristiques **ne s'exécutent pas** : il n'y a rien
+     * à écraser, et rien à vérifier.
+     *
+     * L'ancienne salle, qui n'a que son OBJ, prend l'autre branche. Les deux
+     * chemins vivent dans le même binaire, ce qui est ce qui rend la comparaison
+     * possible.
+     */
     SDL_snprintf(annex, sizeof annex, "%s.scene.json", base);
     logical_sibling(gltf_logical, annex, sibling, sizeof sibling);
     load_scene_sidecar(out, sibling);
+
+    if (!out->has_declared_cabinets) {
+        logical_sibling(gltf_logical, "cabinets.json", sibling, sizeof sibling);
+        load_cabinet_assignment(out, sibling);
+    }
+    add_cabinet_screen_lights(out);
+    if (!out->has_declared_pois) {
+        detect_points_of_interest(out, gltf_logical);
+    }
 
     /*
      * Emprise jouable : union des bornes et des lumières, élargie d'une marge
@@ -917,8 +1067,18 @@ static void add_cabinet_screen_lights(ns_scene *s)
         const ns_v3 p = ns_v3_add(c->screen_center, ns_v3_scale(c->screen_normal, 0.45f));
         l->position[0] = p.x; l->position[1] = p.y; l->position[2] = p.z;
         l->color[0] = tint[0]; l->color[1] = tint[1]; l->color[2] = tint[2];
-        l->intensity = 240.0f;
-        l->range = 6.2f;
+        /*
+         * 90 et non 240, 4,5 m et non 6,2.
+         *
+         * Ces valeurs avaient été réglées sur la salle de 2020, où quinze bornes
+         * se serraient dans un décor à 2,06 unités par mètre. La salle
+         * reconstruite en aligne dix-neuf, en mètres, contre des murs à trois
+         * mètres : à 240 elles noyaient l'allée entière dans la teinte du jeu le
+         * plus proche — un couloir vert vif d'un bout à l'autre. Un écran de
+         * borne éclaire son joueur et un mètre de moquette, pas une salle.
+         */
+        l->intensity = 90.0f;
+        l->range = 4.5f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
         /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,
@@ -980,28 +1140,11 @@ static void detect_points_of_interest(ns_scene *s, const char *gltf_logical)
         return;
     }
 
-    static const struct { const char *token; ns_poi_kind kind; } table[] = {
-        { "billiard", NS_POI_BILLIARD },
-        { "billard",  NS_POI_BILLIARD },
-        { "sofa",     NS_POI_SOFA },
-        { "canape",   NS_POI_SOFA },
-        { "bar_",     NS_POI_BAR },
-        { "accueil",  NS_POI_BAR },
-        { "radio",    NS_POI_RADIO },
-        { "toilette", NS_POI_TOILETS },
-        { "lavabo",   NS_POI_TOILETS },
-        { "porte",    NS_POI_EXIT },
-        { "exit",     NS_POI_EXIT },
-    };
-
     for (cgltf_size n = 0; n < data->nodes_count && s->poi_count < NS_MAX_POI; ++n) {
         const cgltf_node *node = &data->nodes[n];
         if (!node->name || !node->mesh) continue;
 
-        ns_poi_kind kind = NS_POI_NONE;
-        for (size_t t = 0; t < SDL_arraysize(table); ++t) {
-            if (SDL_strcasestr(node->name, table[t].token)) { kind = table[t].kind; break; }
-        }
+        const ns_poi_kind kind = ns_poi_kind_in_name(node->name);
         if (kind == NS_POI_NONE) continue;
 
         /* Éviter les doublons : le décor contient plusieurs radios et plusieurs
