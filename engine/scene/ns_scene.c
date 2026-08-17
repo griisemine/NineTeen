@@ -114,6 +114,10 @@ static void load_lights(ns_scene *s, const char *lights_logical)
         l->range     = ns_json_get_float(&doc, e, "range", 8.0f);
         l->type      = NS_LIGHT_POINT;
         l->shadow_index = -1;
+        /* 0,22 m par défaut : l'ampoule d'applique pour laquelle la constante
+         * globale du shader avait été dimensionnée. Les fichiers qui ne déclarent
+         * pas de rayon gardent donc exactement le comportement d'avant. */
+        l->source_radius = ns_json_get_float(&doc, e, "radius", 0.22f);
 
         a->flicker        = ns_json_get_bool(&doc, e, "flicker", false);
         a->base_intensity = l->intensity;
@@ -917,6 +921,10 @@ static void add_cabinet_screen_lights(ns_scene *s)
         l->range = 6.2f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
+        /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,
+         * pas une ampoule, et son demi-rayon borne la décroissance de sorte que
+         * le joueur qui s'en approche soit éclairé sans être brûlé. */
+        l->source_radius = 0.20f;
 
         a->base_intensity = l->intensity;
         /* Pulsation lente et désynchronisée : un écran de jeu n'a pas une

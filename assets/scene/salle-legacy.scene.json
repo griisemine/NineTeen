@@ -28,6 +28,13 @@
       "pitch": -10.0
     },
     {
+      "name": "plafond",
+      "_comment": "Regard leve vers le plafond, a hauteur d'oeil (3,5 unites = 1,70 m, la valeur de l'auteur). Le pendant exact de la capture de la salle reconstruite : c'est la paire qui tranche la question du pavage.",
+      "position": [0.0, 3.5, 5.4],
+      "yaw": 0.0,
+      "pitch": 34.0
+    },
+    {
       "name": "orbite",
       "_comment": "Tour lent autour du centre de la salle, a hauteur d'homme un peu surelevee. Sert a juger l'ensemble plutot qu'un detail.",
       "orbit": true,

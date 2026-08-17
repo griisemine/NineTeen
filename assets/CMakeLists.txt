@@ -13,13 +13,25 @@ set(GEN      "${CMAKE_BINARY_DIR}/assets")
 file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 
 # ---------------------------------------------------------------------------
-# 1. La salle : OBJ Blender -> glTF 2.0 + lumières déduites
+# 1. La salle : description -> glTF 2.0 + lumières et scène déclarées
 # ---------------------------------------------------------------------------
+# `scene/salle.room.json` est une SOURCE versionnée, pas un asset : elle décrit
+# la salle en mètres, objet par objet, et `roomgen` en tire la géométrie, les
+# lumières et le fichier de scène. Rien n'y est déduit — c'est ce qui supprime
+# les six heuristiques qui produisaient la moquette vernie, les seize lampes de
+# plafond dont sept hors des murs, et les écrans devinés à la fraction près.
+#
+# `--textures=` fait de la moindre faute de frappe dans un nom d'image une erreur
+# de build, là où elle se serait vue à l'exécution sous forme de substitut
+# procédural noyé dans le journal.
 add_custom_command(
-    OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin" "${GEN}/scene/salle.lights.json"
-    COMMAND obj2gltf "${SRC_ROOM}/textures/salle.obj" "${GEN}/scene/salle.gltf"
-    DEPENDS obj2gltf "${SRC_ROOM}/textures/salle.obj" "${SRC_ROOM}/textures/salle.mtl"
-    COMMENT "Salle : OBJ -> glTF 2.0 (matériaux PBR, tangentes, lumières)"
+    OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
+            "${GEN}/scene/salle.lights.json" "${GEN}/scene/salle.scene.json"
+    COMMAND roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
+                    "${GEN}/scene/salle.gltf"
+                    "--textures=${SRC_ROOM}/textures"
+    DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
+    COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
 
@@ -153,6 +165,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.gltf"
         "${GEN}/scene/salle.nsbvh"
         "${GEN}/scene/salle.lights.json"
+        "${GEN}/scene/salle.scene.json"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

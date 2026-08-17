@@ -41,6 +41,34 @@ nineteen_set_warnings(ns_test_geo)
 nineteen_apply_sanitizers(ns_test_geo)
 add_test(NAME geo COMMAND ns_test_geo)
 
+# Les générateurs paramétriques, au-dessus du substrat.
+#
+# Les cas de refus valent autant que les invariants : `geo_wall_run` promet de
+# s'arrêter sur une description incohérente plutôt que de produire un accesseur
+# glTF vide que `bvhbake` refuserait deux étapes plus loin. Comme `tool_fatalf`
+# sort par `exit(1)`, chaque refus est un processus séparé, déclaré `WILL_FAIL` —
+# portable sur les trois plateformes, contrairement à un fork. Un refus qui
+# cesserait de se déclencher fait donc échouer son test, au lieu de le vider.
+add_executable(ns_test_shapes test_shapes.c
+    "${CMAKE_SOURCE_DIR}/tools/geo_shapes.c"
+    "${CMAKE_SOURCE_DIR}/tools/geo_mesh.c"
+    "${CMAKE_SOURCE_DIR}/tools/gltf_write.c")
+target_include_directories(ns_test_shapes PRIVATE
+    "${CMAKE_SOURCE_DIR}/tools" "${CMAKE_SOURCE_DIR}/engine/core")
+if(UNIX)
+    target_link_libraries(ns_test_shapes PRIVATE m)
+endif()
+nineteen_set_warnings(ns_test_shapes)
+nineteen_apply_sanitizers(ns_test_shapes)
+add_test(NAME shapes COMMAND ns_test_shapes)
+
+foreach(refusal IN ITEMS baie-deborde baie-a-cheval baies-superposees
+                         allege-au-dessus-du-linteau linteau-trop-haut
+                         points-confondus boite-plate instance-miroir)
+    add_test(NAME refus-${refusal} COMMAND ns_test_shapes ${refusal})
+    set_tests_properties(refus-${refusal} PROPERTIES WILL_FAIL TRUE)
+endforeach()
+
 add_executable(ns_test_render test_render.c)
 target_link_libraries(ns_test_render PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_render)

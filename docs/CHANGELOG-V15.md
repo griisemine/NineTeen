@@ -43,6 +43,15 @@ que le chantier est terminé.
 - `texgen` : normal map, occlusion de cavité et rugosité dérivées des textures diffuses
   d'origine.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
+- `roomgen` : la salle **générée depuis sa description** (`assets/scene/salle.room.json`), en
+  mètres, objet par objet. Coquille avec baies, sols, plafond en dalles de 0,60 m sur rails en T,
+  piliers, poutres, plinthes, corniche, cimaise, nez de marche. Il écrit aussi les lumières et le
+  fichier de scène : rien n'y est déduit. Un matériau inconnu, une texture absente, un budget
+  dépassé ou une baie incohérente cassent le build en nommant le coupable.
+- `geo_mesh` / `geo_shapes` : le substrat — soudure, normales lissées pondérées par l'aire,
+  tangentes de Lengyel, boîte chanfreinée, plan, panneau, extrusion de profil mitrée, pan de mur
+  percé **sans aucune opération booléenne**. 114 vérifications, plus huit refus prouvés chacun dans
+  son propre processus.
 
 ### Serveur et site
 - Binaire Go unique, front et migrations embarqués, PostgreSQL.
@@ -88,7 +97,7 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Six défauts trouvés en chemin, tous instructifs.
+Huit défauts trouvés en chemin, tous instructifs.
 
 **Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
 tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs
@@ -118,6 +127,21 @@ d'exposition ne pouvait le rattraper.
 sortait à la rugosité 0,5 par défaut. Mais l'auteur avait nommé ses textures `moquette`, `bois`,
 `marbre`, `carllage_toilette`, `cuir_rouge`, `pilonne_rouge`. C'est la meilleure information
 disponible, et elle suffit à donner à chaque famille une rugosité et une métallicité plausibles.
+
+**Un rayon de source est une propriété du luminaire, pas du moteur.** Suite du point sur l'unité
+d'intensité, et celui qui a coûté le plus d'allers-retours. Le rayon qui borne la décroissance en 1/d² était
+une constante globale de 0,22 m — l'ampoule d'une applique. Un pavé lumineux de faux plafond fait
+1,20 m : traité comme une ampoule, il portait 3 600 fois plus d'énergie sur la dalle à 5 cm que sur
+le sol à 3 m. Toutes les valeurs d'intensité essayées donnaient soit un plafond carbonisé, soit un
+sol noir, et souvent les deux. Aucun réglage ne rattrape un rapport de 1 à 3 600 : c'était le
+modèle de source qu'il fallait corriger. Le champ tenait dans le `_pad[2]` que la structure
+traînait déjà, donc sans changer un seul octet de disposition.
+
+**Un albédo se mesure avant de s'expliquer.** La salle reconstruite est restée noire une bonne
+demi-heure, et l'explication cherchée était l'éclairage. Une vingtaine de lignes de C qui moyennent
+les pixels ont donné la vraie : `moquette_noire.jpg` a un albédo de 10/255, soit 4 %. Le plus
+grand plan de la salle était un piège à lumière. `moquette.jpg`, dans le même dossier depuis 2020,
+en a 47 — et c'est en plus le motif bordeaux d'une vraie salle d'arcade.
 
 **Une police peut mentir sur ce qu'elle sait dessiner.** `sega.ttf` déclare les codes des
 caractères accentués, mais leurs glyphes sont vides : « rallumée » s'affichait « rallum e ». Il

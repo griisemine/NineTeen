@@ -86,7 +86,19 @@ typedef struct ns_light_gpu {
     float spot_cos;
     int32_t type;
     int32_t shadow_index;        /* -1 si la lumière ne projette pas d'ombre */
-    float   _pad[2];
+    /*
+     * Rayon apparent de la source, en mètres. Il borne la décroissance en 1/d² :
+     * sans lui, une source ponctuelle placée à 5 cm d'une surface l'éclaire
+     * 3 600 fois plus qu'à 3 m, et la brûle.
+     *
+     * C'était une constante globale de 0,22 m dans `lighting.frag`, dimensionnée
+     * pour l'ampoule d'une applique. Un pavé lumineux de faux plafond fait 1,20 m :
+     * traité comme une ampoule, il carbonisait les dalles voisines tout en
+     * n'éclairant presque rien à trois mètres. D'où un champ par lumière — la
+     * grandeur est une propriété du luminaire, pas du moteur.
+     */
+    float   source_radius;
+    float   _pad;
 } ns_light_gpu;
 
 /* Données CPU associées : ce qui anime la lumière mais n'a pas à monter au GPU. */

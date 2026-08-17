@@ -56,7 +56,13 @@ struct Light {
     vec3  color;     float intensity;
     vec3  direction; float spotCos;
     int   type;      int   shadowIndex;
-    vec2  _pad;
+    /* Même disposition que `ns_light_gpu` et que `lighting.frag`. Le rayon de
+     * source ne sert pas ici — cette passe lance des rayons d'ombre, elle
+     * n'intègre pas la décroissance — mais le champ doit y être : une structure
+     * qui diverge d'un mot entre deux shaders décale tout ce qui suit, en
+     * silence. */
+    float sourceRadius;
+    float _pad;
 };
 
 layout(std430, set = 0, binding = 4) readonly buffer Nodes     { BvhNode     nodes[]; };

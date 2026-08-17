@@ -19,3 +19,12 @@ endfunction()
 nineteen_add_tool(obj2gltf obj2gltf.c gltf_write.c)
 nineteen_add_tool(texgen   texgen.c)
 nineteen_add_tool(bvhbake  bvhbake.c)
+
+# La salle reconstruite. `obj2gltf` reste, mais ne sert plus qu'à produire la
+# salle de 2020 sous `salle-legacy.*` : les deux sortent du même binaire de jeu
+# avec les mêmes réglages de rendu, ce qui rend une différence d'image
+# attribuable — avec deux binaires elle ne l'est pas.
+nineteen_add_tool(roomgen roomgen.c geo_shapes.c geo_mesh.c gltf_write.c)
+target_include_directories(roomgen PRIVATE
+    "${CMAKE_SOURCE_DIR}/engine/core"      # ns_math.h : ni SDL ni moteur, juste <math.h>
+    "${CMAKE_SOURCE_DIR}/third_party/jsmn")

@@ -35,7 +35,8 @@ struct Light {
     float spotCos;
     int   type;
     int   shadowIndex;
-    vec2  _pad;
+    float sourceRadius;   /* mètres ; borne la décroissance en 1/d² */
+    float _pad;
 };
 
 /* Les storage buffers viennent après les textures dans le set 2. */
@@ -112,17 +113,26 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
  *  2. Rayon de source. Une lumière ponctuelle mathématique a une énergie infinie
  *     à distance nulle : une surface frôlant une applique recevait ici plusieurs
  *     centaines de fois l'exposition et ressortait en blanc pur. On borne donc la
- *     distance par le rayon physique de l'ampoule, ce qui revient à traiter la
- *     source comme une petite sphère — ce qu'elle est.
+ *     distance par le rayon physique de la source, ce qui revient à la traiter
+ *     comme une petite sphère — ce qu'elle est.
+ *
+ *     Ce rayon vient désormais **de la lumière**, plus d'une constante globale.
+ *     Elle valait 0,22 m, taillée pour l'ampoule d'une applique ; un pavé lumineux
+ *     de faux plafond fait 1,20 m, et traité comme une ampoule il brûlait les
+ *     dalles à 20 cm tout en n'éclairant presque rien à trois mètres. Il n'y a pas
+ *     d'intensité qui rattrape un rapport de 1 à 3 600 : c'est le modèle de source
+ *     qu'il fallait corriger, pas le réglage.
  *
  *  3. Fenêtrage à la portée. La contribution est ramenée à zéro en douceur avant
  *     la coupure, sinon on voit un cercle net au sol là où la boucle s'arrête.
  */
-const float LIGHT_SOURCE_RADIUS = 0.22;   /* ampoule d'applique, en mètres */
+/* Repli pour une lumière qui n'en déclare pas : l'ampoule d'applique d'avant. */
+const float LIGHT_SOURCE_RADIUS_MIN = 0.05;
 
-float attenuation(float dist, float range)
+float attenuation(float dist, float range, float sourceRadius)
 {
-    float d2 = max(dist * dist, LIGHT_SOURCE_RADIUS * LIGHT_SOURCE_RADIUS);
+    float r = max(sourceRadius, LIGHT_SOURCE_RADIUS_MIN);
+    float d2 = max(dist * dist, r * r);
     float falloff = 1.0 / (4.0 * PI * d2);
     float t = clamp(1.0 - pow(dist / max(range, 0.001), 4.0), 0.0, 1.0);
     return falloff * t * t;
@@ -181,7 +191,7 @@ void main()
             float dist = length(toLight);
             if (dist > li.range) continue;        /* hors de portée : on saute */
             L = toLight / max(dist, 1e-4);
-            atten = attenuation(dist, li.range);
+            atten = attenuation(dist, li.range, li.sourceRadius);
 
             if (li.type == 1) {                   /* projecteur */
                 float cd = dot(-L, normalize(li.direction));
