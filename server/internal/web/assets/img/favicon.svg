@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Une borne d'arcade vue de face : corps sombre, écran allumé, socle rayé. -->
+  <rect width="32" height="32" fill="#07080b"/>
+  <path d="M8 4h16v20l-2 4H10l-2-4z" fill="#151a23" stroke="#ffb01f" stroke-width="1.2"/>
+  <rect x="11" y="8" width="10" height="7" fill="#35e0a1"/>
+  <rect x="11" y="18" width="10" height="2" fill="#ffb01f"/>
+</svg>

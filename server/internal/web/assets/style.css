@@ -1,0 +1,580 @@
+/* ==========================================================================
+   Nineteen — feuille de style du site.
+
+   Direction : la page se parcourt comme la salle elle-même. Fond de moquette
+   noire, lumière qui vient des machines, et deux dispositifs empruntés au décor
+   réel plutôt qu'inventés — la bande de danger jaune et noire qui borde les
+   socles de bornes, et le traitement cathodique, réservé au seul endroit qui
+   est effectivement un écran : le classement.
+
+   Les deux polices d'affichage sont celles du jeu lui-même (room/fonts/), pas
+   des webfonts génériques. C'est ce qui rattache le site à ce qu'il présente.
+
+   Parti pris assumé : une seule ambiance, sombre. Une salle d'arcade en clair
+   n'existe pas. Toutes les couleurs sont donc posées explicitement, sans
+   dépendre du thème du visiteur.
+   ========================================================================== */
+
+/*
+   Les polices d'affichage sont celles du jeu lui-même (legacy/room/fonts/),
+   pas des webfontes génériques : c'est ce qui rattache le site à ce qu'il
+   présente.
+
+   Deux écueils rencontrés en les intégrant, tous deux réglés ici :
+
+   1. sega.ttf, la police des enseignes, dessine son E d'une façon qui se lit
+      comme un C — « CLASSEMENT » devenait « CLASSCMCNT ». Elle est donc
+      réservée aux libellés courts des bornes, où le contexte lève le doute,
+      et écartée des titres.
+
+   2. sega.ttf déclare bien les codes des caractères accentués, mais leurs
+      glyphes sont vides : « rallumée » s'affichait « rallum e ». Elle est donc
+      restreinte à l'ASCII par unicode-range, ce qui fait basculer le navigateur
+      sur la police suivante pour ces caractères. neon.ttf et police.ttf, elles,
+      dessinent réellement les accents et ne sont pas restreintes — vérifié en
+      inspectant la table loca de chaque police plutôt qu'à l'œil.
+*/
+@font-face {
+    font-family: "Sega";
+    src: url("/fonts/sega.ttf") format("truetype");
+    unicode-range: U+0000-007F;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Police19";
+    src: url("/fonts/police.ttf") format("truetype");
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Neon";
+    src: url("/fonts/neon.ttf") format("truetype");
+    font-display: swap;
+}
+
+:root {
+    /* --- Couleurs, relevées sur le rendu du moteur --- */
+    --hall:      #07080b;   /* la moquette noire, très légèrement bleutée */
+    --cabinet:   #0f1218;   /* flanc de borne */
+    --cabinet-2: #151a23;   /* surface surélevée */
+    --edge:      #232b3a;   /* filets et séparations */
+    --marquee:   #ece8df;   /* blanc chaud d'enseigne */
+    --muted:     #8b93a4;   /* texte secondaire, bleuté comme le reste */
+
+    /* Accent : le jaune des bandes de danger sur les socles de bornes.
+       C'est la couleur du monde des salles d'arcade, celle des jetons. */
+    --amber:     #ffb01f;
+    --amber-dim: #7a5309;
+
+    /* Vert de la borne Flappy : réservé à l'état « en direct ». */
+    --screen:    #35e0a1;
+    --danger:    #ff5a4d;
+
+    /* --- Typographie --- */
+    /* Titres : la police d'enseigne au néon, lisible et caractéristique.
+       Le repli garde une graisse forte pour que la hiérarchie tienne même si
+       la police n'est pas chargée. */
+    --display: "Neon", "Police19", "Trebuchet MS", "Segoe UI", sans-serif;
+    --neon:    "Neon", "Police19", sans-serif;
+    /* Libellés de bornes seulement : courts, en capitales, sans accent. */
+    --marquee-face: "Sega", "Neon", "Arial Narrow", sans-serif;
+    --body:    ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono:    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+
+    /* Échelle typographique, ratio 1.25 */
+    --t-xs:  0.75rem;
+    --t-sm:  0.875rem;
+    --t-md:  1rem;
+    --t-lg:  1.25rem;
+    --t-xl:  1.563rem;
+    --t-2xl: 1.953rem;
+    --t-3xl: 2.441rem;
+    --t-4xl: 3.815rem;
+
+    --gap:      1.5rem;
+    --gap-lg:   3rem;
+    --measure:  62ch;
+    --radius:   3px;   /* volontairement dur : une borne n'a pas d'angles arrondis */
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+body {
+    margin: 0;
+    background: var(--hall);
+    color: var(--marquee);
+    font-family: var(--body);
+    font-size: var(--t-md);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--amber); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: #ffc862; }
+
+:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 3px;
+}
+
+.skip {
+    position: absolute; left: -9999px;
+    background: var(--amber); color: var(--hall);
+    padding: 0.6rem 1rem; z-index: 100; font-weight: 700;
+}
+.skip:focus { left: 1rem; top: 1rem; }
+
+.visually-hidden {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ==========================================================================
+   Barre supérieure
+   ========================================================================== */
+
+.topbar {
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: var(--gap);
+    padding: 0.85rem clamp(1rem, 4vw, 3rem);
+    background: rgba(7, 8, 11, 0.82);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--edge);
+    flex-wrap: wrap;
+}
+
+.wordmark { text-decoration: none; margin-right: auto; }
+
+/* L'enseigne. Le halo est fait de plusieurs ombres portées plutôt que d'un
+   filtre : c'est plus net sur un fond sombre, et cela ne force pas la création
+   d'une couche de composition supplémentaire. */
+.wordmark-neon {
+    font-family: var(--neon);
+    font-size: var(--t-xl);
+    letter-spacing: 0.08em;
+    color: #fff5dd;
+    text-shadow:
+        0 0 4px  rgba(255, 176, 31, 0.9),
+        0 0 14px rgba(255, 176, 31, 0.55),
+        0 0 32px rgba(255, 140, 0, 0.35);
+}
+
+.topbar nav {
+    display: flex; gap: 1.4rem; flex-wrap: wrap;
+    font-size: var(--t-sm);
+}
+.topbar nav a {
+    color: var(--muted); text-decoration: none;
+    text-transform: uppercase; letter-spacing: 0.09em;
+    padding-bottom: 2px; border-bottom: 1px solid transparent;
+}
+.topbar nav a:hover { color: var(--marquee); border-bottom-color: var(--amber); }
+
+.account { display: flex; align-items: center; gap: 0.75rem; font-size: var(--t-sm); }
+.account .who { color: var(--muted); }
+.account .who strong { color: var(--marquee); font-weight: 600; }
+
+/* ==========================================================================
+   Boutons
+   ========================================================================== */
+
+.btn {
+    display: inline-block;
+    font: inherit; font-size: var(--t-sm); font-weight: 650;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0.7rem 1.4rem;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    cursor: pointer; text-decoration: none;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.btn-small { padding: 0.4rem 0.9rem; font-size: var(--t-xs); }
+
+.btn-primary {
+    background: var(--amber); color: #150d00; border-color: var(--amber);
+}
+.btn-primary:hover { background: #ffc247; border-color: #ffc247; color: #150d00; }
+
+.btn-ghost {
+    background: transparent; color: var(--marquee); border-color: var(--edge);
+}
+.btn-ghost:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+
+.hero {
+    position: relative;
+    min-height: min(78vh, 720px);
+    display: grid;
+    align-content: end;
+    padding: clamp(2rem, 6vw, 5rem) clamp(1rem, 4vw, 3rem) 0;
+    overflow: hidden;
+}
+
+.hero-plate {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    /* Le rendu est déjà sombre ; on le pousse un peu pour que le texte tienne
+       sans avoir à poser un voile opaque qui l'effacerait. */
+    filter: saturate(1.05) contrast(1.05);
+}
+
+.hero-veil {
+    position: absolute; inset: 0;
+    background:
+        linear-gradient(to top, var(--hall) 4%, rgba(7,8,11,0.86) 32%, rgba(7,8,11,0.25) 70%),
+        radial-gradient(120% 80% at 20% 100%, rgba(7,8,11,0.9), transparent 60%);
+}
+
+.hero-text { position: relative; max-width: 34ch; padding-bottom: 2.5rem; }
+
+.eyebrow {
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--amber);
+    margin: 0 0 1.1rem;
+}
+
+.hero h1 {
+    font-family: var(--display);
+    font-size: clamp(2.6rem, 8vw, var(--t-4xl));
+    line-height: 0.94;
+    letter-spacing: 0.01em;
+    margin: 0 0 1.2rem;
+    text-wrap: balance;
+    text-shadow: 0 2px 30px rgba(0,0,0,0.75);
+}
+
+.lede {
+    font-size: var(--t-lg);
+    color: #c9cbd3;
+    margin: 0 0 1.8rem;
+    max-width: var(--measure);
+}
+
+.hero-actions { display: flex; gap: 0.85rem; flex-wrap: wrap; }
+
+/* Bandeau de chiffres, aligné en bas du hero. */
+.specs {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    margin: 0;
+    background: var(--edge);
+    border-top: 1px solid var(--edge);
+}
+.specs > div { background: var(--hall); padding: 1.1rem 1.3rem; }
+.specs dt {
+    font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.11em;
+    color: var(--muted); margin-bottom: 0.25rem;
+}
+.specs dd {
+    margin: 0;
+    font-family: var(--mono); font-size: var(--t-xl);
+    font-variant-numeric: tabular-nums;
+    color: var(--marquee);
+}
+
+/* ==========================================================================
+   Bande de danger — reprise du socle des bornes du modèle 3D.
+   Elle sépare les grandes parties : c'est un signal, pas un ornement.
+   ========================================================================== */
+
+.hazard {
+    height: 14px;
+    background: repeating-linear-gradient(
+        -45deg,
+        var(--amber) 0 14px,
+        #0b0c10   14px 28px
+    );
+    opacity: 0.85;
+}
+
+/* ==========================================================================
+   Sections
+   ========================================================================== */
+
+.section {
+    padding: clamp(3rem, 8vw, 5.5rem) clamp(1rem, 4vw, 3rem);
+    max-width: 1180px;
+    margin-inline: auto;
+}
+
+.section-head { margin-bottom: var(--gap-lg); max-width: var(--measure); }
+
+.section-head h2 {
+    font-family: var(--display);
+    font-size: clamp(1.9rem, 4.5vw, var(--t-3xl));
+    line-height: 1.05;
+    margin: 0 0 0.8rem;
+    text-wrap: balance;
+}
+.section-head p { margin: 0; color: #b6bcc9; }
+
+/* --- Rail de bornes --------------------------------------------------- */
+
+/* Sur large écran les bornes tiennent toutes de front, comme dans l'allée ;
+   sur mobile elles défilent horizontalement avec accrochage. */
+.rail {
+    list-style: none; margin: 0; padding: 0 0 0.75rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.cab {
+    scroll-snap-align: start;
+    background: linear-gradient(180deg, var(--cabinet-2), var(--cabinet));
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 1.4rem 1.2rem 1.2rem;
+    display: flex; flex-direction: column; gap: 0.45rem;
+    /* Le liseré supérieur imite la lumière du marquee sur le haut de la borne. */
+    box-shadow: inset 0 1px 0 rgba(255, 176, 31, 0.28);
+}
+
+.cab-marquee {
+    font-family: var(--marquee-face);
+    font-size: var(--t-lg);
+    line-height: 1.15;
+}
+.cab-meta {
+    font-family: var(--mono); font-size: var(--t-xs);
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.cab.is-new { border-color: var(--amber-dim); }
+.cab.is-new .cab-meta { color: var(--amber); }
+
+/* --- Classement : le seul endroit traité comme un écran ---------------- */
+
+.crt {
+    position: relative;
+    background: #05070a;
+    border: 1px solid var(--edge);
+    border-radius: 8px;
+    overflow: hidden;
+    /* Halo intérieur : la lueur d'un tube dans une pièce sombre. */
+    box-shadow: inset 0 0 90px rgba(53, 224, 161, 0.07),
+                0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.crt-bar {
+    display: flex; align-items: end; gap: var(--gap);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--edge);
+    background: #0a0d12;
+    flex-wrap: wrap;
+}
+
+.crt-status {
+    margin: 0 0 0.35rem auto;
+    font-family: var(--mono); font-size: var(--t-xs);
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;
+}
+.crt-status[data-state="live"] { color: var(--screen); }
+.crt-status[data-state="error"] { color: var(--danger); }
+
+.crt-screen { padding: 0.5rem 0.4rem 1rem; overflow-x: auto; }
+
+.crt-scanlines {
+    position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.035) 0 1px,
+        transparent 1px 3px
+    );
+}
+
+.board { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.board th, .board td { padding: 0.6rem 1rem; text-align: left; }
+.board thead th {
+    font-family: var(--mono); font-size: var(--t-xs);
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--muted); font-weight: 500;
+    border-bottom: 1px solid var(--edge);
+}
+.board tbody tr { border-bottom: 1px solid rgba(35, 43, 58, 0.5); }
+.board tbody tr:last-child { border-bottom: none; }
+.board .c-rank { width: 5rem; }
+.board .c-score { text-align: right; }
+.board td.c-rank, .board td.c-score {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.board td.c-score { color: var(--marquee); }
+/* Les trois premiers : la couleur de l'accent, sans médaille ni emoji. */
+.board tbody tr:nth-child(-n+3) td.c-rank { color: var(--amber); font-weight: 700; }
+.board .empty { color: var(--muted); font-style: italic; padding: 2rem 1rem; }
+
+/* --- Plateformes ------------------------------------------------------- */
+
+.platforms {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 1px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    background: var(--edge);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.platforms li {
+    background: var(--cabinet);
+    padding: 1.6rem 1.4rem;
+    display: flex; flex-direction: column; gap: 0.4rem; align-items: start;
+}
+.platforms h3 { font-family: var(--display); font-size: var(--t-xl); margin: 0; }
+.platform-detail {
+    margin: 0 0 0.8rem;
+    font-family: var(--mono); font-size: var(--t-xs);
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+.note { margin-top: 1.2rem; font-size: var(--t-sm); color: var(--muted); }
+
+/* --- Avant / après ----------------------------------------------------- */
+
+.ledger {
+    display: grid; gap: 1px;
+    /* Deux colonnes : les quatre entrées se rangent en 2×2 plutôt que de
+       laisser une case vide sur une grille de trois. */
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+    background: var(--edge);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.ledger article { background: var(--cabinet); padding: 1.6rem 1.5rem; }
+.ledger h3 {
+    font-family: var(--display); font-size: var(--t-lg);
+    margin: 0 0 0.9rem; color: var(--amber);
+}
+.ledger p { margin: 0 0 0.8rem; font-size: var(--t-sm); }
+.ledger p:last-child { margin-bottom: 0; }
+
+/* Le « avant » est marqué par un filet gris à gauche, le « après » par un
+   filet ambré : la différence se lit sans avoir à lire. */
+.ledger .before {
+    color: var(--muted);
+    border-left: 2px solid var(--edge);
+    padding-left: 0.9rem;
+}
+.ledger .after {
+    border-left: 2px solid var(--amber);
+    padding-left: 0.9rem;
+}
+
+.audit {
+    margin-top: var(--gap-lg);
+    border: 1px solid var(--amber-dim);
+    border-radius: var(--radius);
+    padding: 1.8rem 1.6rem;
+    background: linear-gradient(180deg, rgba(255,176,31,0.05), transparent 70%);
+    max-width: var(--measure);
+}
+.audit h3 { font-family: var(--display); font-size: var(--t-xl); margin: 0 0 0.8rem; }
+.audit p { margin: 0 0 1rem; }
+.audit-link { margin: 0; }
+
+/* ==========================================================================
+   Pied de page
+   ========================================================================== */
+
+.footer {
+    border-top: 1px solid var(--edge);
+    padding: 2rem clamp(1rem, 4vw, 3rem);
+    display: flex; justify-content: space-between; gap: var(--gap); flex-wrap: wrap;
+    font-size: var(--t-sm); color: var(--muted);
+}
+.footer p { margin: 0; }
+
+/* ==========================================================================
+   Formulaires et fenêtre de connexion
+   ========================================================================== */
+
+.modal {
+    width: min(430px, calc(100vw - 2rem));
+    background: var(--cabinet);
+    color: var(--marquee);
+    border: 1px solid var(--edge);
+    border-radius: 6px;
+    padding: 1.6rem;
+}
+.modal::backdrop { background: rgba(4, 5, 7, 0.78); backdrop-filter: blur(3px); }
+.modal h2 { font-family: var(--display); font-size: var(--t-2xl); margin: 0 0 1.2rem; }
+.modal-close-row { display: flex; justify-content: end; margin-bottom: -0.5rem; }
+
+.tabs { display: flex; gap: 0.4rem; margin-bottom: 1.4rem; }
+.tabs button {
+    flex: 1; font: inherit; font-size: var(--t-sm);
+    padding: 0.55rem 0.5rem; cursor: pointer;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--edge); border-radius: var(--radius);
+}
+.tabs button[aria-selected="true"] {
+    color: var(--hall); background: var(--amber); border-color: var(--amber); font-weight: 650;
+}
+
+.form { display: flex; flex-direction: column; gap: 1rem; }
+
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field > span {
+    font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted);
+}
+.field > span em { font-style: normal; text-transform: none; letter-spacing: 0; }
+.field input, .field select {
+    font: inherit; font-size: var(--t-md);
+    padding: 0.6rem 0.75rem;
+    background: #080a0e;
+    color: var(--marquee);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+}
+.field input:focus, .field select:focus { border-color: var(--amber); outline: none; }
+.field small { font-size: var(--t-xs); color: var(--muted); }
+
+.form-error {
+    margin: 0; padding: 0.6rem 0.8rem;
+    font-size: var(--t-sm);
+    color: #ffd7d3;
+    background: rgba(255, 90, 77, 0.12);
+    border-left: 2px solid var(--danger);
+    border-radius: var(--radius);
+}
+
+/* ==========================================================================
+   Adaptations
+   ========================================================================== */
+
+@media (max-width: 720px) {
+    .topbar { gap: 0.75rem; }
+    .topbar nav { order: 3; width: 100%; gap: 1rem; }
+    .hero { min-height: auto; padding-top: 3rem; }
+    .hero-text { max-width: none; }
+    .rail {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(170px, 78%);
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+    }
+}
+
+@media print {
+    .topbar, .hero-plate, .hero-veil, .crt-scanlines, .modal { display: none; }
+    body { background: #fff; color: #000; }
+}

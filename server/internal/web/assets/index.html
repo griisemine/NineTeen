@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nineteen — salle d'arcade</title>
+<meta name="description" content="Une salle d'arcade en 3D et ses mini-jeux. Écrite en 2020, reconstruite de fond en comble.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">
+    <span class="wordmark-neon">nineteen</span>
+  </a>
+  <nav aria-label="Navigation principale">
+    <a href="#salle">La salle</a>
+    <a href="#classement">Classement</a>
+    <a href="#telecharger">Télécharger</a>
+    <a href="#chantier">Le chantier</a>
+  </nav>
+  <div class="account" id="account">
+    <button type="button" class="btn btn-ghost" data-open="connexion">Se connecter</button>
+  </div>
+</header>
+
+<main id="contenu">
+
+  <!-- ================= Hero : la salle elle-même ================= -->
+  <section class="hero" id="salle">
+    <img class="hero-plate" src="/img/hall.png" alt="La salle d'arcade rendue par le moteur : bornes Flappy Bird, Tetris et Asteroid, moquette à motifs néon, panneau Hard/Easy."
+         width="1280" height="720" fetchpriority="high">
+    <div class="hero-veil" aria-hidden="true"></div>
+
+    <div class="hero-text">
+      <p class="eyebrow">Projet d'études, 2020 &nbsp;→&nbsp; version 15</p>
+      <h1>Une salle<br>d'arcade,<br>rallumée.</h1>
+      <p class="lede">
+        Quinze bornes, huit jeux, une salle modélisée pièce par pièce. Le contenu n'a pas
+        changé&nbsp;; tout ce qui le fait tourner a été refait — moteur de rendu, éclairage,
+        physique, serveur.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#telecharger">Télécharger</a>
+        <a class="btn btn-ghost" href="#chantier">Ce qui a changé</a>
+      </div>
+    </div>
+
+    <dl class="specs">
+      <div><dt>Sources lumineuses</dt><dd data-count="64">64</dd></div>
+      <div><dt>Triangles dans la salle</dt><dd data-count="102231">102&nbsp;231</dd></div>
+      <div><dt>Plateformes</dt><dd>3</dd></div>
+    </dl>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <!-- ================= Les bornes ================= -->
+  <section class="section" id="bornes">
+    <div class="section-head">
+      <h2>Les bornes</h2>
+      <p>Chaque jeu occupe une paire de bornes face à face&nbsp;: la rangée du fond en difficile,
+         celle de devant en facile. Deux emplacements restaient marqués «&nbsp;coming soon&nbsp;»
+         depuis 2020. Ils sont enfin occupés.</p>
+    </div>
+
+    <ul class="rail" id="rail-jeux">
+      <!-- rempli depuis /api/v1/games ; ce contenu de repli reste lisible sans script -->
+      <li class="cab"><span class="cab-marquee">Flappy&nbsp;Bird</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab"><span class="cab-marquee">Tetris</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab"><span class="cab-marquee">Asteroid</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab"><span class="cab-marquee">Shooter</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab"><span class="cab-marquee">Snake</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab"><span class="cab-marquee">Démineur</span><span class="cab-meta">facile · difficile</span></li>
+      <li class="cab is-new"><span class="cab-marquee">Pac-Man</span><span class="cab-meta">nouvelle borne</span></li>
+      <li class="cab is-new"><span class="cab-marquee">Piano</span><span class="cab-meta">nouvelle borne</span></li>
+    </ul>
+  </section>
+
+  <!-- ================= Classement : traité comme un écran ================= -->
+  <section class="section" id="classement">
+    <div class="section-head">
+      <h2>Classement</h2>
+      <p>Les scores ne sont plus déclarés par le jeu. Le serveur ouvre la partie, tire la graine,
+         puis <em>recalcule</em> le score à partir du journal d'événements. Un score inventé ne
+         passe pas.</p>
+    </div>
+
+    <div class="crt">
+      <div class="crt-bar">
+        <label class="field">
+          <span>Jeu</span>
+          <select id="choix-jeu">
+            <option value="0">Classement général</option>
+          </select>
+        </label>
+        <p class="crt-status" id="statut-classement" role="status">Chargement…</p>
+      </div>
+
+      <div class="crt-screen">
+        <table class="board" id="tableau-classement">
+          <caption class="visually-hidden">Meilleurs scores</caption>
+          <thead>
+            <tr><th scope="col" class="c-rank">Rang</th><th scope="col">Joueur</th><th scope="col" class="c-score">Score</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <!-- ================= Téléchargement ================= -->
+  <section class="section" id="telecharger">
+    <div class="section-head">
+      <h2>Télécharger</h2>
+      <p>Un exécutable par plateforme, produit par l'intégration continue à partir du même
+         arbre de sources. Rien à installer à côté.</p>
+    </div>
+
+    <ul class="platforms">
+      <li>
+        <h3>Windows</h3>
+        <p class="platform-detail">x64 · Direct3D&nbsp;12</p>
+        <a class="btn btn-primary" data-dl="windows" href="#" rel="nofollow">Télécharger&nbsp;.zip</a>
+      </li>
+      <li>
+        <h3>macOS</h3>
+        <p class="platform-detail">Apple Silicon &amp; Intel · Metal</p>
+        <a class="btn btn-primary" data-dl="macos" href="#" rel="nofollow">Télécharger&nbsp;.dmg</a>
+      </li>
+      <li>
+        <h3>Linux</h3>
+        <p class="platform-detail">x64 · Vulkan</p>
+        <a class="btn btn-primary" data-dl="linux" href="#" rel="nofollow">Télécharger&nbsp;AppImage</a>
+      </li>
+    </ul>
+    <p class="note" id="note-version">Version <span data-version>15.0.0</span>. Sommes SHA-256 publiées avec chaque version.</p>
+  </section>
+
+  <!-- ================= Le chantier ================= -->
+  <section class="section" id="chantier">
+    <div class="section-head">
+      <h2>Le chantier</h2>
+      <p>Ce qui a réellement changé sous le capot, et pourquoi.</p>
+    </div>
+
+    <div class="ledger">
+      <article>
+        <h3>Rendu</h3>
+        <p class="before">OpenGL en mode immédiat, une lumière fixe, textures plates.</p>
+        <p class="after">Rendu différé PBR sur l'API GPU de SDL3 — Vulkan, Metal et Direct3D&nbsp;12
+           derrière la même API. Ombres et illumination globale lancées en compute sur un BVH.</p>
+      </article>
+      <article>
+        <h3>Éclairage</h3>
+        <p class="before">La lumière était peinte dans les textures&nbsp;: le plafond lumineux
+           n'éclairait rien.</p>
+        <p class="after">Les surfaces émissives sont devenues des sources étendues, d'intensité
+           proportionnelle à leur aire. Chaque borne projette la couleur de son jeu.</p>
+      </article>
+      <article>
+        <h3>Physique</h3>
+        <p class="before">Une simulation cadencée par l'affichage, des hitbox écrites en dur.</p>
+        <p class="after">Pas de temps fixe à 120&nbsp;Hz avec interpolation&nbsp;: le jeu se comporte
+           pareil à 30 comme à 240&nbsp;images par seconde. Collision en capsule contre la géométrie
+           réelle.</p>
+      </article>
+      <article>
+        <h3>Sécurité</h3>
+        <p class="before">Requêtes SQL concaténées, mots de passe en MD5 non salé, vérification
+           TLS désactivée côté client.</p>
+        <p class="after">Requêtes préparées, Argon2id, sessions opaques stockées hachées,
+           limitation de débit, CSRF, en-têtes stricts. <a href="#audit">L'audit complet</a> est publié.</p>
+      </article>
+    </div>
+
+    <div class="audit" id="audit">
+      <h3>L'audit du code d'origine</h3>
+      <p>
+        Vingt constats, dont cinq critiques, sur le code tel qu'il tournait en 2020. Il est
+        publié en entier, y compris ce qui était bien vu&nbsp;: le jeton anti-rejeu, la protection
+        mémoire du score et l'échappement des tickets montraient un vrai réflexe défensif. C'est
+        l'exécution qui manquait, pas l'intention.
+      </p>
+      <p class="audit-link"><a class="btn btn-ghost" href="https://github.com/griisemine/NineTeen/blob/master/docs/SECURITY_AUDIT.md">Lire l'audit</a></p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen — salle d'arcade. Écrit en 2020, reconstruit en 2026.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<!-- ================= Connexion ================= -->
+<dialog id="connexion" class="modal" aria-labelledby="titre-connexion">
+  <form method="dialog" class="modal-close-row">
+    <button class="btn btn-ghost btn-small" value="fermer" aria-label="Fermer">Fermer</button>
+  </form>
+
+  <h2 id="titre-connexion">Votre compte</h2>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" aria-selected="true"  aria-controls="onglet-connexion" id="tab-connexion">Connexion</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="onglet-inscription" id="tab-inscription">Créer un compte</button>
+  </div>
+
+  <form id="onglet-connexion" role="tabpanel" aria-labelledby="tab-connexion" class="form">
+    <label class="field">
+      <span>Identifiant</span>
+      <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="24">
+    </label>
+    <label class="field">
+      <span>Mot de passe</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <p class="form-error" role="alert" hidden></p>
+    <button class="btn btn-primary" type="submit">Se connecter</button>
+  </form>
+
+  <form id="onglet-inscription" role="tabpanel" aria-labelledby="tab-inscription" class="form" hidden>
+    <label class="field">
+      <span>Identifiant</span>
+      <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="24"
+             pattern="[A-Za-z0-9_\-]+">
+      <small>3 à 24 caractères, lettres, chiffres, tiret et souligné.</small>
+    </label>
+    <label class="field">
+      <span>E-mail <em>(facultatif)</em></span>
+      <input type="email" name="email" autocomplete="email">
+    </label>
+    <label class="field">
+      <span>Mot de passe</span>
+      <input type="password" name="password" autocomplete="new-password" required minlength="12">
+      <small>12 caractères minimum. Accents, espaces et ponctuation bienvenus.</small>
+    </label>
+    <p class="form-error" role="alert" hidden></p>
+    <button class="btn btn-primary" type="submit">Créer le compte</button>
+  </form>
+</dialog>
+
+<script src="/app.js" defer></script>
+</body>
+</html>

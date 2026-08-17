@@ -1,0 +1,46 @@
+# docker-compose.yml — la pile complète en une commande.
+#
+#   docker compose up --build
+#
+# Le site est alors sur http://localhost:8080, base migrée et jeux insérés.
+# L'original demandait un hébergement mutualisé avec la bonne version de PHP et
+# une arborescence exacte ; ici tout est dans l'image.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nineteen
+      POSTGRES_PASSWORD: ${NINETEEN_DB_PASSWORD:-nineteen_dev}
+      POSTGRES_DB: nineteen
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Le port n'est PAS publié : seule l'application y accède, par le réseau
+    # interne. Exposer PostgreSQL sur l'hôte est un des réflexes qui coûtent
+    # cher, et il n'apporte rien ici.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nineteen -d nineteen"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NINETEEN_DB_URL: postgres://nineteen:${NINETEEN_DB_PASSWORD:-nineteen_dev}@db:5432/nineteen?sslmode=disable
+      NINETEEN_ADDR: ":8080"
+      NINETEEN_LOG: json
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    # Durcissement du conteneur : rien de tout cela n'est nécessaire au service.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pgdata:
