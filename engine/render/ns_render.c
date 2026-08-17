@@ -14,6 +14,9 @@
 #define FMT_DEPTH    SDL_GPU_TEXTUREFORMAT_D32_FLOAT
 #define FMT_HDR      SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT
 #define FMT_VIS      SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM
+/* Quatre entiers de 16 bits : par lumière dominante, l'indice sur huit bits de
+ * poids fort et la visibilité sur huit bits de poids faible. */
+#define FMT_LIGHT_SHADOW SDL_GPU_TEXTUREFORMAT_R16G16B16A16_UINT
 
 /* ========================================================================== */
 /* Blocs d'uniformes — la disposition doit correspondre exactement au GLSL     */
@@ -54,6 +57,24 @@ typedef struct debug_ubo           { int32_t mode[4]; float scale[4]; } debug_ub
 
 typedef struct denoise_ubo { float step[4]; } denoise_ubo;
 
+typedef struct exposure_ubo {
+    float settings[4];      /* exposition de base, vitesse, min, max */
+    float frame[4];         /* dt, première image, libres */
+} exposure_ubo;
+
+typedef struct volumetric_ubo {
+    float   inv_view_proj[16];
+    float   camera_pos[4];
+    float   fog[4];
+    int32_t config[4];      /* lumières, pas, largeur, hauteur (demi-résolution) */
+    float   params[4];      /* anisotropie, distance max, ambiant, libre */
+} volumetric_ubo;
+
+typedef struct vol_composite_ubo {
+    float size[4];          /* xy : demi-résolution, zw : pleine */
+    float settings[4];      /* intensité, sensibilité de profondeur, libres */
+} vol_composite_ubo;
+
 typedef struct raytrace_ubo {
     float   inv_view_proj[16];
     float   camera_pos[4];
@@ -80,11 +101,21 @@ struct ns_renderer {
     ns_texture rt_visibility[2];    /* ombres + indirect, ping-pong pour l'accumulation */
     ns_texture rt_filtered[2];      /* sortie du débruitage, deux passes à-trous */
     ns_texture reflections;
+    /* Ombres des quatre lumières dominantes par pixel : (indice << 8) | visibilité,
+     * un canal par lumière. Entière, donc jamais filtrée. */
+    ns_texture rt_light_shadow;
     uint32_t   rt_current;          /* index d'écriture du ping-pong */
     uint32_t   accum_frames;        /* images accumulées depuis le dernier mouvement */
     ns_texture *rt_denoised;        /* dernière sortie de débruitage utilisable */
     ns_texture bloom[BLOOM_MIPS];
     ns_texture bloom_tmp[BLOOM_MIPS];
+
+    /* Brouillard volumétrique : marché à demi-résolution, recomposé en pleine.
+     * `hdr_fogged` reçoit la composition — on ne peut pas lire et écrire la même
+     * cible dans une passe, et le halo comme le tone mapping doivent lire la
+     * version brumeuse. */
+    ns_texture volumetric;
+    ns_texture hdr_fogged;
 
     /* Pipelines */
     SDL_GPUGraphicsPipeline *pipe_gbuffer;
@@ -96,10 +127,19 @@ struct ns_renderer {
     SDL_GPUGraphicsPipeline *pipe_debug;
     SDL_GPUComputePipeline  *pipe_raytrace;
     SDL_GPUGraphicsPipeline *pipe_denoise;
+    SDL_GPUComputePipeline  *pipe_volumetric;
+    SDL_GPUGraphicsPipeline *pipe_vol_composite;
+    SDL_GPUComputePipeline  *pipe_exposure;
     SDL_GPUTextureFormat     tonemap_format;
 
     /* Tampon des lumières, réécrit à chaque image (elles scintillent). */
     ns_buffer lights;
+
+    /* Exposition mesurée : un seul flottant, mais il persiste d'une image à
+     * l'autre — c'est lui qui porte l'adaptation. */
+    ns_buffer exposure;
+    double    last_time;
+    bool      exposure_primed;
 
     float prev_view_proj[16];
     ns_render_stats stats;
@@ -112,7 +152,8 @@ struct ns_renderer {
 /* ========================================================================== */
 
 static const char *const g_debug_names[NS_DEBUG_COUNT] = {
-    "none", "albedo", "normal", "emissive", "depth", "visibility", "hdr", "bloom"
+    "none", "albedo", "normal", "emissive", "depth", "visibility", "hdr", "bloom",
+    "volumetric"
 };
 
 const char *ns_debug_view_name(int view)
@@ -152,8 +193,37 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
 
     /* Brouillard très léger, teinté du bleu froid des néons : donne de la
      * profondeur au fond de la salle sans laiter l'image. */
-    s->fog_density = 0.012f;
+    s->fog_density = 0.006f;
     s->fog_color[0] = 0.055f; s->fog_color[1] = 0.062f; s->fog_color[2] = 0.085f;
+
+    /* Diffusion vers l'avant marquée : c'est ce qui distingue un halo d'un voile.
+     * La distance de marche couvre la salle (22 m de long) sans la dépasser —
+     * marcher plus loin ne coûterait que du temps. */
+    s->fog_anisotropy = 0.62f;
+    /*
+     * L'intensité n'est pas à 1, et ce n'est pas un réglage au jugé.
+     *
+     * L'éclairage d'une surface passe par un albédo divisé par pi — de l'ordre
+     * de 0,25 pour un mur clair, 0,01 pour la moquette noire. La diffusion dans
+     * l'air, elle, n'a pas ce facteur : à intensité égale, une source de 500
+     * éclaire l'air **plusieurs fois plus** que le mur qu'elle éclaire. Avec 46
+     * sources dans un hall de 22 m, la première image sortait entièrement
+     * blanche, la salle noyée dans son propre brouillard.
+     *
+     * Ce coefficient est donc l'albédo de diffusion du milieu, absorbé ici plutôt
+     * que réparti dans le shader. La valeur vient de trois captures comparées, pas
+     * d'un calcul.
+     */
+    s->fog_intensity = 0.16f;
+    s->fog_max_distance = 26.0f;
+    s->fog_ambient = 0.35f;
+
+    /* Adaptation d'exposition : montée lente, l'œil met du temps à s'habituer à
+     * la pénombre. Les bornes évitent qu'une salle presque noire soit remontée
+     * jusqu'au grain, ou qu'un écran plein cadre éteigne tout le reste. */
+    s->exposure_adapt = 1.2f;
+    s->exposure_min = 0.45f;
+    s->exposure_max = 3.0f;
 
     /*
      * Ambiance. Une salle d'arcade tire sa lumière de ses machines plutôt que
@@ -175,21 +245,28 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
         s->ssao_samples = 6;
         s->rt_rays_per_pixel = 0;
         s->chromatic_aberration = 0.0f;
+        /* Pas de volumétrique : c'est la passe la plus chère du moteur, et ce
+         * palier existe pour les machines qui n'en veulent pas. */
+        s->volumetric_steps = 0;
+        s->exposure_adapt = 0.0f;
         break;
     case NS_QUALITY_MEDIUM:
         s->raytracing = NS_RT_SHADOWS;
         s->ssao_samples = 10;
         s->rt_rays_per_pixel = 1;
+        s->volumetric_steps = 16;
         break;
     case NS_QUALITY_HIGH:
         s->raytracing = NS_RT_REFLECTIONS;
         s->ssao_samples = 16;
         s->rt_rays_per_pixel = 2;
+        s->volumetric_steps = 24;
         break;
     case NS_QUALITY_ULTRA:
         s->raytracing = NS_RT_FULL;
         s->ssao_samples = 24;
         s->rt_rays_per_pixel = 4;
+        s->volumetric_steps = 32;
         break;
     }
 }
@@ -211,6 +288,9 @@ static void destroy_targets(ns_rhi *r, ns_renderer *rd)
     ns_texture_destroy(r, &rd->rt_filtered[0]);
     ns_texture_destroy(r, &rd->rt_filtered[1]);
     ns_texture_destroy(r, &rd->reflections);
+    ns_texture_destroy(r, &rd->rt_light_shadow);
+    ns_texture_destroy(r, &rd->volumetric);
+    ns_texture_destroy(r, &rd->hdr_fogged);
     for (int i = 0; i < BLOOM_MIPS; ++i) {
         ns_texture_destroy(r, &rd->bloom[i]);
         ns_texture_destroy(r, &rd->bloom_tmp[i]);
@@ -274,6 +354,30 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
         d.name = "visibilité RT";
         ok = ok && ns_texture_create(r, &rd->rt_visibility[i], &d);
     }
+    {
+        ns_texture_desc d;
+        SDL_zero(d);
+        d.width = rw; d.height = rh;
+        d.format = FMT_LIGHT_SHADOW;
+        d.sampled = true;
+        d.storage_write = true;
+        d.name = "ombres par lumière";
+        ok = ok && ns_texture_create(r, &rd->rt_light_shadow, &d);
+    }
+    {
+        /* Demi-résolution : le brouillard est un signal très basse fréquence, et
+         * le rendre en plein coûterait quatre fois plus pour rien de visible. */
+        ns_texture_desc d;
+        SDL_zero(d);
+        d.width  = (rw / 2u) > 0u ? (rw / 2u) : 1u;
+        d.height = (rh / 2u) > 0u ? (rh / 2u) : 1u;
+        d.format = FMT_HDR;
+        d.sampled = true;
+        d.storage_write = true;
+        d.name = "brouillard volumétrique";
+        ok = ok && ns_texture_create(r, &rd->volumetric, &d);
+    }
+    ok = ok && make_target(r, &rd->hdr_fogged, rw, rh, FMT_HDR, false, "HDR embrumé");
     {
         ns_texture_desc d;
         SDL_zero(d);
@@ -463,6 +567,31 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     }
     rd->pipe_denoise = make_fullscreen_pipeline(r, "rt_denoise.frag", &hdr_fmt, 1);
 
+    /* Brouillard volumétrique. Comme le lancer de rayons, son absence n'est pas
+     * fatale : le rendu perd son ambiance, pas son image. */
+    {
+        ns_compute_desc cd;
+        if (ns_compute_desc_fill("volumetric.comp", &cd)) {
+            rd->pipe_volumetric = ns_compute_pipeline_create(r, &cd);
+        }
+        if (!rd->pipe_volumetric) {
+            NS_WARN("passe volumétrique indisponible : brouillard de distance seul");
+        }
+    }
+    rd->pipe_vol_composite = make_fullscreen_pipeline(r, "volumetric_composite.frag", &hdr_fmt, 1);
+
+    /* Adaptation d'exposition. Absente, le tone mapping retombe sur la valeur
+     * constante des réglages. */
+    {
+        ns_compute_desc cd;
+        if (ns_compute_desc_fill("exposure.comp", &cd)) {
+            rd->pipe_exposure = ns_compute_pipeline_create(r, &cd);
+        }
+        if (!rd->pipe_exposure) {
+            NS_WARN("mesure d'exposition indisponible : exposition constante");
+        }
+    }
+
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
         || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
         || !rd->pipe_debug) {
@@ -475,6 +604,19 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
                           sizeof(ns_light_gpu) * NS_MAX_LIGHTS, "lumières")) {
         ns_renderer_destroy(r, rd);
         return NULL;
+    }
+
+    /* Quatre flottants : exposition, luminance lissée, deux de remplissage pour
+     * l'alignement std430. Initialisé, jamais laissé indéfini — le tone mapping
+     * le lit à la toute première image. */
+    {
+        const float initial[4] = { rd->settings.exposure, 0.18f, 0.0f, 0.0f };
+        if (!ns_buffer_create(r, &rd->exposure, NS_BUFFER_STORAGE_RW,
+                              sizeof initial, "exposition")) {
+            ns_renderer_destroy(r, rd);
+            return NULL;
+        }
+        ns_buffer_upload(r, &rd->exposure, initial, sizeof initial, 0);
     }
 
     SDL_memcpy(rd->prev_view_proj, ns_m4_identity().m, sizeof rd->prev_view_proj);
@@ -496,7 +638,11 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     if (rd->pipe_debug)            SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_debug);
     if (rd->pipe_raytrace)         SDL_ReleaseGPUComputePipeline(dev, rd->pipe_raytrace);
     if (rd->pipe_denoise)          SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_denoise);
+    if (rd->pipe_volumetric)       SDL_ReleaseGPUComputePipeline(dev, rd->pipe_volumetric);
+    if (rd->pipe_vol_composite)    SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_vol_composite);
+    if (rd->pipe_exposure)         SDL_ReleaseGPUComputePipeline(dev, rd->pipe_exposure);
     ns_buffer_destroy(r, &rd->lights);
+    ns_buffer_destroy(r, &rd->exposure);
     destroy_targets(r, rd);
     ns_free(rd);
 }
@@ -731,16 +877,18 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     const uint32_t write = rd->rt_current ^ 1u;
     const uint32_t read  = rd->rt_current;
 
-    SDL_GPUStorageTextureReadWriteBinding outputs[2];
+    SDL_GPUStorageTextureReadWriteBinding outputs[3];
     SDL_zeroa(outputs);
     outputs[0].texture = rd->rt_visibility[write].handle;
     outputs[1].texture = rd->reflections.handle;
+    outputs[2].texture = rd->rt_light_shadow.handle;
     /* `cycle` demande au pilote une ressource fraîche si l'ancienne est encore
      * lue par le GPU : sans cela, on attendrait la fin de l'image précédente. */
     outputs[0].cycle = true;
     outputs[1].cycle = true;
+    outputs[2].cycle = true;
 
-    SDL_GPUComputePass *pass = SDL_BeginGPUComputePass(cmd, outputs, 2, NULL, 0);
+    SDL_GPUComputePass *pass = SDL_BeginGPUComputePass(cmd, outputs, 3, NULL, 0);
     SDL_BindGPUComputePipeline(pass, rd->pipe_raytrace);
 
     SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
@@ -843,6 +991,118 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
 /* Dessin complet                                                             */
 /* ========================================================================== */
 
+/*
+ * Brouillard volumétrique, à demi-résolution.
+ *
+ * Renvoie true si le brouillard a été produit — auquel cas l'appelant doit
+ * composer, et `lighting.frag` doit avoir sauté son brouillard de distance.
+ */
+static bool pass_volumetric(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
+                            const ns_m4 *inv_view_proj, const ns_camera *cam,
+                            uint32_t light_count, double time_seconds)
+{
+    if (!rd->pipe_volumetric || !scene->bvh.loaded) return false;
+    if (rd->settings.volumetric_steps <= 0) return false;
+
+    SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
+
+    SDL_GPUStorageTextureReadWriteBinding out;
+    SDL_zero(out);
+    out.texture = rd->volumetric.handle;
+    out.cycle = true;
+
+    SDL_GPUComputePass *pass = SDL_BeginGPUComputePass(cmd, &out, 1, NULL, 0);
+    SDL_BindGPUComputePipeline(pass, rd->pipe_volumetric);
+
+    SDL_GPUTextureSamplerBinding tex;
+    SDL_zero(tex);
+    tex.texture = rd->depth.handle;
+    tex.sampler = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
+    SDL_BindGPUComputeSamplers(pass, 0, &tex, 1);
+
+    /* Les matériaux ne sont pas liés : le brouillard ne colore pas ce qu'il
+     * occulte, il a seulement besoin de savoir si quelque chose bloque. */
+    SDL_GPUBuffer *buffers[3] = {
+        scene->bvh.gpu_nodes.handle,
+        scene->bvh.gpu_tris.handle,
+        rd->lights.handle,
+    };
+    SDL_BindGPUComputeStorageBuffers(pass, 0, buffers, 3);
+
+    volumetric_ubo u;
+    SDL_zero(u);
+    SDL_memcpy(u.inv_view_proj, inv_view_proj->m, sizeof u.inv_view_proj);
+    u.camera_pos[0] = cam->position.x;
+    u.camera_pos[1] = cam->position.y;
+    u.camera_pos[2] = cam->position.z;
+    u.camera_pos[3] = (float)time_seconds;
+    SDL_memcpy(u.fog, rd->settings.fog_color, sizeof(float) * 3);
+    u.fog[3] = rd->settings.fog_density;
+    u.config[0] = (int32_t)light_count;
+    u.config[1] = rd->settings.volumetric_steps;
+    u.config[2] = (int32_t)rd->volumetric.width;
+    u.config[3] = (int32_t)rd->volumetric.height;
+    u.params[0] = rd->settings.fog_anisotropy;
+    u.params[1] = rd->settings.fog_max_distance;
+    u.params[2] = rd->settings.fog_ambient;
+    SDL_PushGPUComputeUniformData(cmd, 0, &u, sizeof u);
+
+    SDL_DispatchGPUCompute(pass, (rd->volumetric.width + 7) / 8,
+                                 (rd->volumetric.height + 7) / 8, 1);
+    SDL_EndGPUComputePass(pass);
+    return true;
+}
+
+/* Mesure de la luminance de l'image et adaptation. Sampler la cible HDR plutôt
+ * que la relire côté CPU : une relecture imposerait une clôture par image. */
+static bool pass_exposure(ns_rhi *r, ns_renderer *rd, SDL_GPUTexture *lit, double time_seconds)
+{
+    if (!rd->pipe_exposure) return false;
+    if (rd->settings.exposure_adapt <= 0.0f) return false;
+
+    SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
+
+    SDL_GPUStorageBufferReadWriteBinding rw;
+    SDL_zero(rw);
+    rw.buffer = rd->exposure.handle;
+    /* Surtout PAS `cycle` : la valeur doit survivre d'une image à l'autre, c'est
+     * elle qui porte l'adaptation. Recycler le tampon repartirait de zéro à
+     * chaque image, et l'exposition ne s'adapterait jamais. */
+    rw.cycle = false;
+
+    SDL_GPUComputePass *pass = SDL_BeginGPUComputePass(cmd, NULL, 0, &rw, 1);
+    SDL_BindGPUComputePipeline(pass, rd->pipe_exposure);
+
+    SDL_GPUTextureSamplerBinding tex;
+    SDL_zero(tex);
+    tex.texture = lit;
+    tex.sampler = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
+    SDL_BindGPUComputeSamplers(pass, 0, &tex, 1);
+
+    /* dt borné : une image longue (chargement, fenêtre déplacée) ferait sinon
+     * sauter l'adaptation d'un coup, ce qui se voit comme un flash. */
+    double dt = rd->exposure_primed ? (time_seconds - rd->last_time) : 0.0;
+    if (dt < 0.0) dt = 0.0;
+    if (dt > 0.1) dt = 0.1;
+
+    exposure_ubo u;
+    SDL_zero(u);
+    u.settings[0] = rd->settings.exposure;
+    u.settings[1] = rd->settings.exposure_adapt;
+    u.settings[2] = rd->settings.exposure_min;
+    u.settings[3] = rd->settings.exposure_max;
+    u.frame[0] = (float)dt;
+    u.frame[1] = rd->exposure_primed ? 0.0f : 1.0f;
+    SDL_PushGPUComputeUniformData(cmd, 0, &u, sizeof u);
+
+    SDL_DispatchGPUCompute(pass, 1, 1, 1);
+    SDL_EndGPUComputePass(pass);
+
+    rd->exposure_primed = true;
+    rd->last_time = time_seconds;
+    return true;
+}
+
 void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                       const ns_camera *camera, SDL_GPUTexture *target,
                       uint32_t target_width, uint32_t target_height,
@@ -927,6 +1187,13 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     }
     pass_raytrace(r, rd, scene, &inv_view_proj, camera, light_count, time_seconds);
 
+    /* --- 2c. Brouillard volumétrique ---
+     * Marché ici, composé après l'éclairage : il lui faut la profondeur (déjà
+     * écrite) mais pas la couleur. Le calculer maintenant permet à l'éclairage
+     * de savoir qu'il doit sauter son brouillard de distance. */
+    const bool volumetric_on =
+        pass_volumetric(r, rd, scene, &inv_view_proj, camera, light_count, time_seconds);
+
     /* --- 3. Éclairage --- */
     {
         frame_ubo u;
@@ -943,20 +1210,58 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         u.counts[0] = (int32_t)light_count;
         /* 0 : aucun lancer de rayons ; 1 : ombres ; 2+ : réflexions disponibles. */
         u.counts[1] = (int32_t)rd->settings.raytracing;
+        /* Le brouillard de distance de `lighting.frag` est un mélange vers une
+         * couleur constante. Quand le volumétrique tourne, il faut le couper :
+         * deux brouillards superposés donnent une salle laiteuse. */
+        u.counts[2] = volumetric_on ? 1 : 0;
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
         SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
-        SDL_GPUTexture *tex[7] = {
+        SDL_GPUTexture *tex[8] = {
             rd->gbuffer_albedo.handle, rd->gbuffer_normal.handle, rd->gbuffer_emissive.handle,
             rd->depth.handle, rd->visibility.handle,
             (rd->rt_denoised ? rd->rt_denoised->handle : rd->rt_visibility[rd->rt_current].handle),
-            rd->reflections.handle
+            rd->reflections.handle,
+            rd->rt_light_shadow.handle
         };
-        SDL_GPUSampler *smp[7] = { nearest, nearest, nearest, nearest, clamp, clamp, clamp };
+        /* La dernière est une texture entière : le filtrage linéaire mélangerait
+         * des indices de lumière, ce qui n'a aucun sens — et Vulkan l'interdit. */
+        SDL_GPUSampler *smp[8] = { nearest, nearest, nearest, nearest, clamp, clamp, clamp, nearest };
 
         fullscreen_pass(r, rd->pipe_lighting, rd->hdr.handle, SDL_GPU_LOADOP_CLEAR,
-                        tex, smp, 7, &u, sizeof u, rd->lights.handle);
+                        tex, smp, 8, &u, sizeof u, rd->lights.handle);
     }
+
+    /* --- 3b. Composition du brouillard ---
+     * Entre l'éclairage et le halo, et pas ailleurs : après le halo les rais ne
+     * fleuriraient pas, or c'est leur débordement qui les rend crédibles. */
+    SDL_GPUTexture *lit = rd->hdr.handle;
+    if (volumetric_on && rd->pipe_vol_composite) {
+        vol_composite_ubo cu;
+        SDL_zero(cu);
+        cu.size[0] = (float)rd->volumetric.width;
+        cu.size[1] = (float)rd->volumetric.height;
+        cu.size[2] = (float)rd->width;
+        cu.size[3] = (float)rd->height;
+        cu.settings[0] = rd->settings.fog_intensity;
+        /* Sensibilité de la remontée guidée par la profondeur. En reverse-Z les
+         * écarts utiles sont minuscules : une valeur trop faible rendrait le
+         * filtre bilinéaire, une valeur trop forte ne garderait qu'un voisin. */
+        cu.settings[1] = 900.0f;
+
+        SDL_GPUSampler *clampS = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
+        SDL_GPUSampler *nearestS = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
+        SDL_GPUTexture *tex[3] = { rd->hdr.handle, rd->volumetric.handle, rd->depth.handle };
+        SDL_GPUSampler *smp[3] = { clampS, clampS, nearestS };
+        fullscreen_pass(r, rd->pipe_vol_composite, rd->hdr_fogged.handle, SDL_GPU_LOADOP_CLEAR,
+                        tex, smp, 3, &cu, sizeof cu, NULL);
+        lit = rd->hdr_fogged.handle;
+    }
+
+    /* --- 3c. Mesure de l'exposition ---
+     * Après la composition du brouillard : c'est bien l'image finale avant halo
+     * dont on veut la luminance, brume comprise. */
+    const bool exposure_measured = pass_exposure(r, rd, lit, time_seconds);
 
     /* --- 4. Halo --- */
     {
@@ -967,7 +1272,7 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         tu.settings[0] = rd->settings.bloom_threshold;
         tu.settings[1] = 0.55f;                   /* douceur du coude */
         tu.settings[2] = 1.0f;
-        SDL_GPUTexture *src = rd->hdr.handle;
+        SDL_GPUTexture *src = lit;
         fullscreen_pass(r, rd->pipe_bloom_threshold, rd->bloom[0].handle, SDL_GPU_LOADOP_CLEAR,
                         &src, &clamp, 1, &tu, sizeof tu, NULL);
 
@@ -1009,7 +1314,8 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         case NS_DEBUG_VISIBILITY: src = (rd->settings.raytracing != NS_RT_OFF && rd->rt_denoised)
                                       ? rd->rt_denoised->handle
                                       : rd->visibility.handle; break;
-        case NS_DEBUG_HDR:        src = rd->hdr.handle;              break;
+        case NS_DEBUG_HDR:        src = lit;                         break;
+        case NS_DEBUG_VOLUMETRIC: src = rd->volumetric.handle;       break;
         case NS_DEBUG_BLOOM:      src = rd->bloom[BLOOM_MIPS - 1].handle; break;
         default: break;
         }
@@ -1037,14 +1343,15 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         u.extra[0] = (float)time_seconds;
         u.extra[1] = rd->settings.saturation;
         u.extra[2] = rd->settings.chromatic_aberration;
+        u.extra[3] = exposure_measured ? 1.0f : 0.0f;
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
         /* Le niveau de halo le plus flou porte l'essentiel du rayonnement ; les
          * niveaux intermédiaires y ont déjà été fondus par la descente. */
-        SDL_GPUTexture *tex[2] = { rd->hdr.handle, rd->bloom[BLOOM_MIPS - 1].handle };
+        SDL_GPUTexture *tex[2] = { lit, rd->bloom[BLOOM_MIPS - 1].handle };
         SDL_GPUSampler *smp[2] = { clamp, clamp };
         fullscreen_pass(r, rd->pipe_tonemap, target, SDL_GPU_LOADOP_CLEAR,
-                        tex, smp, 2, &u, sizeof u, NULL);
+                        tex, smp, 2, &u, sizeof u, rd->exposure.handle);
     }
 
     SDL_memcpy(rd->prev_view_proj, view_proj.m, sizeof rd->prev_view_proj);

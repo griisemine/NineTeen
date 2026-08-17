@@ -21,12 +21,17 @@ const ns_shader_info ns_shader_table[] = {
     { "bloom_threshold.frag",  NS_SHADER_STAGE_FRAGMENT, 1, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "debug_view.frag",       NS_SHADER_STAGE_FRAGMENT, 1, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "gbuffer.frag",          NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
-    /* 7 textures du G-buffer + le tampon des lumières, dans le même set. */
-    { "lighting.frag",         NS_SHADER_STAGE_FRAGMENT, 7, 0, 1, 0, 0, 1,  0, 0, 0 },
+    /* 8 textures (G-buffer, SSAO, visibilité RT, réflexions, ombres par lumière)
+     * puis le tampon des lumières, dans le même set. C'est aussi le plafond de
+     * `fullscreen_pass`, qui ne sait en lier que huit. */
+    { "lighting.frag",         NS_SHADER_STAGE_FRAGMENT, 8, 0, 1, 0, 0, 1,  0, 0, 0 },
     { "rt_denoise.frag",       NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "ssao.frag",             NS_SHADER_STAGE_FRAGMENT, 2, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "test_gradient.frag",    NS_SHADER_STAGE_FRAGMENT, 0, 0, 0, 0, 0, 1,  0, 0, 0 },
-    { "tonemap.frag",          NS_SHADER_STAGE_FRAGMENT, 2, 0, 0, 0, 0, 1,  0, 0, 0 },
+    /* Deux textures puis le tampon d'exposition, dans le même set. */
+    { "tonemap.frag",          NS_SHADER_STAGE_FRAGMENT, 2, 0, 1, 0, 0, 1,  0, 0, 0 },
+    /* HDR éclairé, brouillard demi-résolution, profondeur pleine résolution. */
+    { "volumetric_composite.frag", NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
 
     /* ------------------------------------------------------------- compute */
     /* set 0 : 3 textures (profondeur, normale, historique) puis 4 tampons
@@ -34,8 +39,20 @@ const ns_shader_info ns_shader_table[] = {
      * (visibilité, réflexions) ; set 2 : les paramètres d'image.
      *
      * Trois textures et non quatre : l'albédo du G-buffer était lié sans être
-     * lu. Voir le commentaire de `raytrace.comp`. */
-    { "raytrace.comp",         NS_SHADER_STAGE_COMPUTE,  3, 0, 4, 2, 0, 1,  8, 8, 1 },
+     * lu. Voir le commentaire de `raytrace.comp`.
+     *
+     * Trois images en écriture depuis A5 : la troisième porte les ombres des
+     * quatre lumières dominantes de chaque pixel. */
+    { "raytrace.comp",         NS_SHADER_STAGE_COMPUTE,  3, 0, 4, 3, 0, 1,  8, 8, 1 },
+
+    /* set 0 : la profondeur, puis trois tampons (nœuds, triangles, lumières) —
+     * pas les matériaux : le brouillard ne colore pas ce qu'il occulte ;
+     * set 1 : la cible demi-résolution ; set 2 : les paramètres. */
+    { "volumetric.comp",       NS_SHADER_STAGE_COMPUTE,  1, 0, 3, 1, 0, 1,  8, 8, 1 },
+
+    /* Un unique groupe de travail : une texture en entrée, un tampon d'un seul
+     * flottant en lecture-écriture — le premier du moteur. */
+    { "exposure.comp",         NS_SHADER_STAGE_COMPUTE,  1, 0, 0, 0, 1, 1,  8, 8, 1 },
 };
 
 const size_t ns_shader_table_count = sizeof ns_shader_table / sizeof ns_shader_table[0];

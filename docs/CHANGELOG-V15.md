@@ -47,6 +47,21 @@ que le chantier est terminé.
   d'origine.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
+### Atmosphère
+- **Ombres par lumière.** Le lancer de rayons retient les **quatre sources** qui contribuent le
+  plus à chaque pixel et écrit leur visibilité exacte ; les autres gardent la moyenne pondérée.
+  Un point à l'ombre d'un pilier ne perd plus la lumière des écrans de bornes.
+- **Brouillard volumétrique** en compute, à demi-résolution : marche le long du rayon de vue,
+  phase de Henyey-Greenstein, densité bruitée, occultation par le BVH un pas sur quatre.
+  Recomposé par une remontée **guidée par la profondeur**, entre l'éclairage et le halo.
+- **Adaptation d'exposition** : luminance logarithmique moyenne mesurée en compute dans un
+  tampon de stockage persistant, lissage asymétrique (l'œil s'habitue plus lentement au sombre).
+  C'est ce qui a supprimé le plafond brûlé.
+- L'émissif de complaisance du plafond est **retiré**. Ce qui le rend lisible n'est pas le
+  rebond du sol — l'illumination indirecte ne tourne qu'au palier « ultra » — mais la diffusion
+  volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
+  explication ; la capture a donné la seconde.
+
 ### Joueur
 - Position des pieds et position de l'œil distinguées ; `eye_height` est enfin lue.
 - Collision en capsule balayée contre la géométrie réelle, avec gravité, glissement le long des
@@ -112,7 +127,7 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Douze défauts trouvés en chemin, tous instructifs.
+Quatorze défauts trouvés en chemin, tous instructifs.
 
 **Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
 tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs
@@ -174,6 +189,22 @@ puis refusait les seize shaders l'un après l'autre. Une option `NINETEEN_SHADER
 était forcée à ON sur Apple, et n'était lue par rien. La correction qui compte n'est pas la
 traduction MSL : c'est que le masque de formats soit maintenant **calculé à partir des blobs
 réellement embarqués**, ce qui rend la faute impossible plutôt que corrigée.
+
+**Un point de vue est une donnée qui se périme.** Deux captures de référence se sont
+retrouvées *à l'intérieur* d'un meuble ajouté au palier suivant — l'allée dans une borne, puis
+la vue du plafond dans la borne de classement. Le symptôme est un cadre noir, et rien ne le
+dit : ni le build, ni le journal. La seconde fois, j'ai d'abord cru à une régression du
+palier en cours. `roomgen` connaît à la fois l'emprise des meubles et la position des caméras :
+il refuse maintenant, en nommant l'objet et en donnant les deux boîtes. La marge vaut le rayon
+du corps du joueur — une caméra qui frôle une borne a déjà sa face avant en plein cadre.
+
+**Le brouillard révèle que l'éclairage est chaud.** La première image volumétrique est sortie
+entièrement blanche. L'éclairage d'une surface passe par un albédo divisé par pi — 0,25 pour un
+mur clair, 0,01 pour la moquette noire ; la diffusion dans l'air n'a pas ce facteur. À intensité
+égale, une source éclaire donc l'air plusieurs fois plus que le mur qu'elle éclaire, et 46
+sources dans un hall de 22 m noient la salle dans son propre brouillard. Le coefficient qui
+corrige cela est l'albédo de diffusion du milieu ; sa valeur vient de trois captures comparées,
+et c'est dit comme tel dans le code plutôt que présenté comme une constante physique.
 
 **Une fonction sans appelant est une fonction sans preuve.** `ns_bvh_move_capsule` existait
 depuis M5, avec des commentaires soignés, et n'a jamais été appelée : le joueur traversait les

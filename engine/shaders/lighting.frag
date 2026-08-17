@@ -25,6 +25,13 @@ layout(set = 2, binding = 3) uniform sampler2D u_depth;
 layout(set = 2, binding = 4) uniform sampler2D u_ssao;         /* g : occlusion ambiante */
 layout(set = 2, binding = 5) uniform sampler2D u_rtVisibility; /* r : ombres, gba : indirect */
 layout(set = 2, binding = 6) uniform sampler2D u_reflections;
+/*
+ * Ombres des quatre lumières dominantes du pixel, produites par raytrace.comp.
+ * Chaque canal porte `(indice << 8) | visibilité sur 8 bits`, indice 255 =
+ * « aucune ». Texture entière, donc `usampler2D` et échantillonnage au plus
+ * proche — un filtrage bilinéaire mélangerait des indices, ce qui n'a aucun sens.
+ */
+layout(set = 2, binding = 7) uniform usampler2D u_lightShadow;
 
 struct Light {
     vec3  position;
@@ -39,8 +46,10 @@ struct Light {
     float _pad;
 };
 
-/* Les storage buffers viennent après les textures dans le set 2. */
-layout(std430, set = 2, binding = 7) readonly buffer Lights {
+/* Les storage buffers viennent après les textures dans le set 2 : ajouter une
+ * texture au-dessus décale donc ce binding, et l'oublier ne produit aucun
+ * message — seulement des lumières lues dans le vide. */
+layout(std430, set = 2, binding = 8) readonly buffer Lights {
     Light lights[];
 };
 
@@ -49,7 +58,8 @@ layout(set = 3, binding = 0) uniform Frame {
     vec4  u_cameraPos;        /* xyz : position, w : temps */
     vec4  u_ambient;          /* rgb : lumière d'ambiance, a : intensité */
     vec4  u_fog;              /* rgb : couleur, a : densité */
-    ivec4 u_counts;           /* x : nombre de lumières, y : ray tracing actif, z/w : libres */
+    ivec4 u_counts;           /* x : nombre de lumières, y : ray tracing actif,
+                               * z : brouillard volumétrique actif, w : libre */
 };
 
 const float PI = 3.14159265359;
@@ -175,6 +185,34 @@ void main()
     vec4  rt = texture(u_rtVisibility, v_uv);
     float shadow = (u_counts.y != 0) ? clamp(rt.r, 0.0, 1.0) : 1.0;
 
+    /*
+     * Ombres par lumière.
+     *
+     * `shadow` ci-dessus est une moyenne pondérée sur TOUTES les sources. Elle
+     * était appliquée telle quelle à chacune, ce qui est faux : un point à
+     * l'ombre d'un pilier perdait aussi la lumière des écrans de bornes, à
+     * l'autre bout de la salle. C'est ce qui rendait `docs/render-raytracing.png`
+     * nettement plus sombre que le rendu sans lancer de rayons.
+     *
+     * Les quatre lumières qui comptent le plus pour ce pixel portent désormais
+     * leur visibilité exacte. Les autres gardent la moyenne : elles sont faibles
+     * par construction, puisqu'elles n'ont pas été retenues.
+     */
+    int   shadowIdx[4] = int[4](-1, -1, -1, -1);
+    float shadowVis[4] = float[4](1.0, 1.0, 1.0, 1.0);
+    if (u_counts.y != 0) {
+        /* Lecture SEULEMENT quand la couche de lancer de rayons tourne : sans
+         * elle, cette cible n'a jamais été écrite, et lire une cible indéfinie
+         * est précisément ce qui avait noirci toute l'image en M4. */
+        uvec4 packed = texelFetch(u_lightShadow, ivec2(gl_FragCoord.xy), 0);
+        shadowIdx = int[4](int(packed.x >> 8), int(packed.y >> 8),
+                           int(packed.z >> 8), int(packed.w >> 8));
+        shadowVis = float[4](float(packed.x & 0xFFu) / 255.0,
+                             float(packed.y & 0xFFu) / 255.0,
+                             float(packed.z & 0xFFu) / 255.0,
+                             float(packed.w & 0xFFu) / 255.0);
+    }
+
     vec3 Lo = vec3(0.0);
     int count = min(u_counts.x, 128);
 
@@ -216,8 +254,18 @@ void main()
         /* Un métal n'a pas de composante diffuse. */
         vec3 kd = (vec3(1.0) - F) * (1.0 - metallic);
 
+        /* Visibilité exacte si cette lumière est l'une des quatre dominantes,
+         * moyenne pondérée sinon. */
+        float vis = shadow;
+        if (u_counts.y != 0) {
+            if      (i == shadowIdx[0]) vis = shadowVis[0];
+            else if (i == shadowIdx[1]) vis = shadowVis[1];
+            else if (i == shadowIdx[2]) vis = shadowVis[2];
+            else if (i == shadowIdx[3]) vis = shadowVis[3];
+        }
+
         vec3 radiance = li.color * li.intensity * atten;
-        Lo += (kd * albedo / PI + specular) * radiance * NdotL * shadow;
+        Lo += (kd * albedo / PI + specular) * radiance * NdotL * vis;
     }
 
     /*
@@ -244,10 +292,15 @@ void main()
     vec3 color = Lo + ambient + emissive;
 
     /* Brouillard exponentiel : donne de la profondeur à la salle et adoucit les
-     * limites du modèle, qui n'est pas fermé de tous les côtés. */
-    float dist = length(u_cameraPos.xyz - world);
-    float fogFactor = 1.0 - exp(-dist * u_fog.a);
-    color = mix(color, u_fog.rgb, clamp(fogFactor, 0.0, 1.0));
+     * limites du modèle, qui n'est pas fermé de tous les côtés.
+     *
+     * Coupé quand la passe volumétrique tourne (u_counts.z) : elle fait la même
+     * chose en mieux, et superposer les deux donne une salle laiteuse. */
+    if (u_counts.z == 0) {
+        float dist = length(u_cameraPos.xyz - world);
+        float fogFactor = 1.0 - exp(-dist * u_fog.a);
+        color = mix(color, u_fog.rgb, clamp(fogFactor, 0.0, 1.0));
+    }
 
     o_color = vec4(color, 1.0);
 }

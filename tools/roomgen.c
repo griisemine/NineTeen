@@ -44,6 +44,7 @@
 #define RG_MAX_OBJECTS   1024        /* NS_MAX_OBJECTS */
 #define RG_MAX_CABINETS    24        /* NS_MAX_CABINETS */
 #define RG_MAX_POIS        32        /* NS_MAX_POI */
+#define RG_MAX_SOLIDS     512        /* obstacles suivis pour le contrôle des points de vue */
 #define RG_MAX_TRIANGLES 250000
 
 /* Angles de lissage. Une arête sous ce seuil est adoucie, au-dessus elle reste
@@ -94,6 +95,12 @@ typedef struct rg_poi {
     float   anchor[3];
 } rg_poi;
 
+/* Un obstacle : le nom sert au message d'erreur, pas au format de sortie. */
+typedef struct rg_solid {
+    char    name[64];
+    ns_aabb bounds;
+} rg_solid;
+
 typedef struct rg_builder {
     tool_vec verts;         /* gltf_vertex — un seul pool, partagé (cf. gltf_write.h) */
     tool_vec meshes;        /* gltf_mesh */
@@ -118,6 +125,23 @@ typedef struct rg_builder {
     rg_poi pois[RG_MAX_POIS];
     size_t poi_count;
 
+    /*
+     * Emprise des objets SOLIDES — bornes, caisses, mobilier. Sert à refuser un
+     * point de vue posé dedans.
+     *
+     * Ce n'est pas un raffinement : le point de vue `allee` s'est retrouvé dans
+     * une borne en A4 et rendait un cadre noir, puis `plafond` a été avalé par la
+     * borne de classement du même palier — deux fois le même défaut, découvert
+     * deux fois sur une capture. Les points de vue sont de la donnée qui se périme
+     * quand la salle change ; l'outil qui connaît les deux doit le dire.
+     *
+     * Seuls les solides comptent. La coquille est un objet unique dont la boîte
+     * englobante couvre toute la salle : l'y inclure déclarerait chaque caméra
+     * « dans un mur ».
+     */
+    rg_solid solids[RG_MAX_SOLIDS];
+    size_t   solid_count;
+
     size_t triangle_count;
     ns_aabb bounds;
     /* Emprise du dernier objet émis. Sert aux props qui déclarent un point
@@ -129,6 +153,17 @@ typedef struct rg_builder {
     const char *texture_dir;    /* pour vérifier l'existence, NULL si non fourni */
     int expect_textures;        /* < 0 : pas de contrôle de couverture */
 } rg_builder;
+
+/* Enregistre le dernier objet émis comme obstacle. Appelé explicitement par les
+ * sections qui produisent du volume plein, jamais par les autres. */
+static void record_solid(rg_builder *b, const char *name)
+{
+    if (b->solid_count >= RG_MAX_SOLIDS) return;   /* le contrôle n'est pas critique */
+    rg_solid *s = &b->solids[b->solid_count++];
+    /* Tronqué sciemment : ce nom ne sert qu'aux messages, pas à un appariement. */
+    snprintf(s->name, sizeof s->name, "%.63s", name);
+    s->bounds = b->last_bounds;
+}
 
 static int material_index(const rg_builder *b, const char *name, const char *used_by)
 {
@@ -547,6 +582,7 @@ static void parse_boxes(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[GLTF_MAX_NAME];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
+            record_solid(b, name);
         }
     }
 }
@@ -909,6 +945,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         geo_mesh_append(&placed, &local, &x, -1);
         geo_mesh_free(&local);
         emit_object(b, name, &placed, RG_SMOOTH_HARD);
+        record_solid(b, name);
 
         /* Report du repère local vers le monde. Le lacet suit la convention de
          * `geo_xform` : X' = X cos + Z sin, Z' = -X sin + Z cos. */
@@ -1087,6 +1124,7 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[64];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
+            record_solid(b, name);
 
             /* Un point d'intérêt déclaré : le moteur cessera de repérer le
              * billard et le canapé en cherchant des sous-chaînes dans les noms de
@@ -1430,6 +1468,38 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
         float p[3];
         tool_json_get_vec3(doc, e, "position", p, 0.0f);
         const bool orbit = tool_json_get_bool(doc, e, "orbit", false);
+
+        /*
+         * Un point de vue posé dans un meuble rend un cadre noir, et rien ne le
+         * dit : ni le build, ni le journal d'exécution. C'est arrivé deux fois,
+         * aux mêmes captures, quand A4 a meublé la salle sous des points de vue
+         * écrits pour la salle vide. L'outil connaît les deux : il refuse.
+         *
+         * La marge correspond au rayon du corps du joueur (32 cm) : une caméra
+         * qui frôle une borne de trois centimètres a déjà la face avant du
+         * meuble en plein cadre.
+         *
+         * Les orbites sont exclues : leur `position` est un CENTRE de rotation,
+         * pas un point où la caméra se tient. Celle de la salle tourne
+         * précisément autour de la borne centrale.
+         */
+        if (!orbit) {
+            const float margin = 0.32f;
+            for (size_t k = 0; k < b->solid_count; ++k) {
+                const ns_aabb *bb = &b->solids[k].bounds;
+                if (p[0] > bb->min.x - margin && p[0] < bb->max.x + margin
+                 && p[1] > bb->min.y - margin && p[1] < bb->max.y + margin
+                 && p[2] > bb->min.z - margin && p[2] < bb->max.z + margin) {
+                    tool_fatalf("le point de vue « %s » est posé dans « %s » "
+                                "(%.2f, %.2f, %.2f dans [%.2f %.2f %.2f]-[%.2f %.2f %.2f]) — "
+                                "il rendrait un cadre noir",
+                                name, b->solids[k].name,
+                                (double)p[0], (double)p[1], (double)p[2],
+                                (double)bb->min.x, (double)bb->min.y, (double)bb->min.z,
+                                (double)bb->max.x, (double)bb->max.y, (double)bb->max.z);
+                }
+            }
+        }
 
         fprintf(f, "    { \"name\": \"%s\", \"position\": [%.3f, %.3f, %.3f]",
                 name, (double)p[0], (double)p[1], (double)p[2]);

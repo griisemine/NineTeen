@@ -81,6 +81,19 @@ layout(std430, set = 0, binding = 6) readonly buffer Lights    { Light       lig
 layout(rgba16f, set = 1, binding = 0) uniform writeonly image2D o_visibility;  /* r : ombres, gba : GI */
 layout(rgba16f, set = 1, binding = 1) uniform writeonly image2D o_reflections;
 
+/*
+ * Ombres des quatre lumières dominantes du pixel, empaquetées.
+ *
+ * Un canal par lumière : `(indice << 8) | visibilité sur 8 bits`, avec l'indice
+ * 255 pour « pas de lumière ». NS_MAX_LIGHTS vaut 128, donc huit bits d'indice
+ * suffisent et il en reste huit pour la visibilité.
+ *
+ * Une seule cible entière plutôt que deux (une pour les visibilités, une pour
+ * les indices) : `fullscreen_pass` plafonne à huit textures, et la passe
+ * d'éclairage en lie déjà sept. Deux cibles auraient dépassé.
+ */
+layout(rgba16ui, set = 1, binding = 2) uniform writeonly uimage2D o_lightShadow;
+
 /* --- set 2 : uniformes --- */
 layout(set = 2, binding = 0) uniform Params {
     mat4  u_invViewProj;
@@ -98,6 +111,19 @@ layout(set = 2, binding = 0) uniform Params {
  * emplacement que SDL ne lie jamais. Le shader compilerait, tournerait, et
  * indexerait dans le vide sur Metal. Le CPU connaît ce nombre : il le donne. */
 uint materialCount() { return uint(max(u_accum.w, 1.0)); }
+
+/* Empaquetage d'une lumière dominante : indice sur huit bits de poids fort,
+ * visibilité sur huit bits de poids faible. 255 en indice = « aucune ». */
+uvec4 packLightShadow(int idx[4], float vis[4])
+{
+    uvec4 o;
+    for (int k = 0; k < 4; ++k) {
+        uint index = (idx[k] < 0) ? 255u : uint(idx[k]);
+        uint v = uint(clamp(vis[k], 0.0, 1.0) * 255.0 + 0.5);
+        o[k] = (index << 8) | v;
+    }
+    return o;
+}
 
 const float PI = 3.14159265359;
 const float RAY_EPSILON = 2e-3;      /* décollement de la surface, évite l'auto-intersection */
@@ -337,9 +363,13 @@ void main()
 
     float depth = texture(u_depth, uv).r;
     if (depth <= 0.0) {
-        /* Ciel : entièrement visible, aucun indirect, aucune réflexion. */
+        /* Ciel : entièrement visible, aucun indirect, aucune réflexion.
+         * Les quatre emplacements sont marqués vides — la passe d'éclairage ne
+         * lit de toute façon rien ici, mais laisser de la mémoire indéfinie
+         * dans une cible est exactement ce qui a produit un écran noir en M4. */
         imageStore(o_visibility, pixel, vec4(1.0, 0.0, 0.0, 1.0));
         imageStore(o_reflections, pixel, vec4(0.0));
+        imageStore(o_lightShadow, pixel, uvec4(255u << 8));
         return;
     }
 
@@ -360,14 +390,72 @@ void main()
     int mode = u_config.y;                 /* 1 : ombres, 2 : + réflexions, 3 : + GI */
     int rays = max(u_config.z, 1);
 
-    /* --- Ombres --- */
+    /*
+     * --- Ombres ---
+     *
+     * Deux résultats sortent d'ici, et c'est le cœur du palier A5.
+     *
+     * 1. `shadow`, la fraction non occultée pondérée par la contribution de
+     *    chaque source. C'est ce que la passe d'éclairage appliquait à TOUTES
+     *    les lumières, ce qui est faux : un point à l'ombre d'un pilier perdait
+     *    aussi la lumière des écrans de bornes, à l'autre bout de la salle.
+     *    On la garde pour les lumières faibles, où l'erreur est bornée.
+     *
+     * 2. `topIndex[4]` / `topVisible[4]`, la visibilité EXACTE des quatre
+     *    lumières qui contribuent le plus à ce pixel. C'est ce qui supprime
+     *    l'assombrissement global du lancer de rayons.
+     *
+     * Le coût est nul : la boucle lançait déjà un rayon par lumière et jetait
+     * le résultat individuel. On se contente de garder les quatre qui comptent.
+     * Une première passe classe les lumières sans lancer un seul rayon, une
+     * seconde lance les rayons — et vise le CENTRE de la source pour les quatre
+     * retenues. Un rayon décalé au hasard donnerait une valeur binaire qui
+     * change à chaque image, donc une ombre qui grésille, puisque cette cible-ci
+     * n'est pas accumulée dans le temps.
+     */
     float shadow = 1.0;
+    int   topIndex[4]   = int[4](-1, -1, -1, -1);
+    float topVisible[4] = float[4](1.0, 1.0, 1.0, 1.0);
     {
-        /* Une seule ombre pour l'ensemble des lumières serait faux ; on calcule
-         * ici la fraction non occultée pondérée par la contribution de chaque
-         * source, ce qui donne le facteur que la passe d'éclairage applique. */
-        float lit = 0.0, total = 0.0;
         int count = min(u_config.x, 128);
+
+        /* Passe 1 : classement, sans aucun rayon. */
+        float topWeight[4] = float[4](0.0, 0.0, 0.0, 0.0);
+        for (int i = 0; i < count; ++i) {
+            Light li = lights[i];
+            vec3 toLight = li.position - P;
+            float dist = length(toLight);
+            if (dist > li.range) continue;
+            vec3 L = toLight / max(dist, 1e-4);
+            float ndl = dot(N, L);
+            if (ndl <= 0.0) continue;
+
+            float w = ndl * li.intensity * lightAttenuation(dist, li.range);
+
+            /* Insertion triée dans un tableau de quatre. Déroulée : un indice
+             * variable sur un tableau local force certains compilateurs à le
+             * reporter en mémoire, ce qui coûte plus cher que les seize
+             * comparaisons. */
+            if (w > topWeight[0]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = topWeight[1]; topIndex[2] = topIndex[1];
+                topWeight[1] = topWeight[0]; topIndex[1] = topIndex[0];
+                topWeight[0] = w;            topIndex[0] = i;
+            } else if (w > topWeight[1]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = topWeight[1]; topIndex[2] = topIndex[1];
+                topWeight[1] = w;            topIndex[1] = i;
+            } else if (w > topWeight[2]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = w;            topIndex[2] = i;
+            } else if (w > topWeight[3]) {
+                topWeight[3] = w;            topIndex[3] = i;
+            }
+        }
+
+        /* Passe 2 : les rayons. */
+        float lit = 0.0, total = 0.0;
+        vec3 origin = P + N * RAY_EPSILON * 4.0;
         for (int i = 0; i < count; ++i) {
             Light li = lights[i];
             vec3 toLight = li.position - P;
@@ -380,22 +468,39 @@ void main()
             float w = ndl * li.intensity * lightAttenuation(dist, li.range);
             total += w;
 
-            vec3 origin = P + N * RAY_EPSILON * 4.0;
-            /* Décalage du point visé sur un petit disque : donne une pénombre
-             * douce au lieu d'une ombre parfaitement dure, une source réelle
-             * ayant une taille. */
-            vec3 up = abs(L.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
-            vec3 t = normalize(cross(up, L));
-            vec3 b = cross(L, t);
-            float a1 = randomFloat(rng) * 2.0 * PI;
-            /* Rayon angulaire de la pénombre. À 0.18 rad la source faisait la taille
-             * d'un ballon et un seul rayon par pixel ne suffisait pas à l'échantillonner :
-             * l'ombre ressortait en grain. 0.06 correspond à une ampoule d'applique vue
-             * à deux mètres, et converge en quelques images. */
-            float a2 = sqrt(randomFloat(rng)) * 0.06;
-            vec3 jittered = normalize(L + (t * cos(a1) + b * sin(a1)) * a2);
+            /* Cette lumière fait-elle partie des quatre retenues ? */
+            int slot = -1;
+            if (i == topIndex[0]) slot = 0;
+            else if (i == topIndex[1]) slot = 1;
+            else if (i == topIndex[2]) slot = 2;
+            else if (i == topIndex[3]) slot = 3;
 
-            if (!traceOccluded(origin, jittered, dist - RAY_EPSILON * 8.0)) lit += w;
+            vec3 dir;
+            if (slot >= 0) {
+                dir = L;          /* centre de la source : stable d'une image à l'autre */
+            } else {
+                /* Décalage du point visé sur un petit disque : donne une pénombre
+                 * douce au lieu d'une ombre parfaitement dure, une source réelle
+                 * ayant une taille. Réservé à la moyenne, qui est accumulée.
+                 *
+                 * Rayon angulaire de la pénombre. À 0.18 rad la source faisait la taille
+                 * d'un ballon et un seul rayon par pixel ne suffisait pas à l'échantillonner :
+                 * l'ombre ressortait en grain. 0.06 correspond à une ampoule d'applique vue
+                 * à deux mètres, et converge en quelques images. */
+                vec3 up = abs(L.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+                vec3 t = normalize(cross(up, L));
+                vec3 b = cross(L, t);
+                float a1 = randomFloat(rng) * 2.0 * PI;
+                float a2 = sqrt(randomFloat(rng)) * 0.06;
+                dir = normalize(L + (t * cos(a1) + b * sin(a1)) * a2);
+            }
+
+            float visible = traceOccluded(origin, dir, dist - RAY_EPSILON * 8.0) ? 0.0 : 1.0;
+            lit += w * visible;
+            if (slot == 0) topVisible[0] = visible;
+            else if (slot == 1) topVisible[1] = visible;
+            else if (slot == 2) topVisible[2] = visible;
+            else if (slot == 3) topVisible[3] = visible;
         }
         shadow = (total > 1e-5) ? (lit / total) : 1.0;
     }
@@ -469,4 +574,11 @@ void main()
 
     imageStore(o_visibility, pixel, current);
     imageStore(o_reflections, pixel, vec4(reflection, 1.0));
+
+    /* Les ombres par lumière ne sont PAS accumulées : leurs rayons visent le
+     * centre de la source, donc le résultat est déjà stable d'une image à
+     * l'autre. Les accumuler demanderait de relire l'image précédente et de
+     * vérifier que les quatre indices n'ont pas changé — de la complexité pour
+     * lisser un signal qui ne bouge pas. */
+    imageStore(o_lightShadow, pixel, packLightShadow(topIndex, topVisible));
 }

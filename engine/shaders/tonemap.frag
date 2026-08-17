@@ -14,9 +14,19 @@ layout(location = 0) out vec4 o_color;
 layout(set = 2, binding = 0) uniform sampler2D u_hdr;
 layout(set = 2, binding = 1) uniform sampler2D u_bloom;
 
+/* Le tampon de stockage vient après les textures dans le set 2. Il porte
+ * l'exposition mesurée par `exposure.comp` sur l'image précédente. */
+layout(std430, set = 2, binding = 2) readonly buffer Exposure {
+    float u_measuredExposure;
+    float u_measuredLuma;
+    float _pad0;
+    float _pad1;
+};
+
 layout(set = 3, binding = 0) uniform Params {
-    vec4 u_settings;   /* x : exposition, y : intensité du halo, z : vignettage, w : grain */
-    vec4 u_extra;      /* x : temps, y : saturation, z : aberration chromatique, w : inutilisé */
+    vec4 u_settings;   /* x : exposition de repli, y : intensité du halo, z : vignettage, w : grain */
+    vec4 u_extra;      /* x : temps, y : saturation, z : aberration chromatique,
+                        * w : 1 = employer l'exposition mesurée */
 };
 
 /*
@@ -59,7 +69,11 @@ void main()
                                        isnan(color.g) || isinf(color.g),
                                        isnan(color.b) || isinf(color.b)));
 
-    color *= u_settings.x;                       /* exposition */
+    /* Exposition mesurée quand l'adaptation tourne, constante sinon. Le repli
+     * n'est pas décoratif : au palier « low » la passe de mesure n'existe pas,
+     * et lire un tampon jamais écrit donnerait une image noire ou blanche. */
+    float exposure = (u_extra.w > 0.5) ? u_measuredExposure : u_settings.x;
+    color *= exposure;
     color = acesFilmic(color);
 
     /* Saturation, réglable : la salle gagne à être un peu plus colorée que le

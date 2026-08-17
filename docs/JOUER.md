@@ -125,7 +125,7 @@ SDL_VIDEO_DRIVER=offscreen ./build/linux-x64/bin/nineteen \
     --headless --screenshot=salle.png --frames=8 --quality=high
 ```
 
-Utile aussi quand quelque chose cloche : `--debug=albedo|normal|emissive|depth|visibility|hdr|bloom`
+Utile aussi quand quelque chose cloche : `--debug=albedo|normal|emissive|depth|visibility|hdr|bloom|volumetric`
 affiche une cible intermédiaire au lieu de l'image finale. C'est ce qui a permis d'isoler un écran
 noir en deux minutes, en montrant un G-buffer parfait et un HDR rempli de NaN.
 

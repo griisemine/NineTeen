@@ -85,7 +85,7 @@ SDL_VIDEO_DRIVER=offscreen ./build/linux-x64/bin/nineteen \
     --pos=-12,2.2,11.06 --yaw=-8 --pitch=-6 --quality=high
 ```
 
-Options utiles : `--quality=low|medium|high|ultra`, `--debug=albedo|normal|emissive|depth|visibility|hdr|bloom`
+Options utiles : `--quality=low|medium|high|ultra`, X
 pour inspecter une cible intermédiaire, `--scale=0.75` pour l'échelle de rendu interne.
 
 ---

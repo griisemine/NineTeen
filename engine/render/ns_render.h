@@ -50,6 +50,25 @@ typedef struct ns_render_settings {
     float              chromatic_aberration;
     float              fog_density;
     float              fog_color[3];
+
+    /*
+     * Brouillard volumétrique. `volumetric_steps` à 0 le désactive et rend son
+     * bloc distant à `lighting.frag` — les deux ne se cumulent jamais, deux
+     * brouillards superposés donnant une salle laiteuse.
+     */
+    int                volumetric_steps;    /* 0 = désactivé */
+    float              fog_anisotropy;      /* Henyey-Greenstein, 0 = isotrope */
+    float              fog_intensity;
+    float              fog_max_distance;    /* longueur de marche, en mètres */
+    float              fog_ambient;         /* diffusion de la lumière d'ambiance */
+
+    /*
+     * Adaptation d'exposition. `exposure` reste l'exposition de base ; quand
+     * `exposure_adapt` est non nul, elle est corrigée par la luminance moyenne
+     * mesurée sur l'image précédente, bornée par les deux valeurs suivantes.
+     */
+    float              exposure_adapt;      /* vitesse, 0 = désactivée */
+    float              exposure_min, exposure_max;
     float              ambient[3];
     float              ambient_intensity;
     float              ssao_radius;
@@ -70,6 +89,7 @@ typedef struct ns_render_settings {
         NS_DEBUG_VISIBILITY,
         NS_DEBUG_HDR,
         NS_DEBUG_BLOOM,
+        NS_DEBUG_VOLUMETRIC,
         NS_DEBUG_COUNT
     } debug_view;
 } ns_render_settings;

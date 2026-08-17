@@ -35,9 +35,9 @@
     { "name": "beton",         "texture": "gris_foncer.jpg",          "roughness": 0.90, "metallic": 0.0,  "uvMetres": 1.50 },
 
     { "name": "plafond",       "texture": "plafond.jpg",              "roughness": 0.82, "metallic": 0.0,  "uvMetres": 0.60,
-      "emissive": [1.0, 0.94, 0.74], "emissiveStrength": 0.30,
+      "emissive": [1.0, 0.94, 0.74], "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
-      "_emissif": "0,60 et non 0 : c'est un aveu, pas une physique. Un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien — le cosinus est nul — et il n'y a pas encore d'illumination indirecte au palier « high » pour lui rendre le rebond du sol. À 0,60 le motif se lit et les liserés dorés ressortent, parce que l'émissif multiplie désormais l'albédo (A0) au lieu de l'écraser ; le champ bleu nuit, lui, reste sombre. Cette béquille saute en A5, quand le volumétrique et l'illumination indirecte rendront au plafond la lumière qui rebondit du sol." },
+      "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018." },
     { "name": "rail",          "texture": "gris_foncer.jpg",          "roughness": 0.72, "metallic": 0.15, "uvMetres": 0.60,
       "_": "Pas noir.jpg : cette image est littéralement (0, 0, 0). Un rail d'albédo nul ne renvoie que du spéculaire, et la trame du plafond sortait en filaments blancs sur fond noir au lieu de profilés." },
     { "name": "plenum",        "texture": "noir.jpg",                 "roughness": 0.95, "metallic": 0.0,  "uvMetres": 0.50 },
@@ -446,7 +446,7 @@
       "_": "L'allée devant la rangée de bornes qui regarde -Z. Le cadrage a dû bouger : le premier était posé contre le mur ouest, là où deux bornes sont venues s'installer — la caméra se retrouvait DANS un meuble, et rendait un cadre noir." },
     { "name": "bar",     "position": [  0.00, 1.70, -1.50], "yaw":  90.0, "pitch": -2.0 },
     { "name": "billard", "position": [  0.00, 1.70, -3.00], "yaw": 190.0, "pitch": -8.0 },
-    { "name": "plafond", "position": [  0.00, 1.70,  2.60], "yaw":   0.0, "pitch": 34.0,
+    { "name": "plafond", "position": [ -4.50, 1.70, -3.00], "yaw":   0.0, "pitch": 34.0,
       "_": "Regard levé vers le plafond. C'est la capture qui tranche la question du pavage : 0,60 m par dalle ici, contre une répétition tous les 17,9 m en 2020. Les deux salles déclarent ce point de vue, chacune dans son échelle." },
     { "name": "orbite",  "position": [  0.00, 0.00,  0.00], "orbit": true, "radius": 8.00, "height": 2.35,
       "_": "Sous le plafond, forcément : à 4,20 m la caméra tournait DANS le plénum et ne filmait que le dessus des dalles." }
