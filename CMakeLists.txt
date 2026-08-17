@@ -41,8 +41,11 @@ enable_testing()
 set(NINETEEN_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets"     CACHE PATH "Racine des assets sources")
 set(NINETEEN_GEN_DIR   "${CMAKE_BINARY_DIR}/assets"             CACHE PATH "Racine des assets générés")
 
-add_subdirectory(engine)
+# `tools` avant `engine` : la compilation des shaders du moteur invoque
+# `spv2msl`, qui est un outil. CMake sait résoudre une cible déclarée plus tard,
+# mais l'ordre de lecture rend la dépendance visible plutôt que subtile.
 add_subdirectory(tools)
+add_subdirectory(engine)
 add_subdirectory(assets)
 add_subdirectory(games)
 add_subdirectory(room)

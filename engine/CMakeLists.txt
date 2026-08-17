@@ -20,6 +20,7 @@ add_library(nineteen_engine STATIC
     scene/ns_bvh.c
 
     render/ns_render.c
+    render/ns_shaders.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)

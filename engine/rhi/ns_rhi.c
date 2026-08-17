@@ -1,6 +1,10 @@
 /* ns_rhi.c — implémentation de la couche de rendu au-dessus de SDL3 GPU. */
 #include "ns_rhi.h"
 
+/* Registre des shaders embarqués : sert ici uniquement à savoir quels formats le
+ * binaire contient, pour n'annoncer que ceux-là à SDL. */
+#include "shader_blobs.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_NO_STDIO           /* on lit par nos propres points de montage */
 #define STBI_ONLY_PNG
@@ -147,15 +151,28 @@ ns_rhi *ns_rhi_create(const ns_rhi_desc *desc)
     r->headless = desc->headless;
     r->vsync    = desc->vsync;
 
-    /* On demande tous les formats de shaders que l'on sait produire ; SDL choisit
-     * le backend en fonction de la plateforme. SPIR-V couvre Vulkan, DXIL le
-     * D3D12, MSL le Metal — le même GLSL source produit les trois via la CI. */
-    const SDL_GPUShaderFormat formats =
-        SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL;
+    /*
+     * On n'annonce à SDL que les formats que le binaire **contient réellement**.
+     *
+     * Ce masque valait `SPIRV | DXIL | MSL` en dur, alors que le build ne
+     * produisait que du SPIR-V. SDL choisit son backend d'après ce masque
+     * (Metal, puis D3D12, puis Vulkan) : sur macOS il rendait donc un
+     * périphérique Metal parfaitement valide, et les seize shaders étaient
+     * refusés un par un juste après. Sur Windows, l'annonce de DXIL faisait
+     * choisir D3D12 avant Vulkan, avec le même résultat.
+     *
+     * `ns_shader_registry_formats` est calculé par cmake/EmbedShaders.cmake à
+     * partir des blobs embarqués. Demander un backend qu'on ne sait pas
+     * alimenter devient impossible, plutôt que corrigé.
+     */
+    const SDL_GPUShaderFormat formats = (SDL_GPUShaderFormat)ns_shader_registry_formats;
 
     r->device = SDL_CreateGPUDevice(formats, desc->debug, NULL);
     if (!r->device) {
         NS_ERROR("aucun périphérique GPU utilisable : %s", SDL_GetError());
+        NS_ERROR("  formats de shaders embarqués dans ce binaire : %s%s",
+                 (formats & SDL_GPU_SHADERFORMAT_SPIRV) ? "SPIR-V " : "",
+                 (formats & SDL_GPU_SHADERFORMAT_MSL) ? "MSL " : "");
         ns_free(r);
         return NULL;
     }

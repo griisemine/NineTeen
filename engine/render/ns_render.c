@@ -1,5 +1,6 @@
 /* ns_render.c — implémentation du pipeline de rendu. */
 #include "ns_render.h"
+#include "ns_shaders.h"
 
 #include <string.h>
 
@@ -321,18 +322,18 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
 /* Pipelines                                                                  */
 /* ========================================================================== */
 
-/* Pipeline plein écran : pas de tampon de sommets, pas de test de profondeur. */
+/* Pipeline plein écran : pas de tampon de sommets, pas de test de profondeur.
+ *
+ * Les compteurs de ressources ne sont plus passés au point d'appel : ils
+ * viennent de `ns_shaders.c`, qui est aussi ce contre quoi la traduction MSL est
+ * testée. Deux copies des mêmes chiffres, c'était une de trop. */
 static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
-    ns_rhi *r, const char *frag_name, uint32_t samplers, uint32_t storage_buffers,
+    ns_rhi *r, const char *frag_name,
     const SDL_GPUTextureFormat *formats, uint32_t format_count)
 {
-    ns_shader_desc vsd = { .name = "fullscreen.vert" };
-    ns_shader_desc fsd = {
-        .name = frag_name,
-        .num_samplers = samplers,
-        .num_storage_buffers = storage_buffers,
-        .num_uniform_buffers = 1,
-    };
+    ns_shader_desc vsd, fsd;
+    if (!ns_shader_desc_fill("fullscreen.vert", &vsd)) return NULL;
+    if (!ns_shader_desc_fill(frag_name, &fsd)) return NULL;
 
     SDL_GPUShader *vs = ns_shader_load(r, &vsd, SDL_GPU_SHADERSTAGE_VERTEX);
     SDL_GPUShader *fs = ns_shader_load(r, &fsd, SDL_GPU_SHADERSTAGE_FRAGMENT);
@@ -365,8 +366,9 @@ static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
 
 static SDL_GPUGraphicsPipeline *make_gbuffer_pipeline(ns_rhi *r)
 {
-    ns_shader_desc vsd = { .name = "gbuffer.vert", .num_uniform_buffers = 1 };
-    ns_shader_desc fsd = { .name = "gbuffer.frag", .num_samplers = 3, .num_uniform_buffers = 1 };
+    ns_shader_desc vsd, fsd;
+    if (!ns_shader_desc_fill("gbuffer.vert", &vsd)) return NULL;
+    if (!ns_shader_desc_fill("gbuffer.frag", &fsd)) return NULL;
 
     SDL_GPUShader *vs = ns_shader_load(r, &vsd, SDL_GPU_SHADERSTAGE_VERTEX);
     SDL_GPUShader *fs = ns_shader_load(r, &fsd, SDL_GPU_SHADERSTAGE_FRAGMENT);
@@ -441,30 +443,25 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     rd->tonemap_format = ns_rhi_swapchain_format(r);
 
     rd->pipe_gbuffer = make_gbuffer_pipeline(r);
-    rd->pipe_ssao    = make_fullscreen_pipeline(r, "ssao.frag", 2, 0, &vis_fmt, 1);
-    rd->pipe_lighting = make_fullscreen_pipeline(r, "lighting.frag", 7, 1, &hdr_fmt, 1);
-    rd->pipe_bloom_threshold = make_fullscreen_pipeline(r, "bloom_threshold.frag", 1, 0, &hdr_fmt, 1);
-    rd->pipe_bloom_blur = make_fullscreen_pipeline(r, "bloom_blur.frag", 1, 0, &hdr_fmt, 1);
-    rd->pipe_tonemap = make_fullscreen_pipeline(r, "tonemap.frag", 2, 0, &rd->tonemap_format, 1);
-    rd->pipe_debug   = make_fullscreen_pipeline(r, "debug_view.frag", 1, 0, &rd->tonemap_format, 1);
+    rd->pipe_ssao    = make_fullscreen_pipeline(r, "ssao.frag", &vis_fmt, 1);
+    rd->pipe_lighting = make_fullscreen_pipeline(r, "lighting.frag", &hdr_fmt, 1);
+    rd->pipe_bloom_threshold = make_fullscreen_pipeline(r, "bloom_threshold.frag", &hdr_fmt, 1);
+    rd->pipe_bloom_blur = make_fullscreen_pipeline(r, "bloom_blur.frag", &hdr_fmt, 1);
+    rd->pipe_tonemap = make_fullscreen_pipeline(r, "tonemap.frag", &rd->tonemap_format, 1);
+    rd->pipe_debug   = make_fullscreen_pipeline(r, "debug_view.frag", &rd->tonemap_format, 1);
 
     /* Couche de lancer de rayons. Son absence n'est pas fatale : le rendu
      * retombe sur l'espace écran, ce qui reste jouable. */
     {
         ns_compute_desc cd;
-        SDL_zero(cd);
-        cd.name = "raytrace.comp";
-        cd.num_samplers = 4;                      /* profondeur, normale, albédo, historique */
-        cd.num_readonly_storage_buffers = 4;      /* nœuds, triangles, matériaux, lumières */
-        cd.num_readwrite_storage_textures = 2;    /* visibilité, réflexions */
-        cd.num_uniform_buffers = 1;
-        cd.threads_x = 8; cd.threads_y = 8; cd.threads_z = 1;
-        rd->pipe_raytrace = ns_compute_pipeline_create(r, &cd);
+        if (ns_compute_desc_fill("raytrace.comp", &cd)) {
+            rd->pipe_raytrace = ns_compute_pipeline_create(r, &cd);
+        }
         if (!rd->pipe_raytrace) {
             NS_WARN("pipeline de lancer de rayons indisponible : repli sur l'espace écran");
         }
     }
-    rd->pipe_denoise = make_fullscreen_pipeline(r, "rt_denoise.frag", 3, 0, &hdr_fmt, 1);
+    rd->pipe_denoise = make_fullscreen_pipeline(r, "rt_denoise.frag", &hdr_fmt, 1);
 
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
         || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
@@ -748,13 +745,14 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
 
     SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
     SDL_GPUSampler *linear  = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
-    SDL_GPUTextureSamplerBinding tex[4];
+    /* Trois textures : l'albédo du G-buffer était lié en quatrième position sans
+     * que le shader ne l'échantillonne jamais. */
+    SDL_GPUTextureSamplerBinding tex[3];
     SDL_zeroa(tex);
     tex[0].texture = rd->depth.handle;                    tex[0].sampler = nearest;
     tex[1].texture = rd->gbuffer_normal.handle;           tex[1].sampler = nearest;
-    tex[2].texture = rd->gbuffer_albedo.handle;           tex[2].sampler = nearest;
-    tex[3].texture = rd->rt_visibility[read].handle;      tex[3].sampler = linear;
-    SDL_BindGPUComputeSamplers(pass, 0, tex, 4);
+    tex[2].texture = rd->rt_visibility[read].handle;      tex[2].sampler = linear;
+    SDL_BindGPUComputeSamplers(pass, 0, tex, 3);
 
     SDL_GPUBuffer *buffers[4] = {
         scene->bvh.gpu_nodes.handle,
@@ -788,6 +786,11 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     u.accum[0] = weight;
     u.accum[1] = (float)rd->width;
     u.accum[2] = (float)rd->height;
+    /* Le shader bornait son index de matériau avec `materials.length()`. Cette
+     * fonction n'existe pas en MSL : le traducteur la remplace par un tampon de
+     * tailles que SDL ne lie jamais, donc le shader lirait dans le vide sur
+     * Metal sans que rien ne le signale. Le compte vient d'ici. */
+    u.accum[3] = (float)scene->bvh.material_count;
 
     SDL_PushGPUComputeUniformData(cmd, 0, &u, sizeof u);
 

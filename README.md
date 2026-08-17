@@ -15,7 +15,7 @@ qui les fait vivre qui a changé.
 
 | | V1 (2020) | V15 |
 |---|---|---|
-| Rendu | OpenGL en mode immédiat, une lumière fixe | Rendu différé PBR sur l'API GPU de SDL3 — Vulkan, Metal, Direct3D 12 |
+| Rendu | OpenGL en mode immédiat, une lumière fixe | Rendu différé PBR sur l'API GPU de SDL3 — Vulkan (Linux, Windows), Metal (macOS) |
 | Éclairage | peint dans les textures | 64 sources déduites du modèle, ombres et illumination globale lancées en compute sur un BVH |
 | Simulation | cadencée par l'affichage | pas de temps fixe à 120 Hz avec interpolation |
 | Collision | boîtes écrites à la main | capsule balayée contre la géométrie réelle |
@@ -53,6 +53,15 @@ sudo apt install ninja-build glslang-tools libvulkan-dev \
 
 macOS : `brew install ninja glslang`. Windows : le SDK Vulkan de LunarG fournit
 `glslangValidator`.
+
+Sur macOS, le premier build récupère aussi **SPIRV-Cross** : Metal ne consomme pas de SPIR-V,
+et `tools/spv2msl` traduit les shaders en MSL aux emplacements de ressources que SDL3 attend.
+C'est automatique — l'option `NINETEEN_SHADERCROSS` est activée d'office sur Apple, et
+activable ailleurs (`-DNINETEEN_SHADERCROSS=ON`) pour vérifier la traduction sans Mac.
+
+Direct3D 12 n'est pas alimenté : produire du DXIL demanderait DirectXShaderCompiler, que ce
+dépôt ne tire pas. Le binaire n'annonce donc pas ce format à SDL, qui choisit Vulkan sur
+Windows. Une machine Windows sans pilote Vulkan ne lancera pas le jeu.
 
 Le premier build convertit aussi les assets — la salle passe en glTF, les textures reçoivent
 leurs cartes PBR, le BVH est construit. Compter une douzaine de secondes.

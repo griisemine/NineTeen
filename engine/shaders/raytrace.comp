@@ -28,11 +28,16 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-/* --- set 0 : textures échantillonnées puis tampons en lecture seule --- */
+/* --- set 0 : textures échantillonnées puis tampons en lecture seule ---
+ *
+ * L'albédo du G-buffer était lié ici et n'a jamais été lu : le rebond indirect
+ * se colore avec l'albédo du matériau du BVH, pas avec celui du pixel d'origine.
+ * L'optimiseur SPIR-V supprimait donc la déclaration, et le moteur liait une
+ * quatrième texture que personne n'échantillonnait. Trouvé en traduisant vers
+ * MSL, où un emplacement mort décale tous les suivants. */
 layout(set = 0, binding = 0) uniform sampler2D u_depth;
 layout(set = 0, binding = 1) uniform sampler2D u_normalRM;
-layout(set = 0, binding = 2) uniform sampler2D u_albedoAO;
-layout(set = 0, binding = 3) uniform sampler2D u_history;      /* accumulation précédente */
+layout(set = 0, binding = 2) uniform sampler2D u_history;      /* accumulation précédente */
 
 struct BvhNode {
     vec3 bmin;  uint leftFirst;
@@ -65,10 +70,12 @@ struct Light {
     float _pad;
 };
 
-layout(std430, set = 0, binding = 4) readonly buffer Nodes     { BvhNode     nodes[]; };
-layout(std430, set = 0, binding = 5) readonly buffer Tris      { BvhTri      tris[]; };
-layout(std430, set = 0, binding = 6) readonly buffer Materials { BvhMaterial materials[]; };
-layout(std430, set = 0, binding = 7) readonly buffer Lights    { Light       lights[]; };
+/* Les tampons suivent immédiatement les textures dans le même set : SDL numérote
+ * les emplacements à la file, donc retirer une texture décale ces bindings. */
+layout(std430, set = 0, binding = 3) readonly buffer Nodes     { BvhNode     nodes[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Tris      { BvhTri      tris[]; };
+layout(std430, set = 0, binding = 5) readonly buffer Materials { BvhMaterial materials[]; };
+layout(std430, set = 0, binding = 6) readonly buffer Lights    { Light       lights[]; };
 
 /* --- set 1 : cibles en écriture --- */
 layout(rgba16f, set = 1, binding = 0) uniform writeonly image2D o_visibility;  /* r : ombres, gba : GI */
@@ -80,8 +87,17 @@ layout(set = 2, binding = 0) uniform Params {
     vec4  u_cameraPos;      /* xyz : position, w : temps */
     vec4  u_ambient;
     ivec4 u_config;         /* x : lumières, y : mode RT, z : rayons/pixel, w : n° d'image */
-    vec4  u_accum;          /* x : poids de l'historique, y : largeur, z : hauteur, w : inutilisé */
+    vec4  u_accum;          /* x : poids de l'historique, y : largeur, z : hauteur, w : nb de matériaux */
 };
+
+/* Nombre de matériaux, passé par le CPU plutôt que lu par `materials.length()`.
+ *
+ * Ce n'est pas une préférence de style : en GLSL/SPIR-V la longueur d'un tableau
+ * de taille variable se lit gratuitement, mais en MSL elle n'existe pas — le
+ * traducteur la remplace par un tampon de tailles supplémentaire, à un
+ * emplacement que SDL ne lie jamais. Le shader compilerait, tournerait, et
+ * indexerait dans le vide sur Metal. Le CPU connaît ce nombre : il le donne. */
+uint materialCount() { return uint(max(u_accum.w, 1.0)); }
 
 const float PI = 3.14159265359;
 const float RAY_EPSILON = 2e-3;      /* décollement de la surface, évite l'auto-intersection */
@@ -331,7 +347,6 @@ void main()
     vec3 N = decodeOctahedral(nrm.xy);
     float roughness = clamp(nrm.z, 0.03, 1.0);
     float metallic  = clamp(nrm.w, 0.0, 1.0);
-    vec3  albedo    = texture(u_albedoAO, uv).rgb;
 
     vec3 P = worldFromDepth(uv, depth);
     vec3 V = normalize(u_cameraPos.xyz - P);
@@ -399,7 +414,7 @@ void main()
             }
             vec3 hitPos = origin + dir * h.t;
             vec3 hitN = dot(h.normal, dir) > 0.0 ? -h.normal : h.normal;
-            BvhMaterial m = materials[min(h.material, uint(materials.length() - 1))];
+            BvhMaterial m = materials[min(h.material, materialCount() - 1u)];
 
             /* Le rebond n'est pas lui-même ombré : deux niveaux de rayons
              * d'ombre coûteraient le double pour une différence invisible sur
@@ -430,7 +445,7 @@ void main()
             if (h.hit) {
                 vec3 hitPos = origin + R * h.t;
                 vec3 hitN = dot(h.normal, R) > 0.0 ? -h.normal : h.normal;
-                BvhMaterial m = materials[min(h.material, uint(materials.length() - 1))];
+                BvhMaterial m = materials[min(h.material, materialCount() - 1u)];
                 reflection = directLighting(hitPos, hitN, m.albedo, true, rng) + m.emissive;
             } else {
                 reflection = u_ambient.rgb * u_ambient.a * 0.5;

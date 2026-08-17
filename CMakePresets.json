@@ -43,7 +43,7 @@
     {
       "name": "windows-x64",
       "inherits": "base",
-      "displayName": "Windows x64 (D3D12 / Vulkan)",
+      "displayName": "Windows x64 (Vulkan)",
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
       "architecture": { "value": "x64", "strategy": "external" }
     }
@@ -65,6 +65,16 @@
     {
       "name": "linux-x64-asan",
       "configurePreset": "linux-x64-asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "macos-universal",
+      "configurePreset": "macos-universal",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
       "output": { "outputOnFailure": true }
     }
   ]

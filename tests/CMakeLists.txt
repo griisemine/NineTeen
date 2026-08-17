@@ -6,6 +6,19 @@
 #     produisent un PNG que l'on compare. C'est ce qui permet de vérifier le rendu
 #     en intégration continue, sans écran ni carte graphique.
 
+# Les emplacements de ressources du MSL, confrontés à ce que le moteur annonce à
+# SDL. Le test ne demande ni GPU ni Mac : il lit le texte MSL embarqué dans le
+# binaire. Il n'existe donc que là où du MSL est produit — sur macOS par défaut,
+# et partout ailleurs avec -DNINETEEN_SHADERCROSS=ON, ce que fait la CI Linux
+# pour que la traduction soit vérifiée à chaque commit.
+if(NINETEEN_SHADERCROSS)
+    add_executable(ns_test_msl test_msl.c)
+    target_link_libraries(ns_test_msl PRIVATE nineteen::engine)
+    nineteen_set_warnings(ns_test_msl)
+    nineteen_apply_sanitizers(ns_test_msl)
+    add_test(NAME msl COMMAND ns_test_msl)
+endif()
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)
@@ -76,7 +89,25 @@ add_test(NAME render COMMAND ns_test_render "${CMAKE_BINARY_DIR}/test-render.png
 
 # En intégration continue il n'y a ni écran ni GPU : SDL passe par son pilote
 # vidéo « offscreen » et Vulkan par le rasteriseur logiciel lavapipe.
+#
+# `SKIP_RETURN_CODE` : le test renvoie 77 quand aucun périphérique GPU n'existe
+# (tests/test_render.c:56-62). Sans cette propriété CTest comptait ce 77 comme un
+# échec — donc, pour garder le tableau vert, la CI n'exécutait tout simplement pas
+# ce test hors Linux. C'est exactement ainsi que le rendu Metal a pu rester cassé
+# deux mois sous un build vert. Un test « ignoré » doit se voir, pas disparaître.
+#
+# Le pilote « offscreen » n'est imposé que là où il aide. Sur macOS il n'y a pas
+# de couche logicielle à forcer — Metal est le seul backend — et une fenêtre
+# offscreen n'a pas de CAMetalLayer à rattacher, donc l'imposer transformerait un
+# test exécutable en test ignoré.
+if(APPLE)
+    set(_render_env "")
+else()
+    set(_render_env "SDL_VIDEO_DRIVER=offscreen;LIBGL_ALWAYS_SOFTWARE=1")
+endif()
+
 set_tests_properties(render PROPERTIES
-    ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;LIBGL_ALWAYS_SOFTWARE=1"
+    ENVIRONMENT "${_render_env}"
+    SKIP_RETURN_CODE 77
     TIMEOUT 120
 )

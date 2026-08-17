@@ -21,8 +21,9 @@ $ echo $?
 ```
 
 260 symboles importés en tout, tous de la libc et de libm. **Zéro symbole `SDL_`** : SDL3 est lié
-statiquement. Les shaders sont compilés en SPIR-V au build et **embarqués dans le binaire** — il n'y
-a même pas de fichier `.spv` à retrouver, encore moins à télécharger.
+statiquement. Les shaders sont compilés au build et **embarqués dans le binaire** — il n'y
+a même pas de fichier à retrouver, encore moins à télécharger. En SPIR-V pour Vulkan ; en MSL
+pour Metal, traduit au build par `tools/spv2msl`.
 
 `engine/net/` est un répertoire vide. `NS_CFG_SERVER_URL` existe dans `engine/core/ns_config.h`
 comme clé réservée et **rien ne la lit** : même en écrivant `network.serverUrl = …` à la main dans
@@ -38,7 +39,7 @@ voir la fin de ce document.
 | CMake | 3.21 ou plus |
 | Compilateur | C11 (GCC, Clang, MSVC) |
 | `glslangValidator` | **obligatoire**, pour compiler les shaders |
-| GPU | Vulkan (Linux, Windows) ou Metal (macOS) |
+| GPU | Vulkan (Linux, Windows) ou Metal (macOS). Sur Windows, **un pilote Vulkan est requis** : le binaire ne contient pas de DXIL, donc SDL n'y choisira pas Direct3D 12. |
 
 Debian / Ubuntu :
 

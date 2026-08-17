@@ -10,8 +10,11 @@ que le chantier est terminé.
 ### Build et portabilité
 - Un seul arbre CMake, presets `linux-x64`, `linux-x64-asan`, `macos-universal`, `windows-x64`.
 - SDL3 récupéré sur un tag épinglé ; dépendances header-only vendorées, donc build hermétique.
-- Shaders GLSL compilés en SPIR-V et **embarqués dans le binaire** : rien à retrouver à
-  l'exécution.
+- Shaders GLSL compilés au build et **embarqués dans le binaire** : rien à retrouver à
+  l'exécution. En SPIR-V pour Vulkan ; traduits en MSL par `tools/spv2msl` (sur SPIRV-Cross)
+  pour Metal, aux emplacements de ressources exacts qu'impose SDL3.
+- Le masque de formats présenté à `SDL_CreateGPUDevice` est **dérivé des blobs embarqués** :
+  demander un backend qu'on ne sait pas alimenter est devenu impossible.
 - CI GitHub Actions : matrice trois OS, tâche ASan+UBSan dédiée, tâche serveur Go avec
   PostgreSQL, `go vet` et `gosec`.
 - Avertissements en erreur là où ils traduisent un vrai bug.
@@ -97,7 +100,7 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Huit défauts trouvés en chemin, tous instructifs.
+Dix défauts trouvés en chemin, tous instructifs.
 
 **Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
 tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs
@@ -148,3 +151,22 @@ caractères accentués, mais leurs glyphes sont vides : « rallumée » s'affich
 a fallu inspecter la table `loca` de chaque police pour savoir laquelle dessine réellement quoi.
 Elle rend aussi son `E` d'une façon qui se lit comme un `C` — « CLASSEMENT » devenait
 « CLASSCMCNT ».
+
+**Un build vert ne prouve que ce qu'il exécute.** Le jeu n'avait jamais démarré sur macOS. Le
+build y passait depuis deux mois, parce que la CI n'y lançait que `ctest -R core`, un test sans
+GPU — et l'étape s'appelait honnêtement « hors rendu ». Le binaire n'était exécuté sur aucune
+plateforme sauf Linux. La cause tenait en une ligne : le moteur annonçait à SDL savoir produire
+du SPIR-V, du DXIL **et** du MSL, alors que le build ne produisait que du premier. SDL choisit
+son backend d'après cette annonce : il rendait donc un périphérique Metal parfaitement valide,
+puis refusait les seize shaders l'un après l'autre. Une option `NINETEEN_SHADERCROSS` existait,
+était forcée à ON sur Apple, et n'était lue par rien. La correction qui compte n'est pas la
+traduction MSL : c'est que le masque de formats soit maintenant **calculé à partir des blobs
+réellement embarqués**, ce qui rend la faute impossible plutôt que corrigée.
+
+**Traduire un shader révèle ce qu'il n'utilise pas.** En passant `raytrace.comp` en MSL,
+l'outil a refusé de continuer : le set 0 avait un trou au binding 2. L'albédo du G-buffer y était
+déclaré, lié à chaque image par le moteur, et jamais échantillonné — le rebond indirect se colore
+avec l'albédo du matériau du BVH. L'optimiseur SPIR-V supprimait donc la déclaration. En SPIR-V
+cela ne coûtait qu'une texture liée pour rien ; en MSL, un emplacement mort décale tous les
+suivants. La correction remonte jusqu'aux numéros de binding des quatre tampons de stockage, qui
+suivaient les textures et devaient reculer d'un cran — sur Vulkan aussi.

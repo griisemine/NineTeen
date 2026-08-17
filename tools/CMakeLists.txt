@@ -28,3 +28,17 @@ nineteen_add_tool(roomgen roomgen.c geo_shapes.c geo_mesh.c gltf_write.c)
 target_include_directories(roomgen PRIVATE
     "${CMAKE_SOURCE_DIR}/engine/core"      # ns_math.h : ni SDL ni moteur, juste <math.h>
     "${CMAKE_SOURCE_DIR}/third_party/jsmn")
+
+# ---------------------------------------------------------------------------
+# spv2msl — SPIR-V vers MSL, aux emplacements de ressources que SDL3 attend
+# ---------------------------------------------------------------------------
+# Seul outil de ce répertoire à dépendre d'un tiers, et le seul qui tire du C++
+# dans l'arbre : il n'est donc construit que lorsque du MSL est demandé, c'est-à-
+# dire sur macOS ou quand on veut vérifier la traduction depuis Linux.
+if(NINETEEN_SHADERCROSS)
+    nineteen_add_tool(spv2msl spv2msl.c)
+    target_link_libraries(spv2msl PRIVATE spirv-cross-c)
+    # SPIRV-Cross est du C++ : l'édition de liens doit passer par le pilote C++,
+    # sans quoi il manque la bibliothèque standard C++ à l'assemblage final.
+    set_target_properties(spv2msl PROPERTIES LINKER_LANGUAGE CXX)
+endif()
