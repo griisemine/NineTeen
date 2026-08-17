@@ -17,6 +17,7 @@ add_library(nineteen_engine STATIC
     rhi/ns_rhi_shader.c
 
     scene/ns_scene.c
+    scene/ns_bvh.c
 
     render/ns_render.c
 )

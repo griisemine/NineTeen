@@ -58,7 +58,16 @@ void main()
 
     vec3 orm = texture(u_orm, v_uv).rgb;
     float occlusion = orm.r;
-    float roughness = clamp(orm.g * u_params.y, 0.03, 1.0);
+
+    /*
+     * La rugosité du matériau est l'autorité ; la carte ORM ne fait que la
+     * moduler localement (usure, grain, joints). Multiplier les deux, comme on
+     * le faisait, écrasait la valeur de famille : une moquette annoncée à 0.96
+     * redescendait à 0.27 là où la carte était sombre, et chacune des 49 sources
+     * y laissait un point spéculaire — un semis de points blancs sur le sol.
+     * La carte est donc recentrée sur 1.0 : elle fait varier de ±25 %, pas plus.
+     */
+    float roughness = clamp(u_params.y * (0.75 + 0.5 * orm.g), 0.03, 1.0);
     float metallic  = clamp(u_params.x, 0.0, 1.0);
 
     /* --- normale --- */

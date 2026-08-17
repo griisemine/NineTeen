@@ -15,9 +15,10 @@
 
 #include "ns_core.h"
 #include "ns_math.h"
+#include "ns_bvh.h"
 #include "ns_rhi.h"
 
-#define NS_MAX_LIGHTS    64
+#define NS_MAX_LIGHTS    128
 #define NS_MAX_CABINETS  24
 
 /* ========================================================================== */
@@ -80,6 +81,7 @@ typedef struct ns_light_gpu {
 /* Données CPU associées : ce qui anime la lumière mais n'a pas à monter au GPU. */
 typedef struct ns_light_anim {
     bool  flicker;
+    bool  screen;      /* écran de borne : pulsation douce plutôt que grésillement */
     float phase;
     float base_intensity;
 } ns_light_anim;
@@ -87,6 +89,33 @@ typedef struct ns_light_anim {
 /* ========================================================================== */
 /* Bornes                                                                     */
 /* ========================================================================== */
+
+/*
+ * Points d'intérêt du décor. Le modèle contient un billard, un canapé, un bar
+ * d'accueil, des radios et des toilettes que la V1 n'utilisait pas : ce n'était
+ * que du décor. Les repérer permet d'y accrocher une interaction, une source
+ * sonore positionnelle, ou une zone de réverbération distincte.
+ */
+typedef enum ns_poi_kind {
+    NS_POI_NONE = 0,
+    NS_POI_BILLIARD,
+    NS_POI_SOFA,
+    NS_POI_BAR,
+    NS_POI_RADIO,
+    NS_POI_TOILETS,
+    NS_POI_EXIT,
+    NS_POI_LEADERBOARD,
+    NS_POI_KIND_COUNT
+} ns_poi_kind;
+
+typedef struct ns_poi {
+    char        name[64];
+    ns_poi_kind kind;
+    ns_aabb     bounds;
+    ns_v3       anchor;       /* où se place le joueur pour interagir */
+} ns_poi;
+
+#define NS_MAX_POI 32
 
 typedef struct ns_cabinet {
     char    name[64];
@@ -136,6 +165,9 @@ typedef struct ns_scene {
     ns_cabinet cabinets[NS_MAX_CABINETS];
     uint32_t   cabinet_count;
 
+    ns_poi     pois[NS_MAX_POI];
+    uint32_t   poi_count;
+
     ns_aabb  bounds;        /* toute la géométrie, décor lointain compris */
     /*
      * Emprise de la salle jouable, déduite des bornes et des lumières.
@@ -153,6 +185,9 @@ typedef struct ns_scene {
     ns_texture fallback_white;
     ns_texture fallback_normal;
     ns_texture fallback_orm;
+
+    /* Structure d'accélération : rendu, collision et audio la partagent. */
+    ns_bvh bvh;
 
     ns_arena arena;
 } ns_scene;
@@ -173,5 +208,15 @@ void ns_scene_animate_lights(ns_scene *s, double time_seconds);
 
 /* Trouve la borne la plus proche d'un point, dans un rayon donné. */
 const ns_cabinet *ns_scene_nearest_cabinet(const ns_scene *s, ns_v3 position, float max_distance);
+
+/* Point d'intérêt le plus proche (billard, bar, canapé, radio…). */
+const ns_poi *ns_scene_nearest_poi(const ns_scene *s, ns_v3 position, float max_distance);
+
+/* Libellé lisible d'un type de point d'intérêt, pour l'invite d'interaction. */
+const char *ns_poi_label(ns_poi_kind kind);
+
+/* Couleur d'écran associée à un jeu : sert à la lumière que la borne projette
+ * devant elle, et au halo de son marquee. */
+void ns_game_screen_color(const char *game, float out_rgb[3]);
 
 #endif /* NS_SCENE_H */

@@ -51,6 +51,16 @@ typedef struct bloom_blur_ubo      { float direction[4]; } bloom_blur_ubo;
 typedef struct tonemap_ubo         { float settings[4]; float extra[4]; } tonemap_ubo;
 typedef struct debug_ubo           { int32_t mode[4]; float scale[4]; } debug_ubo;
 
+typedef struct denoise_ubo { float step[4]; } denoise_ubo;
+
+typedef struct raytrace_ubo {
+    float   inv_view_proj[16];
+    float   camera_pos[4];
+    float   ambient[4];
+    int32_t config[4];      /* lumières, mode, rayons/pixel, n° d'image */
+    float   accum[4];       /* poids historique, largeur, hauteur, libre */
+} raytrace_ubo;
+
 /* ========================================================================== */
 
 struct ns_renderer {
@@ -65,8 +75,13 @@ struct ns_renderer {
     ns_texture gbuffer_emissive;
     ns_texture depth;
     ns_texture hdr;
-    ns_texture visibility;
+    ns_texture visibility;          /* SSAO, écrit par une passe de rendu */
+    ns_texture rt_visibility[2];    /* ombres + indirect, ping-pong pour l'accumulation */
+    ns_texture rt_filtered[2];      /* sortie du débruitage, deux passes à-trous */
     ns_texture reflections;
+    uint32_t   rt_current;          /* index d'écriture du ping-pong */
+    uint32_t   accum_frames;        /* images accumulées depuis le dernier mouvement */
+    ns_texture *rt_denoised;        /* dernière sortie de débruitage utilisable */
     ns_texture bloom[BLOOM_MIPS];
     ns_texture bloom_tmp[BLOOM_MIPS];
 
@@ -78,6 +93,8 @@ struct ns_renderer {
     SDL_GPUGraphicsPipeline *pipe_bloom_blur;
     SDL_GPUGraphicsPipeline *pipe_tonemap;
     SDL_GPUGraphicsPipeline *pipe_debug;
+    SDL_GPUComputePipeline  *pipe_raytrace;
+    SDL_GPUGraphicsPipeline *pipe_denoise;
     SDL_GPUTextureFormat     tonemap_format;
 
     /* Tampon des lumières, réécrit à chaque image (elles scintillent). */
@@ -121,7 +138,7 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
     SDL_zerop(s);
     s->quality = quality;
     s->render_scale = 1.0f;
-    s->exposure = 1.0f;
+    s->exposure = 1.35f;
     s->bloom_intensity = 0.7f;
     /* Sous 1.0, les panneaux lumineux du plafond (émissifs à exactement 1.0
      * dans le modèle d'origine) ne fleurissaient pas du tout et ressortaient
@@ -137,10 +154,15 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
     s->fog_density = 0.012f;
     s->fog_color[0] = 0.055f; s->fog_color[1] = 0.062f; s->fog_color[2] = 0.085f;
 
-    /* Ambiance sombre : une salle d'arcade tire sa lumière de ses machines,
-     * pas d'un éclairage général. C'est ce contraste qui la rend crédible. */
-    s->ambient[0] = 0.16f; s->ambient[1] = 0.17f; s->ambient[2] = 0.24f;
-    s->ambient_intensity = 0.55f;
+    /*
+     * Ambiance. Une salle d'arcade tire sa lumière de ses machines plutôt que
+     * d'un éclairage général, et c'est ce contraste qui la rend crédible — mais
+     * une ambiance trop faible écrase tout ce que les sources n'atteignent pas,
+     * et la salle devient illisible. Ce niveau garde les recoins lisibles sans
+     * effacer le relief que créent les néons.
+     */
+    s->ambient[0] = 0.26f; s->ambient[1] = 0.27f; s->ambient[2] = 0.34f;
+    s->ambient_intensity = 0.95f;
 
     s->ssao_radius = 0.45f;
     s->ssao_intensity = 0.85f;
@@ -183,6 +205,10 @@ static void destroy_targets(ns_rhi *r, ns_renderer *rd)
     ns_texture_destroy(r, &rd->depth);
     ns_texture_destroy(r, &rd->hdr);
     ns_texture_destroy(r, &rd->visibility);
+    ns_texture_destroy(r, &rd->rt_visibility[0]);
+    ns_texture_destroy(r, &rd->rt_visibility[1]);
+    ns_texture_destroy(r, &rd->rt_filtered[0]);
+    ns_texture_destroy(r, &rd->rt_filtered[1]);
     ns_texture_destroy(r, &rd->reflections);
     for (int i = 0; i < BLOOM_MIPS; ++i) {
         ns_texture_destroy(r, &rd->bloom[i]);
@@ -231,8 +257,40 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
     ok = ok && make_target(r, &rd->gbuffer_emissive, rw, rh, FMT_EMISSIVE, false, "gbuffer émissif");
     ok = ok && make_target(r, &rd->depth,            rw, rh, FMT_DEPTH,    true,  "profondeur");
     ok = ok && make_target(r, &rd->hdr,              rw, rh, FMT_HDR,      false, "HDR");
-    ok = ok && make_target(r, &rd->visibility,       rw, rh, FMT_VIS,      false, "visibilité");
-    ok = ok && make_target(r, &rd->reflections,      rw, rh, FMT_HDR,      false, "réflexions");
+    ok = ok && make_target(r, &rd->visibility,       rw, rh, FMT_VIS,      false, "SSAO");
+
+    /* Les cibles du lancer de rayons sont écrites par un compute shader et lues
+     * par la passe d'éclairage : il leur faut les deux usages. Le ping-pong
+     * évite d'avoir à lire et écrire la même image dans un seul dispatch, ce que
+     * tous les backends ne garantissent pas. */
+    for (int i = 0; i < 2 && ok; ++i) {
+        ns_texture_desc d;
+        SDL_zero(d);
+        d.width = rw; d.height = rh;
+        d.format = FMT_HDR;
+        d.sampled = true;
+        d.storage_write = true;
+        d.name = "visibilité RT";
+        ok = ok && ns_texture_create(r, &rd->rt_visibility[i], &d);
+    }
+    {
+        ns_texture_desc d;
+        SDL_zero(d);
+        d.width = rw; d.height = rh;
+        d.format = FMT_HDR;
+        d.sampled = true;
+        d.storage_write = true;
+        d.render_target = true;      /* pour l'effacement explicite */
+        d.name = "réflexions";
+        ok = ok && ns_texture_create(r, &rd->reflections, &d);
+    }
+    /* Cibles de débruitage : deux passes à-trous en aller-retour. */
+    for (int i = 0; i < 2 && ok; ++i) {
+        ok = ok && make_target(r, &rd->rt_filtered[i], rw, rh, FMT_HDR, false, "RT filtré");
+    }
+    rd->rt_current = 0;
+    rd->accum_frames = 0;
+    rd->rt_denoised = NULL;
 
     /* Chaîne de halo : chaque niveau à la moitié du précédent. Le flou large
      * s'obtient ainsi en quelques passes au lieu d'un noyau énorme. */
@@ -384,11 +442,29 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
 
     rd->pipe_gbuffer = make_gbuffer_pipeline(r);
     rd->pipe_ssao    = make_fullscreen_pipeline(r, "ssao.frag", 2, 0, &vis_fmt, 1);
-    rd->pipe_lighting = make_fullscreen_pipeline(r, "lighting.frag", 6, 1, &hdr_fmt, 1);
+    rd->pipe_lighting = make_fullscreen_pipeline(r, "lighting.frag", 7, 1, &hdr_fmt, 1);
     rd->pipe_bloom_threshold = make_fullscreen_pipeline(r, "bloom_threshold.frag", 1, 0, &hdr_fmt, 1);
     rd->pipe_bloom_blur = make_fullscreen_pipeline(r, "bloom_blur.frag", 1, 0, &hdr_fmt, 1);
     rd->pipe_tonemap = make_fullscreen_pipeline(r, "tonemap.frag", 2, 0, &rd->tonemap_format, 1);
     rd->pipe_debug   = make_fullscreen_pipeline(r, "debug_view.frag", 1, 0, &rd->tonemap_format, 1);
+
+    /* Couche de lancer de rayons. Son absence n'est pas fatale : le rendu
+     * retombe sur l'espace écran, ce qui reste jouable. */
+    {
+        ns_compute_desc cd;
+        SDL_zero(cd);
+        cd.name = "raytrace.comp";
+        cd.num_samplers = 4;                      /* profondeur, normale, albédo, historique */
+        cd.num_readonly_storage_buffers = 4;      /* nœuds, triangles, matériaux, lumières */
+        cd.num_readwrite_storage_textures = 2;    /* visibilité, réflexions */
+        cd.num_uniform_buffers = 1;
+        cd.threads_x = 8; cd.threads_y = 8; cd.threads_z = 1;
+        rd->pipe_raytrace = ns_compute_pipeline_create(r, &cd);
+        if (!rd->pipe_raytrace) {
+            NS_WARN("pipeline de lancer de rayons indisponible : repli sur l'espace écran");
+        }
+    }
+    rd->pipe_denoise = make_fullscreen_pipeline(r, "rt_denoise.frag", 3, 0, &hdr_fmt, 1);
 
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
         || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
@@ -421,6 +497,8 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     if (rd->pipe_bloom_blur)       SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_bloom_blur);
     if (rd->pipe_tonemap)          SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_tonemap);
     if (rd->pipe_debug)            SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_debug);
+    if (rd->pipe_raytrace)         SDL_ReleaseGPUComputePipeline(dev, rd->pipe_raytrace);
+    if (rd->pipe_denoise)          SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_denoise);
     ns_buffer_destroy(r, &rd->lights);
     destroy_targets(r, rd);
     ns_free(rd);
@@ -637,6 +715,128 @@ static void fullscreen_pass(ns_rhi *r, SDL_GPUGraphicsPipeline *pipe,
 }
 
 /* ========================================================================== */
+/* Passe de lancer de rayons                                                  */
+/* ========================================================================== */
+/*
+ * Un dispatch de compute par image. Les rayons partent des points visibles
+ * reconstruits depuis le G-buffer, ce qui évite de lancer des rayons primaires :
+ * la rasterisation les a déjà résolus, et bien plus vite.
+ */
+static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
+                          const ns_m4 *inv_view_proj, const ns_camera *cam,
+                          uint32_t light_count, double time_seconds)
+{
+    if (!rd->pipe_raytrace || !scene->bvh.loaded) return;
+    if (rd->settings.raytracing == NS_RT_OFF) return;
+
+    SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
+
+    const uint32_t write = rd->rt_current ^ 1u;
+    const uint32_t read  = rd->rt_current;
+
+    SDL_GPUStorageTextureReadWriteBinding outputs[2];
+    SDL_zeroa(outputs);
+    outputs[0].texture = rd->rt_visibility[write].handle;
+    outputs[1].texture = rd->reflections.handle;
+    /* `cycle` demande au pilote une ressource fraîche si l'ancienne est encore
+     * lue par le GPU : sans cela, on attendrait la fin de l'image précédente. */
+    outputs[0].cycle = true;
+    outputs[1].cycle = true;
+
+    SDL_GPUComputePass *pass = SDL_BeginGPUComputePass(cmd, outputs, 2, NULL, 0);
+    SDL_BindGPUComputePipeline(pass, rd->pipe_raytrace);
+
+    SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
+    SDL_GPUSampler *linear  = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
+    SDL_GPUTextureSamplerBinding tex[4];
+    SDL_zeroa(tex);
+    tex[0].texture = rd->depth.handle;                    tex[0].sampler = nearest;
+    tex[1].texture = rd->gbuffer_normal.handle;           tex[1].sampler = nearest;
+    tex[2].texture = rd->gbuffer_albedo.handle;           tex[2].sampler = nearest;
+    tex[3].texture = rd->rt_visibility[read].handle;      tex[3].sampler = linear;
+    SDL_BindGPUComputeSamplers(pass, 0, tex, 4);
+
+    SDL_GPUBuffer *buffers[4] = {
+        scene->bvh.gpu_nodes.handle,
+        scene->bvh.gpu_tris.handle,
+        scene->bvh.gpu_materials.handle,
+        rd->lights.handle,
+    };
+    SDL_BindGPUComputeStorageBuffers(pass, 0, buffers, 4);
+
+    raytrace_ubo u;
+    SDL_zero(u);
+    SDL_memcpy(u.inv_view_proj, inv_view_proj->m, sizeof u.inv_view_proj);
+    u.camera_pos[0] = cam->position.x;
+    u.camera_pos[1] = cam->position.y;
+    u.camera_pos[2] = cam->position.z;
+    u.camera_pos[3] = (float)time_seconds;
+    SDL_memcpy(u.ambient, rd->settings.ambient, sizeof(float) * 3);
+    u.ambient[3] = rd->settings.ambient_intensity;
+    u.config[0] = (int32_t)light_count;
+    u.config[1] = (int32_t)rd->settings.raytracing;
+    u.config[2] = rd->settings.rt_rays_per_pixel;
+    u.config[3] = (int32_t)(ns_rhi_frame_index(r) & 0xFFFFu);
+
+    /* Poids de l'historique : croît avec le nombre d'images accumulées, plafonné
+     * pour que l'image reste réactive. Remis à zéro dès que la caméra bouge —
+     * un historique conservé à tort produit des traînées bien plus visibles que
+     * le bruit qu'il supprime. */
+    const float weight = (rd->accum_frames == 0)
+                       ? 0.0f
+                       : ns_minf(0.95f, 1.0f - 1.0f / (float)(rd->accum_frames + 1));
+    u.accum[0] = weight;
+    u.accum[1] = (float)rd->width;
+    u.accum[2] = (float)rd->height;
+
+    SDL_PushGPUComputeUniformData(cmd, 0, &u, sizeof u);
+
+    /* Groupes de 8x8, arrondis au supérieur ; le shader borne lui-même. */
+    SDL_DispatchGPUCompute(pass, (rd->width + 7) / 8, (rd->height + 7) / 8, 1);
+    SDL_EndGPUComputePass(pass);
+
+    rd->rt_current = write;
+    rd->accum_frames++;
+
+    /*
+     * Débruitage : deux passes à-trous, espacement doublé à la seconde. Deux
+     * suffisent ici parce que l'accumulation temporelle fait le gros du travail
+     * dès que la caméra ralentit ; une troisième passe commencerait à effacer
+     * les petites ombres de contact sous les bornes.
+     *
+     * L'agressivité est modulée par le nombre d'images accumulées : une image
+     * déjà convergée n'a pas besoin d'être lissée, et le filtre lui ferait
+     * perdre du détail.
+     */
+    if (rd->pipe_denoise) {
+        const float converged = ns_minf(1.0f, (float)rd->accum_frames / 24.0f);
+        SDL_GPUSampler *nearest_s = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
+
+        for (int pass_index = 0; pass_index < 2; ++pass_index) {
+            const float spacing = (pass_index == 0) ? 1.0f : 2.0f;
+            denoise_ubo du;
+            SDL_zero(du);
+            du.step[0] = spacing / (float)rd->width;
+            du.step[1] = spacing / (float)rd->height;
+            du.step[2] = 220.0f;                       /* sensibilité à la profondeur */
+            du.step[3] = 24.0f;                        /* sensibilité à la normale */
+            /* Filtre désactivé en douceur quand l'image a convergé. */
+            if (converged >= 1.0f && pass_index == 1) break;
+
+            SDL_GPUTexture *src = (pass_index == 0)
+                                ? rd->rt_visibility[rd->rt_current].handle
+                                : rd->rt_filtered[0].handle;
+            SDL_GPUTexture *tex_in[3] = { src, rd->depth.handle, rd->gbuffer_normal.handle };
+            SDL_GPUSampler *smp_in[3] = { nearest_s, nearest_s, nearest_s };
+
+            fullscreen_pass(r, rd->pipe_denoise, rd->rt_filtered[pass_index].handle,
+                            SDL_GPU_LOADOP_CLEAR, tex_in, smp_in, 3, &du, sizeof du, NULL);
+            rd->rt_denoised = &rd->rt_filtered[pass_index];
+        }
+    }
+}
+
+/* ========================================================================== */
 /* Dessin complet                                                             */
 /* ========================================================================== */
 
@@ -713,6 +913,17 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                         tex, smp, 2, &u, sizeof u, NULL);
     }
 
+    /* --- 2b. Lancer de rayons ---
+     * L'accumulation temporelle n'est valable que si la caméra n'a pas bougé :
+     * on compare la matrice de cette image à celle de la précédente. */
+    {
+        float diff = 0.0f;
+        const float *a = &view_proj.m[0][0];
+        for (int i = 0; i < 16; ++i) diff += fabsf(a[i] - rd->prev_view_proj[i]);
+        if (diff > 1e-4f) rd->accum_frames = 0;
+    }
+    pass_raytrace(r, rd, scene, &inv_view_proj, camera, light_count, time_seconds);
+
     /* --- 3. Éclairage --- */
     {
         frame_ubo u;
@@ -732,14 +943,16 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
         SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
-        SDL_GPUTexture *tex[6] = {
+        SDL_GPUTexture *tex[7] = {
             rd->gbuffer_albedo.handle, rd->gbuffer_normal.handle, rd->gbuffer_emissive.handle,
-            rd->depth.handle, rd->visibility.handle, rd->reflections.handle
+            rd->depth.handle, rd->visibility.handle,
+            (rd->rt_denoised ? rd->rt_denoised->handle : rd->rt_visibility[rd->rt_current].handle),
+            rd->reflections.handle
         };
-        SDL_GPUSampler *smp[6] = { nearest, nearest, nearest, nearest, clamp, clamp };
+        SDL_GPUSampler *smp[7] = { nearest, nearest, nearest, nearest, clamp, clamp, clamp };
 
         fullscreen_pass(r, rd->pipe_lighting, rd->hdr.handle, SDL_GPU_LOADOP_CLEAR,
-                        tex, smp, 6, &u, sizeof u, rd->lights.handle);
+                        tex, smp, 7, &u, sizeof u, rd->lights.handle);
     }
 
     /* --- 4. Halo --- */
@@ -790,7 +1003,9 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         case NS_DEBUG_NORMAL:     src = rd->gbuffer_normal.handle;   break;
         case NS_DEBUG_EMISSIVE:   src = rd->gbuffer_emissive.handle; break;
         case NS_DEBUG_DEPTH:      src = rd->depth.handle;            break;
-        case NS_DEBUG_VISIBILITY: src = rd->visibility.handle;       break;
+        case NS_DEBUG_VISIBILITY: src = (rd->settings.raytracing != NS_RT_OFF && rd->rt_denoised)
+                                      ? rd->rt_denoised->handle
+                                      : rd->visibility.handle; break;
         case NS_DEBUG_HDR:        src = rd->hdr.handle;              break;
         case NS_DEBUG_BLOOM:      src = rd->bloom[BLOOM_MIPS - 1].handle; break;
         default: break;

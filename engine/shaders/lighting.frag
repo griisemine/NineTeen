@@ -22,8 +22,9 @@ layout(set = 2, binding = 0) uniform sampler2D u_albedoAO;
 layout(set = 2, binding = 1) uniform sampler2D u_normalRM;
 layout(set = 2, binding = 2) uniform sampler2D u_emissive;
 layout(set = 2, binding = 3) uniform sampler2D u_depth;
-layout(set = 2, binding = 4) uniform sampler2D u_visibility;   /* r : ombres, g : AO, ba : GI */
-layout(set = 2, binding = 5) uniform sampler2D u_reflections;
+layout(set = 2, binding = 4) uniform sampler2D u_ssao;         /* g : occlusion ambiante */
+layout(set = 2, binding = 5) uniform sampler2D u_rtVisibility; /* r : ombres, gba : indirect */
+layout(set = 2, binding = 6) uniform sampler2D u_reflections;
 
 struct Light {
     vec3  position;
@@ -38,7 +39,7 @@ struct Light {
 };
 
 /* Les storage buffers viennent après les textures dans le set 2. */
-layout(std430, set = 2, binding = 6) readonly buffer Lights {
+layout(std430, set = 2, binding = 7) readonly buffer Lights {
     Light lights[];
 };
 
@@ -156,12 +157,16 @@ void main()
      * lui-même pour un métal — c'est ce qui distingue le chrome du plastique. */
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    vec4 visibility = texture(u_visibility, v_uv);
-    float shadow = (u_counts.y != 0) ? visibility.r : 1.0;
-    float ao     = occlusion * visibility.g;
+    /* L'occlusion ambiante vient toujours de l'espace écran : elle capte le
+     * contact rapproché mieux, et moins cher, que des rayons stochastiques. */
+    float ao = occlusion * texture(u_ssao, v_uv).g;
+
+    /* Les ombres et l'indirect viennent du lancer de rayons quand il tourne. */
+    vec4  rt = texture(u_rtVisibility, v_uv);
+    float shadow = (u_counts.y != 0) ? clamp(rt.r, 0.0, 1.0) : 1.0;
 
     vec3 Lo = vec3(0.0);
-    int count = min(u_counts.x, 64);
+    int count = min(u_counts.x, 128);
 
     for (int i = 0; i < count; ++i) {
         Light li = lights[i];
@@ -205,11 +210,14 @@ void main()
         Lo += (kd * albedo / PI + specular) * radiance * NdotL * shadow;
     }
 
-    /* Ambiance. En l'absence de couche de ray tracing, c'est une constante
-     * modulée par l'occlusion ; avec elle, l'illumination globale calculée
-     * remplace cette approximation. */
-    vec3 indirect = (u_counts.y != 0) ? visibility.b * u_ambient.rgb * u_ambient.a
-                                      : u_ambient.rgb * u_ambient.a;
+    /*
+     * Ambiance. Sans ray tracing, c'est une constante modulée par l'occlusion —
+     * une approximation qui éclaire de la même façon un coin de mur et le
+     * milieu de la salle. Avec l'illumination globale, chaque point reçoit la
+     * lumière effectivement rebondie autour de lui : c'est ce qui fait que la
+     * moquette prend la couleur de la borne qui la surplombe.
+     */
+    vec3 indirect = (u_counts.y >= 3) ? rt.gba : u_ambient.rgb * u_ambient.a;
     vec3 ambient = indirect * albedo * ao;
 
     /* Réflexions : uniquement si la couche de ray tracing les a produites.

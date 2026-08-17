@@ -72,6 +72,10 @@ static int32_t load_one(ns_rhi *r, ns_scene *s, uint32_t *cursor,
     return (int32_t)(*cursor)++;
 }
 
+/* Définies plus bas, utilisées par le chargement. */
+static void add_cabinet_screen_lights(ns_scene *s);
+static void detect_points_of_interest(ns_scene *s, const char *gltf_logical);
+
 /* ========================================================================== */
 /* Lumières et bornes (fichiers JSON annexes)                                 */
 /* ========================================================================== */
@@ -203,24 +207,45 @@ static void load_cabinet_assignment(ns_scene *s, const char *logical)
         ns_json_get_vec3(&doc, screen, "sizeFraction", size_f, 0.0f);
     }
 
+    /*
+     * Orientation des bornes.
+     *
+     * Une borne d'arcade est plus profonde que large : sa face avant est donc
+     * perpendiculaire à son plus GRAND côté horizontal, pas au plus petit — la
+     * première version avait l'inverse et faisait éclairer les bornes vers
+     * l'intérieur du meuble.
+     *
+     * Reste le sens. Les bornes sont disposées en deux rangées face à face de
+     * part et d'autre d'une allée ; chacune regarde donc vers le barycentre de
+     * l'ensemble. C'est une heuristique, mais elle est exacte sur cette salle et
+     * ne dépend d'aucune valeur codée en dur.
+     */
+    ns_v3 flock = ns_v3_zero();
+    for (uint32_t c = 0; c < s->cabinet_count; ++c) {
+        flock = ns_v3_add(flock, ns_aabb_center(s->cabinets[c].bounds));
+    }
+    if (s->cabinet_count) flock = ns_v3_scale(flock, 1.0f / (float)s->cabinet_count);
+
     for (uint32_t c = 0; c < s->cabinet_count; ++c) {
         ns_cabinet *cab = &s->cabinets[c];
         const ns_v3 extent = ns_aabb_extent(cab->bounds);
         const ns_v3 centre = ns_aabb_center(cab->bounds);
+        const ns_v3 toward = ns_v3_sub(flock, centre);
 
-        cab->screen_center = ns_v3_make(
-            cab->bounds.min.x + extent.x * (origin_f[0] + size_f[0] * 0.5f),
-            cab->bounds.min.y + extent.y * (origin_f[1] + size_f[1] * 0.5f),
-            centre.z);
-
-        /* La borne regarde le long de son axe le plus court : c'est la face
-         * avant, celle où se tient le joueur. */
-        if (extent.x < extent.z) {
-            cab->screen_normal = ns_v3_make(centre.x < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f);
+        if (extent.x >= extent.z) {
+            cab->screen_normal = ns_v3_make(toward.x >= 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f);
         } else {
-            cab->screen_normal = ns_v3_make(0.0f, 0.0f, centre.z < 0.0f ? -1.0f : 1.0f);
+            cab->screen_normal = ns_v3_make(0.0f, 0.0f, toward.z >= 0.0f ? 1.0f : -1.0f);
         }
-        cab->player_anchor = ns_v3_add(cab->screen_center, ns_v3_scale(cab->screen_normal, 1.1f));
+
+        /* L'écran est à mi-hauteur de la fraction déclarée, sur la face avant. */
+        const ns_v3 half = ns_v3_scale(extent, 0.5f);
+        cab->screen_center = ns_v3_make(
+            centre.x + cab->screen_normal.x * half.x * 0.92f,
+            cab->bounds.min.y + extent.y * (origin_f[1] + size_f[1] * 0.5f),
+            centre.z + cab->screen_normal.z * half.z * 0.92f);
+
+        cab->player_anchor = ns_v3_add(cab->screen_center, ns_v3_scale(cab->screen_normal, 1.0f));
         cab->player_anchor.y = cab->bounds.min.y;
     }
 
@@ -553,6 +578,8 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
     load_lights(out, sibling);
     logical_sibling(gltf_logical, "cabinets.json", sibling, sizeof sibling);
     load_cabinet_assignment(out, sibling);
+    add_cabinet_screen_lights(out);
+    detect_points_of_interest(out, gltf_logical);
 
     /* Emprise jouable : union des bornes et des lumières, élargie d'une marge
      * de circulation. C'est ce volume qui sert à placer la caméra et le joueur. */
@@ -583,6 +610,18 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
                 (double)out->room_bounds.max.y, (double)out->room_bounds.max.z);
     }
 
+    /* BVH : facultatif. Sans lui, le rendu retombe sur l'espace écran et la
+     * collision est désactivée — le jeu reste lançable, ce qui vaut mieux qu'un
+     * refus de démarrer si l'étape de build a été sautée. */
+    {
+        char bvh_path[512];
+        logical_sibling(gltf_logical, "salle.nsbvh", bvh_path, sizeof bvh_path);
+        if (!ns_bvh_load(r, &out->bvh, bvh_path)) {
+            NS_WARN("BVH absent : pas de lancer de rayons ni de collision "
+                    "(lancer `cmake --build` pour le générer)");
+        }
+    }
+
     NS_INFO("scène prête : %u sommets, %u indices, %u lots, %u matériaux, %u lumières",
             out->vertex_count, out->index_count, out->batch_count,
             out->material_count, out->light_count);
@@ -595,6 +634,7 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
 void ns_scene_unload(ns_rhi *r, ns_scene *s)
 {
     if (!s) return;
+    ns_bvh_unload(r, &s->bvh);
     for (uint32_t i = 0; i < s->texture_count; ++i) {
         if (s->textures && s->textures[i].handle) ns_texture_destroy(r, &s->textures[i]);
     }
@@ -609,6 +649,195 @@ void ns_scene_unload(ns_rhi *r, ns_scene *s)
 }
 
 /* ========================================================================== */
+/* Couleurs d'écran                                                           */
+/* ========================================================================== */
+/*
+ * Chaque jeu a une dominante, reprise de ses propres textures d'origine. La
+ * borne projette cette couleur devant elle : c'est ce qui fait qu'en marchant
+ * dans l'allée, on passe du vert de Flappy au bleu de Tetris. La V1 avait ces
+ * couleurs dans ses images ; ici elles éclairent réellement le sol.
+ */
+typedef struct game_tint { const char *game; float rgb[3]; } game_tint;
+
+static const game_tint g_game_tints[] = {
+    { "flappy",      { 0.32f, 1.00f, 0.52f } },   /* vert du tuyau */
+    { "tetris",      { 0.35f, 0.58f, 1.00f } },   /* bleu de la grille */
+    { "asteroid",    { 0.70f, 0.84f, 1.00f } },   /* blanc-bleu spatial */
+    { "snake",       { 0.45f, 1.00f, 0.38f } },
+    { "shooter",     { 1.00f, 0.46f, 0.24f } },   /* orange des explosions */
+    { "demineur",    { 1.00f, 0.86f, 0.38f } },
+    { "pacman",      { 1.00f, 0.90f, 0.22f } },
+    { "piano",       { 0.88f, 0.42f, 1.00f } },
+    { "leaderboard", { 0.40f, 0.92f, 1.00f } },
+};
+
+void ns_game_screen_color(const char *game, float out_rgb[3])
+{
+    out_rgb[0] = out_rgb[1] = out_rgb[2] = 0.85f;   /* écran éteint : gris froid */
+    if (!game) return;
+    for (size_t i = 0; i < SDL_arraysize(g_game_tints); ++i) {
+        if (SDL_strcasecmp(game, g_game_tints[i].game) == 0) {
+            SDL_memcpy(out_rgb, g_game_tints[i].rgb, sizeof(float) * 3);
+            return;
+        }
+    }
+}
+
+/*
+ * Ajoute une source lumineuse devant l'écran de chaque borne.
+ *
+ * C'est le geste qui change le plus la salle. Les écrans du modèle d'origine
+ * sont des textures claires : ils n'éclairaient rien. Une vraie borne d'arcade
+ * dans une salle sombre projette une flaque de lumière colorée sur la moquette
+ * et sur le joueur qui s'en approche — c'est l'image même d'une salle d'arcade.
+ */
+static void add_cabinet_screen_lights(ns_scene *s)
+{
+    uint32_t added = 0;
+    for (uint32_t i = 0; i < s->cabinet_count && s->light_count < NS_MAX_LIGHTS; ++i) {
+        const ns_cabinet *c = &s->cabinets[i];
+
+        float tint[3];
+        ns_game_screen_color(c->game, tint);
+
+        ns_light_gpu *l = &s->lights[s->light_count];
+        ns_light_anim *a = &s->light_anim[s->light_count];
+        SDL_zerop(l);
+        SDL_zerop(a);
+
+        /* Décollée de l'écran vers le joueur : dans la géométrie, elle
+         * n'éclairerait que l'intérieur de la borne. */
+        const ns_v3 p = ns_v3_add(c->screen_center, ns_v3_scale(c->screen_normal, 0.45f));
+        l->position[0] = p.x; l->position[1] = p.y; l->position[2] = p.z;
+        l->color[0] = tint[0]; l->color[1] = tint[1]; l->color[2] = tint[2];
+        l->intensity = 240.0f;
+        l->range = 6.2f;
+        l->type = NS_LIGHT_POINT;
+        l->shadow_index = -1;
+
+        a->base_intensity = l->intensity;
+        /* Pulsation lente et désynchronisée : un écran de jeu n'a pas une
+         * luminosité constante, et voir quinze bornes battre à l'unisson
+         * détruirait immédiatement l'illusion. */
+        a->flicker = true;
+        a->screen = true;
+        a->phase = (float)i * 1.7f + 0.3f;
+
+        s->light_count++;
+        added++;
+    }
+    if (added) NS_INFO("%u lumières d'écran de borne ajoutées", added);
+}
+
+/* ========================================================================== */
+/* Points d'intérêt                                                           */
+/* ========================================================================== */
+
+static const char *const g_poi_labels[NS_POI_KIND_COUNT] = {
+    "", "Billard", "Canapé", "Bar", "Radio", "Toilettes", "Sortie", "Classement"
+};
+
+const char *ns_poi_label(ns_poi_kind kind)
+{
+    if (kind <= NS_POI_NONE || kind >= NS_POI_KIND_COUNT) return "";
+    return g_poi_labels[kind];
+}
+
+/*
+ * Repère les lieux du décor par le nom des objets du glTF.
+ *
+ * Le modèle contient un billard, un canapé, un bar d'accueil, des radios, des
+ * toilettes et une porte de sortie — tous modélisés, tous inertes dans la V1.
+ * Ce sont autant d'endroits où accrocher une interaction, une source sonore
+ * positionnelle et une zone de réverbération propre.
+ */
+static void detect_points_of_interest(ns_scene *s, const char *gltf_logical)
+{
+    ns_arena_mark mark = ns_arena_save(&s->arena);
+
+    char path[1024];
+    if (!ns_path_resolve(gltf_logical, path, sizeof path)) {
+        ns_arena_restore(&s->arena, mark);
+        return;
+    }
+
+    cgltf_options opt;
+    SDL_zero(opt);
+    cgltf_data *data = NULL;
+    if (cgltf_parse_file(&opt, path, &data) != cgltf_result_success) {
+        ns_arena_restore(&s->arena, mark);
+        return;
+    }
+
+    static const struct { const char *token; ns_poi_kind kind; } table[] = {
+        { "billiard", NS_POI_BILLIARD },
+        { "billard",  NS_POI_BILLIARD },
+        { "sofa",     NS_POI_SOFA },
+        { "canape",   NS_POI_SOFA },
+        { "bar_",     NS_POI_BAR },
+        { "accueil",  NS_POI_BAR },
+        { "radio",    NS_POI_RADIO },
+        { "toilette", NS_POI_TOILETS },
+        { "lavabo",   NS_POI_TOILETS },
+        { "porte",    NS_POI_EXIT },
+        { "exit",     NS_POI_EXIT },
+    };
+
+    for (cgltf_size n = 0; n < data->nodes_count && s->poi_count < NS_MAX_POI; ++n) {
+        const cgltf_node *node = &data->nodes[n];
+        if (!node->name || !node->mesh) continue;
+
+        ns_poi_kind kind = NS_POI_NONE;
+        for (size_t t = 0; t < SDL_arraysize(table); ++t) {
+            if (SDL_strcasestr(node->name, table[t].token)) { kind = table[t].kind; break; }
+        }
+        if (kind == NS_POI_NONE) continue;
+
+        /* Éviter les doublons : le décor contient plusieurs radios et plusieurs
+         * éléments de toilettes ; on ne garde pas dix entrées pour le même lieu
+         * si elles se touchent. */
+        cgltf_float world[16];
+        cgltf_node_transform_world(node, world);
+        const ns_v3 pos = ns_v3_make(world[12], world[13], world[14]);
+
+        bool duplicate = false;
+        for (uint32_t i = 0; i < s->poi_count; ++i) {
+            if (s->pois[i].kind == kind && ns_v3_dist(s->pois[i].anchor, pos) < 3.0f) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate) continue;
+
+        ns_poi *p = &s->pois[s->poi_count++];
+        SDL_zerop(p);
+        SDL_strlcpy(p->name, node->name, sizeof p->name);
+        p->kind = kind;
+        p->anchor = pos;
+    }
+    cgltf_free(data);
+
+    if (s->poi_count) {
+        NS_INFO("%u points d'intérêt repérés dans le décor :", s->poi_count);
+        for (uint32_t i = 0; i < s->poi_count; ++i) {
+            NS_INFO("    %-12s %s", ns_poi_label(s->pois[i].kind), s->pois[i].name);
+        }
+    }
+    ns_arena_restore(&s->arena, mark);
+}
+
+const ns_poi *ns_scene_nearest_poi(const ns_scene *s, ns_v3 position, float max_distance)
+{
+    const ns_poi *best = NULL;
+    float best_dist = max_distance;
+    for (uint32_t i = 0; i < s->poi_count; ++i) {
+        const float d = ns_v3_dist(position, s->pois[i].anchor);
+        if (d < best_dist) { best_dist = d; best = &s->pois[i]; }
+    }
+    return best;
+}
+
+/* ========================================================================== */
 /* Animation de l'éclairage                                                   */
 /* ========================================================================== */
 
@@ -619,14 +848,28 @@ void ns_scene_animate_lights(ns_scene *s, double time_seconds)
         ns_light_anim *a = &s->light_anim[i];
         if (!a->flicker) continue;
 
-        /* Scintillement de tube fluorescent : une oscillation lente pour la
-         * respiration, une rapide pour le grésillement, et un creux occasionnel.
-         * Une simple sinusoïde donnerait un clignotement de guirlande. */
-        const float slow = sinf(t * 1.7f + a->phase) * 0.04f;
-        const float fast = sinf(t * 37.0f + a->phase * 3.1f) * 0.02f;
-        const float dip  = (sinf(t * 0.53f + a->phase) > 0.985f) ? -0.35f : 0.0f;
+        /* Deux comportements distincts.
+         *
+         * Tube fluorescent : une oscillation lente pour la respiration, une
+         * rapide pour le grésillement, et un creux occasionnel. Une simple
+         * sinusoïde donnerait un clignotement de guirlande de Noël.
+         *
+         * Écran de borne : une pulsation lente et douce, comme une image de jeu
+         * dont la luminosité moyenne varie. Quand les mini-jeux tourneront
+         * réellement dans les écrans, cette approximation sera remplacée par la
+         * luminance mesurée de l'image rendue. */
+        float modulation;
+        if (a->screen) {
+            modulation = sinf(t * 2.3f + a->phase) * 0.10f
+                       + sinf(t * 0.7f + a->phase * 2.0f) * 0.06f;
+        } else {
+            const float slow = sinf(t * 1.7f + a->phase) * 0.04f;
+            const float fast = sinf(t * 37.0f + a->phase * 3.1f) * 0.02f;
+            const float dip  = (sinf(t * 0.53f + a->phase) > 0.985f) ? -0.35f : 0.0f;
+            modulation = slow + fast + dip;
+        }
 
-        s->lights[i].intensity = a->base_intensity * (1.0f + slow + fast + dip);
+        s->lights[i].intensity = a->base_intensity * (1.0f + modulation);
         if (s->lights[i].intensity < 0.0f) s->lights[i].intensity = 0.0f;
     }
 }

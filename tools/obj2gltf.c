@@ -55,6 +55,7 @@ typedef struct material {
     float roughness;
     float emissive[3];
     float emissive_strength;
+    const char *family;   /* famille reconnue, NULL sinon */
     int   gltf_index;     /* -1 tant qu'il n'est pas émis */
     int   texture_index;  /* -1 si pas de map_Kd */
 } material;
@@ -94,6 +95,95 @@ typedef struct object {
  * choix pour qu'ils soient révisables.
  */
 static bool g_blender_source = false;   /* renseigné en lisant l'en-tête du MTL */
+
+/*
+ * Bibliothèque de matériaux, indexée par le nom de la texture diffuse.
+ *
+ * Le MTL ne distingue pas une moquette d'un carrelage : tous deux sortent de
+ * Blender avec la même rugosité 0.5 par défaut. Or c'est précisément cette
+ * différence qui fait qu'une salle a l'air construite en matériaux plutôt qu'en
+ * plastique uniforme — le carrelage des toilettes doit renvoyer les néons, la
+ * moquette doit les absorber.
+ *
+ * L'auteur d'origine a nommé ses textures de façon parlante (moquette, bois,
+ * carllage_toilette, marbre_toilettes, cuir_rouge, billard_table…). On s'en sert
+ * pour attribuer à chacune des paramètres physiques plausibles. Le nom n'est pas
+ * une donnée fiable en général, mais ici c'est la meilleure information
+ * disponible, et le résultat est nettement supérieur à une valeur unique.
+ */
+typedef struct material_family {
+    const char *token;        /* sous-chaîne recherchée dans le nom de texture */
+    float roughness;
+    float metallic;
+    const char *label;
+} material_family;
+
+static const material_family g_families[] = {
+    /* Surfaces très diffuses : absorbent la lumière. */
+    { "moquette",   0.96f, 0.0f, "moquette" },
+    { "billard",    0.92f, 0.0f, "feutrine" },
+    { "mur_brique", 0.88f, 0.0f, "brique" },
+    { "plafond",    0.80f, 0.0f, "plafond" },
+
+    /* Surfaces lisses : renvoient les néons, c'est ce qui fait vivre la salle. */
+    { "marbre",     0.10f, 0.0f, "marbre" },
+    { "carllage",   0.16f, 0.0f, "carrelage" },
+    { "carrelage",  0.16f, 0.0f, "carrelage" },
+    { "lavabo",     0.14f, 0.0f, "céramique" },
+    { "toilet",     0.18f, 0.0f, "céramique" },
+    { "floor",      0.24f, 0.0f, "sol ciré" },
+    { "sol",        0.24f, 0.0f, "sol ciré" },
+
+    /* Bois : mat à satiné selon la finition. */
+    { "bois",       0.58f, 0.0f, "bois" },
+    { "poutre",     0.72f, 0.0f, "bois brut" },
+    { "desk",       0.42f, 0.0f, "bois verni" },
+
+    /* Métaux : ce sont eux qui donnent les reflets nets sur les bornes. */
+    { "pilonne",    0.34f, 0.85f, "métal peint" },
+    { "radio",      0.30f, 0.55f, "métal brossé" },
+
+    /* Divers. */
+    { "cuir",       0.62f, 0.0f, "cuir" },
+    { "porte",      0.55f, 0.0f, "porte" },
+
+    /* Écrans, affiches et enseignes : surfaces vitrées, très lisses. */
+    { "_font",      0.12f, 0.0f, "écran" },
+    { "poster",     0.30f, 0.0f, "affiche" },
+    { "pub",        0.28f, 0.0f, "affiche" },
+    { "classement", 0.12f, 0.0f, "écran" },
+    { "chargement", 0.12f, 0.0f, "écran" },
+    { "coming_soon",0.12f, 0.0f, "écran" },
+    { "nineteen",   0.20f, 0.3f, "enseigne" },
+    { "exit",       0.25f, 0.0f, "enseigne" },
+
+    /* Flancs de bornes : peinture laquée. */
+    { "flappy",     0.34f, 0.0f, "laque" },
+    { "snake",      0.34f, 0.0f, "laque" },
+    { "tetris",     0.34f, 0.0f, "laque" },
+    { "asteroid",   0.34f, 0.0f, "laque" },
+};
+
+/* Compare sans tenir compte de la casse, sous-chaîne. */
+static bool name_has_token(const char *haystack, const char *needle)
+{
+    const size_t nl = strlen(needle);
+    for (const char *p = haystack; *p; ++p) {
+        size_t i = 0;
+        while (i < nl && p[i] && ((p[i] | 32) == (needle[i] | 32))) i++;
+        if (i == nl) return true;
+    }
+    return false;
+}
+
+static const material_family *family_for_texture(const char *texture)
+{
+    if (!texture || !*texture) return NULL;
+    for (size_t i = 0; i < sizeof g_families / sizeof g_families[0]; ++i) {
+        if (name_has_token(texture, g_families[i].token)) return &g_families[i];
+    }
+    return NULL;
+}
 
 static void derive_pbr(material *m)
 {
@@ -139,6 +229,17 @@ static void derive_pbr(material *m)
         metallic = 1.0f;
     } else if (ks_max > 0.5f && kd_max < 0.5f) {
         metallic = 0.5f;
+    }
+
+    /* La famille de matériau, quand on la reconnaît, prime sur la valeur
+     * générique de Blender : elle porte une information que le MTL n'a pas. */
+    const material_family *fam = family_for_texture(m->map_kd);
+    if (fam) {
+        roughness = fam->roughness;
+        metallic  = fam->metallic;
+        m->family = fam->label;
+    } else {
+        m->family = NULL;
     }
 
     m->base_color[0] = m->kd[0];
@@ -411,6 +512,8 @@ static void generate_tangents(vertex *verts, size_t vcount,
 /* Déduction des lumières et des bornes                                       */
 /* ========================================================================== */
 
+static float ns_max_strength(float s) { return (s > 0.0f) ? s : 1.0f; }
+
 static bool name_contains_ci(const char *hay, const char *needle)
 {
     const size_t nl = strlen(needle);
@@ -419,37 +522,6 @@ static bool name_contains_ci(const char *hay, const char *needle)
         while (i < nl && p[i] &&
                (p[i] | 32) == (needle[i] | 32)) i++;
         if (i == nl) return true;
-    }
-    return false;
-}
-
-/*
- * Un objet est une source lumineuse si son nom l'annonce (applique, néon,
- * enseigne) ou si son matériau est franchement émissif. Le premier critère
- * rattrape les luminaires dont la texture faisait tout le travail.
- */
-static bool object_is_light(const object *o, const tool_vec *mats, float *out_intensity,
-                            float out_color[3])
-{
-    if (name_contains_ci(o->name, "sconce") || name_contains_ci(o->name, "neon")
-        || name_contains_ci(o->name, "lampe") || name_contains_ci(o->name, "plafond")
-        || name_contains_ci(o->name, "lumiere")) {
-        *out_intensity = 260.0f;                /* applique murale : douce et chaude */
-        out_color[0] = 1.0f; out_color[1] = 0.82f; out_color[2] = 0.58f;
-        return true;
-    }
-
-    for (size_t i = 0; i < o->prims.count; ++i) {
-        const primitive *p = &TOOL_VEC_AT(&o->prims, primitive, i);
-        if (p->material < 0) continue;
-        const material *m = &((const material *)mats->data)[(size_t)p->material];
-        if (m->emissive_strength > 0.5f) {
-            *out_intensity = 130.0f * m->emissive_strength;
-            out_color[0] = m->emissive[0];
-            out_color[1] = m->emissive[1];
-            out_color[2] = m->emissive[2];
-            return true;
-        }
     }
     return false;
 }
@@ -944,27 +1016,139 @@ int main(int argc, char **argv)
 
     fprintf(lf, "  \"lights\": [\n");
     size_t light_count = 0;
+
+    /*
+     * Génération des sources lumineuses.
+     *
+     * Le modèle d'origine peignait la lumière dans les textures : les appliques,
+     * les panneaux du plafond et les écrans de bornes étaient des surfaces
+     * claires, pas des émetteurs. Résultat, une salle uniformément sombre dès
+     * qu'on l'éclaire pour de vrai.
+     *
+     * On corrige en deux temps :
+     *
+     *  1. Toute surface au matériau émissif devient une **source étendue**.
+     *     Une grande surface (le plafond lumineux fait plusieurs mètres carrés)
+     *     ne peut pas être représentée par un point unique : le sol serait
+     *     éclairé par un projecteur au lieu d'une nappe. On répartit donc
+     *     plusieurs points sur son emprise, proportionnellement à son aire.
+     *
+     *  2. Les luminaires reconnus par leur nom gardent leur source dédiée,
+     *     chaude et scintillante.
+     *
+     * L'intensité est proportionnelle à l'aire : un panneau de 4 m² doit
+     * éclairer quatre fois plus qu'un panneau d'un mètre carré, à luminance
+     * égale. C'est ce qui manquait le plus.
+     */
     for (size_t o = 0; o < objects.count; ++o) {
         const object *ob = &TOOL_VEC_AT(&objects, object, o);
         if (!ob->has_bounds) continue;
-        float intensity = 0.0f, color[3] = { 1, 1, 1 };
-        if (!object_is_light(ob, &mats, &intensity, color)) continue;
 
-        const float cx = (ob->bbox_min.x + ob->bbox_max.x) * 0.5f;
-        const float cy = (ob->bbox_min.y + ob->bbox_max.y) * 0.5f;
-        const float cz = (ob->bbox_min.z + ob->bbox_max.z) * 0.5f;
-        /* Portée liée à l'intensité : au-delà, la contribution est sous le bruit
-         * de quantification, autant ne pas la calculer. */
-        const float range = sqrtf(intensity) * 0.85f;
+        /* Aire émissive de l'objet et couleur associée. */
+        double emissive_area = 0.0;
+        float  emissive_color[3] = { 1.0f, 1.0f, 1.0f };
+        float  emissive_strength = 0.0f;
 
-        if (light_count) fprintf(lf, ",\n");
-        fprintf(lf, "    { \"name\": \"%s\", \"type\": \"point\", \"position\": [%.4f, %.4f, %.4f], "
-                    "\"color\": [%.4f, %.4f, %.4f], \"intensity\": %.3f, \"range\": %.3f, \"flicker\": %s }",
-                ob->name, (double)cx, (double)cy, (double)cz,
-                (double)color[0], (double)color[1], (double)color[2],
-                (double)intensity, (double)range,
-                name_contains_ci(ob->name, "neon") ? "true" : "false");
-        light_count++;
+        for (size_t pr = 0; pr < ob->prims.count; ++pr) {
+            const primitive *p = &((const primitive *)ob->prims.data)[pr];
+            if (p->material < 0) continue;
+            const material *m = &TOOL_VEC_AT(&mats, material, (size_t)p->material);
+            if (m->emissive_strength <= 0.0f) continue;
+
+            const uint32_t *idx = (const uint32_t *)p->indices.data;
+            for (size_t i = 0; i + 2 < p->indices.count; i += 3) {
+                const vertex *a = &TOOL_VEC_AT(&verts, vertex, idx[i]);
+                const vertex *b = &TOOL_VEC_AT(&verts, vertex, idx[i + 1]);
+                const vertex *c = &TOOL_VEC_AT(&verts, vertex, idx[i + 2]);
+                const v3 e1 = { b->position.x - a->position.x, b->position.y - a->position.y,
+                                b->position.z - a->position.z };
+                const v3 e2 = { c->position.x - a->position.x, c->position.y - a->position.y,
+                                c->position.z - a->position.z };
+                const v3 cr = { e1.y * e2.z - e1.z * e2.y,
+                                e1.z * e2.x - e1.x * e2.z,
+                                e1.x * e2.y - e1.y * e2.x };
+                emissive_area += 0.5 * sqrt((double)(cr.x * cr.x + cr.y * cr.y + cr.z * cr.z));
+            }
+            if (m->emissive_strength > emissive_strength) {
+                emissive_strength = m->emissive_strength;
+                emissive_color[0] = m->emissive[0];
+                emissive_color[1] = m->emissive[1];
+                emissive_color[2] = m->emissive[2];
+            }
+        }
+
+        const bool named_fixture = name_contains_ci(ob->name, "sconce")
+                                || name_contains_ci(ob->name, "neon")
+                                || name_contains_ci(ob->name, "lampe")
+                                || name_contains_ci(ob->name, "lumiere");
+
+        if (emissive_area < 0.02 && !named_fixture) continue;
+
+        const v3 bmin = ob->bbox_min, bmax = ob->bbox_max;
+        const v3 extent = { bmax.x - bmin.x, bmax.y - bmin.y, bmax.z - bmin.z };
+
+        /* Nombre de points : un tous les 2.5 m² environ, borné pour ne pas
+         * saturer la boucle d'éclairage sur un plafond entier. */
+        int nx = 1, nz = 1;
+        if (emissive_area > 2.5) {
+            nx = (int)(extent.x / 2.4f) + 1;
+            nz = (int)(extent.z / 2.4f) + 1;
+            if (nx > 4) nx = 4;
+            if (nz > 4) nz = 4;
+        }
+        const int points = nx * nz;
+
+        /* Luminance -> intensité. Calibré pour que le plafond lumineux éclaire
+         * la salle sans la brûler, avec l'exposition par défaut. */
+        float total_intensity = named_fixture
+            ? 340.0f
+            : (float)(emissive_area * 130.0 * (double)ns_max_strength(emissive_strength));
+        if (total_intensity < 30.0f) total_intensity = 30.0f;
+        if (total_intensity > 4200.0f) total_intensity = 4200.0f;
+        const float per_point = total_intensity / (float)points;
+
+        float color[3];
+        if (named_fixture) {
+            /* Applique murale : blanc chaud, ce qui contraste avec le froid des
+             * néons de bornes et donne du relief à l'éclairage. */
+            color[0] = 1.0f; color[1] = 0.84f; color[2] = 0.62f;
+        } else {
+            color[0] = emissive_color[0];
+            color[1] = emissive_color[1];
+            color[2] = emissive_color[2];
+        }
+
+        /* Portée : au-delà, la contribution passe sous le bruit de
+         * quantification. Racine de l'intensité, facteur ajusté à l'œil. */
+        const float range = sqrtf(per_point) * 1.35f + 1.5f;
+
+        for (int gz = 0; gz < nz; ++gz) {
+            for (int gx = 0; gx < nx; ++gx) {
+                const float fx = (nx == 1) ? 0.5f : ((float)gx + 0.5f) / (float)nx;
+                const float fz = (nz == 1) ? 0.5f : ((float)gz + 0.5f) / (float)nz;
+
+                float px = bmin.x + extent.x * fx;
+                float pz = bmin.z + extent.z * fz;
+                /* Décollé de la surface vers l'intérieur de la pièce, sinon la
+                 * source est dans la géométrie et n'éclaire rien. */
+                float py = bmin.y + extent.y * 0.5f;
+                if (extent.y < 0.6f) py = bmin.y - 0.25f;   /* panneau horizontal : plafond */
+
+                if (light_count >= 96) break;
+                if (light_count) fprintf(lf, ",\n");
+                fprintf(lf, "    { \"name\": \"%s#%d\", \"type\": \"point\", "
+                            "\"position\": [%.4f, %.4f, %.4f], "
+                            "\"color\": [%.4f, %.4f, %.4f], \"intensity\": %.3f, "
+                            "\"range\": %.3f, \"flicker\": %s, \"area\": %.3f }",
+                        ob->name, gz * nx + gx,
+                        (double)px, (double)py, (double)pz,
+                        (double)color[0], (double)color[1], (double)color[2],
+                        (double)per_point, (double)range,
+                        (named_fixture && name_contains_ci(ob->name, "neon")) ? "true" : "false",
+                        emissive_area);
+                light_count++;
+            }
+        }
     }
     fprintf(lf, "\n  ],\n");
 
