@@ -85,5 +85,28 @@ void main()
 
     o_albedo_ao = vec4(albedo.rgb, occlusion);
     o_normal_rm = vec4(encodeOctahedral(N), roughness, metallic);
-    o_emissive  = vec4(u_emissive.rgb * u_emissive.a, 1.0);
+
+    /*
+     * Émissif modulé par la texture, et non constant.
+     *
+     * C'est la correction la plus rentable de tout le moteur, pour une
+     * multiplication. Écrire `u_emissive.rgb * u_emissive.a` seul faisait sortir
+     * chaque matériau émissif en **aplat uniforme** : les dix-huit matériaux du
+     * modèle qui portent `Ke 1 1 1` devenaient des rectangles blancs purs. Deux
+     * conséquences très visibles, et longtemps prises pour deux bugs distincts :
+     *
+     *   - les quinze écrans de bornes s'affichaient en blanc, alors que leurs
+     *     images (flappy_hard_font.jpg, tetris_font.jpg, snake_font.jpg…) sont
+     *     bien présentes et bien échantillonnées dans `albedo` ;
+     *   - le plafond, dont la texture est un motif art déco sombre à liserés
+     *     dorés, remplissait le haut du cadre d'un gris plat. L'œil s'y adaptait,
+     *     et toute la salle était perçue comme sombre — d'où « il manque un toit »
+     *     et « la salle est trop sombre », qui étaient le même défaut.
+     *
+     * La correction suit la convention glTF elle-même : `emissiveFactor` y
+     * *multiplie* `emissiveTexture`. Faute de texture émissive séparée dans ce
+     * modèle, c'est l'albédo qui joue ce rôle — et c'est légitime, puisque c'est
+     * précisément l'image que la surface est censée émettre.
+     */
+    o_emissive = vec4(u_emissive.rgb * u_emissive.a * albedo.rgb, 1.0);
 }

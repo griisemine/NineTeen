@@ -121,8 +121,16 @@ typedef struct material_family {
 static const material_family g_families[] = {
     /* Surfaces très diffuses : absorbent la lumière. */
     { "moquette",   0.96f, 0.0f, "moquette" },
+    /*
+     * `floor.jpg` **est** la moquette du hall, malgré son nom : c'est un bouclé
+     * noir dont on distingue les boucles, semé de motifs néon. Elle était classée
+     * « sol ciré » à 0.24 par ce même tableau, et comme elle habille
+     * `sol_moquette` — le grand sol de la salle, sa plus grande surface — chacune
+     * des 64 sources y laissait un point spéculaire. Le semis de points blancs
+     * que j'avais compensé côté shader venait de cette seule ligne.
+     */
+    { "floor",      0.96f, 0.0f, "moquette" },
     { "billard",    0.92f, 0.0f, "feutrine" },
-    { "mur_brique", 0.88f, 0.0f, "brique" },
     { "plafond",    0.80f, 0.0f, "plafond" },
 
     /* Surfaces lisses : renvoient les néons, c'est ce qui fait vivre la salle. */
@@ -131,8 +139,6 @@ static const material_family g_families[] = {
     { "carrelage",  0.16f, 0.0f, "carrelage" },
     { "lavabo",     0.14f, 0.0f, "céramique" },
     { "toilet",     0.18f, 0.0f, "céramique" },
-    { "floor",      0.24f, 0.0f, "sol ciré" },
-    { "sol",        0.24f, 0.0f, "sol ciré" },
 
     /* Bois : mat à satiné selon la finition. */
     { "bois",       0.58f, 0.0f, "bois" },
@@ -140,7 +146,6 @@ static const material_family g_families[] = {
     { "desk",       0.42f, 0.0f, "bois verni" },
 
     /* Métaux : ce sont eux qui donnent les reflets nets sur les bornes. */
-    { "pilonne",    0.34f, 0.85f, "métal peint" },
     { "radio",      0.30f, 0.55f, "métal brossé" },
 
     /* Divers. */
@@ -162,6 +167,24 @@ static const material_family g_families[] = {
     { "snake",      0.34f, 0.0f, "laque" },
     { "tetris",     0.34f, 0.0f, "laque" },
     { "asteroid",   0.34f, 0.0f, "laque" },
+
+    /*
+     * Règles inatteignables sur ce modèle, gardées et signalées plutôt que
+     * supprimées.
+     *
+     * Ces trois textures existent bien dans `legacy/room/textures/` mais **aucun
+     * `map_Kd` du MTL ne les référence** : l'auteur les dessinait à la main en
+     * mode immédiat dans `room.c`, ou ne les a jamais utilisées. Les règles ne
+     * peuvent donc jamais se déclencher ici. Elles restent parce qu'elles portent
+     * une information utile — les valeurs plausibles pour ces trois matières,
+     * quand la salle reconstruite leur donnera enfin un mur et des piliers.
+     *
+     * Placées en fin de tableau : la recherche s'arrête au premier jeton trouvé,
+     * donc une règle morte ne peut pas masquer une règle vivante.
+     */
+    { "mur_brique", 0.88f, 0.0f, "brique" },
+    { "pilonne",    0.34f, 0.85f, "métal peint" },
+    { "sol",        0.24f, 0.0f, "sol ciré" },
 };
 
 /* Compare sans tenir compte de la casse, sous-chaîne. */
