@@ -337,6 +337,50 @@ static inline ns_m4 ns_m4_from_quat(ns_quat q)
     return r;
 }
 
+/* Conjugué : pour un quaternion unitaire, c'est aussi son inverse. */
+static inline ns_quat ns_quat_conjugate(ns_quat q)
+{
+    ns_quat r = { -q.x, -q.y, -q.z, q.w };
+    return r;
+}
+
+/* Rotation d'un vecteur, par la forme de Rodrigues. Passer par une matrice
+ * marcherait aussi, mais coûte trois fois plus pour un seul vecteur — et un
+ * squelette en tourne un par articulation et par image. */
+static inline ns_v3 ns_quat_rotate(ns_quat q, ns_v3 v)
+{
+    const ns_v3 u = ns_v3_make(q.x, q.y, q.z);
+    const ns_v3 t = ns_v3_scale(ns_v3_cross(u, v), 2.0f);
+    return ns_v3_add(ns_v3_add(v, ns_v3_scale(t, q.w)), ns_v3_cross(u, t));
+}
+
+/*
+ * Rotation la plus courte amenant `from` sur `to`, tous deux normalisés.
+ *
+ * Le cas antiparallèle est traité explicitement : l'axe (from × to) y est nul,
+ * donc la construction habituelle produit un quaternion nul puis des NaN. On
+ * choisit alors n'importe quel axe orthogonal — toutes les rotations d'un demi-
+ * tour sont également correctes, et n'en choisir aucune ne l'est pas.
+ */
+static inline ns_quat ns_quat_from_to(ns_v3 from, ns_v3 to)
+{
+    const ns_v3 a = ns_v3_norm(from);
+    const ns_v3 b = ns_v3_norm(to);
+    const float d = ns_v3_dot(a, b);
+
+    if (d >= 1.0f - 1e-6f) return ns_quat_identity();
+
+    if (d <= -1.0f + 1e-6f) {
+        ns_v3 axis = ns_v3_cross(ns_v3_make(1, 0, 0), a);
+        if (ns_v3_len_sq(axis) < 1e-8f) axis = ns_v3_cross(ns_v3_make(0, 1, 0), a);
+        return ns_quat_from_axis(ns_v3_norm(axis), NS_PI);
+    }
+
+    const ns_v3 axis = ns_v3_cross(a, b);
+    ns_quat q = { axis.x, axis.y, axis.z, 1.0f + d };
+    return ns_quat_norm(q);
+}
+
 /* Composition translation/rotation/échelle, l'ordre habituel T * R * S. */
 static inline ns_m4 ns_m4_trs(ns_v3 t, ns_quat r, ns_v3 s)
 {

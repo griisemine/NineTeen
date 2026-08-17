@@ -46,6 +46,7 @@ typedef struct options {
     float       exposure;
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
+    bool        bench;      /* mesure le temps GPU réel, image par image */
 } options;
 
 static void print_usage(const char *exe)
@@ -60,7 +61,9 @@ static void print_usage(const char *exe)
         "  --scale=F            échelle de rendu interne, 0.4 à 2.0 (défaut 1.0)\n"
         "  --fullscreen         plein écran\n"
         "  --no-vsync           désactive la synchronisation verticale\n"
-        "  --quality=Q          low | medium | high | ultra (défaut high)\n"
+        "  --quality=Q          low | medium | high | ultra (défaut medium)\n"
+        "                       high et ultra activent le lancer de rayons : superbe\n"
+        "                       en capture, coûteux en temps réel\n"
         "  --room=R             generated | legacy (défaut generated si présente)\n"
         "  --view=NOM           point de vue nommé déclaré par la scène : c'est ce\n"
         "                       qui permet de comparer deux salles d'échelles\n"
@@ -72,9 +75,96 @@ static void print_usage(const char *exe)
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
+        "  --bench              mesure le temps GPU réel de chaque image\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
         "  --help               affiche ce message\n",
         NINETEEN_VERSION, exe);
+}
+
+/* ==========================================================================
+ * Réglages par machine : fichier .env, puis variables d'environnement
+ * ========================================================================== */
+
+/*
+ * Trois niveaux, du plus faible au plus fort : le fichier `.env`, les variables
+ * d'environnement, puis la ligne de commande. C'est l'ordre habituel, et le seul
+ * qui permette d'essayer un réglage sans éditer un fichier.
+ *
+ * L'implémentation est volontairement minuscule : `CLÉ=VALEUR` par ligne, `#`
+ * pour commenter, pas de guillemets, pas d'expansion. Un format plus riche
+ * demanderait un analyseur, donc des messages d'erreur, donc un test — pour
+ * régler une qualité et une résolution.
+ */
+static void apply_env_file(const char *path)
+{
+    if (!path || !path[0]) return;
+    SDL_IOStream *io = SDL_IOFromFile(path, "r");
+    if (!io) return;
+
+    size_t size = 0;
+    char *text = (char *)SDL_LoadFile_IO(io, &size, true);
+    if (!text) return;
+
+    char *line = text;
+    while (line && *line) {
+        char *end = SDL_strchr(line, '\n');
+        if (end) *end = '\0';
+
+        char *p = line;
+        while (*p == ' ' || *p == '\t') ++p;
+        if (*p && *p != '#') {
+            char *eq = SDL_strchr(p, '=');
+            if (eq) {
+                *eq = '\0';
+                char *key = p, *value = eq + 1;
+                /* Rogner la fin de la clé et le \r d'un fichier écrit sous Windows. */
+                size_t kl = SDL_strlen(key);
+                while (kl > 0 && (key[kl - 1] == ' ' || key[kl - 1] == '\t')) key[--kl] = '\0';
+                size_t vl = SDL_strlen(value);
+                while (vl > 0 && (value[vl - 1] == ' ' || value[vl - 1] == '\t'
+                               || value[vl - 1] == '\r')) value[--vl] = '\0';
+
+                /* `false` : une variable déjà présente dans l'environnement
+                 * l'emporte sur le fichier, comme annoncé. */
+                if (kl > 0) SDL_SetEnvironmentVariable(SDL_GetEnvironment(), key, value, false);
+            }
+        }
+
+        line = end ? end + 1 : NULL;
+    }
+    SDL_free(text);
+}
+
+static void load_env_defaults(options *o)
+{
+    const char *forced = SDL_getenv("NINETEEN_ENV");
+    if (forced && forced[0]) {
+        apply_env_file(forced);
+    } else {
+        apply_env_file(".env");
+        char beside[1024];
+        const char *base = SDL_GetBasePath();
+        if (base) {
+            SDL_snprintf(beside, sizeof beside, "%s.env", base);
+            apply_env_file(beside);
+        }
+    }
+
+    const char *v;
+    if ((v = SDL_getenv("NINETEEN_QUALITY")) != NULL) {
+        if (SDL_strcmp(v, "low") == 0)         o->quality = NS_QUALITY_LOW;
+        else if (SDL_strcmp(v, "medium") == 0) o->quality = NS_QUALITY_MEDIUM;
+        else if (SDL_strcmp(v, "high") == 0)   o->quality = NS_QUALITY_HIGH;
+        else if (SDL_strcmp(v, "ultra") == 0)  o->quality = NS_QUALITY_ULTRA;
+        else NS_WARN("NINETEEN_QUALITY=%s inconnu — ignoré", v);
+    }
+    if ((v = SDL_getenv("NINETEEN_WIDTH")) != NULL)     o->width = SDL_atoi(v);
+    if ((v = SDL_getenv("NINETEEN_HEIGHT")) != NULL)    o->height = SDL_atoi(v);
+    if ((v = SDL_getenv("NINETEEN_SCALE")) != NULL)     o->render_scale = (float)SDL_atof(v);
+    if ((v = SDL_getenv("NINETEEN_EXPOSURE")) != NULL)  o->exposure = (float)SDL_atof(v);
+    if ((v = SDL_getenv("NINETEEN_VSYNC")) != NULL)     o->vsync = (SDL_atoi(v) != 0);
+    if ((v = SDL_getenv("NINETEEN_FULLSCREEN")) != NULL) o->fullscreen = (SDL_atoi(v) != 0);
+    if ((v = SDL_getenv("NINETEEN_ROOM")) != NULL)      o->room = v;
 }
 
 static bool parse_options(int argc, char **argv, options *o)
@@ -84,9 +174,12 @@ static bool parse_options(int argc, char **argv, options *o)
     o->width = 1600;
     o->height = 900;
     o->vsync = true;
-    o->quality = NS_QUALITY_HIGH;
+    o->quality = NS_QUALITY_MEDIUM;
     o->camera_mode = ROOM_CAM_PLAYER;
     o->render_scale = 1.0f;
+
+    /* Avant la ligne de commande : elle doit pouvoir tout écraser. */
+    load_env_defaults(o);
 
     for (int i = 1; i < argc; ++i) {
         const char *a = argv[i];
@@ -109,6 +202,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->fullscreen = true;
         } else if (SDL_strcmp(a, "--no-vsync") == 0) {
             o->vsync = false;
+        } else if (SDL_strcmp(a, "--bench") == 0) {
+            o->bench = true;
         } else if (SDL_strcmp(a, "--debug-gpu") == 0) {
             o->debug_gpu = true;
         } else if (SDL_strncmp(a, "--debug=", 8) == 0) {
@@ -410,12 +505,18 @@ int main(int argc, char **argv)
         cam.pitch = cam.prev_pitch = opt.pitch;
     }
 
+    ns_viewmodel_pose viewmodel;
+    ns_viewmodel_pose_clear(&viewmodel);
+
     ns_clock clock;
     ns_clock_init(&clock, NS_DEFAULT_TICK_HZ);
 
     bool running = true;
     bool mouse_captured = false;
     int frames_rendered = 0;
+
+    double bench_total = 0.0, bench_min = 1e30, bench_max = 0.0;
+    int    bench_count = 0;
 
     if (!opt.headless) {
         SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), true);
@@ -555,11 +656,38 @@ int main(int argc, char **argv)
                 target = offscreen.handle;
             }
 
+            const double frame_start = opt.bench ? ns_time_seconds() : 0.0;
             const ns_camera render_cam = room_camera_resolve(&cam, (float)clock.alpha);
-            ns_renderer_draw(rhi, renderer, &scene, &render_cam, target, w, h, now);
+            /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
+            const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
+            ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now);
             ns_rhi_end_frame(rhi);
             frames_rendered++;
 
+            /*
+             * Mesure. L'attente est INDISPENSABLE : sans elle on chronomètre
+             * l'enregistrement des commandes, pas leur exécution — c'est ainsi
+             * qu'un rendu à une image par seconde a pu être annoncé à 1 793.
+             * La première image est écartée : elle porte la compilation des
+             * pipelines par le pilote.
+             */
+            if (opt.bench) {
+                ns_rhi_wait_idle(rhi);
+                const double ms = (ns_time_seconds() - frame_start) * 1000.0;
+                if (frames_rendered > 1) {
+                    bench_total += ms;
+                    bench_count++;
+                    if (ms < bench_min) bench_min = ms;
+                    if (ms > bench_max) bench_max = ms;
+                }
+            }
+
+            /* `--bench` sans capture doit s'arrêter aussi : sans cette
+             * condition la boucle tournait indéfiniment, et la mesure ne
+             * revenait jamais. */
+            if (!opt.screenshot && opt.bench && frames_rendered >= opt.frames) {
+                running = false;
+            }
             if (opt.screenshot && frames_rendered >= opt.frames) {
                 ns_rhi_capture_texture_png(rhi, target, w, h, ns_rhi_swapchain_format(rhi),
                                            opt.screenshot);
@@ -572,8 +700,16 @@ int main(int argc, char **argv)
         }
     }
 
-    NS_INFO("arrêt après %d images (%.1f images/s en moyenne)",
-            frames_rendered, clock.fps_smoothed);
+    if (opt.bench && bench_count > 0) {
+        const double avg = bench_total / (double)bench_count;
+        NS_INFO("mesure GPU sur %d images : %.1f ms en moyenne (%.1f images/s), "
+                "min %.1f ms, max %.1f ms",
+                bench_count, avg, 1000.0 / avg, bench_min, bench_max);
+    } else {
+        NS_INFO("arrêt après %d images (%.1f images/s en moyenne — sans attente GPU, "
+                "ce chiffre ne mesure QUE l'enregistrement des commandes ; employer --bench)",
+                frames_rendered, clock.fps_smoothed);
+    }
 
     ns_scene_unload(rhi, &scene);
     ns_renderer_destroy(rhi, renderer);

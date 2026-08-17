@@ -18,6 +18,7 @@
 
 #include "ns_rhi.h"
 #include "ns_scene.h"
+#include "ns_viewmodel.h"
 
 typedef struct ns_renderer ns_renderer;
 
@@ -121,9 +122,15 @@ const ns_render_settings *ns_renderer_settings(const ns_renderer *rd);
  * Dessine la scène. `target` reçoit l'image finale ; passer la texture de
  * swapchain pour l'affichage, ou une texture hors écran pour une capture.
  * À appeler entre ns_rhi_begin_frame et ns_rhi_end_frame.
+ *
+ * `viewmodel` peut être NULL : les bras ne sont alors pas dessinés. C'est le cas
+ * en caméra libre et en orbite, où ils n'auraient aucun sens. Le moteur dessine
+ * la pose, il ne la calcule pas — cette séparation est ce qui lui évite de
+ * connaître la machine à états de l'interaction.
  */
 void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
-                      const ns_camera *camera, SDL_GPUTexture *target,
+                      const ns_camera *camera, const ns_viewmodel_pose *viewmodel,
+                      SDL_GPUTexture *target,
                       uint32_t target_width, uint32_t target_height,
                       double time_seconds);
 

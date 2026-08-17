@@ -1,6 +1,7 @@
 /* ns_render.c — implémentation du pipeline de rendu. */
 #include "ns_render.h"
 #include "ns_shaders.h"
+#include "ns_viewmodel.h"
 
 #include <string.h>
 
@@ -17,6 +18,17 @@
 /* Quatre entiers de 16 bits : par lumière dominante, l'indice sur huit bits de
  * poids fort et la visibilité sur huit bits de poids faible. */
 #define FMT_LIGHT_SHADOW SDL_GPU_TEXTUREFORMAT_R16G16B16A16_UINT
+
+/*
+ * Diviseur de résolution du lancer de rayons.
+ *
+ * Le rendre à pleine résolution était la première cause du jeu à une image par
+ * seconde sur un M1 Pro. Ce signal-là est débruité par deux passes à-trous puis
+ * accumulé sur plusieurs images : sa fréquence utile est bien inférieure à celle
+ * du pixel. À demi-résolution on divise par quatre le nombre de rayons, et la
+ * différence ne se voit pas — le filtre l'effaçait déjà.
+ */
+#define RT_DOWNSCALE 2u
 
 /* ========================================================================== */
 /* Blocs d'uniformes — la disposition doit correspondre exactement au GLSL     */
@@ -57,6 +69,19 @@ typedef struct debug_ubo           { int32_t mode[4]; float scale[4]; } debug_ub
 
 typedef struct denoise_ubo { float step[4]; } denoise_ubo;
 
+typedef struct viewmodel_vs_ubo {
+    float view_proj[16];
+    float model[16];
+    float params[4];        /* longueur du segment, libres */
+} viewmodel_vs_ubo;
+
+typedef struct viewmodel_fs_ubo {
+    float   base_color[4];  /* rgb + rugosité */
+    float   camera[4];      /* xyz + métallicité */
+    float   ambient[4];
+    int32_t counts[4];
+} viewmodel_fs_ubo;
+
 typedef struct exposure_ubo {
     float settings[4];      /* exposition de base, vitesse, min, max */
     float frame[4];         /* dt, première image, libres */
@@ -90,6 +115,10 @@ struct ns_renderer {
 
     uint32_t width, height;             /* résolution de rendu */
     uint32_t target_width, target_height;
+    /* Résolution du lancer de rayons. Le signal est débruité puis accumulé dans
+     * le temps : le rendre à pleine résolution coûte quatre fois plus pour un
+     * résultat que le filtre à-trous efface de toute façon. */
+    uint32_t rt_width, rt_height;
 
     /* Cibles */
     ns_texture gbuffer_albedo;
@@ -117,6 +146,11 @@ struct ns_renderer {
     ns_texture volumetric;
     ns_texture hdr_fogged;
 
+    /* Profondeur PROPRE au viewmodel. Non négociable : l'accumulation temporelle
+     * du lancer de rayons ne reprojette pas, donc des bras écrits dans la
+     * profondeur partagée traîneraient dans les ombres à chaque mouvement. */
+    ns_texture viewmodel_depth;
+
     /* Pipelines */
     SDL_GPUGraphicsPipeline *pipe_gbuffer;
     SDL_GPUGraphicsPipeline *pipe_ssao;
@@ -130,6 +164,7 @@ struct ns_renderer {
     SDL_GPUComputePipeline  *pipe_volumetric;
     SDL_GPUGraphicsPipeline *pipe_vol_composite;
     SDL_GPUComputePipeline  *pipe_exposure;
+    SDL_GPUGraphicsPipeline *pipe_viewmodel;
     SDL_GPUTextureFormat     tonemap_format;
 
     /* Tampon des lumières, réécrit à chaque image (elles scintillent). */
@@ -138,6 +173,13 @@ struct ns_renderer {
     /* Exposition mesurée : un seul flottant, mais il persiste d'une image à
      * l'autre — c'est lui qui porte l'adaptation. */
     ns_buffer exposure;
+
+    /* Les bras : géométrie construite une fois au démarrage, jamais réécrite.
+     * Seules les matrices changent, et elles passent par un uniforme. */
+    ns_buffer vm_vertices, vm_indices;
+    uint32_t  vm_first_index[NS_VM_SEGMENT_COUNT];
+    uint32_t  vm_index_count[NS_VM_SEGMENT_COUNT];
+    bool      vm_ready;
     double    last_time;
     bool      exposure_primed;
 
@@ -222,8 +264,17 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * la pénombre. Les bornes évitent qu'une salle presque noire soit remontée
      * jusqu'au grain, ou qu'un écran plein cadre éteigne tout le reste. */
     s->exposure_adapt = 1.2f;
-    s->exposure_min = 0.45f;
-    s->exposure_max = 3.0f;
+    /*
+     * Bornes resserrées, et c'est le réglage qui décide de l'ambiance.
+     *
+     * Une adaptation libre ANNULE l'obscurité : elle voit une salle sombre,
+     * pousse l'exposition au maximum, et rend une salle claire — le travail
+     * d'éclairage est effacé par la mesure censée le servir. À 1,6 au plafond,
+     * l'adaptation lisse encore le passage d'un couloir noir à un écran de borne,
+     * mais elle ne peut plus transformer une salle tamisée en salle éclairée.
+     */
+    s->exposure_min = 0.55f;
+    s->exposure_max = 1.60f;
 
     /*
      * Ambiance. Une salle d'arcade tire sa lumière de ses machines plutôt que
@@ -232,8 +283,18 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * et la salle devient illisible. Ce niveau garde les recoins lisibles sans
      * effacer le relief que créent les néons.
      */
-    s->ambient[0] = 0.26f; s->ambient[1] = 0.27f; s->ambient[2] = 0.34f;
-    s->ambient_intensity = 0.95f;
+    /*
+     * Réécrite pour une salle SOMBRE. À 0,26 x 0,95, l'ambiance portait à elle
+     * seule l'essentiel de l'image : les néons ne se détachaient de rien et la
+     * salle avait l'éclairage d'un couloir de bureau. Ici elle ne fait plus que
+     * garder les recoins lisibles — le relief vient des sources, et surtout des
+     * écrans de bornes, qui sont ce qui éclaire une vraie salle d'arcade.
+     *
+     * Teintée du bleu froid des tubes : une ambiance neutre grise à ce niveau se
+     * lit comme un voile sale.
+     */
+    s->ambient[0] = 0.030f; s->ambient[1] = 0.036f; s->ambient[2] = 0.052f;
+    s->ambient_intensity = 1.0f;
 
     s->ssao_radius = 0.45f;
     s->ssao_intensity = 0.85f;
@@ -250,23 +311,33 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
         s->volumetric_steps = 0;
         s->exposure_adapt = 0.0f;
         break;
+    /*
+     * MEDIUM est le palier par défaut, et il n'a PAS de lancer de rayons.
+     *
+     * Une traversée de BVH en compute, par pixel, est une fonction de capture —
+     * pas de temps réel sur un GPU intégré. Mesuré : le jeu tournait à une image
+     * par seconde sur un MacBook Pro M1 Pro en `high`, et je ne l'avais pas vu
+     * parce que mes mesures headless n'attendaient jamais le GPU. L'ambiance de
+     * la salle repose sur l'éclairage et le volumétrique, pas sur les ombres
+     * lancées : les couper coûte peu à l'image et beaucoup au compteur.
+     */
     case NS_QUALITY_MEDIUM:
-        s->raytracing = NS_RT_SHADOWS;
+        s->raytracing = NS_RT_OFF;
         s->ssao_samples = 10;
-        s->rt_rays_per_pixel = 1;
-        s->volumetric_steps = 16;
+        s->rt_rays_per_pixel = 0;
+        s->volumetric_steps = 14;
         break;
     case NS_QUALITY_HIGH:
-        s->raytracing = NS_RT_REFLECTIONS;
-        s->ssao_samples = 16;
-        s->rt_rays_per_pixel = 2;
-        s->volumetric_steps = 24;
+        s->raytracing = NS_RT_SHADOWS;
+        s->ssao_samples = 14;
+        s->rt_rays_per_pixel = 1;
+        s->volumetric_steps = 20;
         break;
     case NS_QUALITY_ULTRA:
         s->raytracing = NS_RT_FULL;
-        s->ssao_samples = 24;
-        s->rt_rays_per_pixel = 4;
-        s->volumetric_steps = 32;
+        s->ssao_samples = 20;
+        s->rt_rays_per_pixel = 2;
+        s->volumetric_steps = 28;
         break;
     }
 }
@@ -291,6 +362,7 @@ static void destroy_targets(ns_rhi *r, ns_renderer *rd)
     ns_texture_destroy(r, &rd->rt_light_shadow);
     ns_texture_destroy(r, &rd->volumetric);
     ns_texture_destroy(r, &rd->hdr_fogged);
+    ns_texture_destroy(r, &rd->viewmodel_depth);
     for (int i = 0; i < BLOOM_MIPS; ++i) {
         ns_texture_destroy(r, &rd->bloom[i]);
         ns_texture_destroy(r, &rd->bloom_tmp[i]);
@@ -344,10 +416,15 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
      * par la passe d'éclairage : il leur faut les deux usages. Le ping-pong
      * évite d'avoir à lire et écrire la même image dans un seul dispatch, ce que
      * tous les backends ne garantissent pas. */
+    /* Le lancer de rayons et tout ce qui en dérive vivent à leur propre
+     * résolution, plus basse. */
+    rd->rt_width  = (rw / RT_DOWNSCALE) > 0u ? (rw / RT_DOWNSCALE) : 1u;
+    rd->rt_height = (rh / RT_DOWNSCALE) > 0u ? (rh / RT_DOWNSCALE) : 1u;
+
     for (int i = 0; i < 2 && ok; ++i) {
         ns_texture_desc d;
         SDL_zero(d);
-        d.width = rw; d.height = rh;
+        d.width = rd->rt_width; d.height = rd->rt_height;
         d.format = FMT_HDR;
         d.sampled = true;
         d.storage_write = true;
@@ -357,7 +434,7 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
     {
         ns_texture_desc d;
         SDL_zero(d);
-        d.width = rw; d.height = rh;
+        d.width = rd->rt_width; d.height = rd->rt_height;
         d.format = FMT_LIGHT_SHADOW;
         d.sampled = true;
         d.storage_write = true;
@@ -378,10 +455,11 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
         ok = ok && ns_texture_create(r, &rd->volumetric, &d);
     }
     ok = ok && make_target(r, &rd->hdr_fogged, rw, rh, FMT_HDR, false, "HDR embrumé");
+    ok = ok && make_target(r, &rd->viewmodel_depth, rw, rh, FMT_DEPTH, true, "profondeur viewmodel");
     {
         ns_texture_desc d;
         SDL_zero(d);
-        d.width = rw; d.height = rh;
+        d.width = rd->rt_width; d.height = rd->rt_height;
         d.format = FMT_HDR;
         d.sampled = true;
         d.storage_write = true;
@@ -391,7 +469,8 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
     }
     /* Cibles de débruitage : deux passes à-trous en aller-retour. */
     for (int i = 0; i < 2 && ok; ++i) {
-        ok = ok && make_target(r, &rd->rt_filtered[i], rw, rh, FMT_HDR, false, "RT filtré");
+        ok = ok && make_target(r, &rd->rt_filtered[i], rd->rt_width, rd->rt_height,
+                               FMT_HDR, false, "RT filtré");
     }
     rd->rt_current = 0;
     rd->accum_frames = 0;
@@ -534,6 +613,101 @@ static SDL_GPUGraphicsPipeline *make_gbuffer_pipeline(ns_rhi *r)
     return p;
 }
 
+/*
+ * Pipeline du viewmodel : même disposition de sommet que la scène, mais une
+ * matrice de modèle par tirage, une seule cible couleur (la HDR déjà éclairée) et
+ * sa PROPRE profondeur.
+ */
+static SDL_GPUGraphicsPipeline *make_viewmodel_pipeline(ns_rhi *r, SDL_GPUTextureFormat color)
+{
+    ns_shader_desc vsd, fsd;
+    if (!ns_shader_desc_fill("viewmodel.vert", &vsd)) return NULL;
+    if (!ns_shader_desc_fill("viewmodel.frag", &fsd)) return NULL;
+
+    SDL_GPUShader *vs = ns_shader_load(r, &vsd, SDL_GPU_SHADERSTAGE_VERTEX);
+    SDL_GPUShader *fs = ns_shader_load(r, &fsd, SDL_GPU_SHADERSTAGE_FRAGMENT);
+    if (!vs || !fs) {
+        if (vs) SDL_ReleaseGPUShader(ns_rhi_device(r), vs);
+        if (fs) SDL_ReleaseGPUShader(ns_rhi_device(r), fs);
+        return NULL;
+    }
+
+    SDL_GPUVertexBufferDescription vb;
+    SDL_zero(vb);
+    vb.slot = 0;
+    vb.pitch = sizeof(ns_vertex);
+    vb.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+
+    SDL_GPUVertexAttribute attrs[4];
+    SDL_zeroa(attrs);
+    attrs[0].location = 0; attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3; attrs[0].offset = offsetof(ns_vertex, position);
+    attrs[1].location = 1; attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3; attrs[1].offset = offsetof(ns_vertex, normal);
+    attrs[2].location = 2; attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2; attrs[2].offset = offsetof(ns_vertex, uv);
+    attrs[3].location = 3; attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4; attrs[3].offset = offsetof(ns_vertex, tangent);
+
+    SDL_GPUColorTargetDescription target;
+    SDL_zero(target);
+    target.format = color;
+
+    SDL_GPUGraphicsPipelineCreateInfo info;
+    SDL_zero(info);
+    info.vertex_shader = vs;
+    info.fragment_shader = fs;
+    info.vertex_input_state.vertex_buffer_descriptions = &vb;
+    info.vertex_input_state.num_vertex_buffers = 1;
+    info.vertex_input_state.vertex_attributes = attrs;
+    info.vertex_input_state.num_vertex_attributes = 4;
+    info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    /* Même parti que le reste du moteur : le shader retourne la normale sur les
+     * faces arrière, et une erreur d'enroulement reste ainsi invisible plutôt que
+     * de faire disparaître un segment. */
+    info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+
+    info.depth_stencil_state.enable_depth_test = true;
+    info.depth_stencil_state.enable_depth_write = true;
+    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL;
+
+    info.target_info.color_target_descriptions = &target;
+    info.target_info.num_color_targets = 1;
+    info.target_info.has_depth_stencil_target = true;
+    info.target_info.depth_stencil_format = FMT_DEPTH;
+
+    SDL_GPUGraphicsPipeline *p = SDL_CreateGPUGraphicsPipeline(ns_rhi_device(r), &info);
+    SDL_ReleaseGPUShader(ns_rhi_device(r), vs);
+    SDL_ReleaseGPUShader(ns_rhi_device(r), fs);
+    if (!p) NS_ERROR("pipeline viewmodel refusé : %s", SDL_GetError());
+    return p;
+}
+
+/* Construit la géométrie des bras et la téléverse une fois pour toutes. */
+static void build_viewmodel(ns_rhi *r, ns_renderer *rd)
+{
+    enum { MAX_V = 2048, MAX_I = 4096 };
+    static ns_vertex verts[MAX_V];
+    static uint32_t  indices[MAX_I];
+
+    uint32_t vcount = 0, icount = 0;
+    ns_viewmodel_build(verts, MAX_V, &vcount, indices, MAX_I, &icount,
+                       rd->vm_first_index, rd->vm_index_count);
+    if (vcount == 0 || icount == 0) return;
+
+    bool ok = ns_buffer_create(r, &rd->vm_vertices, NS_BUFFER_VERTEX,
+                               (uint32_t)(sizeof(ns_vertex) * vcount), "sommets viewmodel");
+    ok = ok && ns_buffer_create(r, &rd->vm_indices, NS_BUFFER_INDEX,
+                                (uint32_t)(sizeof(uint32_t) * icount), "indices viewmodel");
+    ok = ok && ns_buffer_upload(r, &rd->vm_vertices, verts,
+                                (uint32_t)(sizeof(ns_vertex) * vcount), 0);
+    ok = ok && ns_buffer_upload(r, &rd->vm_indices, indices,
+                                (uint32_t)(sizeof(uint32_t) * icount), 0);
+    rd->vm_ready = ok;
+    if (ok) {
+        NS_INFO("viewmodel : %u sommets, %u triangles", vcount, icount / 3u);
+    } else {
+        NS_WARN("viewmodel : géométrie non téléversée — bras absents");
+    }
+}
+
 ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
 {
     ns_renderer *rd = (ns_renderer *)ns_calloc(1, sizeof *rd);
@@ -592,6 +766,9 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
         }
     }
 
+    /* Les bras. Leur absence n'est pas fatale non plus : on joue sans mains. */
+    rd->pipe_viewmodel = make_viewmodel_pipeline(r, FMT_HDR);
+
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
         || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
         || !rd->pipe_debug) {
@@ -619,6 +796,8 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
         ns_buffer_upload(r, &rd->exposure, initial, sizeof initial, 0);
     }
 
+    build_viewmodel(r, rd);
+
     SDL_memcpy(rd->prev_view_proj, ns_m4_identity().m, sizeof rd->prev_view_proj);
     NS_INFO("rendu prêt (qualité %d, ray tracing %d)", (int)rd->settings.quality,
             (int)rd->settings.raytracing);
@@ -641,8 +820,11 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     if (rd->pipe_volumetric)       SDL_ReleaseGPUComputePipeline(dev, rd->pipe_volumetric);
     if (rd->pipe_vol_composite)    SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_vol_composite);
     if (rd->pipe_exposure)         SDL_ReleaseGPUComputePipeline(dev, rd->pipe_exposure);
+    if (rd->pipe_viewmodel)        SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_viewmodel);
     ns_buffer_destroy(r, &rd->lights);
     ns_buffer_destroy(r, &rd->exposure);
+    ns_buffer_destroy(r, &rd->vm_vertices);
+    ns_buffer_destroy(r, &rd->vm_indices);
     destroy_targets(r, rd);
     ns_free(rd);
 }
@@ -932,8 +1114,8 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                        ? 0.0f
                        : ns_minf(0.95f, 1.0f - 1.0f / (float)(rd->accum_frames + 1));
     u.accum[0] = weight;
-    u.accum[1] = (float)rd->width;
-    u.accum[2] = (float)rd->height;
+    u.accum[1] = (float)rd->rt_width;
+    u.accum[2] = (float)rd->rt_height;
     /* Le shader bornait son index de matériau avec `materials.length()`. Cette
      * fonction n'existe pas en MSL : le traducteur la remplace par un tampon de
      * tailles que SDL ne lie jamais, donc le shader lirait dans le vide sur
@@ -943,7 +1125,7 @@ static void pass_raytrace(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     SDL_PushGPUComputeUniformData(cmd, 0, &u, sizeof u);
 
     /* Groupes de 8x8, arrondis au supérieur ; le shader borne lui-même. */
-    SDL_DispatchGPUCompute(pass, (rd->width + 7) / 8, (rd->height + 7) / 8, 1);
+    SDL_DispatchGPUCompute(pass, (rd->rt_width + 7) / 8, (rd->rt_height + 7) / 8, 1);
     SDL_EndGPUComputePass(pass);
 
     rd->rt_current = write;
@@ -1103,8 +1285,91 @@ static bool pass_exposure(ns_rhi *r, ns_renderer *rd, SDL_GPUTexture *lit, doubl
     return true;
 }
 
+/*
+ * Les bras, en forward, dans la cible HDR déjà éclairée et embrumée.
+ *
+ * Deux choses distinguent cette passe de toutes les autres :
+ *   - elle CHARGE la couleur au lieu de l'effacer — elle se pose sur l'image ;
+ *   - elle EFFACE sa propre profondeur, qui n'est partagée avec personne.
+ */
+static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
+                           const ns_m4 *view, SDL_GPUTexture *target,
+                           const ns_viewmodel_pose *pose, uint32_t light_count)
+{
+    if (!pose || !rd->pipe_viewmodel || !rd->vm_ready) return;
+
+    bool any = false;
+    for (int i = 0; i < NS_VM_SEGMENT_COUNT; ++i) any = any || pose->draw[i];
+    if (!any) return;
+
+    SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
+
+    SDL_GPUColorTargetInfo cti;
+    SDL_zero(cti);
+    cti.texture = target;
+    cti.load_op = SDL_GPU_LOADOP_LOAD;
+    cti.store_op = SDL_GPU_STOREOP_STORE;
+
+    SDL_GPUDepthStencilTargetInfo ds;
+    SDL_zero(ds);
+    ds.texture = rd->viewmodel_depth.handle;
+    ds.load_op = SDL_GPU_LOADOP_CLEAR;
+    ds.store_op = SDL_GPU_STOREOP_DONT_CARE;
+    ds.clear_depth = 0.0f;              /* reverse-Z : le plan lointain vaut 0 */
+    ds.cycle = true;
+
+    SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(cmd, &cti, 1, &ds);
+    SDL_BindGPUGraphicsPipeline(pass, rd->pipe_viewmodel);
+
+    SDL_GPUBufferBinding vb = { rd->vm_vertices.handle, 0 };
+    SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
+    SDL_GPUBufferBinding ib = { rd->vm_indices.handle, 0 };
+    SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+    SDL_GPUBuffer *lights = rd->lights.handle;
+    SDL_BindGPUFragmentStorageBuffers(pass, 0, &lights, 1);
+
+    /* Projection propre : plus étroite que celle de la scène, et un plan proche
+     * très court parce que les mains passent à vingt centimètres de l'œil. */
+    const float aspect = (float)rd->width / (float)ns_maxf(1.0f, (float)rd->height);
+    const float fov = (pose->fov_y_degrees > 1.0f) ? pose->fov_y_degrees : 45.0f;
+    const ns_m4 proj = ns_m4_perspective(fov * NS_DEG2RAD, aspect, 0.02f, 6.0f, true);
+    const ns_m4 view_proj = ns_m4_mul(proj, *view);
+
+    viewmodel_fs_ubo fu;
+    SDL_zero(fu);
+    /* Un gant sombre et mat, une manche à peine plus claire : le viewmodel ne
+     * doit pas attirer l'œil, seulement exister. */
+    fu.base_color[0] = 0.20f; fu.base_color[1] = 0.19f; fu.base_color[2] = 0.21f;
+    fu.base_color[3] = 0.72f;                  /* rugosité */
+    fu.camera[0] = cam->position.x;
+    fu.camera[1] = cam->position.y;
+    fu.camera[2] = cam->position.z;
+    fu.camera[3] = 0.0f;                       /* métallicité */
+    SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
+    fu.ambient[3] = rd->settings.ambient_intensity;
+    fu.counts[0] = (int32_t)light_count;
+    SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
+
+    for (int i = 0; i < NS_VM_SEGMENT_COUNT; ++i) {
+        if (!pose->draw[i] || rd->vm_index_count[i] == 0) continue;
+
+        viewmodel_vs_ubo vu;
+        SDL_zero(vu);
+        SDL_memcpy(vu.view_proj, view_proj.m, sizeof vu.view_proj);
+        SDL_memcpy(vu.model, pose->segment[i].m, sizeof vu.model);
+        vu.params[0] = pose->length[i];
+        SDL_PushGPUVertexUniformData(cmd, 0, &vu, sizeof vu);
+
+        SDL_DrawGPUIndexedPrimitives(pass, rd->vm_index_count[i], 1,
+                                     rd->vm_first_index[i], 0, 0);
+    }
+
+    SDL_EndGPURenderPass(pass);
+}
+
 void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
-                      const ns_camera *camera, SDL_GPUTexture *target,
+                      const ns_camera *camera, const ns_viewmodel_pose *viewmodel,
+                      SDL_GPUTexture *target,
                       uint32_t target_width, uint32_t target_height,
                       double time_seconds)
 {
@@ -1214,6 +1479,10 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
          * couleur constante. Quand le volumétrique tourne, il faut le couper :
          * deux brouillards superposés donnent une salle laiteuse. */
         u.counts[2] = volumetric_on ? 1 : 0;
+        /* Diviseur de résolution du lancer de rayons : `lighting.frag` lit la
+         * cible d'ombres par lumière au texel près, et doit donc savoir de
+         * combien elle est réduite. */
+        u.counts[3] = (int32_t)RT_DOWNSCALE;
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
         SDL_GPUSampler *nearest = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
@@ -1257,6 +1526,12 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                         tex, smp, 3, &cu, sizeof cu, NULL);
         lit = rd->hdr_fogged.handle;
     }
+
+    /* --- 3b bis. Les bras ---
+     * Après le brouillard (ils le prennent), avant le halo (ils fleurissent), et
+     * avant la mesure d'exposition : une main qui passe devant un néon doit peser
+     * dans la luminance moyenne, sinon l'image pompe quand on lève le bras. */
+    pass_viewmodel(r, rd, camera, &view, lit, viewmodel, light_count);
 
     /* --- 3c. Mesure de l'exposition ---
      * Après la composition du brouillard : c'est bien l'image finale avant halo

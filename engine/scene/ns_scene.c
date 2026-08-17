@@ -1066,7 +1066,20 @@ static void add_cabinet_screen_lights(ns_scene *s)
          * n'éclairerait que l'intérieur de la borne. */
         const ns_v3 p = ns_v3_add(c->screen_center, ns_v3_scale(c->screen_normal, 0.45f));
         l->position[0] = p.x; l->position[1] = p.y; l->position[2] = p.z;
-        l->color[0] = tint[0]; l->color[1] = tint[1]; l->color[2] = tint[2];
+        /*
+         * Désaturation vers le blanc.
+         *
+         * La teinte pure repeignait tout : huit bornes du même jeu alignées le
+         * long d'une allée rendaient le mur, la moquette et le plafond d'un vert
+         * uniforme, et on ne lisait plus ni la texture ni la forme. Une lampe
+         * colorée réelle porte surtout de la lumière blanche avec une dominante.
+         * À 45 % de teinte l'identité de chaque borne reste lisible sur le
+         * mètre qu'elle éclaire, sans avaler la salle.
+         */
+        const float TINT = 0.45f;
+        for (int k = 0; k < 3; ++k) {
+            l->color[k] = tint[k] * TINT + (1.0f - TINT);
+        }
         /*
          * 90 et non 240, 4,5 m et non 6,2.
          *
@@ -1077,8 +1090,13 @@ static void add_cabinet_screen_lights(ns_scene *s)
          * plus proche — un couloir vert vif d'un bout à l'autre. Un écran de
          * borne éclaire son joueur et un mètre de moquette, pas une salle.
          */
-        l->intensity = 90.0f;
-        l->range = 4.5f;
+        /* Remontée depuis 90 : la salle a été rééclairée en A5b, et les écrans
+         * sont devenus la source PRINCIPALE plutôt qu'un appoint. Vingt
+         * plafonniers de 500 les écrasaient ; il n'en reste que quatre, faibles.
+         * C'est ce qui donne l'ambiance d'une vraie salle d'arcade, où ce sont
+         * les machines qui éclairent. */
+        l->intensity = 150.0f;
+        l->range = 4.2f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
         /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,

@@ -315,6 +315,11 @@ bool ns_rhi_begin_frame(ns_rhi *r)
     return true;
 }
 
+void ns_rhi_wait_idle(ns_rhi *r)
+{
+    if (r && r->device) SDL_WaitForGPUIdle(r->device);
+}
+
 void ns_rhi_end_frame(ns_rhi *r)
 {
     NS_ASSERT(r->frame_active);

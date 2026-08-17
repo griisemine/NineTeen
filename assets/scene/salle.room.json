@@ -2,453 +2,2708 @@
   "_": "===========================================================================",
   "_titre": "La salle de Nineteen, décrite plutôt que modélisée.",
   "_lu_par": "tools/roomgen.c, au build. Ce fichier est une SOURCE versionnée, pas un asset : il n'est jamais copié à côté du jeu.",
-
   "_pourquoi": "Le décor de 2020 est un OBJ de 127 objets dont la moitié s'appelle Cube.0XX. Le moteur devait donc deviner quelle borne joue à quoi, où est son écran, quelle boîte est une lampe — et chacune de ces déductions se trompe quelque part. Ici tout est nommé et placé. La classe entière de bugs disparaît avec les heuristiques.",
-
   "_echelle": "Le mètre. Le modèle d'origine est en unités Blender à 2,06 par mètre — l'auteur l'a écrit lui-même, HAUTEUR_CAMERA_DEBOUT 3.5F pour un œil debout (legacy/room/room.c:90) — et le moteur V15 l'a lu comme des mètres, ce qui donnait un joueur de 82 cm au milieu de bornes de 2,40 m. Le problème cesse d'exister ici par construction.",
-
   "_plan": "Les cotes reprennent celles du modèle de 2020 divisées par 2,06, puis élargies : le hall d'origine faisait 19,3 x 14,4 m sous 2,92 m de plafond, celui-ci fait 22 x 16 sous 3,10. Le pan coupé du coin nord-est reprend le mur en diagonale de l'original (x = -0,4737 z + 9,401 en unités du modèle), et devient l'entrée.",
-
   "_convention": "Les points de mur se lisent [x, z] et suivent la LIGNE MÉDIANE. Ils sont listés de sorte qu'en marchant de l'un au suivant, l'intérieur soit à gauche : c'est la seule règle à tenir, tout le reste en découle (face intérieure, sens des onglets, côté des moulures).",
-
   "units": "metres",
   "name": "salle",
-
   "room": {
-    "height": 3.10,
-    "wallThickness": 0.20,
+    "height": 2.92,
+    "wallThickness": 0.2,
     "_playable": "Emprise de circulation, déclarée plutôt que déduite. Sans elle le moteur l'estime depuis l'union des bornes et des lumières élargie de 3 m, ce qui est une approximation nécessaire sur l'ancien modèle et inutile ici.",
-    "playable": { "min": [-11.0, 0.0, -8.0], "max": [11.0, 3.10, 8.0] }
+    "playable": {
+      "min": [
+        -9.65,
+        0.0,
+        -7.2
+      ],
+      "max": [
+        9.65,
+        2.92,
+        7.2
+      ]
+    }
   },
-
   "_materiaux": "Les 58 textures d'origine sont conservées — c'est ce qui garde la même salle. Le mode de pavage (uvMetres) est DÉCLARÉ par matériau : une moquette boucle tous les 1,5 m, une dalle de plafond tous les 0,60. C'est la correction directe du plafond de 2020, dont les UV bouclaient une fois tous les 17,9 m et qui se lisait comme un aplat.",
-
   "materials": [
-    { "name": "sol",           "texture": "moquette.jpg",            "roughness": 0.94, "metallic": 0.0,  "uvMetres": 1.50,
+    {
+      "name": "sol",
+      "texture": "moquette.jpg",
+      "roughness": 0.94,
+      "metallic": 0.0,
+      "uvMetres": 1.5,
       "_albedo": "Mesuré : moquette.jpg a un albédo moyen de 47/255 (81, 32, 29 — le motif bordeaux d'arcade), contre 10/255 pour moquette_noire.jpg et 30 pour floor.jpg. Le sol est la plus grande surface de la salle : à 4 % d'albédo il avale toute la lumière, et aucun réglage d'exposition ne rattrape ça. C'est aussi la texture la plus proche d'un vrai sol d'arcade.",
-      "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires." },
-    { "name": "sol_sombre",    "texture": "moquette_noire.jpg",      "roughness": 0.96, "metallic": 0.0,  "uvMetres": 1.50 },
-    { "name": "sol_toilettes", "texture": "carllage_toilette.jpg",    "roughness": 0.32, "metallic": 0.0,  "uvMetres": 1.00 },
-    { "name": "mur",           "texture": "mur_gris.jpg",             "roughness": 0.88, "metallic": 0.0,  "uvMetres": 2.50 },
-    { "name": "mur_exterieur", "texture": "mur_brique.jpg",           "roughness": 0.93, "metallic": 0.0,  "uvMetres": 2.00 },
-    { "name": "mur_toilettes", "texture": "carllage_mur_toilette.jpg","roughness": 0.28, "metallic": 0.0,  "uvMetres": 1.20 },
-    { "name": "beton",         "texture": "gris_foncer.jpg",          "roughness": 0.90, "metallic": 0.0,  "uvMetres": 1.50 },
-
-    { "name": "plafond",       "texture": "plafond.jpg",              "roughness": 0.82, "metallic": 0.0,  "uvMetres": 0.60,
-      "emissive": [1.0, 0.94, 0.74], "emissiveStrength": 0.0,
+      "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires."
+    },
+    {
+      "name": "sol_sombre",
+      "texture": "moquette_noire.jpg",
+      "roughness": 0.96,
+      "metallic": 0.0,
+      "uvMetres": 1.5
+    },
+    {
+      "name": "sol_toilettes",
+      "texture": "carllage_toilette.jpg",
+      "roughness": 0.32,
+      "metallic": 0.0,
+      "uvMetres": 1.0
+    },
+    {
+      "name": "mur",
+      "texture": "mur_gris.jpg",
+      "roughness": 0.88,
+      "metallic": 0.0,
+      "uvMetres": 2.5
+    },
+    {
+      "name": "mur_exterieur",
+      "texture": "mur_brique.jpg",
+      "roughness": 0.93,
+      "metallic": 0.0,
+      "uvMetres": 2.0
+    },
+    {
+      "name": "mur_toilettes",
+      "texture": "carllage_mur_toilette.jpg",
+      "roughness": 0.28,
+      "metallic": 0.0,
+      "uvMetres": 1.2
+    },
+    {
+      "name": "beton",
+      "texture": "gris_foncer.jpg",
+      "roughness": 0.9,
+      "metallic": 0.0,
+      "uvMetres": 1.5
+    },
+    {
+      "name": "plafond",
+      "texture": "plafond.jpg",
+      "roughness": 0.82,
+      "metallic": 0.0,
+      "uvMetres": 0.6,
+      "emissive": [
+        1.0,
+        0.94,
+        0.74
+      ],
+      "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
-      "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018." },
-    { "name": "rail",          "texture": "gris_foncer.jpg",          "roughness": 0.72, "metallic": 0.15, "uvMetres": 0.60,
-      "_": "Pas noir.jpg : cette image est littéralement (0, 0, 0). Un rail d'albédo nul ne renvoie que du spéculaire, et la trame du plafond sortait en filaments blancs sur fond noir au lieu de profilés." },
-    { "name": "plenum",        "texture": "noir.jpg",                 "roughness": 0.95, "metallic": 0.0,  "uvMetres": 0.50 },
-    { "name": "panneau_lumineux", "baseColor": [1.0, 0.975, 0.94, 1.0], "roughness": 0.35, "metallic": 0.0,
-      "emissive": [1.0, 0.975, 0.94], "emissiveStrength": 1.05,
-      "_": "Sans texture : le moteur retombe alors sur son blanc de substitut, et l'émissif — désormais multiplié par l'albédo depuis A0 — donne une dalle lumineuse unie plutôt qu'un aplat parasite." },
-
-    { "name": "pilier",        "texture": "pilonne_rouge.jpg",        "baseColor": [0.70, 0.72, 0.72, 1.0], "roughness": 0.74, "metallic": 0.0, "uvMetres": 1.20,
-      "_": "Cette texture existe depuis 2020 et n'a jamais servi : les PILONNE du modèle portaient un matériau gris uni." },
-    { "name": "poutre",        "texture": "poutre.jpg",               "roughness": 0.86, "metallic": 0.0,  "uvMetres": 2.00 },
-    { "name": "bois_noir",     "texture": "bois_noir.jpg",            "roughness": 0.58, "metallic": 0.0,  "uvMetres": 1.00 },
-    { "name": "bois",          "texture": "bois.jpg",                 "roughness": 0.64, "metallic": 0.0,  "uvMetres": 1.00 },
-    { "name": "borne_caisson",  "baseColor": [0.042, 0.048, 0.060, 1.0], "roughness": 0.38, "metallic": 0.04,
-      "_": "Sans texture, et c'est la correction d'une première tentative qui multipliait noir.jpg par 1,6 : cette image est littéralement (0, 0, 0), et aucun facteur ne remonte un zéro. Les caissons sortaient noirs. Un flanc de borne est une laque sombre unie ; le moteur retombe sur son blanc de substitut, que baseColor teinte." },
-    { "name": "borne_cadre",    "texture": "gris_foncer.jpg",       "roughness": 0.38, "metallic": 0.25, "uvMetres": 0.50 },
-    { "name": "borne_commande", "texture": "bordeaux.jpg",          "roughness": 0.46, "metallic": 0.0,  "uvMetres": 0.60 },
-
-    { "name": "ecran_flappy_facile", "texture": "flappy_easy_font.jpg",   "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_flappy_dur",    "texture": "flappy_hard_font.jpg",   "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_snake",         "texture": "snake_font.jpg",         "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_tetris",        "texture": "tetris_font.jpg",        "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_asteroid",      "texture": "asteroid_font.jpg",      "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_asteroid_dur",  "texture": "asteroid_font_hard.jpg", "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_shooter",       "texture": "shooter_font.jpg",       "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_demineur",      "texture": "demineur_font.jpg",      "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_classement",    "texture": "leaderboard_font.jpg",   "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.35, "fit": true },
-    { "name": "ecran_bientot",       "texture": "coming_soon.jpg",        "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.10, "fit": true },
-    { "name": "ecran_chargement",    "texture": "chargement.png",         "roughness": 0.20, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 1.10, "fit": true },
-
-    { "name": "marquee_flappy",   "texture": "flappy.jpg",        "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-    { "name": "marquee_snake",    "texture": "snake.jpg",         "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-    { "name": "marquee_tetris",   "texture": "tetris.jpg",        "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-    { "name": "marquee_asteroid", "texture": "asteroid.jpg",      "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-    { "name": "marquee_nineteen", "texture": "nineteen_name.jpg", "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-    { "name": "marquee_pub",      "texture": "pub.jpg",           "roughness": 0.30, "emissive": [1.0, 0.97, 0.9], "emissiveStrength": 0.85, "fit": true },
-
-    { "name": "billard_tapis",  "texture": "billard_table.jpg",  "roughness": 0.90, "uvMetres": 1.20 },
-    { "name": "billard_bois",   "texture": "bois_moins_noir.jpg","roughness": 0.44, "uvMetres": 0.80 },
-    { "name": "comptoir",       "texture": "desk.jpg",           "roughness": 0.42, "uvMetres": 1.00 },
-    { "name": "cuir",           "texture": "cuir_rouge.jpg",     "baseColor": [0.55, 0.5, 0.5, 1.0], "roughness": 0.52, "uvMetres": 0.90 },
-    { "name": "marbre",         "texture": "marbre_toilettes.jpg","roughness": 0.22, "uvMetres": 1.60 },
-    { "name": "lavabo",         "texture": "lavabo.jpg",         "roughness": 0.24, "fit": true },
-    { "name": "cuvette",        "texture": "toilet.jpg",         "roughness": 0.26, "fit": true },
-    { "name": "chasse",         "texture": "toilette_push.jpg",  "roughness": 0.30, "fit": true },
-    { "name": "radio",          "texture": "Radio.jpg",          "roughness": 0.48, "fit": true },
-    { "name": "porte_bois",     "texture": "porte_exterieur.jpg","roughness": 0.55, "fit": true },
-    { "name": "sortie",         "texture": "exit.png",           "roughness": 0.35, "emissive": [0.3, 1.0, 0.4], "emissiveStrength": 2.6, "fit": true },
-    { "name": "enseigne",       "texture": "nineteen_name.jpg",  "roughness": 0.35, "emissive": [1.0, 0.9, 0.6], "emissiveStrength": 2.2, "fit": true },
-    { "name": "classement_fond","texture": "background_classement.png", "roughness": 0.40, "fit": true },
-    { "name": "ciel",           "texture": "ciel.jpg",           "roughness": 0.70, "fit": true },
-    { "name": "sol_technique",  "texture": "floor.jpg",          "roughness": 0.92, "uvMetres": 1.20,
-      "_": "La moquette bouclée noire d'origine, gardée pour le couloir de service : c'est elle que le jeton « sol ciré » d'obj2gltf vernissait à 0,24." },
-
-    { "name": "affiche_1", "texture": "poster_1.png", "roughness": 0.60, "fit": true },
-    { "name": "affiche_2", "texture": "poster_2.png", "roughness": 0.60, "fit": true },
-    { "name": "affiche_3", "texture": "poster_3.jpg", "roughness": 0.60, "fit": true },
-    { "name": "affiche_4", "texture": "poster_4.jpg", "roughness": 0.60, "fit": true },
-    { "name": "affiche_5", "texture": "poster_5.jpg", "roughness": 0.60, "fit": true },
-    { "name": "affiche_6", "texture": "poster_6.jpg", "roughness": 0.60, "fit": true },
-    { "name": "affiche_7", "texture": "poster_7.jpg", "roughness": 0.60, "fit": true },
-    { "name": "affiche_8", "texture": "poster_8.jpg", "roughness": 0.60, "fit": true },
-
-    { "name": "jaune",  "texture": "jaune.jpg",  "roughness": 0.50, "uvMetres": 0.80 },
-    { "name": "bleu",   "texture": "bleu.jpg",   "roughness": 0.50, "uvMetres": 0.80 },
-    { "name": "rouge",  "texture": "rouge.jpg",  "roughness": 0.50, "uvMetres": 0.80 },
-    { "name": "bordeau_uni", "texture": "bordeau_uni.jpg", "roughness": 0.55, "uvMetres": 0.80 },
-    { "name": "marron", "texture": "marron_foncer.jpg", "roughness": 0.60, "uvMetres": 0.90 },
-    { "name": "gris",   "texture": "gris_foncer.jpg", "roughness": 0.70, "uvMetres": 0.90 }
+      "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018."
+    },
+    {
+      "name": "rail",
+      "texture": "gris_foncer.jpg",
+      "roughness": 0.72,
+      "metallic": 0.15,
+      "uvMetres": 0.6,
+      "_": "Pas noir.jpg : cette image est littéralement (0, 0, 0). Un rail d'albédo nul ne renvoie que du spéculaire, et la trame du plafond sortait en filaments blancs sur fond noir au lieu de profilés."
+    },
+    {
+      "name": "plenum",
+      "texture": "noir.jpg",
+      "roughness": 0.95,
+      "metallic": 0.0,
+      "uvMetres": 0.5
+    },
+    {
+      "name": "panneau_lumineux",
+      "baseColor": [
+        1.0,
+        0.975,
+        0.94,
+        1.0
+      ],
+      "roughness": 0.35,
+      "metallic": 0.0,
+      "emissive": [
+        1.0,
+        0.975,
+        0.94
+      ],
+      "emissiveStrength": 1.05,
+      "_": "Sans texture : le moteur retombe alors sur son blanc de substitut, et l'émissif — désormais multiplié par l'albédo depuis A0 — donne une dalle lumineuse unie plutôt qu'un aplat parasite."
+    },
+    {
+      "name": "pilier",
+      "texture": "pilonne_rouge.jpg",
+      "baseColor": [
+        0.7,
+        0.72,
+        0.72,
+        1.0
+      ],
+      "roughness": 0.74,
+      "metallic": 0.0,
+      "uvMetres": 1.2,
+      "_": "Cette texture existe depuis 2020 et n'a jamais servi : les PILONNE du modèle portaient un matériau gris uni."
+    },
+    {
+      "name": "poutre",
+      "texture": "poutre.jpg",
+      "roughness": 0.86,
+      "metallic": 0.0,
+      "uvMetres": 2.0
+    },
+    {
+      "name": "bois_noir",
+      "texture": "bois_noir.jpg",
+      "roughness": 0.58,
+      "metallic": 0.0,
+      "uvMetres": 1.0
+    },
+    {
+      "name": "bois",
+      "texture": "bois.jpg",
+      "roughness": 0.64,
+      "metallic": 0.0,
+      "uvMetres": 1.0
+    },
+    {
+      "name": "borne_caisson",
+      "baseColor": [
+        0.042,
+        0.048,
+        0.06,
+        1.0
+      ],
+      "roughness": 0.38,
+      "metallic": 0.04,
+      "_": "Sans texture, et c'est la correction d'une première tentative qui multipliait noir.jpg par 1,6 : cette image est littéralement (0, 0, 0), et aucun facteur ne remonte un zéro. Les caissons sortaient noirs. Un flanc de borne est une laque sombre unie ; le moteur retombe sur son blanc de substitut, que baseColor teinte."
+    },
+    {
+      "name": "borne_cadre",
+      "texture": "gris_foncer.jpg",
+      "roughness": 0.38,
+      "metallic": 0.25,
+      "uvMetres": 0.5
+    },
+    {
+      "name": "borne_commande",
+      "texture": "bordeaux.jpg",
+      "roughness": 0.46,
+      "metallic": 0.0,
+      "uvMetres": 0.6
+    },
+    {
+      "name": "ecran_flappy_facile",
+      "texture": "flappy_easy_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_flappy_dur",
+      "texture": "flappy_hard_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_snake",
+      "texture": "snake_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_tetris",
+      "texture": "tetris_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_asteroid",
+      "texture": "asteroid_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_asteroid_dur",
+      "texture": "asteroid_font_hard.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_shooter",
+      "texture": "shooter_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_demineur",
+      "texture": "demineur_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_classement",
+      "texture": "leaderboard_font.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_bientot",
+      "texture": "coming_soon.jpg",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "ecran_chargement",
+      "texture": "chargement.png",
+      "roughness": 0.2,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.1,
+      "fit": true
+    },
+    {
+      "name": "marquee_flappy",
+      "texture": "flappy.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "marquee_snake",
+      "texture": "snake.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "marquee_tetris",
+      "texture": "tetris.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "marquee_asteroid",
+      "texture": "asteroid.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "marquee_nineteen",
+      "texture": "nineteen_name.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "marquee_pub",
+      "texture": "pub.jpg",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.15,
+      "fit": true
+    },
+    {
+      "name": "billard_tapis",
+      "texture": "billard_table.jpg",
+      "roughness": 0.9,
+      "uvMetres": 1.2
+    },
+    {
+      "name": "billard_bois",
+      "texture": "bois_moins_noir.jpg",
+      "roughness": 0.44,
+      "uvMetres": 0.8
+    },
+    {
+      "name": "comptoir",
+      "texture": "desk.jpg",
+      "roughness": 0.42,
+      "uvMetres": 1.0
+    },
+    {
+      "name": "cuir",
+      "texture": "cuir_rouge.jpg",
+      "baseColor": [
+        0.55,
+        0.5,
+        0.5,
+        1.0
+      ],
+      "roughness": 0.52,
+      "uvMetres": 0.9
+    },
+    {
+      "name": "marbre",
+      "texture": "marbre_toilettes.jpg",
+      "roughness": 0.22,
+      "uvMetres": 1.6
+    },
+    {
+      "name": "lavabo",
+      "texture": "lavabo.jpg",
+      "roughness": 0.24,
+      "fit": true
+    },
+    {
+      "name": "cuvette",
+      "texture": "toilet.jpg",
+      "roughness": 0.26,
+      "fit": true
+    },
+    {
+      "name": "chasse",
+      "texture": "toilette_push.jpg",
+      "roughness": 0.3,
+      "fit": true
+    },
+    {
+      "name": "radio",
+      "texture": "Radio.jpg",
+      "roughness": 0.48,
+      "fit": true
+    },
+    {
+      "name": "porte_bois",
+      "texture": "porte_exterieur.jpg",
+      "roughness": 0.55,
+      "fit": true
+    },
+    {
+      "name": "sortie",
+      "texture": "exit.png",
+      "roughness": 0.35,
+      "emissive": [
+        0.3,
+        1.0,
+        0.4
+      ],
+      "emissiveStrength": 2.6,
+      "fit": true
+    },
+    {
+      "name": "enseigne",
+      "texture": "nineteen_name.jpg",
+      "roughness": 0.35,
+      "emissive": [
+        1.0,
+        0.9,
+        0.6
+      ],
+      "emissiveStrength": 2.2,
+      "fit": true
+    },
+    {
+      "name": "classement_fond",
+      "texture": "background_classement.png",
+      "roughness": 0.4,
+      "fit": true
+    },
+    {
+      "name": "ciel",
+      "texture": "ciel.jpg",
+      "roughness": 0.7,
+      "fit": true
+    },
+    {
+      "name": "sol_technique",
+      "texture": "floor.jpg",
+      "roughness": 0.92,
+      "uvMetres": 1.2,
+      "_": "La moquette bouclée noire d'origine, gardée pour le couloir de service : c'est elle que le jeton « sol ciré » d'obj2gltf vernissait à 0,24."
+    },
+    {
+      "name": "affiche_1",
+      "texture": "poster_1.png",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_2",
+      "texture": "poster_2.png",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_3",
+      "texture": "poster_3.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_4",
+      "texture": "poster_4.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_5",
+      "texture": "poster_5.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_6",
+      "texture": "poster_6.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_7",
+      "texture": "poster_7.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "affiche_8",
+      "texture": "poster_8.jpg",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
+      "name": "jaune",
+      "texture": "jaune.jpg",
+      "roughness": 0.5,
+      "uvMetres": 0.8
+    },
+    {
+      "name": "bleu",
+      "texture": "bleu.jpg",
+      "roughness": 0.5,
+      "uvMetres": 0.8
+    },
+    {
+      "name": "rouge",
+      "texture": "rouge.jpg",
+      "roughness": 0.5,
+      "uvMetres": 0.8
+    },
+    {
+      "name": "bordeau_uni",
+      "texture": "bordeau_uni.jpg",
+      "roughness": 0.55,
+      "uvMetres": 0.8
+    },
+    {
+      "name": "marron",
+      "texture": "marron_foncer.jpg",
+      "roughness": 0.6,
+      "uvMetres": 0.9
+    },
+    {
+      "name": "gris",
+      "texture": "gris_foncer.jpg",
+      "roughness": 0.7,
+      "uvMetres": 0.9
+    }
   ],
-
-  "_lumieres": "Déclarées, avec leur nom et leur portée. En 2020 elles étaient DÉDUITES de l'aire émissive des matériaux : le plafond en produisait seize, posées sur la boîte englobante de la dalle plutôt que sur celle de la salle, dont SEPT tombaient hors des murs et éclairaient par le joint de 23 mm entre les murs et le toit. Celles marquées ceilingPanel posent en plus un panneau lumineux dans les dalles qu'elles couvrent — une seule liste, donc rien à tenir d'accord.",
-
+  "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources. Ici quatre plafonniers faibles balisent la circulation, des néons colorés rasent les murs, et l'essentiel de la lumière vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines qui éclairent.",
   "_intensite": "Le shader intègre color * intensity / (4 pi d^2) (lighting.frag:123). À 3 m sous un plafonnier, cela vaut intensity / 113 : sur une moquette d'albédo linéaire 0,03, il faut donc de l'ordre du millier pour éclairer un sol, pas de la centaine. Les 165 essayés d'abord donnaient une salle noire — et c'est exactement pour cela que celle de 2020 paraissait éclairée : ce n'étaient pas ses lumières ponctuelles qui portaient l'image, mais une dalle émissive de 600 m² au plafond.",
-
   "_luminaires": "panelSize donne l'emprise du luminaire dans la trame. 1,20 x 0,60 est le format courant d'un pavé de faux plafond : deux dalles. Les X sont donc posés sur un JOINT de trame (-11,10 + 5 x 0,60 = -8,10) et les Z sur un CENTRE de dalle, pour que la paire tombe juste.",
-
   "lights": [
-    { "name": "plafonnier_r1", "at": [-8.10, 2.90, -4.8], "color": [1.0, 0.97, 0.92], "intensity": 500.0, "range": 11.0, "radius": 0.45,
-      "ceilingPanel": true, "panelSize": [1.20, 0.60], "repeat": { "count": 5, "step": [4.2, 0, 0] } },
-    { "name": "plafonnier_r2", "at": [-8.10, 2.90, -1.8], "color": [1.0, 0.97, 0.92], "intensity": 500.0, "range": 11.0, "radius": 0.45,
-      "ceilingPanel": true, "panelSize": [1.20, 0.60], "repeat": { "count": 5, "step": [4.2, 0, 0] } },
-    { "name": "plafonnier_r3", "at": [-8.10, 2.90,  1.8], "color": [1.0, 0.97, 0.92], "intensity": 500.0, "range": 11.0, "radius": 0.45,
-      "ceilingPanel": true, "panelSize": [1.20, 0.60], "repeat": { "count": 5, "step": [4.2, 0, 0] } },
-    { "name": "plafonnier_r4", "at": [-8.10, 2.90,  4.8], "color": [1.0, 0.97, 0.92], "intensity": 500.0, "range": 11.0, "radius": 0.45,
-      "ceilingPanel": true, "panelSize": [1.20, 0.60], "repeat": { "count": 5, "step": [4.2, 0, 0] } },
-    { "name": "plafonnier_toilettes", "at": [-9.0, 2.90, -6.0], "color": [0.92, 0.96, 1.0], "intensity": 260.0, "range": 6.0, "radius": 0.30,
-      "ceilingPanel": true, "flicker": true,
-      "_": "Le neon qui gresille des toilettes. C'est la seule lumiere instable de la salle : une qui clignote se remarque, dix deviennent un effet." },
-
-    { "name": "applique_ouest", "at": [-10.80, 2.30, -1.0], "color": [1.0, 0.84, 0.62], "intensity": 150.0, "range": 7.0, "radius": 0.11,
-      "repeat": { "count": 3, "step": [0, 0, 4.0] } },
-    { "name": "applique_sud",   "at": [-4.0, 2.30, -7.80], "color": [1.0, 0.84, 0.62], "intensity": 150.0, "range": 7.0, "radius": 0.11,
-      "repeat": { "count": 3, "step": [5.0, 0, 0] } }
+    {
+      "name": "plafonnier_allee",
+      "at": [
+        -5.2,
+        2.74,
+        -3.4
+      ],
+      "color": [
+        0.86,
+        0.9,
+        1.0
+      ],
+      "intensity": 62.0,
+      "range": 4.6,
+      "radius": 0.42,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.1,
+        0.55
+      ],
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          6.8
+        ]
+      },
+      "_": "Deux dalles au-dessus de l'allée ouest, juste assez pour ne pas marcher à l'aveugle."
+    },
+    {
+      "name": "plafonnier_bar",
+      "at": [
+        1.6,
+        2.74,
+        -5.6
+      ],
+      "color": [
+        1.0,
+        0.86,
+        0.66
+      ],
+      "intensity": 78.0,
+      "range": 5.0,
+      "radius": 0.42,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.1,
+        0.55
+      ],
+      "repeat": {
+        "count": 2,
+        "step": [
+          3.6,
+          0.0,
+          0.0
+        ]
+      },
+      "_": "Le comptoir est le seul endroit où l'on a besoin d'y voir vraiment. Chaud, à l'inverse du reste."
+    },
+    {
+      "name": "plafonnier_toilettes",
+      "at": [
+        7.4,
+        2.74,
+        5.2
+      ],
+      "color": [
+        0.78,
+        0.92,
+        0.84
+      ],
+      "intensity": 34.0,
+      "range": 3.4,
+      "radius": 0.3,
+      "flicker": true,
+      "ceilingPanel": true,
+      "panelSize": [
+        0.9,
+        0.45
+      ],
+      "_": "Le néon qui grésille au fond du couloir. Il était déjà là ; il est maintenant seul."
+    },
+    {
+      "name": "neon_mur_ouest",
+      "at": [
+        -8.9,
+        2.2,
+        -4.0
+      ],
+      "color": [
+        0.24,
+        0.62,
+        1.0
+      ],
+      "intensity": 26.0,
+      "range": 3.8,
+      "radius": 0.55,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          4.0
+        ]
+      },
+      "_": "Tube bleu rasant le mur ouest. Faible portée, franchement coloré : il TEINTE, il n'éclaire pas."
+    },
+    {
+      "name": "neon_mur_est",
+      "at": [
+        8.9,
+        2.2,
+        -2.0
+      ],
+      "color": [
+        1.0,
+        0.22,
+        0.52
+      ],
+      "intensity": 26.0,
+      "range": 3.8,
+      "radius": 0.55,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          4.0
+        ]
+      },
+      "_": "Magenta en face du bleu : c'est le contraste des deux qui fait la salle, pas leur somme."
+    },
+    {
+      "name": "applique_entree",
+      "at": [
+        6.4,
+        2.05,
+        3.2
+      ],
+      "color": [
+        1.0,
+        0.74,
+        0.48
+      ],
+      "intensity": 30.0,
+      "range": 3.0,
+      "radius": 0.11,
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      },
+      "_": "Deux appliques près de l'entrée, à hauteur d'homme : elles donnent un point de repère en entrant."
+    }
   ],
-
   "_sols": "Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement.",
-
   "floors": [
-    { "name": "sol_hall",      "material": "sol",           "centre": [ 2.05,  0.00], "size": [18.10, 16.20], "y": 0.0 },
-    { "name": "sol_couloir",   "material": "sol",           "centre": [-9.05,  2.05], "size": [ 4.10, 12.10], "y": 0.0 },
-    { "name": "sol_toilettes", "material": "sol_toilettes", "centre": [-9.05, -6.05], "size": [ 4.10,  4.10], "y": 0.0 }
+    {
+      "name": "sol_hall",
+      "material": "sol",
+      "centre": [
+        2.05,
+        0.0
+      ],
+      "size": [
+        18.1,
+        16.2
+      ],
+      "y": 0.0
+    },
+    {
+      "name": "sol_couloir",
+      "material": "sol",
+      "centre": [
+        -9.05,
+        2.05
+      ],
+      "size": [
+        4.1,
+        12.1
+      ],
+      "y": 0.0
+    },
+    {
+      "name": "sol_toilettes",
+      "material": "sol_toilettes",
+      "centre": [
+        -9.05,
+        -6.05
+      ],
+      "size": [
+        4.1,
+        4.1
+      ],
+      "y": 0.0
+    }
   ],
-
   "walls": [
     {
       "name": "coquille",
       "_": "Le pourtour, avec son pan coupé au nord-est — repris du mur en diagonale de 2020 — qui devient l'entrée.",
-      "points": [[-11.10, -8.10], [-11.10, 8.10], [7.10, 8.10], [11.10, 4.10], [11.10, -8.10]],
+      "points": [
+        [
+          -9.65,
+          -7.2
+        ],
+        [
+          -9.65,
+          7.2
+        ],
+        [
+          6.173,
+          7.2
+        ],
+        [
+          9.65,
+          3.644
+        ],
+        [
+          9.65,
+          -7.2
+        ]
+      ],
       "closed": true,
-      "materialInner": "mur", "materialOuter": "mur_exterieur", "materialReveal": "beton",
+      "materialInner": "mur",
+      "materialOuter": "mur_exterieur",
+      "materialReveal": "beton",
       "openings": [
-        { "name": "porte_entree", "offset": 36.03, "width": 2.40, "sill": 0.0, "head": 2.30 }
+        {
+          "name": "porte_entree",
+          "offset": 36.03,
+          "width": 2.4,
+          "sill": 0.0,
+          "head": 2.3
+        }
       ]
     },
     {
       "name": "cloison_toilettes",
       "_": "Referme le coin sud-ouest. L'intérieur des toilettes est à gauche de la marche, donc le carrelage habille bien le dedans.",
-      "points": [[-11.10, -4.00], [-7.00, -4.00], [-7.00, -8.10]],
+      "points": [
+        [
+          -9.65,
+          -3.556
+        ],
+        [
+          -6.086,
+          -3.556
+        ],
+        [
+          -6.086,
+          -7.2
+        ]
+      ],
       "closed": false,
-      "materialInner": "mur_toilettes", "materialOuter": "mur", "materialReveal": "beton",
+      "materialInner": "mur_toilettes",
+      "materialOuter": "mur",
+      "materialReveal": "beton",
       "openings": [
-        { "name": "porte_toilettes", "offset": 2.40, "width": 0.95, "sill": 0.0, "head": 2.10 }
+        {
+          "name": "porte_toilettes",
+          "offset": 2.4,
+          "width": 0.95,
+          "sill": 0.0,
+          "head": 2.1
+        }
       ]
     }
   ],
-
   "ceilings": [
     {
       "name": "plafond",
-      "material": "plafond", "railMaterial": "rail",
-      "panelMaterial": "panneau_lumineux", "voidMaterial": "plenum",
-      "centre": [0.0, 0.0], "size": [22.20, 16.20], "y": 3.10,
-      "tile": 0.60, "railWidth": 0.038, "railDrop": 0.042, "plenum": 0.38,
+      "material": "plafond",
+      "railMaterial": "rail",
+      "panelMaterial": "panneau_lumineux",
+      "voidMaterial": "plenum",
+      "centre": [
+        0.0,
+        0.0
+      ],
+      "size": [
+        22.2,
+        16.2
+      ],
+      "y": 3.1,
+      "tile": 0.6,
+      "railWidth": 0.038,
+      "railDrop": 0.042,
+      "plenum": 0.38,
       "_missing": "Une dalle retirée, qui montre le vide et un câble. C'est ce qui fait lire le plafond comme un vrai plafond suspendu plutôt que comme une texture de plafond.",
-      "missing": [[28, 20]]
+      "missing": [
+        [
+          28,
+          20
+        ]
+      ]
     }
   ],
-
   "boxes": [
-    { "name": "pilier_ouest", "material": "pilier", "at": [-7.60, 0.0, -6.0], "size": [0.48, 2.855, 0.48],
-      "chamfer": 0.015, "repeat": { "count": 5, "step": [0, 0, 3.0] } },
-    { "name": "pilier_est",   "material": "pilier", "at": [ 7.60, 0.0, -6.0], "size": [0.48, 2.855, 0.48],
-      "chamfer": 0.015, "repeat": { "count": 5, "step": [0, 0, 3.0] } },
-
-    { "name": "poutre", "material": "poutre", "at": [0.0, 2.855, -6.0], "size": [22.20, 0.20, 0.42],
-      "chamfer": 0.018, "faces": "noBottom", "repeat": { "count": 5, "step": [0, 0, 3.0] },
-      "_": "Le dessus est masqué par les dalles ; on ne le génère pas. Les poutres s'arrêtent juste sous les rails (3,055 m) et posent sur les piliers." },
-
-    { "name": "estrade", "material": "bois_noir", "at": [0.0, 0.0, 1.0], "size": [7.00, 0.15, 5.00],
-      "chamfer": 0.02, "faces": "noBottom",
-      "_": "La plate-forme centrale, reprise du marquage CENTRE_MACHINE_SOL de 2020. La borne de classement y montera en A4." }
+    {
+      "name": "pilier_ouest",
+      "material": "pilier",
+      "at": [
+        -6.607,
+        0.0,
+        -5.333
+      ],
+      "size": [
+        0.48,
+        2.855,
+        0.48
+      ],
+      "chamfer": 0.015,
+      "repeat": {
+        "count": 5,
+        "step": [
+          0.0,
+          0.0,
+          2.667
+        ]
+      }
+    },
+    {
+      "name": "pilier_est",
+      "material": "pilier",
+      "at": [
+        6.607,
+        0.0,
+        -5.333
+      ],
+      "size": [
+        0.48,
+        2.855,
+        0.48
+      ],
+      "chamfer": 0.015,
+      "repeat": {
+        "count": 5,
+        "step": [
+          0.0,
+          0.0,
+          2.667
+        ]
+      }
+    },
+    {
+      "name": "poutre",
+      "material": "poutre",
+      "at": [
+        0.0,
+        2.689,
+        -5.333
+      ],
+      "size": [
+        22.2,
+        0.2,
+        0.42
+      ],
+      "chamfer": 0.018,
+      "faces": "noBottom",
+      "repeat": {
+        "count": 5,
+        "step": [
+          0.0,
+          0.0,
+          2.667
+        ]
+      },
+      "_": "Le dessus est masqué par les dalles ; on ne le génère pas. Les poutres s'arrêtent juste sous les rails (3,055 m) et posent sur les piliers."
+    },
+    {
+      "name": "estrade",
+      "material": "bois_noir",
+      "at": [
+        0.0,
+        0.0,
+        0.889
+      ],
+      "size": [
+        7.0,
+        0.15,
+        5.0
+      ],
+      "chamfer": 0.02,
+      "faces": "noBottom",
+      "_": "La plate-forme centrale, reprise du marquage CENTRE_MACHINE_SOL de 2020. La borne de classement y montera en A4."
+    }
   ],
-
   "_bornes": "Dix-neuf bornes, chacune nommée, placée, orientée, et sachant à quoi elle joue. Le moteur devinait ces trois dernières choses : l'écran par des fractions inventées de la boîte englobante (centre 31 cm trop bas), l'orientation par le barycentre du troupeau, et le jeu par un tri en X puis Z qui ne collait pas aux images peintes sur les marquees. Cotes réelles : 0,72 x 1,86 x 0,88 m — le modèle de 2020 mélangeait deux échelles et donnait des bornes de 2,39 m sous un plafond de 2,92.",
-
   "cabinets": [
-    { "name": "borne_arcade_1", "slot": 1, "game": "flappy", "difficulty": "easy",
-      "at": [-2.60, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_facile", "marquee": "marquee_flappy" },
-    { "name": "borne_arcade_2", "slot": 2, "game": "flappy", "difficulty": "hard",
-      "at": [-1.80, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_dur", "marquee": "marquee_flappy" },
-    { "name": "borne_arcade_3", "slot": 3, "game": "snake", "difficulty": "normal",
-      "at": [-1.00, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_snake", "marquee": "marquee_snake" },
-    { "name": "borne_arcade_4", "slot": 4, "game": "tetris", "difficulty": "normal",
-      "at": [1.00, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_tetris", "marquee": "marquee_tetris" },
-    { "name": "borne_arcade_5", "slot": 5, "game": "asteroid", "difficulty": "normal",
-      "at": [1.80, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_asteroid", "marquee": "marquee_asteroid" },
-    { "name": "borne_arcade_6", "slot": 6, "game": "asteroid", "difficulty": "hard",
-      "at": [2.60, 0.00, -5.05], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_asteroid_dur", "marquee": "marquee_asteroid" },
-    { "name": "borne_arcade_7", "slot": 7, "game": "shooter", "difficulty": "normal",
-      "at": [-2.60, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_shooter", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_8", "slot": 8, "game": "demineur", "difficulty": "normal",
-      "at": [-1.80, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_demineur", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_9", "slot": 9, "game": "snake", "difficulty": "hard",
-      "at": [-1.00, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_snake", "marquee": "marquee_snake" },
-    { "name": "borne_arcade_10", "slot": 10, "game": "tetris", "difficulty": "hard",
-      "at": [1.00, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_tetris", "marquee": "marquee_tetris" },
-    { "name": "borne_arcade_11", "slot": 11, "game": "pacman", "difficulty": "normal",
-      "at": [1.80, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_bientot", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_12", "slot": 12, "game": "piano", "difficulty": "normal",
-      "at": [2.60, 0.00, -4.15], "yaw": 0.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_bientot", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_13", "slot": 13, "game": "flappy", "difficulty": "easy",
-      "at": [-10.40, 0.00, 4.00], "yaw": 90.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_facile", "marquee": "marquee_flappy" },
-    { "name": "borne_arcade_14", "slot": 14, "game": "shooter", "difficulty": "hard",
-      "at": [-10.40, 0.00, 4.85], "yaw": 90.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_shooter", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_15", "slot": 15, "game": "demineur", "difficulty": "hard",
-      "at": [10.40, 0.00, -3.00], "yaw": 270.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_demineur", "marquee": "marquee_pub" },
-    { "name": "borne_arcade_16", "slot": 16, "game": "asteroid", "difficulty": "normal",
-      "at": [10.40, 0.00, -2.15], "yaw": 270.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_asteroid", "marquee": "marquee_asteroid" },
-    { "name": "borne_arcade_17", "slot": 17, "game": "flappy", "difficulty": "hard",
-      "at": [10.40, 0.00, -1.30], "yaw": 270.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_dur", "marquee": "marquee_flappy" },
-    { "name": "borne_arcade_18", "slot": 18, "game": "tetris", "difficulty": "normal",
-      "at": [10.40, 0.00, -0.45], "yaw": 270.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_chargement", "marquee": "marquee_tetris" },
-    { "name": "borne_classement", "slot": 19, "game": "leaderboard", "difficulty": "normal",
-      "at": [0.00, 0.15, 2.60], "yaw": 180.0,
-      "materialBody": "borne_caisson", "materialTrim": "borne_cadre", "materialPanel": "borne_commande",
-      "screen": "ecran_classement", "marquee": "marquee_nineteen" }
+    {
+      "name": "borne_arcade_1",
+      "slot": 1,
+      "game": "flappy",
+      "difficulty": "easy",
+      "at": [
+        -2.26,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_flappy_facile",
+      "marquee": "marquee_flappy"
+    },
+    {
+      "name": "borne_arcade_2",
+      "slot": 2,
+      "game": "flappy",
+      "difficulty": "hard",
+      "at": [
+        -1.565,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_flappy_dur",
+      "marquee": "marquee_flappy"
+    },
+    {
+      "name": "borne_arcade_3",
+      "slot": 3,
+      "game": "snake",
+      "difficulty": "normal",
+      "at": [
+        -0.869,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_snake",
+      "marquee": "marquee_snake"
+    },
+    {
+      "name": "borne_arcade_4",
+      "slot": 4,
+      "game": "tetris",
+      "difficulty": "normal",
+      "at": [
+        0.869,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_tetris",
+      "marquee": "marquee_tetris"
+    },
+    {
+      "name": "borne_arcade_5",
+      "slot": 5,
+      "game": "asteroid",
+      "difficulty": "normal",
+      "at": [
+        1.565,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_asteroid",
+      "marquee": "marquee_asteroid"
+    },
+    {
+      "name": "borne_arcade_6",
+      "slot": 6,
+      "game": "asteroid",
+      "difficulty": "hard",
+      "at": [
+        2.26,
+        0.0,
+        -4.489
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_asteroid_dur",
+      "marquee": "marquee_asteroid"
+    },
+    {
+      "name": "borne_arcade_7",
+      "slot": 7,
+      "game": "shooter",
+      "difficulty": "normal",
+      "at": [
+        -2.26,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_shooter",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_8",
+      "slot": 8,
+      "game": "demineur",
+      "difficulty": "normal",
+      "at": [
+        -1.565,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_demineur",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_9",
+      "slot": 9,
+      "game": "snake",
+      "difficulty": "hard",
+      "at": [
+        -0.869,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_snake",
+      "marquee": "marquee_snake"
+    },
+    {
+      "name": "borne_arcade_10",
+      "slot": 10,
+      "game": "tetris",
+      "difficulty": "hard",
+      "at": [
+        0.869,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_tetris",
+      "marquee": "marquee_tetris"
+    },
+    {
+      "name": "borne_arcade_11",
+      "slot": 11,
+      "game": "pacman",
+      "difficulty": "normal",
+      "at": [
+        1.565,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_bientot",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_12",
+      "slot": 12,
+      "game": "piano",
+      "difficulty": "normal",
+      "at": [
+        2.26,
+        0.0,
+        -3.689
+      ],
+      "yaw": 0.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_bientot",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_13",
+      "slot": 13,
+      "game": "flappy",
+      "difficulty": "easy",
+      "at": [
+        -9.041,
+        0.0,
+        3.556
+      ],
+      "yaw": 90.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_flappy_facile",
+      "marquee": "marquee_flappy"
+    },
+    {
+      "name": "borne_arcade_14",
+      "slot": 14,
+      "game": "shooter",
+      "difficulty": "hard",
+      "at": [
+        -9.041,
+        0.0,
+        4.311
+      ],
+      "yaw": 90.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_shooter",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_15",
+      "slot": 15,
+      "game": "demineur",
+      "difficulty": "hard",
+      "at": [
+        9.041,
+        0.0,
+        -2.667
+      ],
+      "yaw": 270.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_demineur",
+      "marquee": "marquee_pub"
+    },
+    {
+      "name": "borne_arcade_16",
+      "slot": 16,
+      "game": "asteroid",
+      "difficulty": "normal",
+      "at": [
+        9.041,
+        0.0,
+        -1.911
+      ],
+      "yaw": 270.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_asteroid",
+      "marquee": "marquee_asteroid"
+    },
+    {
+      "name": "borne_arcade_17",
+      "slot": 17,
+      "game": "flappy",
+      "difficulty": "hard",
+      "at": [
+        9.041,
+        0.0,
+        -1.156
+      ],
+      "yaw": 270.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_flappy_dur",
+      "marquee": "marquee_flappy"
+    },
+    {
+      "name": "borne_arcade_18",
+      "slot": 18,
+      "game": "tetris",
+      "difficulty": "normal",
+      "at": [
+        9.041,
+        0.0,
+        -0.4
+      ],
+      "yaw": 270.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_chargement",
+      "marquee": "marquee_tetris"
+    },
+    {
+      "name": "borne_classement",
+      "slot": 19,
+      "game": "leaderboard",
+      "difficulty": "normal",
+      "at": [
+        0.0,
+        0.141,
+        2.311
+      ],
+      "yaw": 180.0,
+      "materialBody": "borne_caisson",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_classement",
+      "marquee": "marquee_nineteen"
+    }
   ],
-
   "_moulures": "Plinthes, corniche, cimaise, nez de marche. Ce sont elles qui font le bâti : sans moulure, une géométrie générée se lit comme un assemblage de boîtes, quel que soit le soin mis aux textures.",
-
   "mouldings": [
-    { "name": "plinthe_est", "material": "bois_noir", "profile": "plinthe", "section": [0.022, 0.14],
-      "y": 0.0, "offset": 0.10, "closed": false,
-      "points": [[11.10, 4.10], [11.10, -8.10], [-7.00, -8.10], [-7.00, -4.00], [-7.75, -4.00]] },
-    { "name": "plinthe_ouest", "material": "bois_noir", "profile": "plinthe", "section": [0.022, 0.14],
-      "y": 0.0, "offset": 0.10, "closed": false,
-      "points": [[-8.70, -4.00], [-11.10, -4.00], [-11.10, 8.10], [7.10, 8.10]],
-      "_": "Deux courses et non une : la plinthe s'interrompt à la porte des toilettes, entre x = -8,70 et x = -7,75. Une plinthe qui traverse une baie est le détail qui trahit une salle générée." },
-
-    { "name": "corniche_hall", "material": "bois_noir", "profile": "corniche", "section": [0.090, 0.100],
-      "y": 3.10, "offset": 0.10, "closed": true,
-      "points": [[11.10, 4.10], [11.10, -8.10], [-7.00, -8.10], [-7.00, -4.00], [-11.10, -4.00], [-11.10, 8.10], [7.10, 8.10]] },
-    { "name": "cimaise_hall", "material": "bois", "profile": "cimaise", "section": [0.028, 0.060],
-      "y": 2.42, "offset": 0.10, "closed": true,
-      "points": [[11.10, 4.10], [11.10, -8.10], [-7.00, -8.10], [-7.00, -4.00], [-11.10, -4.00], [-11.10, 8.10], [7.10, 8.10]],
-      "_": "À 2,42 m, soit au-dessus des deux linteaux (2,30 et 2,10) : une cimaise qui coupe une porte se voit tout de suite." },
-
-    { "name": "nez_estrade", "material": "bois", "profile": "nez", "section": [0.040, 0.060],
-      "y": 0.09, "offset": 0.0, "closed": true,
-      "points": [[-3.50, -1.50], [3.50, -1.50], [3.50, 3.50], [-3.50, 3.50]],
-      "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme." }
+    {
+      "name": "plinthe_est",
+      "material": "bois_noir",
+      "profile": "plinthe",
+      "section": [
+        0.022,
+        0.14
+      ],
+      "y": 0.0,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          9.65,
+          3.644
+        ],
+        [
+          9.65,
+          -7.2
+        ],
+        [
+          -6.086,
+          -7.2
+        ],
+        [
+          -6.086,
+          -3.556
+        ],
+        [
+          -6.738,
+          -3.556
+        ]
+      ]
+    },
+    {
+      "name": "plinthe_ouest",
+      "material": "bois_noir",
+      "profile": "plinthe",
+      "section": [
+        0.022,
+        0.14
+      ],
+      "y": 0.0,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          -7.564,
+          -3.556
+        ],
+        [
+          -9.65,
+          -3.556
+        ],
+        [
+          -9.65,
+          7.2
+        ],
+        [
+          6.173,
+          7.2
+        ]
+      ],
+      "_": "Deux courses et non une : la plinthe s'interrompt à la porte des toilettes, entre x = -8,70 et x = -7,75. Une plinthe qui traverse une baie est le détail qui trahit une salle générée."
+    },
+    {
+      "name": "corniche_hall",
+      "material": "bois_noir",
+      "profile": "corniche",
+      "section": [
+        0.09,
+        0.1
+      ],
+      "y": 3.1,
+      "offset": 0.1,
+      "closed": true,
+      "points": [
+        [
+          9.65,
+          3.644
+        ],
+        [
+          9.65,
+          -7.2
+        ],
+        [
+          -6.086,
+          -7.2
+        ],
+        [
+          -6.086,
+          -3.556
+        ],
+        [
+          -9.65,
+          -3.556
+        ],
+        [
+          -9.65,
+          7.2
+        ],
+        [
+          6.173,
+          7.2
+        ]
+      ]
+    },
+    {
+      "name": "cimaise_hall",
+      "material": "bois",
+      "profile": "cimaise",
+      "section": [
+        0.028,
+        0.06
+      ],
+      "y": 2.42,
+      "offset": 0.1,
+      "closed": true,
+      "points": [
+        [
+          9.65,
+          3.644
+        ],
+        [
+          9.65,
+          -7.2
+        ],
+        [
+          -6.086,
+          -7.2
+        ],
+        [
+          -6.086,
+          -3.556
+        ],
+        [
+          -9.65,
+          -3.556
+        ],
+        [
+          -9.65,
+          7.2
+        ],
+        [
+          6.173,
+          7.2
+        ]
+      ],
+      "_": "À 2,42 m, soit au-dessus des deux linteaux (2,30 et 2,10) : une cimaise qui coupe une porte se voit tout de suite."
+    },
+    {
+      "name": "nez_estrade",
+      "material": "bois",
+      "profile": "nez",
+      "section": [
+        0.04,
+        0.06
+      ],
+      "y": 0.09,
+      "offset": 0.0,
+      "closed": true,
+      "points": [
+        [
+          -3.043,
+          -1.333
+        ],
+        [
+          3.043,
+          -1.333
+        ],
+        [
+          3.043,
+          3.111
+        ],
+        [
+          -3.043,
+          3.111
+        ]
+      ],
+      "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme."
+    }
   ],
-
   "_props": "Le mobilier et le décor. Chaque objet est une composition de boîtes et de panneaux décrits DANS SON PROPRE REPÈRE, puis posé d'un bloc : on déplace un billard sans recalculer dix lignes. Ceux qui portent un « poi » deviennent des lieux d'interaction déclarés — le moteur les repérait jusqu'ici en cherchant des sous-chaînes dans les noms de nœuds du glTF.",
-
   "props": [
-    { "name": "billard", "at": [-7.60, 0.0, 3.60], "yaw": 12.0,
-      "poi": "billard", "anchor": [0.0, 0.0, -1.10],
+    {
+      "name": "billard",
+      "at": [
+        -6.607,
+        0.0,
+        3.2
+      ],
+      "yaw": 12.0,
+      "poi": "billard",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.978
+      ],
       "parts": [
-        { "type": "box", "material": "billard_bois", "at": [0, 0.62, 0],    "size": [2.36, 0.20, 1.36], "chamfer": 0.02 },
-        { "type": "box", "material": "billard_tapis","at": [0, 0.76, 0],    "size": [2.10, 0.02, 1.10], "chamfer": 0.004 },
-        { "type": "box", "material": "billard_bois", "at": [0, 0.78, -0.62],"size": [2.36, 0.06, 0.12], "chamfer": 0.012 },
-        { "type": "box", "material": "billard_bois", "at": [0, 0.78,  0.62],"size": [2.36, 0.06, 0.12], "chamfer": 0.012 },
-        { "type": "box", "material": "billard_bois", "at": [-1.12, 0.78, 0],"size": [0.12, 0.06, 1.36], "chamfer": 0.012 },
-        { "type": "box", "material": "billard_bois", "at": [ 1.12, 0.78, 0],"size": [0.12, 0.06, 1.36], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [-0.98, 0.0, -0.52], "size": [0.16, 0.62, 0.16], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [ 0.98, 0.0, -0.52], "size": [0.16, 0.62, 0.16], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [-0.98, 0.0,  0.52], "size": [0.16, 0.62, 0.16], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [ 0.98, 0.0,  0.52], "size": [0.16, 0.62, 0.16], "chamfer": 0.012 }
-      ] },
-
-    { "name": "bar_accueil", "at": [0.0, 0.0, 7.10], "yaw": 180.0,
-      "poi": "bar", "anchor": [0.0, 0.0, -0.95],
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.0,
+            0.584,
+            0.0
+          ],
+          "size": [
+            2.36,
+            0.2,
+            1.36
+          ],
+          "chamfer": 0.02
+        },
+        {
+          "type": "box",
+          "material": "billard_tapis",
+          "at": [
+            0.0,
+            0.716,
+            0.0
+          ],
+          "size": [
+            2.1,
+            0.02,
+            1.1
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.0,
+            0.735,
+            -0.551
+          ],
+          "size": [
+            2.36,
+            0.06,
+            0.12
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.0,
+            0.735,
+            0.551
+          ],
+          "size": [
+            2.36,
+            0.06,
+            0.12
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            -0.974,
+            0.735,
+            0.0
+          ],
+          "size": [
+            0.12,
+            0.06,
+            1.36
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.974,
+            0.735,
+            0.0
+          ],
+          "size": [
+            0.12,
+            0.06,
+            1.36
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.852,
+            0.0,
+            -0.462
+          ],
+          "size": [
+            0.16,
+            0.62,
+            0.16
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.852,
+            0.0,
+            -0.462
+          ],
+          "size": [
+            0.16,
+            0.62,
+            0.16
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.852,
+            0.0,
+            0.462
+          ],
+          "size": [
+            0.16,
+            0.62,
+            0.16
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.852,
+            0.0,
+            0.462
+          ],
+          "size": [
+            0.16,
+            0.62,
+            0.16
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "name": "bar_accueil",
+      "at": [
+        0.0,
+        0.0,
+        6.311
+      ],
+      "yaw": 180.0,
+      "poi": "bar",
+      "anchor": [
+        0.0,
+        0.0,
+        -0.844
+      ],
       "parts": [
-        { "type": "box", "material": "comptoir",  "at": [0, 0.0, 0],     "size": [5.40, 1.06, 0.72], "chamfer": 0.014 },
-        { "type": "box", "material": "bois_noir", "at": [0, 1.06, 0.06], "size": [5.60, 0.05, 0.92], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [0, 0.0, -0.55], "size": [5.20, 0.90, 0.40], "chamfer": 0.010 },
-        { "type": "panel","material": "classement_fond", "at": [0, 1.70, -0.74], "size": [1.80, 0.90] }
-      ] },
-
-    { "name": "tabouret", "at": [-1.80, 0.0, 6.05], "yaw": 0.0,
-      "repeat": { "count": 4, "step": [1.20, 0, 0], "yawStep": 17.0 },
+        {
+          "type": "box",
+          "material": "comptoir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            5.4,
+            1.06,
+            0.72
+          ],
+          "chamfer": 0.014
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.998,
+            0.053
+          ],
+          "size": [
+            5.6,
+            0.05,
+            0.92
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.0,
+            -0.489
+          ],
+          "size": [
+            5.2,
+            0.9,
+            0.4
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "type": "panel",
+          "material": "classement_fond",
+          "at": [
+            0.0,
+            1.601,
+            -0.658
+          ],
+          "size": [
+            1.8,
+            0.9
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tabouret",
+      "at": [
+        -1.565,
+        0.0,
+        5.378
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 4,
+        "step": [
+          1.043,
+          0.0,
+          0.0
+        ],
+        "yawStep": 17.0
+      },
       "parts": [
-        { "type": "box", "material": "cuir",      "at": [0, 0.66, 0], "size": [0.34, 0.09, 0.34], "chamfer": 0.03 },
-        { "type": "box", "material": "borne_cadre","at": [0, 0.0, 0], "size": [0.08, 0.66, 0.08], "chamfer": 0.01 },
-        { "type": "box", "material": "borne_cadre","at": [0, 0.01, 0],"size": [0.34, 0.03, 0.34], "chamfer": 0.008 }
-      ] },
-
-    { "name": "canape", "at": [6.60, 0.0, 4.60], "yaw": 215.0,
-      "poi": "canape", "anchor": [0.0, 0.0, 0.95],
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.622,
+            0.0
+          ],
+          "size": [
+            0.34,
+            0.09,
+            0.34
+          ],
+          "chamfer": 0.03
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.08,
+            0.66,
+            0.08
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            0.009,
+            0.0
+          ],
+          "size": [
+            0.34,
+            0.03,
+            0.34
+          ],
+          "chamfer": 0.008
+        }
+      ]
+    },
+    {
+      "name": "canape",
+      "at": [
+        5.738,
+        0.0,
+        4.089
+      ],
+      "yaw": 215.0,
+      "poi": "canape",
+      "anchor": [
+        0.0,
+        0.0,
+        0.844
+      ],
       "parts": [
-        { "type": "box", "material": "cuir",  "at": [0, 0.0,  0],    "size": [2.10, 0.42, 0.86], "chamfer": 0.05 },
-        { "type": "box", "material": "cuir",  "at": [0, 0.42, -0.30],"size": [2.10, 0.44, 0.26], "chamfer": 0.05 },
-        { "type": "box", "material": "cuir",  "at": [-0.95, 0.42, 0],"size": [0.20, 0.26, 0.86], "chamfer": 0.05 },
-        { "type": "box", "material": "cuir",  "at": [ 0.95, 0.42, 0],"size": [0.20, 0.26, 0.86], "chamfer": 0.05 }
-      ] },
-
-    { "name": "canape_angle", "at": [8.40, 0.0, 2.30], "yaw": 285.0,
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            2.1,
+            0.42,
+            0.86
+          ],
+          "chamfer": 0.05
+        },
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.396,
+            -0.267
+          ],
+          "size": [
+            2.1,
+            0.44,
+            0.26
+          ],
+          "chamfer": 0.05
+        },
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            -0.826,
+            0.396,
+            0.0
+          ],
+          "size": [
+            0.2,
+            0.26,
+            0.86
+          ],
+          "chamfer": 0.05
+        },
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.826,
+            0.396,
+            0.0
+          ],
+          "size": [
+            0.2,
+            0.26,
+            0.86
+          ],
+          "chamfer": 0.05
+        }
+      ]
+    },
+    {
+      "name": "canape_angle",
+      "at": [
+        7.303,
+        0.0,
+        2.044
+      ],
+      "yaw": 285.0,
       "parts": [
-        { "type": "box", "material": "cuir", "at": [0, 0.0,  0],     "size": [1.60, 0.42, 0.86], "chamfer": 0.05 },
-        { "type": "box", "material": "cuir", "at": [0, 0.42, -0.30], "size": [1.60, 0.44, 0.26], "chamfer": 0.05 }
-      ] },
-
-    { "name": "table_basse", "at": [7.30, 0.0, 3.40], "yaw": 8.0,
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            1.6,
+            0.42,
+            0.86
+          ],
+          "chamfer": 0.05
+        },
+        {
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.396,
+            -0.267
+          ],
+          "size": [
+            1.6,
+            0.44,
+            0.26
+          ],
+          "chamfer": 0.05
+        }
+      ]
+    },
+    {
+      "name": "table_basse",
+      "at": [
+        6.346,
+        0.0,
+        3.022
+      ],
+      "yaw": 8.0,
       "parts": [
-        { "type": "box", "material": "bois", "at": [0, 0.36, 0], "size": [0.92, 0.05, 0.56], "chamfer": 0.012 },
-        { "type": "box", "material": "borne_cadre", "at": [0, 0.0, 0], "size": [0.06, 0.36, 0.46], "chamfer": 0.008 }
-      ] },
-
-    { "name": "bureau", "at": [9.30, 0.0, 6.40], "yaw": 200.0,
+        {
+          "type": "box",
+          "material": "bois",
+          "at": [
+            0.0,
+            0.339,
+            0.0
+          ],
+          "size": [
+            0.92,
+            0.05,
+            0.56
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.06,
+            0.36,
+            0.46
+          ],
+          "chamfer": 0.008
+        }
+      ]
+    },
+    {
+      "name": "bureau",
+      "at": [
+        8.085,
+        0.0,
+        5.689
+      ],
+      "yaw": 200.0,
       "parts": [
-        { "type": "box", "material": "comptoir",  "at": [0, 0.0,  0],    "size": [1.60, 0.74, 0.72], "chamfer": 0.012 },
-        { "type": "box", "material": "bois_noir", "at": [0, 0.74, 0],    "size": [1.72, 0.04, 0.82], "chamfer": 0.010 },
-        { "type": "box", "material": "radio",     "at": [0.48, 0.78, 0], "size": [0.32, 0.20, 0.16], "chamfer": 0.012 }
-      ] },
-
-    { "name": "distributeur", "at": [-10.55, 0.0, -1.60], "yaw": 90.0,
+        {
+          "type": "box",
+          "material": "comptoir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            1.6,
+            0.74,
+            0.72
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.697,
+            0.0
+          ],
+          "size": [
+            1.72,
+            0.04,
+            0.82
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "type": "box",
+          "material": "radio",
+          "at": [
+            0.417,
+            0.735,
+            0.0
+          ],
+          "size": [
+            0.32,
+            0.2,
+            0.16
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "name": "distributeur",
+      "at": [
+        -9.172,
+        0.0,
+        -1.422
+      ],
+      "yaw": 90.0,
       "parts": [
-        { "type": "box", "material": "borne_caisson", "at": [0, 0.0, 0],    "size": [0.86, 1.92, 0.78], "chamfer": 0.014 },
-        { "type": "panel","material": "bleu",         "at": [0, 1.20, 0.40],"size": [0.66, 1.00] },
-        { "type": "panel","material": "jaune",        "at": [0, 0.42, 0.40],"size": [0.66, 0.30] }
-      ] },
-
-    { "name": "jukebox", "at": [4.20, 0.0, 6.60], "yaw": 195.0,
+        {
+          "type": "box",
+          "material": "borne_caisson",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.86,
+            1.92,
+            0.78
+          ],
+          "chamfer": 0.014
+        },
+        {
+          "type": "panel",
+          "material": "bleu",
+          "at": [
+            0.0,
+            1.13,
+            0.356
+          ],
+          "size": [
+            0.66,
+            1.0
+          ]
+        },
+        {
+          "type": "panel",
+          "material": "jaune",
+          "at": [
+            0.0,
+            0.396,
+            0.356
+          ],
+          "size": [
+            0.66,
+            0.3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "jukebox",
+      "at": [
+        3.651,
+        0.0,
+        5.867
+      ],
+      "yaw": 195.0,
       "parts": [
-        { "type": "box", "material": "bordeau_uni", "at": [0, 0.0, 0],     "size": [0.78, 1.32, 0.56], "chamfer": 0.03 },
-        { "type": "box", "material": "jaune",       "at": [0, 1.32, 0],    "size": [0.72, 0.16, 0.50], "chamfer": 0.06 },
-        { "type": "panel","material": "rouge",      "at": [0, 0.86, 0.29], "size": [0.58, 0.44] }
-      ] },
-
-    { "name": "radio_murale", "at": [-10.90, 1.62, 5.40], "yaw": 90.0,
-      "poi": "radio", "anchor": [0.0, -1.62, 0.80],
+        {
+          "type": "box",
+          "material": "bordeau_uni",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.78,
+            1.32,
+            0.56
+          ],
+          "chamfer": 0.03
+        },
+        {
+          "type": "box",
+          "material": "jaune",
+          "at": [
+            0.0,
+            1.243,
+            0.0
+          ],
+          "size": [
+            0.72,
+            0.16,
+            0.5
+          ],
+          "chamfer": 0.06
+        },
+        {
+          "type": "panel",
+          "material": "rouge",
+          "at": [
+            0.0,
+            0.81,
+            0.258
+          ],
+          "size": [
+            0.58,
+            0.44
+          ]
+        }
+      ]
+    },
+    {
+      "name": "radio_murale",
+      "at": [
+        -9.476,
+        1.526,
+        4.8
+      ],
+      "yaw": 90.0,
+      "poi": "radio",
+      "anchor": [
+        0.0,
+        -1.526,
+        0.711
+      ],
       "parts": [
-        { "type": "box", "material": "marron", "at": [0, 0.0, 0],    "size": [0.10, 0.24, 0.40], "chamfer": 0.012 },
-        { "type": "panel","material": "radio", "at": [0.055, 0.12, 0],"size": [0.36, 0.22], "yaw": 90 }
-      ] },
-
-    { "name": "lavabo_toilettes", "at": [-10.70, 0.0, -5.40], "yaw": 90.0,
-      "poi": "toilettes", "anchor": [0.0, 0.0, 0.80],
+        {
+          "type": "box",
+          "material": "marron",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.1,
+            0.24,
+            0.4
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "panel",
+          "material": "radio",
+          "at": [
+            0.048,
+            0.113,
+            0.0
+          ],
+          "size": [
+            0.36,
+            0.22
+          ],
+          "yaw": 90
+        }
+      ]
+    },
+    {
+      "name": "lavabo_toilettes",
+      "at": [
+        -9.302,
+        0.0,
+        -4.8
+      ],
+      "yaw": 90.0,
+      "poi": "toilettes",
+      "anchor": [
+        0.0,
+        0.0,
+        0.711
+      ],
       "parts": [
-        { "type": "box", "material": "marbre", "at": [0, 0.0, 0],     "size": [0.52, 0.86, 1.40], "chamfer": 0.012 },
-        { "type": "panel","material": "lavabo","at": [0, 0.865, 0],   "size": [0.44, 1.20], "pitch": -90 },
-        { "type": "panel","material": "marbre","at": [0.26, 1.55, 0], "size": [1.30, 0.90], "yaw": 90 }
-      ] },
-
-    { "name": "cabine_toilettes", "at": [-8.30, 0.0, -6.90], "yaw": 0.0,
-      "repeat": { "count": 2, "step": [1.15, 0, 0] },
+        {
+          "type": "box",
+          "material": "marbre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.52,
+            0.86,
+            1.4
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "panel",
+          "material": "lavabo",
+          "at": [
+            0.0,
+            0.815,
+            0.0
+          ],
+          "size": [
+            0.44,
+            1.2
+          ],
+          "pitch": -90
+        },
+        {
+          "type": "panel",
+          "material": "marbre",
+          "at": [
+            0.226,
+            1.46,
+            0.0
+          ],
+          "size": [
+            1.3,
+            0.9
+          ],
+          "yaw": 90
+        }
+      ]
+    },
+    {
+      "name": "cabine_toilettes",
+      "at": [
+        -7.216,
+        0.0,
+        -6.133
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 2,
+        "step": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
       "parts": [
-        { "type": "box", "material": "borne_cadre", "at": [-0.55, 0.12, 0], "size": [0.04, 1.90, 1.30], "chamfer": 0.006 },
-        { "type": "box", "material": "borne_cadre", "at": [ 0.55, 0.12, 0], "size": [0.04, 1.90, 1.30], "chamfer": 0.006 },
-        { "type": "box", "material": "cuvette",     "at": [0, 0.0, -0.42],  "size": [0.36, 0.42, 0.54], "chamfer": 0.03 },
-        { "type": "panel","material": "chasse",     "at": [0, 0.86, -0.68], "size": [0.24, 0.18] }
-      ] },
-
-    { "name": "porte_entree_battant", "at": [8.75, 0.0, 6.45], "yaw": 225.0,
-      "poi": "porte", "anchor": [-0.60, 0.0, 0.90],
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            -0.478,
+            0.113,
+            0.0
+          ],
+          "size": [
+            0.04,
+            1.9,
+            1.3
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.478,
+            0.113,
+            0.0
+          ],
+          "size": [
+            0.04,
+            1.9,
+            1.3
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "cuvette",
+          "at": [
+            0.0,
+            0.0,
+            -0.373
+          ],
+          "size": [
+            0.36,
+            0.42,
+            0.54
+          ],
+          "chamfer": 0.03
+        },
+        {
+          "type": "panel",
+          "material": "chasse",
+          "at": [
+            0.0,
+            0.81,
+            -0.604
+          ],
+          "size": [
+            0.24,
+            0.18
+          ]
+        }
+      ]
+    },
+    {
+      "name": "porte_entree_battant",
+      "at": [
+        7.607,
+        0.0,
+        5.733
+      ],
+      "yaw": 225.0,
+      "poi": "porte",
+      "anchor": [
+        -0.522,
+        0.0,
+        0.8
+      ],
       "parts": [
-        { "type": "panel", "material": "porte_bois", "at": [-0.60, 1.15, 0.0], "size": [1.15, 2.26] },
-        { "type": "panel", "material": "ciel",       "at": [ 0.60, 1.15, 0.0], "size": [1.15, 2.26] }
-      ] },
-
-    { "name": "panneau_sortie", "at": [8.75, 2.48, 6.45], "yaw": 225.0,
-      "parts": [ { "type": "panel", "material": "sortie", "at": [0, 0, 0], "size": [0.52, 0.20] } ] },
-
-    { "name": "enseigne_nineteen", "at": [0.0, 2.62, 7.86], "yaw": 180.0,
+        {
+          "type": "panel",
+          "material": "porte_bois",
+          "at": [
+            -0.522,
+            1.083,
+            0.0
+          ],
+          "size": [
+            1.15,
+            2.26
+          ]
+        },
+        {
+          "type": "panel",
+          "material": "ciel",
+          "at": [
+            0.522,
+            1.083,
+            0.0
+          ],
+          "size": [
+            1.15,
+            2.26
+          ]
+        }
+      ]
+    },
+    {
+      "name": "panneau_sortie",
+      "at": [
+        7.607,
+        2.336,
+        5.733
+      ],
+      "yaw": 225.0,
       "parts": [
-        { "type": "panel", "material": "enseigne",   "at": [0, 0, 0],      "size": [3.20, 0.80] },
-        { "type": "box",   "material": "borne_cadre","at": [0, -0.46, 0.05],"size": [3.40, 0.06, 0.10], "chamfer": 0.01 }
-      ] },
-
-    { "name": "affiche_ouest", "at": [-10.96, 1.55, -0.40], "yaw": 90.0,
-      "repeat": { "count": 3, "step": [0, 0, 2.30] },
-      "parts": [ { "type": "panel", "material": "affiche_1", "at": [0, 0, 0], "size": [0.62, 0.90] } ] },
-    { "name": "affiche_ouest_b", "at": [-10.96, 1.42, 6.60], "yaw": 90.0,
-      "parts": [ { "type": "panel", "material": "affiche_2", "at": [0, 0, 0], "size": [0.58, 0.86] } ] },
-    { "name": "affiche_sud", "at": [-3.20, 1.50, -7.96], "yaw": 0.0,
-      "parts": [ { "type": "panel", "material": "affiche_3", "at": [0, 0, 0], "size": [0.62, 0.90] } ] },
-    { "name": "affiche_sud_b", "at": [1.40, 1.62, -7.96], "yaw": 0.0, "roll": 0.0,
-      "parts": [ { "type": "panel", "material": "affiche_4", "at": [0, 0, 0], "size": [0.58, 0.84], "roll": -3.5 } ] },
-    { "name": "affiche_sud_c", "at": [5.60, 1.44, -7.96], "yaw": 0.0,
-      "parts": [ { "type": "panel", "material": "affiche_5", "at": [0, 0, 0], "size": [0.66, 0.94] } ] },
-    { "name": "affiche_est", "at": [10.96, 1.58, 1.90], "yaw": 270.0,
-      "parts": [ { "type": "panel", "material": "affiche_6", "at": [0, 0, 0], "size": [0.60, 0.88] } ] },
-    { "name": "affiche_est_b", "at": [10.96, 1.36, 4.20], "yaw": 270.0,
-      "parts": [ { "type": "panel", "material": "affiche_7", "at": [0, 0, 0], "size": [0.62, 0.90], "roll": 2.5 } ] },
-    { "name": "affiche_nord", "at": [-6.40, 1.52, 7.96], "yaw": 180.0,
-      "parts": [ { "type": "panel", "material": "affiche_8", "at": [0, 0, 0], "size": [0.64, 0.92] } ] },
-
-    { "name": "tapis_technique", "at": [-9.05, 0.004, -1.20], "yaw": 0.0,
-      "parts": [ { "type": "box", "material": "sol_technique", "at": [0, 0, 0], "size": [3.40, 0.008, 2.20], "chamfer": 0.0 } ] }
+        {
+          "type": "panel",
+          "material": "sortie",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.52,
+            0.2
+          ]
+        }
+      ]
+    },
+    {
+      "name": "enseigne_nineteen",
+      "at": [
+        0.0,
+        2.468,
+        6.987
+      ],
+      "yaw": 180.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "enseigne",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            3.2,
+            0.8
+          ]
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            -0.433,
+            0.044
+          ],
+          "size": [
+            3.4,
+            0.06,
+            0.1
+          ],
+          "chamfer": 0.01
+        }
+      ]
+    },
+    {
+      "name": "affiche_ouest",
+      "at": [
+        -9.528,
+        1.46,
+        -0.356
+      ],
+      "yaw": 90.0,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          2.044
+        ]
+      },
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_1",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.62,
+            0.9
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affiche_ouest_b",
+      "at": [
+        -9.528,
+        1.338,
+        5.867
+      ],
+      "yaw": 90.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_2",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.58,
+            0.86
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affiche_sud",
+      "at": [
+        -2.782,
+        1.413,
+        -7.076
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_3",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.62,
+            0.9
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affiche_sud_b",
+      "at": [
+        1.217,
+        1.526,
+        -7.076
+      ],
+      "yaw": 0.0,
+      "roll": 0.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_4",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.58,
+            0.84
+          ],
+          "roll": -3.5
+        }
+      ]
+    },
+    {
+      "name": "affiche_sud_c",
+      "at": [
+        4.868,
+        1.356,
+        -7.076
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_5",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.66,
+            0.94
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affiche_est",
+      "at": [
+        9.528,
+        1.488,
+        1.689
+      ],
+      "yaw": 270.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_6",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.6,
+            0.88
+          ]
+        }
+      ]
+    },
+    {
+      "name": "affiche_est_b",
+      "at": [
+        9.528,
+        1.281,
+        3.733
+      ],
+      "yaw": 270.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_7",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.62,
+            0.9
+          ],
+          "roll": 2.5
+        }
+      ]
+    },
+    {
+      "name": "affiche_nord",
+      "at": [
+        -5.564,
+        1.432,
+        7.076
+      ],
+      "yaw": 180.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_8",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.64,
+            0.92
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tapis_technique",
+      "at": [
+        -7.868,
+        0.004,
+        -1.067
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "box",
+          "material": "sol_technique",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            3.4,
+            0.008,
+            2.2
+          ],
+          "chamfer": 0.0
+        }
+      ]
+    }
   ],
-
   "_depart": "Le joueur entre par le pan coupé et regarde vers le centre de la salle. La position est celle des PIEDS : le moteur ajoute la hauteur d'œil.",
-  "playerStart": { "position": [7.80, 0.0, 5.60], "yaw": 225.0 },
-
+  "playerStart": {
+    "position": [
+      6.781,
+      0.0,
+      4.978
+    ],
+    "yaw": 225.0
+  },
   "_captures": "Les MÊMES NOMS que salle-legacy.scene.json, mais exprimés ici en mètres. C'est tout l'intérêt : --pos= désignerait deux endroits différents dans deux salles d'échelles différentes, alors que --view=allee désigne le même cadrage dans chacune.",
-
   "captures": [
-    { "name": "allee",   "position": [ -6.00, 1.70, -6.30], "yaw":   4.0, "pitch": -3.0,
-      "_": "L'allée devant la rangée de bornes qui regarde -Z. Le cadrage a dû bouger : le premier était posé contre le mur ouest, là où deux bornes sont venues s'installer — la caméra se retrouvait DANS un meuble, et rendait un cadre noir." },
-    { "name": "bar",     "position": [  0.00, 1.70, -1.50], "yaw":  90.0, "pitch": -2.0 },
-    { "name": "billard", "position": [  0.00, 1.70, -3.00], "yaw": 190.0, "pitch": -8.0 },
-    { "name": "plafond", "position": [ -4.50, 1.70, -3.00], "yaw":   0.0, "pitch": 34.0,
-      "_": "Regard levé vers le plafond. C'est la capture qui tranche la question du pavage : 0,60 m par dalle ici, contre une répétition tous les 17,9 m en 2020. Les deux salles déclarent ce point de vue, chacune dans son échelle." },
-    { "name": "orbite",  "position": [  0.00, 0.00,  0.00], "orbit": true, "radius": 8.00, "height": 2.35,
-      "_": "Sous le plafond, forcément : à 4,20 m la caméra tournait DANS le plénum et ne filmait que le dessus des dalles." }
+    {
+      "name": "allee",
+      "position": [
+        -5.216,
+        1.601,
+        -5.6
+      ],
+      "yaw": 4.0,
+      "pitch": -3.0,
+      "_": "L'allée devant la rangée de bornes qui regarde -Z. Le cadrage a dû bouger : le premier était posé contre le mur ouest, là où deux bornes sont venues s'installer — la caméra se retrouvait DANS un meuble, et rendait un cadre noir."
+    },
+    {
+      "name": "bar",
+      "position": [
+        0.0,
+        1.601,
+        -1.333
+      ],
+      "yaw": 90.0,
+      "pitch": -2.0
+    },
+    {
+      "name": "billard",
+      "position": [
+        0.0,
+        1.601,
+        -2.667
+      ],
+      "yaw": 190.0,
+      "pitch": -8.0
+    },
+    {
+      "name": "plafond",
+      "position": [
+        -3.912,
+        1.601,
+        -2.667
+      ],
+      "yaw": 0.0,
+      "pitch": 34.0,
+      "_": "Regard levé vers le plafond. C'est la capture qui tranche la question du pavage : 0,60 m par dalle ici, contre une répétition tous les 17,9 m en 2020. Les deux salles déclarent ce point de vue, chacune dans son échelle."
+    },
+    {
+      "name": "orbite",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "orbit": true,
+      "radius": 8.0,
+      "height": 2.35,
+      "_": "Sous le plafond, forcément : à 4,20 m la caméra tournait DANS le plénum et ne filmait que le dessus des dalles."
+    }
   ]
 }

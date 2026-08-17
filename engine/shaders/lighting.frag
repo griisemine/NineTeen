@@ -59,7 +59,8 @@ layout(set = 3, binding = 0) uniform Frame {
     vec4  u_ambient;          /* rgb : lumière d'ambiance, a : intensité */
     vec4  u_fog;              /* rgb : couleur, a : densité */
     ivec4 u_counts;           /* x : nombre de lumières, y : ray tracing actif,
-                               * z : brouillard volumétrique actif, w : libre */
+                               * z : brouillard volumétrique actif,
+                               * w : diviseur de résolution du lancer de rayons */
 };
 
 const float PI = 3.14159265359;
@@ -204,7 +205,10 @@ void main()
         /* Lecture SEULEMENT quand la couche de lancer de rayons tourne : sans
          * elle, cette cible n'a jamais été écrite, et lire une cible indéfinie
          * est précisément ce qui avait noirci toute l'image en M4. */
-        uvec4 packed = texelFetch(u_lightShadow, ivec2(gl_FragCoord.xy), 0);
+        /* La cible du lancer de rayons est plus petite que l'image : sans cette
+         * division, on lirait le quart supérieur gauche étiré sur tout l'écran. */
+        const int rtDiv = max(u_counts.w, 1);
+        uvec4 packed = texelFetch(u_lightShadow, ivec2(gl_FragCoord.xy) / rtDiv, 0);
         shadowIdx = int[4](int(packed.x >> 8), int(packed.y >> 8),
                            int(packed.z >> 8), int(packed.w >> 8));
         shadowVis = float[4](float(packed.x & 0xFFu) / 255.0,

@@ -259,6 +259,50 @@ void main()
     float transmittance = 1.0;
     const float t = u_cameraPos.w;
 
+    /*
+     * Présélection des lumières, UNE FOIS par pixel plutôt qu'à chaque pas.
+     *
+     * La boucle interne parcourait les 46 sources à chacun des 24 pas : mille
+     * évaluations par pixel, à demi-résolution, soit la deuxième cause du jeu à
+     * une image par seconde. Les huit plus fortes au milieu du rayon portent
+     * l'essentiel du halo — une source qui ne compte pas au milieu du trajet ne
+     * compte nulle part sur ce rayon.
+     */
+    const int MAX_ACTIVE = 8;
+    int   chosen[MAX_ACTIVE];
+    float chosenWeight[MAX_ACTIVE];
+    int   chosenCount = 0;
+    {
+        const vec3 mid = origin + dir * (rayLength * 0.5);
+        for (int k = 0; k < MAX_ACTIVE; ++k) { chosen[k] = -1; chosenWeight[k] = 0.0; }
+
+        for (int i = 0; i < lightCount; ++i) {
+            Light li = lights[i];
+            if (li.type == 2) continue;              /* directionnelle : pas de halo local */
+            vec3 toLight = li.position - mid;
+            float d = length(toLight);
+            /* Portée mesurée depuis le milieu, élargie de la demi-longueur du
+             * rayon : une source proche de la caméra compte, même si le milieu
+             * du trajet est déjà loin d'elle. */
+            if (d > li.range + rayLength * 0.5) continue;
+
+            float w = li.intensity / max(d * d, 0.04);
+            /* Insertion triée dans huit emplacements. */
+            int slot = -1;
+            for (int k = 0; k < MAX_ACTIVE; ++k) {
+                if (w > chosenWeight[k]) { slot = k; break; }
+            }
+            if (slot < 0) continue;
+            for (int k = MAX_ACTIVE - 1; k > slot; --k) {
+                chosen[k] = chosen[k - 1];
+                chosenWeight[k] = chosenWeight[k - 1];
+            }
+            chosen[slot] = i;
+            chosenWeight[slot] = w;
+        }
+        for (int k = 0; k < MAX_ACTIVE; ++k) if (chosen[k] >= 0) chosenCount = k + 1;
+    }
+
     for (int s = 0; s < steps; ++s) {
         float dist = (float(s) + jitter) * stepLen;
         vec3 p = origin + dir * dist;
@@ -277,9 +321,8 @@ void main()
         float strongestDist = 0.0;
         float strongestWeight = 0.0;
 
-        for (int i = 0; i < lightCount; ++i) {
-            Light li = lights[i];
-            if (li.type == 2) continue;          /* directionnelle : pas de halo local */
+        for (int k = 0; k < chosenCount; ++k) {
+            Light li = lights[chosen[k]];
 
             vec3 toLight = li.position - p;
             float d = length(toLight);

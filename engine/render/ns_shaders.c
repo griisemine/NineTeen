@@ -13,6 +13,9 @@ const ns_shader_info ns_shader_table[] = {
     /* ------------------------------------------------------------- sommets */
     { "fullscreen.vert", NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 0,  0, 0, 0 },
     { "gbuffer.vert",    NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
+    /* Une matrice de modèle PAR SEGMENT : c'est ce que le G-buffer ne sait pas
+     * faire, et la raison d'être du pipeline du viewmodel. */
+    { "viewmodel.vert",  NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
 
     /* ------------------------------------------------------------ fragments */
     /* Aucun pipeline ne l'emploie aujourd'hui ; la table décrit le shader. */
@@ -32,6 +35,8 @@ const ns_shader_info ns_shader_table[] = {
     { "tonemap.frag",          NS_SHADER_STAGE_FRAGMENT, 2, 0, 1, 0, 0, 1,  0, 0, 0 },
     /* HDR éclairé, brouillard demi-résolution, profondeur pleine résolution. */
     { "volumetric_composite.frag", NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
+    /* Aucune texture, mais le tampon des lumières — le même que l'éclairage. */
+    { "viewmodel.frag",        NS_SHADER_STAGE_FRAGMENT, 0, 0, 1, 0, 0, 1,  0, 0, 0 },
 
     /* ------------------------------------------------------------- compute */
     /* set 0 : 3 textures (profondeur, normale, historique) puis 4 tampons

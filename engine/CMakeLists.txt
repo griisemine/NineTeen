@@ -21,6 +21,9 @@ add_library(nineteen_engine STATIC
 
     render/ns_render.c
     render/ns_shaders.c
+    render/ns_viewmodel.c
+
+    anim/ns_ik.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -32,6 +35,7 @@ target_include_directories(nineteen_engine
         "${CMAKE_CURRENT_SOURCE_DIR}/rhi"
         "${CMAKE_CURRENT_SOURCE_DIR}/scene"
         "${CMAKE_CURRENT_SOURCE_DIR}/render"
+        "${CMAKE_CURRENT_SOURCE_DIR}/anim"
 )
 
 target_link_libraries(nineteen_engine

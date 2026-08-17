@@ -71,6 +71,17 @@ void ns_rhi_set_vsync(ns_rhi *r, bool vsync);
 bool ns_rhi_begin_frame(ns_rhi *r);
 void ns_rhi_end_frame(ns_rhi *r);
 
+/*
+ * Attend que le GPU ait tout terminé.
+ *
+ * À n'employer QUE pour mesurer : en fonctionnement normal, laisser le CPU
+ * prendre de l'avance sur le GPU est précisément ce qui donne du débit. Mais sans
+ * cette attente, un chronomètre côté CPU mesure la vitesse à laquelle on
+ * *enregistre* les commandes, pas celle à laquelle elles s'exécutent — et c'est
+ * ainsi qu'un rendu à 1 image par seconde a pu être annoncé à 1 793.
+ */
+void ns_rhi_wait_idle(ns_rhi *r);
+
 SDL_GPUCommandBuffer *ns_rhi_cmd(ns_rhi *r);
 SDL_GPUTexture       *ns_rhi_swapchain_texture(ns_rhi *r);
 SDL_GPUTextureFormat  ns_rhi_swapchain_format(ns_rhi *r);
