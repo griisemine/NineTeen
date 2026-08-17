@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Client C — les trois plateformes cibles, depuis le même arbre CMake.
+  # ---------------------------------------------------------------------------
+  client:
+    name: Client (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux x64",       os: ubuntu-24.04,  preset: linux-x64 }
+          - { name: "macOS universal", os: macos-14,      preset: macos-universal }
+          - { name: "Windows x64",     os: windows-2022,  preset: windows-x64 }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build glslang-tools \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev \
+            mesa-vulkan-drivers
+
+      - name: Dépendances macOS
+        if: runner.os == 'macOS'
+        run: brew install ninja glslang
+
+      - name: Dépendances Windows
+        if: runner.os == 'Windows'
+        # glslangValidator arrive avec le SDK Vulkan ; ninja est déjà présent.
+        run: |
+          choco install --no-progress vulkan-sdk
+        shell: pwsh
+
+      - name: Cache des dépendances récupérées
+        uses: actions/cache@v4
+        with:
+          path: build/${{ matrix.preset }}/_deps
+          key: deps-${{ matrix.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+
+      - name: Configuration
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Compilation
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # Le rendu est vérifié pour de vrai, sans écran ni carte graphique :
+      # SDL passe par son pilote « offscreen » et Vulkan par lavapipe (logiciel).
+      - name: Tests
+        if: runner.os == 'Linux'
+        env:
+          SDL_VIDEO_DRIVER: offscreen
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: ctest --preset ${{ matrix.preset }}
+
+      - name: Tests (macOS / Windows, hors rendu)
+        if: runner.os != 'Linux'
+        run: ctest --test-dir build/${{ matrix.preset }} -R core --output-on-failure
+
+      - name: Capture de rendu produite par la CI
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/*.png
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Sanitizers : ce que la V1 n'a jamais subi, et qui aurait trouvé ses
+  # débordements de tampon avant qu'ils n'arrivent chez les joueurs.
+  # ---------------------------------------------------------------------------
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build glslang-tools \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev mesa-vulkan-drivers
+      - run: cmake --preset linux-x64-asan
+      - run: cmake --build --preset linux-x64-asan
+      - name: Tests sous sanitizers
+        env:
+          SDL_VIDEO_DRIVER: offscreen
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build/linux-x64-asan -R core --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # Serveur Go
+  # ---------------------------------------------------------------------------
+  server:
+    name: Serveur Go
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: nineteen_ci
+          POSTGRES_USER: nineteen
+          POSTGRES_DB: nineteen_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: server/go.sum
+
+      - name: Vérifications statiques
+        run: |
+          go vet ./...
+          test -z "$(gofmt -l .)" || { echo "gofmt : fichiers non formatés"; gofmt -l .; exit 1; }
+
+      - name: Analyse de sécurité
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          "$(go env GOPATH)/bin/gosec" -quiet -exclude-generated ./...
+
+      - name: Tests
+        env:
+          NINETEEN_DB_URL: postgres://nineteen:nineteen_ci@localhost:5432/nineteen_test?sslmode=disable
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Compilation
+        run: go build ./...

@@ -11,6 +11,9 @@ add_library(nineteen_engine STATIC
     core/ns_clock.c
     core/ns_paths.c
     core/ns_config.c
+
+    rhi/ns_rhi.c
+    rhi/ns_rhi_shader.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -19,13 +22,15 @@ target_include_directories(nineteen_engine
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}"          # #include "core/ns_core.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/core"     # #include "ns_core.h" en interne
+        "${CMAKE_CURRENT_SOURCE_DIR}/rhi"
 )
 
 target_link_libraries(nineteen_engine
     PUBLIC
         nineteen::sdl3
-    PRIVATE
+    PUBLIC
         nineteen::stb
+    PRIVATE
         nineteen::jsmn
 )
 
