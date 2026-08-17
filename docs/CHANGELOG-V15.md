@@ -1,0 +1,121 @@
+# Journal de la reconstruction
+
+Ce document dit ce qui tourne, ce qui reste, et ce qui a été appris en route. Il ne prétend pas
+que le chantier est terminé.
+
+---
+
+## Ce qui tourne
+
+### Build et portabilité
+- Un seul arbre CMake, presets `linux-x64`, `linux-x64-asan`, `macos-universal`, `windows-x64`.
+- SDL3 récupéré sur un tag épinglé ; dépendances header-only vendorées, donc build hermétique.
+- Shaders GLSL compilés en SPIR-V et **embarqués dans le binaire** : rien à retrouver à
+  l'exécution.
+- CI GitHub Actions : matrice trois OS, tâche ASan+UBSan dédiée, tâche serveur Go avec
+  PostgreSQL, `go vet` et `gosec`.
+- Avertissements en erreur là où ils traduisent un vrai bug.
+
+### Noyau moteur
+- Journalisation à niveaux, sortie fichier, boîte de dialogue native sur assertion.
+- Arènes mémoire et allocation tracée avec canaris.
+- Horloge à pas fixe 120 Hz avec accumulateur et interpolation au rendu.
+- Résolution de chemins par points de montage, refus des chemins remontants.
+- Configuration persistante écrite atomiquement.
+- Algèbre : matrices colonne-majeure en profondeur [0,1] avec reverse-Z, quaternions,
+  intersections rayon/AABB et rayon/triangle partagées par le rendu, la collision et l'audio.
+- PCG32 à graine explicite, sans biais modulo.
+
+### Rendu
+- G-buffer sur trois cibles, normales encodées en octaédrique.
+- Éclairage différé Cook-Torrance, 64 sources.
+- Occlusion ambiante en espace écran, échantillonnage hémisphérique cosinus.
+- Ombres, illumination globale à un rebond et réflexions **lancées en compute** sur le BVH de
+  la salle, avec accumulation temporelle et débruitage à-trous guidé par la géométrie.
+- Halo séparable sur cinq niveaux, tone mapping ACES, brouillard, vignettage, grain.
+- Élimination par frustum, regroupement des liaisons de texture par matériau.
+- Visualisation des cibles intermédiaires en ligne de commande.
+
+### Assets
+- `obj2gltf` : la salle Blender vers glTF 2.0, avec conversion Blinn-Phong vers
+  metallic-roughness adaptée à l'exporteur détecté, génération des tangentes, déduction des
+  sources lumineuses par aire émissive, bibliothèque de matériaux par famille de texture.
+- `texgen` : normal map, occlusion de cavité et rugosité dérivées des textures diffuses
+  d'origine.
+- `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
+
+### Serveur et site
+- Binaire Go unique, front et migrations embarqués, PostgreSQL.
+- Argon2id, sessions opaques stockées hachées, limitation de débit, CSRF, en-têtes stricts.
+- Autorité serveur sur les scores : journal de partie scellé par HMAC, score recalculé,
+  invariants par jeu. Seize scénarios d'attaque couverts par des tests, et vérifié de bout en
+  bout contre une vraie base.
+- Site refait, direction artistique empruntée au décor du jeu, polices du jeu.
+- `docker-compose` avec base non exposée, image distroless, conteneur en lecture seule.
+
+### Documentation
+- Audit du code d'origine : 22 constats, dont un prouvé sous AddressSanitizer et trois
+  hypothèses explicitement écartées.
+
+---
+
+## Ce qui reste
+
+- **Portage des mini-jeux.** Les huit jeux tournent encore sur le code de 2020 dans `legacy/`.
+  Le travail est mécanique — aucun n'utilise OpenGL, tous passent par `SDL_Renderer` et
+  partagent une signature d'entrée presque commune — mais il représente 12 000 lignes de
+  gameplay. La couche `engine/sprite/` qui les recevra reste à écrire.
+- **Audio spatialisé.** miniaudio est vendoré et l'occlusion par lancer de rayon sur le BVH est
+  écrite et testée côté CPU ; le mixage positionnel, les bus et la réverbe par zone ne sont pas
+  encore branchés.
+- **Écrans de bornes en direct.** L'infrastructure est là (les jeux sauront dessiner dans une
+  texture cible, les bornes ont déjà leur écran repéré et leur lumière colorée) mais les écrans
+  affichent encore une texture fixe.
+- **Interaction.** Les bornes et les trois lieux du décor — billard, canapé, bar — sont
+  détectés et exposés par le moteur ; l'invite d'interaction et l'entrée dans un jeu ne sont pas
+  câblées.
+- **Paquets de release.** Le workflow de compilation existe ; celui qui produit AppImage, `.dmg`
+  et `.msi` signés reste à écrire.
+- **Compression des textures.** Les cartes générées sont des PNG (215 Mio au total). Un passage
+  en KTX2/BC7 diviserait ça par cinq et accélérerait le chargement.
+
+---
+
+## Ce que la reconstruction a appris
+
+Six défauts trouvés en chemin, tous instructifs.
+
+**Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
+tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs
+entre ses 183 primitives : 96 067 sommets devenaient 17,5 millions. L'arène a refusé net une
+allocation de 843 Mio au lieu de la servir, et a nommé le coupable dans le message d'erreur.
+
+**Un écran noir peut venir de six endroits, et les regarder un par un est le seul moyen
+fiable.** La passe d'éclairage échantillonnait une cible de réflexions que rien n'avait jamais
+écrite. Elle contenait de la mémoire GPU arbitraire, donc des NaN, qui traversaient toute la
+couleur et ressortaient en noir après le tone mapping. C'est la visualisation des cibles
+intermédiaires — un G-buffer parfait, un HDR rempli de bruit — qui a isolé le problème en deux
+minutes.
+
+**Une formule de conversion « standard » peut être exactement fausse.** La rugosité des 120
+matériaux était dérivée de l'exposant spéculaire par l'équivalence Blinn-Phong/GGX classique.
+La distribution des valeurs du fichier — 101 matériaux à exactement 225, maximum à 900 —
+révélait un export Blender, dont l'exporteur écrit `Ns = (1 - rugosité)² × 900`. L'inversion est
+donc exacte, et la formule générique donnait 0,09 là où l'auteur avait mis 0,5 : tous les murs
+en miroir.
+
+**L'unité d'une intensité lumineuse n'est pas un détail.** L'atténuation en 1/d² sans
+normalisation sphérique ni rayon de source donnait plusieurs centaines de fois l'exposition
+correcte près d'une applique. Les hautes lumières étaient brûlées, et aucun réglage
+d'exposition ne pouvait le rattraper.
+
+**Le nom d'un fichier est une donnée.** Le MTL ne distingue pas une moquette d'un carrelage : tout
+sortait à la rugosité 0,5 par défaut. Mais l'auteur avait nommé ses textures `moquette`, `bois`,
+`marbre`, `carllage_toilette`, `cuir_rouge`, `pilonne_rouge`. C'est la meilleure information
+disponible, et elle suffit à donner à chaque famille une rugosité et une métallicité plausibles.
+
+**Une police peut mentir sur ce qu'elle sait dessiner.** `sega.ttf` déclare les codes des
+caractères accentués, mais leurs glyphes sont vides : « rallumée » s'affichait « rallum e ». Il
+a fallu inspecter la table `loca` de chaque police pour savoir laquelle dessine réellement quoi.
+Elle rend aussi son `E` d'une façon qui se lit comme un `C` — « CLASSEMENT » devenait
+« CLASSCMCNT ».
