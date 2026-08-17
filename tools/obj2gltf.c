@@ -26,11 +26,22 @@
  *     PANNEAU_EASY/HARD…) : on en extrait la liste des bornes et l'emprise de
  *     leur écran, pour y afficher le mini-jeu en direct.
  */
+#include "gltf_write.h"
 #include "tools_common.h"
 
 #include <math.h>
 
 #define MAX_NAME 128
+
+/*
+ * Préfixe des URI de texture dans le glTF.
+ *
+ * Il valait « textures/ » en dur, ce qui suffisait tant que le glTF était écrit
+ * juste au-dessus du répertoire des textures. La salle d'origine doit désormais
+ * pouvoir être produite ailleurs — dans `scene/legacy/` — pour être comparée à
+ * la salle reconstruite ; l'URI doit alors remonter d'un niveau.
+ */
+static const char *g_texture_prefix = "textures/";
 
 /* ========================================================================== */
 /* Structures intermédiaires                                                  */
@@ -574,40 +585,30 @@ static bool object_is_cabinet(const char *name)
 /* Écriture glTF                                                              */
 /* ========================================================================== */
 
-typedef struct writer {
-    FILE  *json;
-    FILE  *bin;
-    size_t bin_offset;
-} writer;
-
-/* Aligne le buffer binaire : glTF exige que chaque accesseur soit aligné sur
- * la taille de son composant. */
-static void bin_align(writer *w, size_t alignment)
-{
-    while (w->bin_offset % alignment) {
-        fputc(0, w->bin);
-        w->bin_offset++;
-    }
-}
-
-static size_t bin_write(writer *w, const void *data, size_t bytes)
-{
-    const size_t offset = w->bin_offset;
-    if (fwrite(data, 1, bytes, w->bin) != bytes) tool_fatalf("écriture du .bin interrompue");
-    w->bin_offset += bytes;
-    return offset;
-}
-
 int main(int argc, char **argv)
 {
-    if (argc < 3) {
+    const char *in_path = NULL, *out_path = NULL;
+    for (int i = 1; i < argc; ++i) {
+        if (strncmp(argv[i], "--texture-prefix=", 17) == 0) {
+            g_texture_prefix = argv[i] + 17;
+        } else if (argv[i][0] == '-' && argv[i][1] == '-') {
+            fprintf(stderr, "obj2gltf : option inconnue « %s »\n", argv[i]);
+            return 2;
+        } else if (!in_path) {
+            in_path = argv[i];
+        } else if (!out_path) {
+            out_path = argv[i];
+        } else {
+            fprintf(stderr, "obj2gltf : argument surnuméraire « %s »\n", argv[i]);
+            return 2;
+        }
+    }
+    if (!in_path || !out_path) {
         fprintf(stderr,
             "obj2gltf — convertit un OBJ/MTL en glTF 2.0 avec matériaux PBR et lumières déduites\n"
-            "usage : %s <entrée.obj> <sortie.gltf>\n", argv[0]);
+            "usage : %s [--texture-prefix=CHEMIN/] <entrée.obj> <sortie.gltf>\n", argv[0]);
         return 2;
     }
-    const char *in_path  = argv[1];
-    const char *out_path = argv[2];
 
     printf("obj2gltf : %s\n", in_path);
 
@@ -809,100 +810,44 @@ int main(int argc, char **argv)
         tool_vec_free(&all_indices);
     }
 
-    /* ------------------------------------------------------- écriture du bin */
-    char out_dir[512], out_base[256], bin_name[300], bin_path[1024], lights_path[1024];
+    /* ------------------------------------------------ écriture du glTF et du bin */
+    /*
+     * La sérialisation elle-même vit dans `gltf_write.c`, partagée avec
+     * `roomgen` : deux écrivains glTF dans le même dépôt divergeraient, et l'un
+     * des deux finirait par produire des fichiers que `bvhbake` refuse.
+     * Ici on ne fait que traduire les structures de l'analyseur OBJ vers la
+     * forme neutre qu'attend l'écrivain.
+     */
+    char out_dir[512], out_base[256], bin_name[300], lights_path[1024];
     tool_dirname(out_path, out_dir, sizeof out_dir);
     tool_basename_noext(out_path, out_base, sizeof out_base);
     snprintf(bin_name, sizeof bin_name, "%s.bin", out_base);
-    snprintf(bin_path, sizeof bin_path, "%s%s", out_dir, bin_name);
     snprintf(lights_path, sizeof lights_path, "%s%s.lights.json", out_dir, out_base);
 
-    writer w = { NULL, NULL, 0 };
-    w.bin = fopen(bin_path, "wb");
-    if (!w.bin) tool_fatalf("écriture impossible : %s", bin_path);
-
-    /* Attributs, chacun tightly packed dans son propre bufferView. */
-    const size_t vcount = verts.count;
-    float *scratch = (float *)malloc(sizeof(float) * 4 * (vcount ? vcount : 1));
-    if (!scratch) tool_fatalf("mémoire épuisée (tampon d'écriture)");
-
+    /* Emprise de toute la géométrie. L'écrivain glTF la recalcule pour l'accesseur
+     * POSITION, mais le JSON annexe en a besoin aussi et ne le voit pas passer. */
     float pos_min[3] = { 1e30f, 1e30f, 1e30f }, pos_max[3] = { -1e30f, -1e30f, -1e30f };
-
-    for (size_t i = 0; i < vcount; ++i) {
+    for (size_t i = 0; i < verts.count; ++i) {
         const vertex *v = &TOOL_VEC_AT(&verts, vertex, i);
-        scratch[i * 3 + 0] = v->position.x;
-        scratch[i * 3 + 1] = v->position.y;
-        scratch[i * 3 + 2] = v->position.z;
-        if (v->position.x < pos_min[0]) pos_min[0] = v->position.x;
-        if (v->position.y < pos_min[1]) pos_min[1] = v->position.y;
-        if (v->position.z < pos_min[2]) pos_min[2] = v->position.z;
-        if (v->position.x > pos_max[0]) pos_max[0] = v->position.x;
-        if (v->position.y > pos_max[1]) pos_max[1] = v->position.y;
-        if (v->position.z > pos_max[2]) pos_max[2] = v->position.z;
-    }
-    bin_align(&w, 4);
-    const size_t off_pos = bin_write(&w, scratch, sizeof(float) * 3 * vcount);
-
-    for (size_t i = 0; i < vcount; ++i) {
-        const vertex *v = &TOOL_VEC_AT(&verts, vertex, i);
-        scratch[i * 3 + 0] = v->normal.x;
-        scratch[i * 3 + 1] = v->normal.y;
-        scratch[i * 3 + 2] = v->normal.z;
-    }
-    bin_align(&w, 4);
-    const size_t off_nrm = bin_write(&w, scratch, sizeof(float) * 3 * vcount);
-
-    for (size_t i = 0; i < vcount; ++i) {
-        const vertex *v = &TOOL_VEC_AT(&verts, vertex, i);
-        scratch[i * 2 + 0] = v->uv.x;
-        scratch[i * 2 + 1] = v->uv.y;
-    }
-    bin_align(&w, 4);
-    const size_t off_uv = bin_write(&w, scratch, sizeof(float) * 2 * vcount);
-
-    for (size_t i = 0; i < vcount; ++i) {
-        const vertex *v = &TOOL_VEC_AT(&verts, vertex, i);
-        memcpy(&scratch[i * 4], v->tangent, sizeof(float) * 4);
-    }
-    bin_align(&w, 4);
-    const size_t off_tan = bin_write(&w, scratch, sizeof(float) * 4 * vcount);
-    free(scratch);
-
-    /* Indices : un bufferView par primitive, pour garder les accesseurs simples. */
-    typedef struct { size_t offset, count; } idx_view;
-    tool_vec idx_views; tool_vec_init(&idx_views, sizeof(idx_view));
-
-    for (size_t o = 0; o < objects.count; ++o) {
-        object *ob = &TOOL_VEC_AT(&objects, object, o);
-        for (size_t pr = 0; pr < ob->prims.count; ++pr) {
-            primitive *p = &TOOL_VEC_AT(&ob->prims, primitive, pr);
-            bin_align(&w, 4);
-            idx_view *iv = (idx_view *)tool_vec_push(&idx_views);
-            iv->offset = bin_write(&w, p->indices.data, sizeof(uint32_t) * p->indices.count);
-            iv->count  = p->indices.count;
+        const float p[3] = { v->position.x, v->position.y, v->position.z };
+        for (int k = 0; k < 3; ++k) {
+            if (p[k] < pos_min[k]) pos_min[k] = p[k];
+            if (p[k] > pos_max[k]) pos_max[k] = p[k];
         }
     }
-    const size_t bin_total = w.bin_offset;
-    fclose(w.bin);
-    tool_infof("%s : %.1f Mio", bin_name, (double)bin_total / (1024.0 * 1024.0));
 
-    /* ------------------------------------------------------ écriture du glTF */
-    FILE *g = fopen(out_path, "wb");
-    if (!g) tool_fatalf("écriture impossible : %s", out_path);
-
-    fprintf(g, "{\n");
-    fprintf(g, "  \"asset\": { \"version\": \"2.0\", \"generator\": \"Nineteen obj2gltf V15\" },\n");
-    fprintf(g, "  \"extensionsUsed\": [\"KHR_materials_emissive_strength\"],\n");
-    fprintf(g, "  \"scene\": 0,\n");
-
-    /* --- textures : une image par map_Kd distincte --- */
+    /* Une image par `map_Kd` distincte : plusieurs matériaux partagent souvent
+     * la même texture, et l'écrivain attend des indices, pas des noms. */
     tool_vec images; tool_vec_init(&images, sizeof(char[MAX_NAME]));
     for (size_t i = 0; i < mats.count; ++i) {
         material *m = &TOOL_VEC_AT(&mats, material, i);
         if (!m->map_kd[0]) continue;
         int found = -1;
         for (size_t k = 0; k < images.count; ++k) {
-            if (strcmp((const char *)images.data + k * MAX_NAME, m->map_kd) == 0) { found = (int)k; break; }
+            if (strcmp((const char *)images.data + k * MAX_NAME, m->map_kd) == 0) {
+                found = (int)k;
+                break;
+            }
         }
         if (found < 0) {
             char *slot = (char *)tool_vec_push(&images);
@@ -912,121 +857,84 @@ int main(int argc, char **argv)
         m->texture_index = found;
     }
 
+    const char **texture_uris = NULL;
     if (images.count) {
-        fprintf(g, "  \"images\": [\n");
+        texture_uris = (const char **)malloc(sizeof(char *) * images.count);
+        if (!texture_uris) tool_fatalf("mémoire épuisée (liste de textures)");
         for (size_t i = 0; i < images.count; ++i) {
-            fprintf(g, "    { \"uri\": \"textures/%s\" }%s\n",
-                    (const char *)images.data + i * MAX_NAME, (i + 1 < images.count) ? "," : "");
+            texture_uris[i] = (const char *)images.data + i * MAX_NAME;
         }
-        fprintf(g, "  ],\n");
-        fprintf(g, "  \"samplers\": [ { \"magFilter\": 9729, \"minFilter\": 9987, \"wrapS\": 10497, \"wrapT\": 10497 } ],\n");
-        fprintf(g, "  \"textures\": [\n");
-        for (size_t i = 0; i < images.count; ++i) {
-            fprintf(g, "    { \"source\": %zu, \"sampler\": 0 }%s\n", i, (i + 1 < images.count) ? "," : "");
-        }
-        fprintf(g, "  ],\n");
     }
 
-    /* --- matériaux --- */
-    fprintf(g, "  \"materials\": [\n");
-    for (size_t i = 0; i < mats.count; ++i) {
-        material *m = &TOOL_VEC_AT(&mats, material, i);
-        m->gltf_index = (int)i;
-        fprintf(g, "    {\n      \"name\": \"%s\",\n", m->name);
-        fprintf(g, "      \"pbrMetallicRoughness\": {\n");
-        fprintf(g, "        \"baseColorFactor\": [%.6f, %.6f, %.6f, %.6f],\n",
-                (double)m->base_color[0], (double)m->base_color[1],
-                (double)m->base_color[2], (double)m->base_color[3]);
-        if (m->texture_index >= 0) {
-            fprintf(g, "        \"baseColorTexture\": { \"index\": %d },\n", m->texture_index);
+    gltf_material *out_mats = NULL;
+    if (mats.count) {
+        out_mats = (gltf_material *)calloc(mats.count, sizeof(gltf_material));
+        if (!out_mats) tool_fatalf("mémoire épuisée (matériaux de sortie)");
+        for (size_t i = 0; i < mats.count; ++i) {
+            const material *m = &TOOL_VEC_AT(&mats, material, i);
+            gltf_material *o = &out_mats[i];
+            snprintf(o->name, sizeof o->name, "%s", m->name);
+            memcpy(o->base_color, m->base_color, sizeof o->base_color);
+            memcpy(o->emissive, m->emissive, sizeof o->emissive);
+            o->metallic          = m->metallic;
+            o->roughness         = m->roughness;
+            o->emissive_strength = m->emissive_strength;
+            o->texture           = m->texture_index;
         }
-        fprintf(g, "        \"metallicFactor\": %.4f,\n", (double)m->metallic);
-        fprintf(g, "        \"roughnessFactor\": %.4f\n", (double)m->roughness);
-        fprintf(g, "      }");
-        if (m->emissive_strength > 0.0f) {
-            fprintf(g, ",\n      \"emissiveFactor\": [%.6f, %.6f, %.6f]",
-                    (double)m->emissive[0], (double)m->emissive[1], (double)m->emissive[2]);
-            fprintf(g, ",\n      \"extensions\": { \"KHR_materials_emissive_strength\": "
-                       "{ \"emissiveStrength\": %.4f } }", (double)m->emissive_strength);
-        }
-        if (m->base_color[3] < 0.999f) {
-            fprintf(g, ",\n      \"alphaMode\": \"BLEND\"");
-        }
-        fprintf(g, ",\n      \"doubleSided\": false\n    }%s\n", (i + 1 < mats.count) ? "," : "");
     }
-    fprintf(g, "  ],\n");
 
-    /* --- bufferViews --- */
-    fprintf(g, "  \"buffers\": [ { \"uri\": \"%s\", \"byteLength\": %zu } ],\n", bin_name, bin_total);
-    fprintf(g, "  \"bufferViews\": [\n");
-    fprintf(g, "    { \"buffer\": 0, \"byteOffset\": %zu, \"byteLength\": %zu, \"target\": 34962 },\n",
-            off_pos, sizeof(float) * 3 * vcount);
-    fprintf(g, "    { \"buffer\": 0, \"byteOffset\": %zu, \"byteLength\": %zu, \"target\": 34962 },\n",
-            off_nrm, sizeof(float) * 3 * vcount);
-    fprintf(g, "    { \"buffer\": 0, \"byteOffset\": %zu, \"byteLength\": %zu, \"target\": 34962 },\n",
-            off_uv, sizeof(float) * 2 * vcount);
-    fprintf(g, "    { \"buffer\": 0, \"byteOffset\": %zu, \"byteLength\": %zu, \"target\": 34962 }",
-            off_tan, sizeof(float) * 4 * vcount);
-    for (size_t i = 0; i < idx_views.count; ++i) {
-        const idx_view *iv = &TOOL_VEC_AT(&idx_views, idx_view, i);
-        fprintf(g, ",\n    { \"buffer\": 0, \"byteOffset\": %zu, \"byteLength\": %zu, \"target\": 34963 }",
-                iv->offset, sizeof(uint32_t) * iv->count);
+    /* Maillages : un par objet OBJ, une primitive par matériau rencontré.
+     * L'ordre est conservé tel quel — c'est lui qui rend contigus les lots de
+     * dessin d'un même objet côté moteur. */
+    size_t total_prims = 0;
+    for (size_t o = 0; o < objects.count; ++o) {
+        total_prims += TOOL_VEC_AT(&objects, object, o).prims.count;
     }
-    fprintf(g, "\n  ],\n");
 
-    /* --- accessors : 0..3 attributs partagés, puis un par primitive --- */
-    fprintf(g, "  \"accessors\": [\n");
-    fprintf(g, "    { \"bufferView\": 0, \"componentType\": 5126, \"count\": %zu, \"type\": \"VEC3\", "
-               "\"min\": [%.6f, %.6f, %.6f], \"max\": [%.6f, %.6f, %.6f] },\n",
-            vcount, (double)pos_min[0], (double)pos_min[1], (double)pos_min[2],
-            (double)pos_max[0], (double)pos_max[1], (double)pos_max[2]);
-    fprintf(g, "    { \"bufferView\": 1, \"componentType\": 5126, \"count\": %zu, \"type\": \"VEC3\" },\n", vcount);
-    fprintf(g, "    { \"bufferView\": 2, \"componentType\": 5126, \"count\": %zu, \"type\": \"VEC2\" },\n", vcount);
-    fprintf(g, "    { \"bufferView\": 3, \"componentType\": 5126, \"count\": %zu, \"type\": \"VEC4\" }", vcount);
-    for (size_t i = 0; i < idx_views.count; ++i) {
-        const idx_view *iv = &TOOL_VEC_AT(&idx_views, idx_view, i);
-        fprintf(g, ",\n    { \"bufferView\": %zu, \"componentType\": 5125, \"count\": %zu, \"type\": \"SCALAR\" }",
-                4 + i, iv->count);
-    }
-    fprintf(g, "\n  ],\n");
+    gltf_mesh      *out_meshes = (gltf_mesh *)calloc(objects.count ? objects.count : 1,
+                                                     sizeof(gltf_mesh));
+    gltf_primitive *out_prims  = (gltf_primitive *)calloc(total_prims ? total_prims : 1,
+                                                          sizeof(gltf_primitive));
+    if (!out_meshes || !out_prims) tool_fatalf("mémoire épuisée (maillages de sortie)");
 
-    /* --- meshes : un par objet, une primitive par matériau --- */
-    fprintf(g, "  \"meshes\": [\n");
-    size_t prim_counter = 0;
-    size_t emitted_meshes = 0;
+    size_t prim_cursor = 0;
     for (size_t o = 0; o < objects.count; ++o) {
         const object *ob = &TOOL_VEC_AT(&objects, object, o);
-        if (emitted_meshes) fprintf(g, ",\n");
-        fprintf(g, "    { \"name\": \"%s\", \"primitives\": [\n", ob->name);
+        gltf_mesh *om = &out_meshes[o];
+        snprintf(om->name, sizeof om->name, "%s", ob->name);
+        om->prims      = &out_prims[prim_cursor];
+        om->prim_count = ob->prims.count;
         for (size_t pr = 0; pr < ob->prims.count; ++pr) {
             const primitive *p = &((const primitive *)ob->prims.data)[pr];
-            fprintf(g, "      { \"attributes\": { \"POSITION\": 0, \"NORMAL\": 1, "
-                       "\"TEXCOORD_0\": 2, \"TANGENT\": 3 }, \"indices\": %zu",
-                    4 + prim_counter);
-            if (p->material >= 0) fprintf(g, ", \"material\": %d", p->material);
-            fprintf(g, ", \"mode\": 4 }%s\n", (pr + 1 < ob->prims.count) ? "," : "");
-            prim_counter++;
+            out_prims[prim_cursor].indices     = (const uint32_t *)p->indices.data;
+            out_prims[prim_cursor].index_count = p->indices.count;
+            out_prims[prim_cursor].material    = p->material;
+            prim_cursor++;
         }
-        fprintf(g, "    ] }");
-        emitted_meshes++;
     }
-    fprintf(g, "\n  ],\n");
 
-    /* --- nodes et scène --- */
-    fprintf(g, "  \"nodes\": [\n");
-    for (size_t o = 0; o < objects.count; ++o) {
-        const object *ob = &TOOL_VEC_AT(&objects, object, o);
-        fprintf(g, "    { \"name\": \"%s\", \"mesh\": %zu }%s\n",
-                ob->name, o, (o + 1 < objects.count) ? "," : "");
-    }
-    fprintf(g, "  ],\n");
+    gltf_scene scene;
+    memset(&scene, 0, sizeof scene);
+    scene.verts          = (const gltf_vertex *)verts.data;
+    scene.vert_count     = verts.count;
+    scene.meshes         = out_meshes;
+    scene.mesh_count     = objects.count;
+    scene.materials      = out_mats;
+    scene.material_count = mats.count;
+    scene.textures       = texture_uris;
+    scene.texture_count  = images.count;
+    scene.texture_prefix = g_texture_prefix;
+    scene.generator      = "Nineteen obj2gltf V15";
+    scene.scene_name     = "salle";
 
-    fprintf(g, "  \"scenes\": [ { \"name\": \"salle\", \"nodes\": [");
-    for (size_t o = 0; o < objects.count; ++o) {
-        fprintf(g, "%s%zu", o ? ", " : "", o);
-    }
-    fprintf(g, "] } ]\n}\n");
-    fclose(g);
+    const size_t bin_total = gltf_write(&scene, out_path);
+    tool_infof("%s : %.1f Mio", bin_name, (double)bin_total / (1024.0 * 1024.0));
+
+    free(out_meshes);
+    free(out_prims);
+    free(out_mats);
+    free(texture_uris);
+    tool_vec_free(&images);
 
     /* -------------------------------------- lumières et bornes (JSON annexe) */
     FILE *lf = fopen(lights_path, "wb");

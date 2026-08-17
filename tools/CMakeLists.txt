@@ -16,6 +16,6 @@ function(nineteen_add_tool name)
     set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools")
 endfunction()
 
-nineteen_add_tool(obj2gltf obj2gltf.c)
+nineteen_add_tool(obj2gltf obj2gltf.c gltf_write.c)
 nineteen_add_tool(texgen   texgen.c)
 nineteen_add_tool(bvhbake  bvhbake.c)

@@ -12,6 +12,20 @@ nineteen_set_warnings(ns_test_core)
 nineteen_apply_sanitizers(ns_test_core)
 add_test(NAME core COMMAND ns_test_core)
 
+# L'écrivain glTF est testé contre le validateur que la chaîne de build utilise
+# réellement (cgltf, appelé par bvhbake) : un document mal formé doit être refusé
+# ici, et non trois étapes plus loin dans un message parlant d'octets.
+add_executable(ns_test_gltf_write test_gltf_write.c "${CMAKE_SOURCE_DIR}/tools/gltf_write.c")
+target_include_directories(ns_test_gltf_write PRIVATE "${CMAKE_SOURCE_DIR}/tools")
+target_link_libraries(ns_test_gltf_write PRIVATE nineteen::cgltf)
+if(UNIX)
+    target_link_libraries(ns_test_gltf_write PRIVATE m)
+endif()
+nineteen_set_warnings(ns_test_gltf_write)
+nineteen_apply_sanitizers(ns_test_gltf_write)
+add_test(NAME gltf_write
+         COMMAND ns_test_gltf_write "${CMAKE_BINARY_DIR}/test-gltf-write.gltf")
+
 add_executable(ns_test_render test_render.c)
 target_link_libraries(ns_test_render PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_render)
