@@ -173,12 +173,24 @@ static void load_lights(ns_scene *s, const char *lights_logical)
  */
 static void load_scene_sidecar(ns_scene *s, const char *logical)
 {
+    /*
+     * On sonde d'abord la présence du fichier.
+     *
+     * `ns_file_read_all` journalise une ERREUR quand il ne résout pas son chemin —
+     * ce qui est juste pour un asset requis, et faux ici : l'absence de ce fichier
+     * est le cas *normal* pour une salle dont tout est déduit. Sans cette sonde, le
+     * code déclarait l'absence anodine tandis que la couche du dessous l'annonçait
+     * comme une erreur, et la cible `render-compare` crachait quatre ERREUR
+     * parfaitement attendues. `ns_path_resolve` échoue en silence sur un fichier
+     * absent : c'est donc la bonne façon de demander « est-il là ? ».
+     */
+    char resolved[1024];
+    if (!ns_path_resolve(logical, resolved, sizeof resolved)) return;
+
     ns_arena_mark mark = ns_arena_save(&s->arena);
     size_t size = 0;
     char *text = (char *)ns_file_read_all(&s->arena, logical, &size);
     if (!text) {
-        /* Pas un avertissement : l'absence est le cas normal pour l'ancienne
-         * salle, dont tout est déduit. */
         ns_arena_restore(&s->arena, mark);
         return;
     }
@@ -769,15 +781,25 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
                 (double)out->room_bounds.max.y, (double)out->room_bounds.max.z);
     }
 
-    /* BVH : facultatif. Sans lui, le rendu retombe sur l'espace écran et la
+    /*
+     * BVH : facultatif. Sans lui, le rendu retombe sur l'espace écran et la
      * collision est désactivée — le jeu reste lançable, ce qui vaut mieux qu'un
-     * refus de démarrer si l'étape de build a été sautée. */
+     * refus de démarrer si l'étape de build a été sautée.
+     *
+     * Le nom est dérivé du nom de base, comme les autres annexes. Il était codé
+     * en dur à « salle.nsbvh », si bien que `--room=legacy` chargeait le BVH de
+     * l'*autre* salle. Invisible tant que les deux salles sortaient du même OBJ
+     * et que leurs deux BVH étaient identiques à l'octet — et cassant net dès que
+     * `roomgen` produit une vraie géométrie, puisque le lancer de rayons et la
+     * collision auraient alors travaillé contre le mauvais maillage.
+     */
     {
         char bvh_path[512];
-        logical_sibling(gltf_logical, "salle.nsbvh", bvh_path, sizeof bvh_path);
+        SDL_snprintf(annex, sizeof annex, "%s.nsbvh", base);
+        logical_sibling(gltf_logical, annex, bvh_path, sizeof bvh_path);
         if (!ns_bvh_load(r, &out->bvh, bvh_path)) {
-            NS_WARN("BVH absent : pas de lancer de rayons ni de collision "
-                    "(lancer `cmake --build` pour le générer)");
+            NS_WARN("BVH absent (%s) : pas de lancer de rayons ni de collision "
+                    "(lancer `cmake --build` pour le générer)", bvh_path);
         }
     }
 

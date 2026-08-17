@@ -27,6 +27,11 @@ qui les fait vivre qui a changé.
 
 ## Compiler
 
+> **Le jeu n'a besoin ni de serveur, ni de base de données, ni de compte.** Le binaire ne contient
+> même pas le code pour ouvrir une connexion — il n'importe aucun symbole réseau et ne dépend que de
+> la libc et de libm. Tout est dans **[docs/JOUER.md](docs/JOUER.md)** : prérequis, build hors ligne,
+> touches, et comment le vérifier soi-même en une commande.
+
 Il faut CMake 3.21+, un compilateur C11, et `glslangValidator` pour les shaders. SDL3 est
 récupéré automatiquement.
 

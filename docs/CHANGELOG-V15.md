@@ -66,8 +66,13 @@ que le chantier est terminé.
   partagent une signature d'entrée presque commune — mais il représente 12 000 lignes de
   gameplay. La couche `engine/sprite/` qui les recevra reste à écrire.
 - **Audio spatialisé.** miniaudio est vendoré et l'occlusion par lancer de rayon sur le BVH est
-  écrite et testée côté CPU ; le mixage positionnel, les bus et la réverbe par zone ne sont pas
-  encore branchés.
+  **écrite** côté CPU ; le mixage positionnel, les bus et la réverbe par zone ne sont pas encore
+  branchés.
+
+  *Correction :* cette ligne annonçait cette fonction comme « testée ». Elle ne l'est pas, et rien
+  du BVH ne l'est — `tests/test_core.c` ne construit aucun BVH et n'appelle ni `ns_bvh_occluded`,
+  ni `ns_bvh_occlusion_factor`, ni `ns_bvh_raycast`, ni `ns_bvh_move_capsule`. Les tests
+  correspondants sont au programme du palier audio ; en attendant, la phrase dit ce qui est.
 - **Écrans de bornes en direct.** L'infrastructure est là (les jeux sauront dessiner dans une
   texture cible, les bornes ont déjà leur écran repéré et leur lumière colorée) mais les écrans
   affichent encore une texture fixe.

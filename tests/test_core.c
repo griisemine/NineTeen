@@ -316,6 +316,91 @@ static void test_paths(void)
     ns_paths_shutdown();
 }
 
+/*
+ * Priorité des montages : un montage ordinaire doit battre le répertoire du
+ * binaire, même si celui-ci a été monté avant.
+ *
+ * `ns_paths_init` monte le répertoire du binaire dès l'initialisation, donc
+ * *avant* que le jeu ait pu monter l'arbre de build ou `$NINETEEN_ASSETS`. Comme
+ * la résolution retient le premier montage contenant le fichier, un simple ajout
+ * en fin de tableau donnait la priorité au répertoire du binaire — l'inverse de ce
+ * qu'annonçaient à la fois `ns_paths.c` et `room/main.c`. Installer le jeu à côté
+ * d'un arbre d'assets périmé masquait alors l'arbre de build sans un mot.
+ *
+ * Le test met le même nom de fichier dans le répertoire du binaire et dans un
+ * répertoire monté ensuite, et vérifie que c'est le second qui gagne. Il échoue
+ * avec l'ancien comportement.
+ */
+static void test_mount_priority(void)
+{
+    printf("\npriorité des points de montage\n");
+
+    const char *user = ns_path_user_dir();
+    const char *bin  = SDL_GetBasePath();
+    if (!user || !*user || !bin || !*bin) {
+        printf("  (répertoires indisponibles, test ignoré)\n");
+        return;
+    }
+
+    char over_dir[1024], over_file[1200], bin_file[1200];
+    SDL_snprintf(over_dir, sizeof over_dir, "%sns_mount_over", user);
+    SDL_CreateDirectory(over_dir);
+    SDL_snprintf(over_file, sizeof over_file, "%s/ns_priority.txt", over_dir);
+    SDL_snprintf(bin_file, sizeof bin_file, "%sns_priority.txt", bin);
+
+    bool wrote = true;
+    const char *paths[2] = { bin_file, over_file };
+    const char *marks[2] = { "BIN", "OVER" };
+    for (int i = 0; i < 2; ++i) {
+        SDL_IOStream *io = SDL_IOFromFile(paths[i], "w");
+        if (!io) { wrote = false; break; }
+        SDL_WriteIO(io, marks[i], SDL_strlen(marks[i]));
+        SDL_CloseIO(io);
+    }
+
+    if (!wrote) {
+        printf("  (écriture impossible, test ignoré)\n");
+    } else {
+        CHECK(ns_paths_init(NULL), "initialisation");
+        CHECK(ns_paths_mount(over_dir), "montage de surcharge");
+
+        char out[1200];
+        if (ns_path_resolve("ns_priority.txt", out, sizeof out)) {
+            CHECK(SDL_strstr(out, "ns_mount_over") != NULL,
+                  "un montage ordinaire doit battre le répertoire du binaire, "
+                  "or on a résolu : %s", out);
+        } else {
+            CHECK(false, "ns_priority.txt devait être résolu");
+        }
+
+        /* Entre montages ordinaires, l'ordre d'ajout reste la priorité — c'est ce
+         * qu'annonce l'API, et c'est pourquoi `room/main.c` monte la surcharge
+         * d'environnement AVANT l'arbre de build. */
+        char second[1024];
+        SDL_snprintf(second, sizeof second, "%sns_mount_second", user);
+        SDL_CreateDirectory(second);
+        char second_file[1200];
+        SDL_snprintf(second_file, sizeof second_file, "%s/ns_priority.txt", second);
+        SDL_IOStream *io = SDL_IOFromFile(second_file, "w");
+        if (io) {
+            SDL_WriteIO(io, "SECOND", 6);
+            SDL_CloseIO(io);
+            CHECK(ns_paths_mount(second), "second montage ordinaire");
+            if (ns_path_resolve("ns_priority.txt", out, sizeof out)) {
+                CHECK(SDL_strstr(out, "ns_mount_over") != NULL,
+                      "le premier montage ordinaire garde la priorité : %s", out);
+            }
+            SDL_RemovePath(second_file);
+        }
+        SDL_RemovePath(second);
+        ns_paths_shutdown();
+    }
+
+    SDL_RemovePath(bin_file);
+    SDL_RemovePath(over_file);
+    SDL_RemovePath(over_dir);
+}
+
 int main(void)
 {
     if (!SDL_Init(0)) {
@@ -331,6 +416,7 @@ int main(void)
     test_rng_determinism();
     test_math();
     test_paths();
+    test_mount_priority();
 
     printf("\n%d vérifications, %d échec(s)\n", g_checks, g_failures);
     SDL_Quit();

@@ -159,15 +159,25 @@ static bool parse_options(int argc, char **argv, options *o)
     return true;
 }
 
-/* Monte les répertoires de données. En développement, l'arbre de build est
- * prioritaire ; en paquet installé, seul le répertoire du binaire existe. */
+/*
+ * Monte les répertoires de données, du plus prioritaire au moins prioritaire.
+ *
+ * L'ordre d'appel *est* l'ordre de priorité : la résolution retient le premier
+ * montage qui contient le fichier. D'où cet ordre, et pas un autre :
+ *
+ *   1. `$NINETEEN_ASSETS` — une surcharge explicite doit gagner, sinon ce n'en est
+ *      pas une. Elle était montée en dernier et ne pouvait donc rien surcharger.
+ *   2. l'arbre de build — prioritaire en développement.
+ *   3. le répertoire du binaire, monté en dernier recours par `ns_paths_init` et
+ *      marqué comme tel : c'est la disposition d'un paquet installé.
+ */
 static void mount_asset_directories(void)
 {
+    const char *env = SDL_getenv("NINETEEN_ASSETS");
+    if (env && *env) ns_paths_mount(env);
 #ifdef NINETEEN_BUILD_ASSET_DIR
     ns_paths_mount(NINETEEN_BUILD_ASSET_DIR);
 #endif
-    const char *env = SDL_getenv("NINETEEN_ASSETS");
-    if (env && *env) ns_paths_mount(env);
 }
 
 int main(int argc, char **argv)
@@ -321,35 +331,49 @@ int main(int argc, char **argv)
      */
     if (opt.viewpoint) {
         const ns_viewpoint *vp = ns_scene_find_viewpoint(&scene, opt.viewpoint);
-        if (!vp) {
-            fprintf(stderr, "point de vue inconnu : %s\n", opt.viewpoint);
-            if (scene.viewpoint_count == 0) {
-                fprintf(stderr, "  cette salle n'en déclare aucun (fichier .scene.json absent)\n");
-            } else {
-                fprintf(stderr, "  disponibles :");
-                for (uint32_t i = 0; i < scene.viewpoint_count; ++i) {
-                    fprintf(stderr, " %s", scene.viewpoints[i].name);
-                }
-                fprintf(stderr, "\n");
+        /*
+         * Deux situations à ne pas confondre.
+         *
+         * Une salle qui ne déclare **aucun** point de vue ne peut pas satisfaire
+         * `--view=`, et ce n'est pas une faute de l'appelant : c'est le cas de la
+         * salle reconstruite tant que `roomgen` n'a pas écrit son fichier de
+         * scène. On avertit et on garde la caméra par défaut. Sinon la cible
+         * `render-compare`, dont le rôle est justement d'étayer la comparaison,
+         * échouerait sur la moitié de ses captures.
+         *
+         * Une salle qui en déclare mais **pas celui-là**, c'est une faute de
+         * frappe : erreur franche, et on liste les noms disponibles.
+         */
+        if (!vp && scene.viewpoint_count == 0) {
+            NS_WARN("« %s » ignoré : cette salle ne déclare aucun point de vue "
+                    "(fichier .scene.json absent) — caméra par défaut",
+                    opt.viewpoint);
+        } else if (!vp) {
+            fprintf(stderr, "point de vue inconnu : %s\n  disponibles :", opt.viewpoint);
+            for (uint32_t i = 0; i < scene.viewpoint_count; ++i) {
+                fprintf(stderr, " %s", scene.viewpoints[i].name);
             }
+            fprintf(stderr, "\n");
             ns_scene_unload(rhi, &scene);
             ns_renderer_destroy(rhi, renderer);
             ns_rhi_destroy(rhi);
             SDL_Quit();
             return 1;
         }
-        if (vp->orbit) {
-            cam.mode = ROOM_CAM_ORBIT;
-            cam.orbit_center = vp->position;
-            if (vp->orbit_radius > 0.0f) cam.orbit_radius = vp->orbit_radius;
-            if (vp->orbit_height > 0.0f) cam.orbit_height = vp->orbit_height;
-        } else {
-            cam.mode = ROOM_CAM_FREE;
-            cam.position = cam.prev_position = vp->position;
-            cam.yaw   = cam.prev_yaw   = vp->yaw;
-            cam.pitch = cam.prev_pitch = vp->pitch;
+        if (vp) {
+            if (vp->orbit) {
+                cam.mode = ROOM_CAM_ORBIT;
+                cam.orbit_center = vp->position;
+                if (vp->orbit_radius > 0.0f) cam.orbit_radius = vp->orbit_radius;
+                if (vp->orbit_height > 0.0f) cam.orbit_height = vp->orbit_height;
+            } else {
+                cam.mode = ROOM_CAM_FREE;
+                cam.position = cam.prev_position = vp->position;
+                cam.yaw   = cam.prev_yaw   = vp->yaw;
+                cam.pitch = cam.prev_pitch = vp->pitch;
+            }
+            NS_INFO("point de vue « %s »", vp->name);
         }
-        NS_INFO("point de vue « %s »", vp->name);
     }
 
     /* Point de vue imposé en ligne de commande : sert au cadrage des captures
