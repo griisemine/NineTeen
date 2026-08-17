@@ -159,6 +159,89 @@ static void load_lights(ns_scene *s, const char *lights_logical)
     ns_arena_restore(&s->arena, mark);
 }
 
+/*
+ * Fichier annexe de scène : `<nom>.scene.json`.
+ *
+ * C'est le fichier que `roomgen` écrira, et il porte ce que la salle *déclare*
+ * au lieu de ce que le moteur devine : son échelle, son emprise jouable, le
+ * point d'apparition du joueur, et les points de vue nommés qui rendent les
+ * captures comparables d'une salle à l'autre.
+ *
+ * Il est optionnel. Absent, on retombe sur la déduction — c'est ce qui permet à
+ * l'ancienne salle et à la nouvelle de coexister sans branchement conditionnel
+ * dans le reste du moteur.
+ */
+static void load_scene_sidecar(ns_scene *s, const char *logical)
+{
+    ns_arena_mark mark = ns_arena_save(&s->arena);
+    size_t size = 0;
+    char *text = (char *)ns_file_read_all(&s->arena, logical, &size);
+    if (!text) {
+        /* Pas un avertissement : l'absence est le cas normal pour l'ancienne
+         * salle, dont tout est déduit. */
+        ns_arena_restore(&s->arena, mark);
+        return;
+    }
+
+    ns_json doc;
+    if (!ns_json_parse(&doc, text, size, &s->arena)) {
+        NS_ERROR("fichier de scène illisible : %s", logical);
+        ns_arena_restore(&s->arena, mark);
+        return;
+    }
+    const ns_json_value *root = ns_json_root(&doc);
+
+    const float upm = ns_json_get_float(&doc, root, "unitsPerMetre", 0.0f);
+    if (upm > 0.0f) s->units_per_metre = upm;
+
+    const ns_json_value *rb = ns_json_get(&doc, root, "roomBounds");
+    if (rb) {
+        float bmin[3], bmax[3];
+        ns_json_get_vec3(&doc, rb, "min", bmin, 0.0f);
+        ns_json_get_vec3(&doc, rb, "max", bmax, 0.0f);
+        const ns_aabb declared = { ns_v3_make(bmin[0], bmin[1], bmin[2]),
+                                   ns_v3_make(bmax[0], bmax[1], bmax[2]) };
+        if (ns_aabb_valid(declared)) {
+            s->room_bounds = declared;
+            s->has_declared_room_bounds = true;
+        }
+    }
+
+    const ns_json_value *start = ns_json_get(&doc, root, "playerStart");
+    if (start) {
+        float p[3];
+        ns_json_get_vec3(&doc, start, "position", p, 0.0f);
+        s->player_start = ns_v3_make(p[0], p[1], p[2]);
+        s->player_yaw = ns_json_get_float(&doc, start, "yaw", -90.0f) * NS_DEG2RAD;
+        s->has_player_start = true;
+    }
+
+    const ns_json_value *views = ns_json_get(&doc, root, "captures");
+    const int view_count = ns_json_array_count(&doc, views);
+    for (int i = 0; i < view_count && s->viewpoint_count < NS_MAX_VIEWPOINTS; ++i) {
+        const ns_json_value *e = ns_json_at(&doc, views, i);
+        ns_viewpoint *v = &s->viewpoints[s->viewpoint_count];
+        SDL_zerop(v);
+        ns_json_get_string(&doc, e, "name", v->name, sizeof v->name);
+        if (!v->name[0]) continue;      /* un point de vue sans nom est inutilisable */
+
+        float p[3];
+        ns_json_get_vec3(&doc, e, "position", p, 0.0f);
+        v->position = ns_v3_make(p[0], p[1], p[2]);
+        v->yaw   = ns_json_get_float(&doc, e, "yaw", 0.0f) * NS_DEG2RAD;
+        v->pitch = ns_json_get_float(&doc, e, "pitch", 0.0f) * NS_DEG2RAD;
+        v->orbit = ns_json_get_bool(&doc, e, "orbit", false);
+        v->orbit_radius = ns_json_get_float(&doc, e, "radius", 0.0f);
+        v->orbit_height = ns_json_get_float(&doc, e, "height", 0.0f);
+        s->viewpoint_count++;
+    }
+
+    NS_INFO("scène déclarée : %.3f unité/m, %u point(s) de vue%s",
+            (double)s->units_per_metre, s->viewpoint_count,
+            s->has_declared_room_bounds ? ", emprise jouable déclarée" : "");
+    ns_arena_restore(&s->arena, mark);
+}
+
 static void load_cabinet_assignment(ns_scene *s, const char *logical)
 {
     ns_arena_mark mark = ns_arena_save(&s->arena);
@@ -368,12 +451,37 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
     pos_slot *pos_map = NS_ARENA_ARRAY(&out->arena, pos_slot, total_prims ? total_prims : 1);
     size_t pos_map_count = 0;
 
+    /*
+     * Table des objets nommés, construite **pendant** le parcours des nœuds : le
+     * nom est là, sous la main. La version précédente relançait une seconde
+     * analyse complète du glTF juste pour relire ces noms — `cgltf_parse_file`
+     * *et* `cgltf_load_buffers` sur 5,8 Mio de binaire, une deuxième fois dans le
+     * même chargement.
+     */
+    out->objects = NS_ARENA_ARRAY(&out->arena, ns_scene_object,
+                                  data->nodes_count ? data->nodes_count : 1);
+    out->object_count = 0;
+
     for (cgltf_size n = 0; n < data->nodes_count; ++n) {
         const cgltf_node *node = &data->nodes[n];
         if (!node->mesh) continue;
 
         cgltf_float world[16];
         cgltf_node_transform_world(node, world);
+
+        /* Un objet par nœud porteur de maillage. La tranche de lots est contiguë
+         * parce que l'écrivain glTF conserve l'ordre des nœuds — ce qui est
+         * précisément pourquoi il ne trie pas par matériau. */
+        ns_scene_object *obj = NULL;
+        if (out->object_count < data->nodes_count) {
+            obj = &out->objects[out->object_count];
+            SDL_zerop(obj);
+            SDL_strlcpy(obj->name, node->name ? node->name : "(sans nom)", sizeof obj->name);
+            obj->kind        = NS_OBJ_DECOR;
+            obj->bounds      = ns_aabb_empty();
+            obj->first_batch = out->batch_count;
+            obj->batch_count = 0;
+        }
 
         for (cgltf_size p = 0; p < node->mesh->primitives_count; ++p) {
             const cgltf_primitive *prim = &node->mesh->primitives[p];
@@ -468,10 +576,21 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
             batch->index_count = (uint32_t)prim->indices->count;
             batch->material    = prim->material
                                ? (int32_t)cgltf_material_index(data, prim->material) : -1;
+            batch->object      = obj ? (int32_t)out->object_count : -1;
             batch->bounds      = prim_bounds;
+
+            if (obj) {
+                obj->batch_count++;
+                obj->bounds = ns_aabb_union(obj->bounds, prim_bounds);
+            }
 
             scene_bounds = ns_aabb_union(scene_bounds, prim_bounds);
         }
+
+        /* Un nœud dont aucune primitive n'a survécu (non triangulée, sans
+         * indices) ne devient pas un objet : une tranche de zéro lot n'aurait
+         * rien à désigner. */
+        if (obj && obj->batch_count > 0) out->object_count++;
     }
 
     out->vertex_count = vcursor;
@@ -574,16 +693,56 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
 
     /* ------------------------------------------------- lumières et bornes */
     char sibling[512];
-    logical_sibling(gltf_logical, "salle.lights.json", sibling, sizeof sibling);
+
+    /*
+     * L'échelle par défaut est celle du modèle de 2020 : le fichier de scène,
+     * quand il existe, la remplace. Mettre 1,0 par défaut ferait marcher le
+     * joueur à 82 cm de haut dans l'ancienne salle sans que rien ne le signale —
+     * c'est exactement le défaut qu'on corrige.
+     */
+    out->units_per_metre = NS_LEGACY_UNITS_PER_METRE;
+
+    /*
+     * Les fichiers annexes portent le nom de base du glTF, et non « salle » en
+     * dur : deux salles cohabitent dans le même répertoire (salle.gltf et
+     * salle-legacy.gltf), et elles doivent lire *leurs* lumières.
+     *
+     * Pourquoi le même répertoire plutôt qu'un sous-dossier : l'URI des textures
+     * dans un glTF est relative au fichier, donc un sous-dossier imposerait un
+     * préfixe « ../textures/ » — que `ns_path_resolve` refuse, à raison, puisque
+     * son rôle est justement d'interdire les chemins remontants. Partager le
+     * répertoire évite à la fois la remontée et la duplication des 58 textures.
+     */
+    char base[256];
+    basename_noext(gltf_logical, base, sizeof base);
+    char annex[320];
+
+    SDL_snprintf(annex, sizeof annex, "%s.lights.json", base);
+    logical_sibling(gltf_logical, annex, sibling, sizeof sibling);
     load_lights(out, sibling);
+
     logical_sibling(gltf_logical, "cabinets.json", sibling, sizeof sibling);
     load_cabinet_assignment(out, sibling);
     add_cabinet_screen_lights(out);
     detect_points_of_interest(out, gltf_logical);
 
-    /* Emprise jouable : union des bornes et des lumières, élargie d'une marge
-     * de circulation. C'est ce volume qui sert à placer la caméra et le joueur. */
-    {
+    /* Le fichier de scène passe en dernier : ce qu'il déclare prime sur ce que
+     * les étapes précédentes ont déduit. */
+    SDL_snprintf(annex, sizeof annex, "%s.scene.json", base);
+    logical_sibling(gltf_logical, annex, sibling, sizeof sibling);
+    load_scene_sidecar(out, sibling);
+
+    /*
+     * Emprise jouable : union des bornes et des lumières, élargie d'une marge
+     * de circulation. C'est ce volume qui sert à placer la caméra et le joueur.
+     *
+     * Uniquement quand elle n'est pas déclarée. La déduction est une
+     * approximation nécessaire sur l'ancien modèle — dont le décor lointain
+     * étire la boîte englobante au-delà de cinquante mètres — mais la salle
+     * reconstruite connaît sa propre emprise, et une valeur déclarée ne doit
+     * jamais être écrasée par une valeur devinée.
+     */
+    if (!out->has_declared_room_bounds) {
         ns_aabb rb = ns_aabb_empty();
         for (uint32_t i = 0; i < out->cabinet_count; ++i) {
             rb = ns_aabb_union(rb, out->cabinets[i].bounds);
@@ -622,9 +781,31 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
         }
     }
 
-    NS_INFO("scène prête : %u sommets, %u indices, %u lots, %u matériaux, %u lumières",
+    /*
+     * Les tranches d'objets doivent partitionner exactement le tableau de lots :
+     * contiguës, dans l'ordre, sans trou ni chevauchement. Tout le reste en
+     * dépend — c'est ce qui permet de désigner la géométrie d'une borne par une
+     * paire (premier lot, nombre de lots) au lieu d'un parcours. La propriété
+     * tient parce que l'écrivain glTF conserve l'ordre des nœuds ; la vérifier
+     * ici coûte un parcours au chargement et évite de découvrir la rupture
+     * comme un écran de borne affiché sur le mur d'en face.
+     */
+    {
+        uint32_t walked = 0;
+        bool contiguous = true;
+        for (uint32_t i = 0; i < out->object_count; ++i) {
+            if (out->objects[i].first_batch != walked) { contiguous = false; break; }
+            walked += out->objects[i].batch_count;
+        }
+        if (!contiguous || walked != out->batch_count) {
+            NS_ERROR("tranches d'objets incohérentes : %u lots couverts sur %u",
+                     walked, out->batch_count);
+        }
+    }
+
+    NS_INFO("scène prête : %u sommets, %u indices, %u lots, %u objets, %u matériaux, %u lumières",
             out->vertex_count, out->index_count, out->batch_count,
-            out->material_count, out->light_count);
+            out->object_count, out->material_count, out->light_count);
     NS_INFO("emprise : (%.1f %.1f %.1f) à (%.1f %.1f %.1f)",
             (double)out->bounds.min.x, (double)out->bounds.min.y, (double)out->bounds.min.z,
             (double)out->bounds.max.x, (double)out->bounds.max.y, (double)out->bounds.max.z);
@@ -872,6 +1053,24 @@ void ns_scene_animate_lights(ns_scene *s, double time_seconds)
         s->lights[i].intensity = a->base_intensity * (1.0f + modulation);
         if (s->lights[i].intensity < 0.0f) s->lights[i].intensity = 0.0f;
     }
+}
+
+const ns_scene_object *ns_scene_find_object(const ns_scene *s, const char *name)
+{
+    if (!s || !name || !*name) return NULL;
+    for (uint32_t i = 0; i < s->object_count; ++i) {
+        if (SDL_strcmp(s->objects[i].name, name) == 0) return &s->objects[i];
+    }
+    return NULL;
+}
+
+const ns_viewpoint *ns_scene_find_viewpoint(const ns_scene *s, const char *name)
+{
+    if (!s || !name || !*name) return NULL;
+    for (uint32_t i = 0; i < s->viewpoint_count; ++i) {
+        if (SDL_strcasecmp(s->viewpoints[i].name, name) == 0) return &s->viewpoints[i];
+    }
+    return NULL;
 }
 
 const ns_cabinet *ns_scene_nearest_cabinet(const ns_scene *s, ns_v3 position, float max_distance)

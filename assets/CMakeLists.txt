@@ -24,6 +24,58 @@ add_custom_command(
 )
 
 # ---------------------------------------------------------------------------
+# 1b. La même salle, produite à part, pour pouvoir comparer
+# ---------------------------------------------------------------------------
+# La salle de 2020 reste disponible sous `salle-legacy.*`, sélectionnable à
+# l'exécution par `--room=legacy`. Les deux sortant du même binaire avec les mêmes
+# réglages de rendu, une différence d'image est attribuable ; avec deux binaires
+# elle ne l'est pas.
+#
+# Volontairement dans le MÊME répertoire que la salle reconstruite, sous un autre
+# nom de base : l'URI des textures dans un glTF est relative au fichier, donc un
+# sous-dossier `legacy/` imposerait un préfixe `../textures/` — que le moteur
+# refuse, à raison, puisque `ns_path_resolve` a pour rôle d'interdire les chemins
+# remontants. Partager le répertoire évite à la fois la remontée et la
+# duplication des 58 textures.
+option(NINETEEN_BUILD_LEGACY_ROOM "Produire aussi la salle OBJ de 2020, pour comparaison" ON)
+
+if(NINETEEN_BUILD_LEGACY_ROOM)
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/salle-legacy.gltf" "${GEN}/scene/salle-legacy.bin"
+                "${GEN}/scene/salle-legacy.lights.json"
+        COMMAND obj2gltf "${SRC_ROOM}/textures/salle.obj"
+                         "${GEN}/scene/salle-legacy.gltf"
+        DEPENDS obj2gltf "${SRC_ROOM}/textures/salle.obj" "${SRC_ROOM}/textures/salle.mtl"
+        COMMENT "Salle 2020 : OBJ -> glTF (chemin de référence)"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/salle-legacy.nsbvh"
+        COMMAND bvhbake "${GEN}/scene/salle-legacy.gltf" "${GEN}/scene/salle-legacy.nsbvh"
+        DEPENDS bvhbake "${GEN}/scene/salle-legacy.gltf"
+        COMMENT "Salle 2020 : construction du BVH (SAH)"
+        VERBATIM
+    )
+    # Les points de vue nommés de l'ancienne salle, écrits à la main dans SON
+    # échelle (2,06 unité/m) : c'est ce qui rend la comparaison possible.
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/salle-legacy.scene.json"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle-legacy.scene.json"
+                "${GEN}/scene/salle-legacy.scene.json"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle-legacy.scene.json"
+        VERBATIM
+    )
+    set(LEGACY_ROOM_OUTPUTS
+        "${GEN}/scene/salle-legacy.gltf"
+        "${GEN}/scene/salle-legacy.nsbvh"
+        "${GEN}/scene/salle-legacy.lights.json"
+        "${GEN}/scene/salle-legacy.scene.json")
+else()
+    set(LEGACY_ROOM_OUTPUTS "")
+endif()
+
+# ---------------------------------------------------------------------------
 # 2. Le BVH : sert au ray tracing, à la collision et à l'occlusion audio
 # ---------------------------------------------------------------------------
 add_custom_command(
@@ -103,5 +155,33 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.lights.json"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
+        ${LEGACY_ROOM_OUTPUTS}
         ${GENERATED_MAPS}
 )
+
+# ---------------------------------------------------------------------------
+# 5. Comparaison des deux salles, aux mêmes cadrages
+# ---------------------------------------------------------------------------
+# `cmake --build … --target render-compare` produit une paire de captures par
+# point de vue nommé. Le critère n'est pas « ça compile » mais « regarde les
+# deux images » : c'est le seul moyen de tenir la promesse que la salle
+# reconstruite est meilleure, plutôt que de l'affirmer.
+if(NINETEEN_BUILD_LEGACY_ROOM)
+    set(COMPARE_COMMANDS "")
+    foreach(view IN ITEMS allee bar billard orbite)
+        foreach(room IN ITEMS legacy generated)
+            list(APPEND COMPARE_COMMANDS
+                COMMAND "${CMAKE_COMMAND}" -E env SDL_VIDEO_DRIVER=offscreen
+                        "$<TARGET_FILE:nineteen>" --headless
+                        "--room=${room}" "--view=${view}" --frames=8
+                        --width=1280 --height=720 --quality=high
+                        "--screenshot=${CMAKE_BINARY_DIR}/compare-${view}-${room}.png")
+        endforeach()
+    endforeach()
+    add_custom_target(render-compare
+        ${COMPARE_COMMANDS}
+        DEPENDS nineteen nineteen_assets
+        COMMENT "Captures comparées des deux salles, par point de vue nommé"
+        VERBATIM
+    )
+endif()

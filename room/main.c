@@ -44,6 +44,8 @@ typedef struct options {
     float       yaw, pitch;
     bool        has_view;
     float       exposure;
+    const char *room;       /* "generated" | "legacy" */
+    const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
 } options;
 
 static void print_usage(const char *exe)
@@ -59,6 +61,10 @@ static void print_usage(const char *exe)
         "  --fullscreen         plein écran\n"
         "  --no-vsync           désactive la synchronisation verticale\n"
         "  --quality=Q          low | medium | high | ultra (défaut high)\n"
+        "  --room=R             generated | legacy (défaut generated si présente)\n"
+        "  --view=NOM           point de vue nommé déclaré par la scène : c'est ce\n"
+        "                       qui permet de comparer deux salles d'échelles\n"
+        "                       différentes au même cadrage\n"
         "  --camera=M           player | free | orbit (défaut player)\n"
         "  --angle=F            angle de départ de la caméra orbite, en degrés\n"
         "  --pos=X,Y,Z          place la caméra à un point précis (mode libre)\n"
@@ -107,6 +113,14 @@ static bool parse_options(int argc, char **argv, options *o)
             o->debug_gpu = true;
         } else if (SDL_strncmp(a, "--debug=", 8) == 0) {
             o->debug_view = a + 8;
+        } else if (SDL_strncmp(a, "--room=", 7) == 0) {
+            o->room = a + 7;
+            if (SDL_strcmp(o->room, "generated") != 0 && SDL_strcmp(o->room, "legacy") != 0) {
+                fprintf(stderr, "salle inconnue : %s (attendu generated ou legacy)\n", o->room);
+                return false;
+            }
+        } else if (SDL_strncmp(a, "--view=", 7) == 0) {
+            o->viewpoint = a + 7;
         } else if (SDL_strncmp(a, "--pos=", 6) == 0) {
             o->position = a + 6; o->has_view = true;
         } else if (SDL_strncmp(a, "--yaw=", 6) == 0) {
@@ -223,13 +237,34 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /*
+     * Deux salles coexistent : celle reconstruite par `roomgen` et celle
+     * convertie du modèle de 2020. Le choix est fait **à l'exécution** et non à
+     * la compilation, pour que les captures avant/après sortent du même binaire
+     * avec les mêmes réglages de rendu — sinon toute différence d'image devient
+     * inattribuable.
+     */
+    const char *room_choice = opt.room ? opt.room : ns_config_get_str(NS_CFG_ROOM_SOURCE, "generated");
+    const char *scene_path = (SDL_strcmp(room_choice, "legacy") == 0)
+                           ? "scene/salle-legacy.gltf"
+                           : "scene/salle.gltf";
+
     ns_scene scene;
-    if (!ns_scene_load(rhi, &scene, "scene/salle.gltf")) {
-        NS_FATAL("la salle n'a pas pu être chargée");
-        ns_renderer_destroy(rhi, renderer);
-        ns_rhi_destroy(rhi);
-        SDL_Quit();
-        return 1;
+    if (!ns_scene_load(rhi, &scene, scene_path)) {
+        /* La salle reconstruite peut ne pas avoir encore été produite ; dans ce
+         * cas on retombe sur celle de 2020 plutôt que de refuser de démarrer. */
+        bool loaded = false;
+        if (!opt.room && SDL_strcmp(scene_path, "scene/salle.gltf") == 0) {
+            NS_WARN("salle reconstruite absente, repli sur celle de 2020");
+            loaded = ns_scene_load(rhi, &scene, "scene/salle-legacy.gltf");
+        }
+        if (!loaded) {
+            NS_FATAL("la salle n'a pas pu être chargée (%s)", scene_path);
+            ns_renderer_destroy(rhi, renderer);
+            ns_rhi_destroy(rhi);
+            SDL_Quit();
+            return 1;
+        }
     }
 
     /*
@@ -242,10 +277,31 @@ int main(int argc, char **argv)
     const ns_v3 extent = ns_aabb_extent(room);
     const float floor_y = room.min.y;
 
+    /*
+     * Hauteur d'yeux : 1,70 m, converti à l'échelle du décor.
+     *
+     * Le facteur est ce qui manquait. Le modèle de 2020 est en unités Blender,
+     * 2,06 par mètre — l'auteur l'écrivait lui-même (`HAUTEUR_CAMERA_DEBOUT
+     * 3.5F`, legacy/room/room.c:90). La constante 1.68f posée ici plaçait donc
+     * l'œil à **82 cm du sol** : un joueur d'un mètre de haut au milieu de bornes
+     * de 2,4 m, qui regardait les écrans par en dessous. Exprimer la valeur en
+     * mètres et la convertir vaut pour les deux salles.
+     */
+    const float upm = scene.units_per_metre > 0.0f ? scene.units_per_metre : 1.0f;
+    const float eye_height = 1.70f * upm;
+
     room_camera cam;
     room_camera_init(&cam,
-                     ns_v3_make(centre.x, floor_y + 1.68f, centre.z + extent.z * 0.28f),
-                     -90.0f * NS_DEG2RAD);
+                     scene.has_player_start
+                       ? ns_v3_make(scene.player_start.x,
+                                    scene.player_start.y + eye_height,
+                                    scene.player_start.z)
+                       : ns_v3_make(centre.x, floor_y + eye_height,
+                                    centre.z + extent.z * 0.28f),
+                     scene.has_player_start ? scene.player_yaw : -90.0f * NS_DEG2RAD);
+    cam.eye_height = eye_height;
+    cam.speed_walk = 1.4f * upm;      /* marche tranquille */
+    cam.speed_run  = 3.3f * upm;      /* pas pressé, pas un sprint d'athlète */
     cam.mode = opt.camera_mode;
     cam.orbit_angle = opt.camera_angle;
 
@@ -254,7 +310,47 @@ int main(int argc, char **argv)
      * Une orbite extérieure ne montrerait que la face arrière des murs. */
     cam.orbit_center = ns_v3_make(centre.x, floor_y, centre.z);
     cam.orbit_radius = ns_minf(extent.x, extent.z) * 0.30f;
-    cam.orbit_height = 2.3f;
+    cam.orbit_height = 1.4f * upm;
+
+    /*
+     * Point de vue nommé, déclaré par la scène.
+     *
+     * C'est le seul moyen honnête de comparer deux salles : `--pos=0,1.68,8`
+     * désigne deux endroits différents selon l'échelle du modèle, alors que
+     * `--view=allee` désigne le même cadrage dans le référentiel de chacune.
+     */
+    if (opt.viewpoint) {
+        const ns_viewpoint *vp = ns_scene_find_viewpoint(&scene, opt.viewpoint);
+        if (!vp) {
+            fprintf(stderr, "point de vue inconnu : %s\n", opt.viewpoint);
+            if (scene.viewpoint_count == 0) {
+                fprintf(stderr, "  cette salle n'en déclare aucun (fichier .scene.json absent)\n");
+            } else {
+                fprintf(stderr, "  disponibles :");
+                for (uint32_t i = 0; i < scene.viewpoint_count; ++i) {
+                    fprintf(stderr, " %s", scene.viewpoints[i].name);
+                }
+                fprintf(stderr, "\n");
+            }
+            ns_scene_unload(rhi, &scene);
+            ns_renderer_destroy(rhi, renderer);
+            ns_rhi_destroy(rhi);
+            SDL_Quit();
+            return 1;
+        }
+        if (vp->orbit) {
+            cam.mode = ROOM_CAM_ORBIT;
+            cam.orbit_center = vp->position;
+            if (vp->orbit_radius > 0.0f) cam.orbit_radius = vp->orbit_radius;
+            if (vp->orbit_height > 0.0f) cam.orbit_height = vp->orbit_height;
+        } else {
+            cam.mode = ROOM_CAM_FREE;
+            cam.position = cam.prev_position = vp->position;
+            cam.yaw   = cam.prev_yaw   = vp->yaw;
+            cam.pitch = cam.prev_pitch = vp->pitch;
+        }
+        NS_INFO("point de vue « %s »", vp->name);
+    }
 
     /* Point de vue imposé en ligne de commande : sert au cadrage des captures
      * de référence, et à revenir exactement au même endroit d'une version du

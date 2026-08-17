@@ -34,12 +34,18 @@
 #define MAX_NAME 128
 
 /*
- * Préfixe des URI de texture dans le glTF.
+ * Préfixe des URI de texture dans le glTF, « textures/ » par défaut.
  *
- * Il valait « textures/ » en dur, ce qui suffisait tant que le glTF était écrit
- * juste au-dessus du répertoire des textures. La salle d'origine doit désormais
- * pouvoir être produite ailleurs — dans `scene/legacy/` — pour être comparée à
- * la salle reconstruite ; l'URI doit alors remonter d'un niveau.
+ * Ajouté pour pouvoir produire l'ancienne salle dans un sous-répertoire, d'où
+ * l'URI devait remonter d'un niveau — et c'est ainsi qu'on a découvert que ça ne
+ * marche pas : `ns_path_resolve` **refuse** un chemin logique contenant `..`,
+ * puisque son rôle est précisément d'interdire les chemins remontants. La salle
+ * de 2020 est donc produite dans le même répertoire sous le nom de base
+ * `salle-legacy`, ce qui évite à la fois la remontée et la duplication des 58
+ * textures.
+ *
+ * L'option reste : elle sert dès qu'un glTF doit être écrit hors de l'arbre
+ * d'assets, où le garde ne s'applique pas. Le garde, lui, ne bouge pas.
  */
 static const char *g_texture_prefix = "textures/";
 

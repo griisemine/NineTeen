@@ -39,6 +39,7 @@ void ns_config_set_bool(const char *key, bool value);
 #define NS_CFG_VOL_SFX         "audio.sfx"
 #define NS_CFG_VOL_AMBIENCE    "audio.ambience"
 #define NS_CFG_MOUSE_SENS      "input.mouseSensitivity"
+#define NS_CFG_ROOM_SOURCE     "room.source"            /* generated | legacy */
 #define NS_CFG_SERVER_URL      "network.serverUrl"
 
 #endif /* NS_CONFIG_H */

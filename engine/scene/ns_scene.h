@@ -21,6 +21,17 @@
 #define NS_MAX_LIGHTS    128
 #define NS_MAX_CABINETS  24
 
+/*
+ * Échelle du modèle de 2020, en unités par mètre.
+ *
+ * Établie depuis les constantes de l'auteur lui-même — `HAUTEUR_CAMERA_DEBOUT
+ * 3.5F` et `HAUTEUR_CAMERA_ACCROUPI 2.7F` (legacy/room/room.c:90-91) pour un œil
+ * debout et accroupi — et confirmée par tout le reste du décor : à ce facteur, le
+ * plafond tombe à 2,92 m, les appliques à 2,3 m, les piliers à 0,48 m de côté, le
+ * comptoir à 1,25 m de haut et les affiches à 0,38 × 0,66 m.
+ */
+#define NS_LEGACY_UNITS_PER_METRE 2.06f
+
 /* ========================================================================== */
 /* Format de sommet                                                           */
 /* ========================================================================== */
@@ -137,8 +148,72 @@ typedef struct ns_draw_batch {
     uint32_t first_index;
     uint32_t index_count;
     int32_t  material;
+    /*
+     * Objet auquel ce lot appartient, ou -1. C'était la lacune qui empêchait de
+     * relier une borne à sa géométrie : un lot ne portait que son matériau, et
+     * les matériaux sont partagés — `ecran_demineur` habille deux bornes,
+     * `ecran_shooter.001` en habille trois. Une surcharge indexée par matériau
+     * piloterait donc sept bornes à l'unisson.
+     *
+     * Un `int32_t` et non un nom : ce champ est parcouru une fois par lot à
+     * chaque image dans la boucle d'élimination, et 48 octets de nom y coûteraient
+     * plus de cache que la fonctionnalité ne vaut.
+     */
+    int32_t  object;
     ns_aabb  bounds;             /* pour l'élimination par frustum */
 } ns_draw_batch;
+
+/* ========================================================================== */
+/* Objets nommés                                                              */
+/* ========================================================================== */
+/*
+ * La géométrie est un seul grand tampon découpé en lots ; cette table redonne un
+ * nom et une nature à chaque tranche. C'est ce qui permet de désigner « l'écran
+ * de la borne 4 » sans le deviner à partir d'une fraction de sa boîte englobante.
+ *
+ * Les noms viennent des nœuds du glTF. Sur le modèle de 2020 ils ne servent pas à
+ * grand-chose — la moitié du décor s'appelle `Cube.0XX` et les quinze bornes
+ * portent toutes le même nom — mais la salle reconstruite les rend exploitables,
+ * et la table fonctionne pour les deux.
+ */
+typedef enum ns_object_kind {
+    NS_OBJ_DECOR = 0,
+    NS_OBJ_CABINET,
+    NS_OBJ_SCREEN,
+    NS_OBJ_FIXTURE,
+    NS_OBJ_DOOR,
+    NS_OBJ_PROP,
+    NS_OBJ_KIND_COUNT
+} ns_object_kind;
+
+typedef struct ns_scene_object {
+    char           name[64];
+    ns_object_kind kind;
+    ns_aabb        bounds;
+    uint32_t       first_batch, batch_count;   /* tranche contiguë de `batches` */
+} ns_scene_object;
+
+#define NS_MAX_OBJECTS 1024
+
+/* ========================================================================== */
+/* Points de vue nommés                                                       */
+/* ========================================================================== */
+/*
+ * Pourquoi des noms et pas des coordonnées : la salle de 2020 est modélisée à
+ * 2,06 unités par mètre, la salle reconstruite à 1. La même coordonnée y désigne
+ * donc deux endroits différents, et `--pos=0,1.68,8` ne compare rien. Chaque
+ * salle déclare en revanche les mêmes points de vue *nommés* dans son propre
+ * référentiel, ce qui rend les captures comparables.
+ */
+typedef struct ns_viewpoint {
+    char  name[32];
+    ns_v3 position;
+    float yaw, pitch;        /* radians */
+    bool  orbit;             /* si vrai, position sert de centre */
+    float orbit_radius, orbit_height;
+} ns_viewpoint;
+
+#define NS_MAX_VIEWPOINTS 16
 
 /* ========================================================================== */
 /* Scène                                                                      */
@@ -151,6 +226,9 @@ typedef struct ns_scene {
 
     ns_draw_batch *batches;
     uint32_t       batch_count;
+
+    ns_scene_object *objects;
+    uint32_t         object_count;
 
     ns_texture *textures;
     uint32_t    texture_count;
@@ -177,6 +255,31 @@ typedef struct ns_scene {
      * Placer une caméra d'après `bounds` la met à l'extérieur, dans le noir.
      */
     ns_aabb  room_bounds;
+
+    /*
+     * Échelle du modèle, en unités par mètre.
+     *
+     * La salle de 2020 vaut 2,06 : l'auteur l'a modélisée en unités Blender, et
+     * il le disait lui-même — `HAUTEUR_CAMERA_DEBOUT 3.5F` pour un œil debout
+     * (legacy/room/room.c:90). Le moteur V15 plaçait pourtant la caméra à 1,68,
+     * soit **82 cm de haut** : le joueur était un enfant au milieu de bornes de
+     * 2,4 m. Toutes les grandeurs du joueur — hauteur d'yeux, vitesse, rayon de
+     * capsule, amplitude d'oscillation — sont donc exprimées en mètres et
+     * multipliées par ce facteur.
+     *
+     * La salle reconstruite vaut 1,0, et le problème cesse d'exister.
+     */
+    float units_per_metre;
+
+    /* Point d'apparition déclaré. Absent (w == 0) : déduit de `room_bounds`. */
+    ns_v3 player_start;
+    float player_yaw;
+    bool  has_player_start;
+    bool  has_declared_room_bounds;
+
+    ns_viewpoint viewpoints[NS_MAX_VIEWPOINTS];
+    uint32_t     viewpoint_count;
+
     uint32_t vertex_count;
     uint32_t index_count;
 
@@ -205,6 +308,14 @@ void ns_scene_unload(ns_rhi *r, ns_scene *s);
 
 /* Fait vivre l'éclairage : scintillement des néons, pulsation des écrans. */
 void ns_scene_animate_lights(ns_scene *s, double time_seconds);
+
+/* Objet nommé, ou NULL. La comparaison est exacte et sensible à la casse : le
+ * fichier annexe désigne les objets par nom plutôt que par indice, ce qui reste
+ * valable si l'ordre des nœuds change. */
+const ns_scene_object *ns_scene_find_object(const ns_scene *s, const char *name);
+
+/* Point de vue nommé, ou NULL. */
+const ns_viewpoint *ns_scene_find_viewpoint(const ns_scene *s, const char *name);
 
 /* Trouve la borne la plus proche d'un point, dans un rayon donné. */
 const ns_cabinet *ns_scene_nearest_cabinet(const ns_scene *s, ns_v3 position, float max_distance);
