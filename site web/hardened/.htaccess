@@ -1,0 +1,27 @@
+# En-têtes de sécurité HTTP (NIN-19) + durcissement Apache.
+# À adapter selon le serveur (nginx : équivalents dans le server block).
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    # HSTS : activer uniquement quand tout le trafic est en HTTPS
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    # Ne pas divulguer la version de PHP / Apache
+    Header unset X-Powered-By
+    Header unset Server
+</IfModule>
+
+# Ne jamais servir les fichiers sensibles, même par erreur.
+<FilesMatch "\.(env|ini|log|sql|md)$">
+    Require all denied
+</FilesMatch>
+
+# Interdire l'accès direct au helper de connexion DB.
+<Files "db.php">
+    Require all denied
+</Files>
+
+# Désactiver le listing de répertoire.
+Options -Indexes
