@@ -315,10 +315,19 @@ vec3 cosineHemisphere(vec3 n, inout uint rng)
     return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
 }
 
-float lightAttenuation(float dist, float range)
+/* Rayon de source : PROPRIÉTÉ DU LUMINAIRE, pas du moteur.
+ *
+ * Cette fonction employait une constante de 0,22 m — l'ampoule d'une applique —
+ * alors que `ns_light_gpu` porte le champ par lumière depuis A4 et que
+ * `lighting.frag` le lit. Un pavé lumineux de faux plafond fait 1,20 m : traité
+ * comme une ampoule, il pesait beaucoup trop lourd dans le classement des quatre
+ * sources dominantes, et les ombres retenues n'étaient pas celles qui comptent.
+ * Deux formules d'atténuation dans le même moteur finissent toujours par
+ * diverger ; celle-ci est maintenant celle de la passe d'éclairage. */
+float lightAttenuation(float dist, float range, float sourceRadius)
 {
-    const float SOURCE_RADIUS = 0.22;
-    float d2 = max(dist * dist, SOURCE_RADIUS * SOURCE_RADIUS);
+    float r = max(sourceRadius, 0.05);
+    float d2 = max(dist * dist, r * r);
     float w = clamp(1.0 - pow(dist / max(range, 0.001), 4.0), 0.0, 1.0);
     return w * w / (4.0 * PI * d2);
 }
@@ -346,7 +355,7 @@ vec3 directLighting(vec3 pos, vec3 normal, vec3 albedo, bool traceShadows, inout
             vec3 origin = pos + normal * RAY_EPSILON * 4.0;
             if (traceOccluded(origin, L, dist - RAY_EPSILON * 8.0)) continue;
         }
-        sum += albedo / PI * li.color * li.intensity * lightAttenuation(dist, li.range) * ndl;
+        sum += albedo / PI * li.color * li.intensity * lightAttenuation(dist, li.range, li.sourceRadius) * ndl;
     }
     return sum;
 }
@@ -430,7 +439,7 @@ void main()
             float ndl = dot(N, L);
             if (ndl <= 0.0) continue;
 
-            float w = ndl * li.intensity * lightAttenuation(dist, li.range);
+            float w = ndl * li.intensity * lightAttenuation(dist, li.range, li.sourceRadius);
 
             /* Insertion triée dans un tableau de quatre. Déroulée : un indice
              * variable sur un tableau local force certains compilateurs à le
@@ -465,7 +474,7 @@ void main()
             float ndl = dot(N, L);
             if (ndl <= 0.0) continue;
 
-            float w = ndl * li.intensity * lightAttenuation(dist, li.range);
+            float w = ndl * li.intensity * lightAttenuation(dist, li.range, li.sourceRadius);
             total += w;
 
             /* Cette lumière fait-elle partie des quatre retenues ? */
