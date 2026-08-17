@@ -11,9 +11,14 @@ add_library(nineteen_engine STATIC
     core/ns_clock.c
     core/ns_paths.c
     core/ns_config.c
+    core/ns_json.c
 
     rhi/ns_rhi.c
     rhi/ns_rhi_shader.c
+
+    scene/ns_scene.c
+
+    render/ns_render.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -23,6 +28,8 @@ target_include_directories(nineteen_engine
         "${CMAKE_CURRENT_SOURCE_DIR}"          # #include "core/ns_core.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/core"     # #include "ns_core.h" en interne
         "${CMAKE_CURRENT_SOURCE_DIR}/rhi"
+        "${CMAKE_CURRENT_SOURCE_DIR}/scene"
+        "${CMAKE_CURRENT_SOURCE_DIR}/render"
 )
 
 target_link_libraries(nineteen_engine
@@ -32,6 +39,7 @@ target_link_libraries(nineteen_engine
         nineteen::stb
     PRIVATE
         nineteen::jsmn
+        nineteen::cgltf
 )
 
 if(UNIX)

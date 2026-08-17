@@ -434,7 +434,7 @@ static bool object_is_light(const object *o, const tool_vec *mats, float *out_in
     if (name_contains_ci(o->name, "sconce") || name_contains_ci(o->name, "neon")
         || name_contains_ci(o->name, "lampe") || name_contains_ci(o->name, "plafond")
         || name_contains_ci(o->name, "lumiere")) {
-        *out_intensity = 12.0f;                 /* applique murale : douce et chaude */
+        *out_intensity = 260.0f;                /* applique murale : douce et chaude */
         out_color[0] = 1.0f; out_color[1] = 0.82f; out_color[2] = 0.58f;
         return true;
     }
@@ -444,7 +444,7 @@ static bool object_is_light(const object *o, const tool_vec *mats, float *out_in
         if (p->material < 0) continue;
         const material *m = &((const material *)mats->data)[(size_t)p->material];
         if (m->emissive_strength > 0.5f) {
-            *out_intensity = 6.0f * m->emissive_strength;
+            *out_intensity = 130.0f * m->emissive_strength;
             out_color[0] = m->emissive[0];
             out_color[1] = m->emissive[1];
             out_color[2] = m->emissive[2];
@@ -955,7 +955,7 @@ int main(int argc, char **argv)
         const float cz = (ob->bbox_min.z + ob->bbox_max.z) * 0.5f;
         /* Portée liée à l'intensité : au-delà, la contribution est sous le bruit
          * de quantification, autant ne pas la calculer. */
-        const float range = sqrtf(intensity) * 3.0f;
+        const float range = sqrtf(intensity) * 0.85f;
 
         if (light_count) fprintf(lf, ",\n");
         fprintf(lf, "    { \"name\": \"%s\", \"type\": \"point\", \"position\": [%.4f, %.4f, %.4f], "

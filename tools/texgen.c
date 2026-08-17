@@ -89,7 +89,7 @@ static void box_blur(const float *src, float *dst, int w, int h, int radius)
 int main(int argc, char **argv)
 {
     options opt = {
-        .normal_strength = 3.0f,
+        .normal_strength = 1.4f,
         .rough_min = 0.28f,
         .rough_max = 0.92f,
         .ao_strength = 1.0f,
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
         fprintf(stderr,
             "texgen — dérive normal map et ORM d'une texture diffuse\n"
             "usage : %s [options] <image> <répertoire de sortie>\n"
-            "  --strength=F   amplitude du relief (défaut 3.0)\n"
+            "  --strength=F   amplitude du relief (défaut 1.4)\n"
             "  --upscale=N    agrandissement Mitchell avant traitement (défaut 1)\n"
             "  --rough-min=F  rugosité des zones lisses (défaut 0.28)\n"
             "  --rough-max=F  rugosité des zones texturées (défaut 0.92)\n"
