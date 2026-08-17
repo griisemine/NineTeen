@@ -43,6 +43,7 @@ set(NINETEEN_GEN_DIR   "${CMAKE_BINARY_DIR}/assets"             CACHE PATH "Raci
 
 add_subdirectory(engine)
 add_subdirectory(tools)
+add_subdirectory(assets)
 add_subdirectory(games)
 add_subdirectory(room)
 add_subdirectory(tests)
