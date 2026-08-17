@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+
+    {
+      "name": "linux-x64",
+      "inherits": "base",
+      "displayName": "Linux x64 (Vulkan)",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-x64-asan",
+      "inherits": "linux-x64",
+      "displayName": "Linux x64 — ASan + UBSan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "NINETEEN_SANITIZE": "ON"
+      }
+    },
+
+    {
+      "name": "macos-universal",
+      "inherits": "base",
+      "displayName": "macOS universal (Metal)",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" },
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
+      }
+    },
+
+    {
+      "name": "windows-x64",
+      "inherits": "base",
+      "displayName": "Windows x64 (D3D12 / Vulkan)",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "architecture": { "value": "x64", "strategy": "external" }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "linux-x64",       "configurePreset": "linux-x64" },
+    { "name": "linux-x64-asan",  "configurePreset": "linux-x64-asan" },
+    { "name": "macos-universal", "configurePreset": "macos-universal" },
+    { "name": "windows-x64",     "configurePreset": "windows-x64" }
+  ],
+
+  "testPresets": [
+    {
+      "name": "linux-x64",
+      "configurePreset": "linux-x64",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-x64-asan",
+      "configurePreset": "linux-x64-asan",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

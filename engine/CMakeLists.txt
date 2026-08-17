@@ -1,0 +1,48 @@
+# engine/ — le cœur réutilisable.
+#
+# Une seule bibliothèque statique. Les mini-jeux et la salle en dépendent ; aucun
+# d'eux ne parle directement à SDL, ce qui permettra de changer de backend sans
+# retoucher le gameplay (exactement ce qui manquait à la V1, où chaque jeu
+# ouvrait sa propre fenêtre et gérait sa propre boucle).
+
+add_library(nineteen_engine STATIC
+    core/ns_log.c
+    core/ns_alloc.c
+    core/ns_clock.c
+    core/ns_paths.c
+    core/ns_config.c
+)
+
+add_library(nineteen::engine ALIAS nineteen_engine)
+
+target_include_directories(nineteen_engine
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}"          # #include "core/ns_core.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/core"     # #include "ns_core.h" en interne
+)
+
+target_link_libraries(nineteen_engine
+    PUBLIC
+        nineteen::sdl3
+    PRIVATE
+        nineteen::stb
+        nineteen::jsmn
+)
+
+if(UNIX)
+    target_link_libraries(nineteen_engine PUBLIC m)
+endif()
+
+nineteen_set_warnings(nineteen_engine)
+nineteen_apply_sanitizers(nineteen_engine)
+
+# Les shaders du moteur sont embarqués dans la bibliothèque : le jeu n'a aucun
+# fichier .spv à retrouver à l'exécution.
+file(GLOB NINETEEN_ENGINE_SHADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.comp"
+)
+if(NINETEEN_ENGINE_SHADERS)
+    nineteen_add_shaders(nineteen_engine SOURCES ${NINETEEN_ENGINE_SHADERS})
+endif()
