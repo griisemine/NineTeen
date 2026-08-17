@@ -46,6 +46,18 @@ que le chantier est terminé.
 - `texgen` : normal map, occlusion de cavité et rugosité dérivées des textures diffuses
   d'origine.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
+
+### Joueur
+- Position des pieds et position de l'œil distinguées ; `eye_height` est enfin lue.
+- Collision en capsule balayée contre la géométrie réelle, avec gravité, glissement le long des
+  murs, **hauteur de marche** (une plinthe de trois centimètres n'arrête plus personne) et
+  vérification du plafond au saut.
+- Accroupissement avec contrôle de dégagement : on ne se relève pas sous une table.
+- Oscillation de marche pilotée par la **distance réellement parcourue** — pas par le temps, pas
+  par la vitesse demandée. Impulsion à l'atterrissage, roulis en virage, respiration à l'arrêt.
+- Tout l'état d'animation est interpolé au rendu, et l'oscillation est appliquée *après*
+  l'interpolation : échantillonnée à 120 Hz puis interpolée linéairement, une sinusoïde perd ses
+  sommets.
 - `roomgen` : la salle **générée depuis sa description** (`assets/scene/salle.room.json`), en
   mètres, objet par objet. Coquille avec baies, sols, plafond en dalles de 0,60 m sur rails en T,
   piliers, poutres, plinthes, corniche, cimaise, nez de marche. Il écrit aussi les lumières et le
@@ -78,13 +90,13 @@ que le chantier est terminé.
   partagent une signature d'entrée presque commune — mais il représente 12 000 lignes de
   gameplay. La couche `engine/sprite/` qui les recevra reste à écrire.
 - **Audio spatialisé.** miniaudio est vendoré et l'occlusion par lancer de rayon sur le BVH est
-  **écrite** côté CPU ; le mixage positionnel, les bus et la réverbe par zone ne sont pas encore
-  branchés.
+  écrite côté CPU **et maintenant testée** (`tests/test_bvh.c`) ; le mixage positionnel, les bus
+  et la réverbe par zone ne sont pas encore branchés.
 
-  *Correction :* cette ligne annonçait cette fonction comme « testée ». Elle ne l'est pas, et rien
-  du BVH ne l'est — `tests/test_core.c` ne construit aucun BVH et n'appelle ni `ns_bvh_occluded`,
-  ni `ns_bvh_occlusion_factor`, ni `ns_bvh_raycast`, ni `ns_bvh_move_capsule`. Les tests
-  correspondants sont au programme du palier audio ; en attendant, la phrase dit ce qui est.
+  *Historique de cette ligne :* elle a d'abord annoncé la fonction comme « testée » alors qu'aucun
+  test de BVH n'existait, puis a été corrigée pour dire le contraire. Les tests existent depuis le
+  palier joueur : `ns_bvh_raycast`, `ns_bvh_occluded`, `ns_bvh_occlusion_factor` et
+  `ns_bvh_move_capsule` sont vérifiés sur un BVH construit à la main, sans fichier ni GPU.
 - **Écrans de bornes en direct.** L'infrastructure est là (les jeux sauront dessiner dans une
   texture cible, les bornes ont déjà leur écran repéré et leur lumière colorée) mais les écrans
   affichent encore une texture fixe.
@@ -100,7 +112,7 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Dix défauts trouvés en chemin, tous instructifs.
+Douze défauts trouvés en chemin, tous instructifs.
 
 **Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
 tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs
@@ -162,6 +174,21 @@ puis refusait les seize shaders l'un après l'autre. Une option `NINETEEN_SHADER
 était forcée à ON sur Apple, et n'était lue par rien. La correction qui compte n'est pas la
 traduction MSL : c'est que le masque de formats soit maintenant **calculé à partir des blobs
 réellement embarqués**, ce qui rend la faute impossible plutôt que corrigée.
+
+**Une fonction sans appelant est une fonction sans preuve.** `ns_bvh_move_capsule` existait
+depuis M5, avec des commentaires soignés, et n'a jamais été appelée : le joueur traversait les
+murs et volait. En la branchant, trois défauts sont apparus d'un coup. Elle renvoyait la position
+des *pieds* alors que la caméra tient celle de l'*œil* — un mètre soixante-dix d'écart. Elle
+n'avait aucune notion de hauteur de marche, donc une plinthe de trois centimètres arrêtait net.
+Et son recollement au sol, appliqué sans regarder le signe du déplacement vertical, annulait la
+première fraction de seconde de tout saut : sauter n'aurait « rien fait », sans message. Aucun de
+ces trois-là n'était visible à la lecture.
+
+**Ce qui pilote une animation compte autant que sa forme.** L'oscillation de marche était d'abord
+pilotée par la vitesse *souhaitée*. Un test l'a prise en défaut sans le chercher : plaqué contre un
+mur, le joueur continuait de dodeliner comme s'il avançait. La corriger pour suivre le déplacement
+*réellement effectué* règle le cas du mur, celui de la marche gravie, et d'avance celui des bruits
+de pas — qui, branchés sur la même phase, auraient sinon résonné dans le vide.
 
 **Traduire un shader révèle ce qu'il n'utilise pas.** En passant `raytrace.comp` en MSL,
 l'outil a refusé de continuer : le set 0 avait un trou au binding 2. L'albédo du G-buffer y était

@@ -309,9 +309,26 @@ int main(int argc, char **argv)
                        : ns_v3_make(centre.x, floor_y + eye_height,
                                     centre.z + extent.z * 0.28f),
                      scene.has_player_start ? scene.player_yaw : -90.0f * NS_DEG2RAD);
-    cam.eye_height = eye_height;
-    cam.speed_walk = 1.4f * upm;      /* marche tranquille */
-    cam.speed_run  = 3.3f * upm;      /* pas pressé, pas un sprint d'athlète */
+    /*
+     * Le corps du joueur, en mètres, converti à l'échelle du décor chargé.
+     *
+     * Les proportions sont celles de l'auteur de 2020 — 3,5 unités debout,
+     * 2,7 accroupi (legacy/room/room.c:90-91), soit un rapport de 0,771 que l'on
+     * conserve. Tout ce qui suit se déduit d'une taille d'adulte, et non de
+     * constantes choisies au jugé.
+     */
+    cam.eye_height = cam.prev_eye_height = eye_height;
+    cam.eye_height_stand  = eye_height;
+    cam.eye_height_crouch = 1.31f * upm;
+    cam.body_radius       = 0.32f * upm;
+    cam.body_height_stand = 1.82f * upm;   /* le crâne, pas les yeux */
+    cam.body_height_crouch = 1.42f * upm;
+    cam.step_height       = 0.35f * upm;
+    cam.gravity           = 9.81f * upm;
+    cam.jump_speed        = 3.0f * upm;
+    cam.speed_walk   = 1.4f * upm;    /* marche tranquille */
+    cam.speed_run    = 3.3f * upm;    /* pas pressé, pas un sprint d'athlète */
+    cam.speed_crouch = 0.75f * upm;
     cam.mode = opt.camera_mode;
     cam.orbit_angle = opt.camera_angle;
 
@@ -431,8 +448,17 @@ int main(int argc, char **argv)
                     ns_rhi_request_screenshot(rhi, shot);
                     break;
                 }
+                case SDLK_SPACE:
+                    /* Le saut est une transition, pas un état : lu en événement
+                     * pour qu'un appui bref ne se perde pas entre deux pas. */
+                    if (!ev.key.repeat) cam.jump_requested = true;
+                    break;
                 case SDLK_F5:
                     cam.mode = (cam.mode == ROOM_CAM_FREE) ? ROOM_CAM_PLAYER : ROOM_CAM_FREE;
+                    /* Repartir du sol : en passant du vol libre au mode joueur,
+                     * la vitesse accumulée en l'air se transformerait en chute. */
+                    cam.velocity = ns_v3_zero();
+                    cam.grounded = false;
                     NS_INFO("caméra : %s", cam.mode == ROOM_CAM_FREE ? "libre" : "joueur");
                     break;
                 case SDLK_F6:
@@ -463,21 +489,38 @@ int main(int argc, char **argv)
             }
         }
 
-        /* Clavier lu en continu plutôt qu'en événements : on veut l'état, pas
-         * les transitions. Les touches ZQSD sont acceptées en plus de WASD,
-         * comme dans la version d'origine. */
+        /*
+         * Clavier lu en continu plutôt qu'en événements : on veut l'état, pas
+         * les transitions.
+         *
+         * Les *scancodes* désignent une position physique sur le clavier, pas
+         * une lettre : `SDL_SCANCODE_W` est la touche qui porte un W en QWERTY
+         * et un Z en AZERTY. Le bloc ZQSD est donc déjà branché, et il l'était —
+         * un commentaire prétendait ici que les deux étaient acceptés « en plus »
+         * l'un de l'autre, ce qui n'a pas de sens : c'est la même touche. Il n'y
+         * a rien à ajouter, seulement à cesser de le décrire de travers.
+         */
         const bool *keys = SDL_GetKeyboardState(NULL);
         cam.input_forward = (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN] ? 1.0f : 0.0f);
         cam.input_strafe  = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
-        cam.input_up      = (keys[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f)
-                          - (keys[SDL_SCANCODE_LCTRL] ? 1.0f : 0.0f);
         cam.running = keys[SDL_SCANCODE_LSHIFT];
+
+        /* Espace et Ctrl ne veulent pas dire la même chose selon le mode : en vol
+         * libre ils montent et descendent, en mode joueur ils sautent et
+         * accroupissent. Les confondre donnait un joueur capable de s'envoler. */
+        cam.crouch_held = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_C];
+        if (cam.mode == ROOM_CAM_FREE) {
+            cam.input_up = (keys[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f)
+                         - (keys[SDL_SCANCODE_LCTRL] ? 1.0f : 0.0f);
+        } else {
+            cam.input_up = 0.0f;
+        }
 
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
-            room_camera_tick(&cam, (float)clock.tick_seconds);
+            room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
         }
         ns_clock_end_frame(&clock);
 

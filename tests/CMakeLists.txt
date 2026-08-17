@@ -19,6 +19,16 @@ if(NINETEEN_SHADERCROSS)
     add_test(NAME msl COMMAND ns_test_msl)
 endif()
 
+# La collision et l'audio traversent le même BVH que le rendu. Aucune des quatre
+# fonctions n'était testée — et le changelog affirmait pourtant que l'occlusion
+# audio l'était. Le BVH est construit à la main ici : ni fichier, ni GPU.
+add_executable(ns_test_bvh test_bvh.c "${CMAKE_SOURCE_DIR}/room/room_camera.c")
+target_include_directories(ns_test_bvh PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_bvh PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_bvh)
+nineteen_apply_sanitizers(ns_test_bvh)
+add_test(NAME bvh COMMAND ns_test_bvh)
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

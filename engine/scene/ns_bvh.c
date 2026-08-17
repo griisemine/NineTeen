@@ -249,17 +249,55 @@ bool ns_bvh_occluded(const ns_bvh *b, ns_v3 origin, ns_v3 dir, float max_distanc
  * Trois itérations suffisent : elles couvrent le coin (deux murs) et le coin
  * plus le sol. Au-delà, on préfère arrêter le mouvement que boucler.
  */
-ns_v3 ns_bvh_move_capsule(const ns_bvh *b, ns_v3 position, ns_v3 motion,
-                          float radius, float height, bool *out_grounded)
+/* Marge au-dessus de la hauteur de marche : un obstacle plus haut que ça doit
+ * arrêter le joueur, un obstacle plus bas doit être gravi. Sans marge, un sol
+ * parfaitement horizontal à la hauteur exacte de la sonde donne un contact
+ * rasant dont le résultat dépend des arrondis. */
+#define NS_CAPSULE_STEP_MARGIN 0.02f
+
+/* Tolérance de recollement au sol quand on n'était pas déjà au sol : de quoi
+ * poser les pieds sans annuler une chute qui vient de commencer. */
+#define NS_CAPSULE_SNAP_AIR 0.02f
+
+void ns_bvh_move_capsule(const ns_bvh *b, ns_capsule_move *m)
 {
-    if (out_grounded) *out_grounded = false;
-    if (!b || !b->loaded) return ns_v3_add(position, motion);
+    NS_ASSERT(m != NULL);
 
-    /* Trois hauteurs de sonde : pieds, taille, tête. Une seule sonde centrale
-     * laisserait passer les obstacles bas (marches, socles de bornes). */
-    const float probe_heights[3] = { radius * 1.05f, height * 0.5f, height - radius * 1.05f };
+    m->grounded = false;
+    m->touched_wall = false;
+    m->ground_normal = ns_v3_make(0.0f, 1.0f, 0.0f);
+    m->ground_material = 0;
 
-    ns_v3 remaining = motion;
+    if (!b || !b->loaded) {
+        /* Sans BVH, le jeu reste jouable : on se déplace librement plutôt que
+         * de refuser d'avancer. C'est le repli documenté pour une salle sans
+         * fichier .nsbvh. */
+        m->position = ns_v3_add(m->feet, m->motion);
+        m->grounded = m->was_grounded;
+        return;
+    }
+
+    const float radius = ns_maxf(m->radius, 1e-3f);
+    const float height = ns_maxf(m->height, radius * 2.2f);
+    const float step   = ns_maxf(m->step_height, 0.0f);
+
+    ns_v3 position = m->feet;
+
+    /*
+     * --- Horizontal, avec glissement ---
+     *
+     * Trois hauteurs de sonde. La plus basse part **au-dessus** de la hauteur de
+     * marche : c'est tout le mécanisme du franchissement. Un obstacle plus bas
+     * qu'elle n'est jamais vu comme un mur ; c'est la remise au sol, plus bas,
+     * qui hisse le joueur dessus.
+     */
+    float lo = ns_minf(step + NS_CAPSULE_STEP_MARGIN, height - radius * 1.05f);
+    lo = ns_maxf(lo, radius * 0.25f);
+    const float hi = ns_maxf(height - radius * 1.05f, lo);
+    const float mid = (lo + hi) * 0.5f;
+    const float probe_heights[3] = { lo, mid, hi };
+
+    ns_v3 remaining = ns_v3_make(m->motion.x, 0.0f, m->motion.z);
     for (int iter = 0; iter < 3; ++iter) {
         const float dist = ns_v3_len(remaining);
         if (dist < 1e-5f) break;
@@ -283,6 +321,7 @@ ns_v3 ns_bvh_move_capsule(const ns_bvh *b, ns_v3 position, ns_v3 motion,
             position = ns_v3_add(position, remaining);
             break;
         }
+        m->touched_wall = true;
 
         /* Avancer jusqu'au contact, en gardant l'épaisseur de la capsule. */
         const float allowed = ns_maxf(0.0f, nearest - radius);
@@ -295,16 +334,58 @@ ns_v3 ns_bvh_move_capsule(const ns_bvh *b, ns_v3 position, ns_v3 motion,
         remaining = rest;
     }
 
-    /* Contact avec le sol : sonde vers le bas depuis les genoux. */
-    const ns_v3 foot = ns_v3_add(position, ns_v3_make(0.0f, radius * 1.05f, 0.0f));
-    const ns_ray_hit ground = ns_bvh_raycast(b, foot, ns_v3_make(0.0f, -1.0f, 0.0f), radius * 1.6f);
-    if (ground.hit) {
-        if (out_grounded) *out_grounded = true;
-        /* Recoller au sol évite l'accumulation de micro-chutes qui finit par
-         * faire passer le joueur au travers. */
-        position.y = ground.position.y;
+    /*
+     * --- Vertical ---
+     *
+     * En montée, on vérifie le plafond : sans ça, un saut sous une poutre fait
+     * traverser la poutre, puis la retombée replace le joueur au-dessus.
+     */
+    const float vertical = m->motion.y;
+    if (vertical > 0.0f) {
+        const ns_v3 head = ns_v3_add(position, ns_v3_make(0.0f, height - radius, 0.0f));
+        const ns_ray_hit up = ns_bvh_raycast(b, head, ns_v3_make(0.0f, 1.0f, 0.0f), vertical + radius);
+        if (up.hit) {
+            position.y += ns_maxf(0.0f, up.t - radius);
+            m->touched_wall = true;
+        } else {
+            position.y += vertical;
+        }
+    } else {
+        position.y += vertical;
     }
-    return position;
+
+    /*
+     * --- Remise au sol ---
+     *
+     * La sonde part au-dessus de la hauteur de marche et descend. Trois cas :
+     *   - le sol est au-dessus des pieds d'au plus une marche : on monte ;
+     *   - il est en dessous, on était au sol, et on ne monte pas : on descend la
+     *     marche en restant collé ;
+     *   - sinon : on est en l'air, et la gravité continue.
+     *
+     * Le second cas est ce qui distingue une marche descendue d'un saut. Sans le
+     * test `vertical <= 0`, la première fraction de seconde d'un saut serait
+     * annulée par le recollement, et le joueur ne décollerait jamais.
+     */
+    const float reach_up = step + NS_CAPSULE_STEP_MARGIN;
+    const float snap_down = (m->was_grounded && vertical <= 0.0f) ? step : NS_CAPSULE_SNAP_AIR;
+
+    const ns_v3 probe_origin = ns_v3_add(position, ns_v3_make(0.0f, reach_up, 0.0f));
+    const ns_ray_hit ground = ns_bvh_raycast(b, probe_origin, ns_v3_make(0.0f, -1.0f, 0.0f),
+                                             reach_up + snap_down);
+    if (ground.hit) {
+        const float dy = ground.position.y - position.y;
+        const bool climbing = (dy > 0.0f && dy <= reach_up);
+        const bool settling = (dy <= 0.0f && -dy <= snap_down && vertical <= 0.0f);
+        if (climbing || settling) {
+            position.y = ground.position.y;
+            m->grounded = true;
+            m->ground_normal = ground.normal;
+            m->ground_material = ground.material;
+        }
+    }
+
+    m->position = position;
 }
 
 /* ========================================================================== */

@@ -68,10 +68,37 @@ bool ns_bvh_occluded(const ns_bvh *b, ns_v3 origin, ns_v3 dir, float max_distanc
  * long des surfaces. Remplace les boîtes de collision codées en dur de la V1 :
  * on ne traverse plus une borne en l'abordant de biais.
  *
- * Renvoie la position finale ; `out_grounded` indique si l'on repose sur le sol.
+ * `feet` et `position` sont la BASE de la capsule, pas son centre ni les yeux.
+ * C'est ce que la fonction sait produire — elle plaque la base sur le point de
+ * contact — et confondre les deux est la première erreur qu'on fait en la
+ * branchant.
+ *
+ * `step_height` est ce qui manquait pour qu'elle soit utilisable : sans elle,
+ * une plinthe de trois centimètres arrête le joueur net. Les sondes horizontales
+ * partent juste au-dessus de cette hauteur, et la remise au sol s'occupe de
+ * monter la marche.
+ *
+ * `was_grounded` n'est pas décoratif : c'est lui qui distingue « descendre une
+ * marche » (on recolle au sol) de « sauter » (on ne recolle surtout pas).
  */
-ns_v3 ns_bvh_move_capsule(const ns_bvh *b, ns_v3 position, ns_v3 motion,
-                          float radius, float height, bool *out_grounded);
+typedef struct ns_capsule_move {
+    /* --- entrées --- */
+    ns_v3 feet;
+    ns_v3 motion;
+    float radius;
+    float height;
+    float step_height;
+    bool  was_grounded;
+
+    /* --- sorties --- */
+    ns_v3 position;        /* base de la capsule après résolution */
+    ns_v3 ground_normal;   /* normale du sol touché ; (0,1,0) par défaut */
+    uint32_t ground_material;
+    bool  grounded;
+    bool  touched_wall;
+} ns_capsule_move;
+
+void ns_bvh_move_capsule(const ns_bvh *b, ns_capsule_move *m);
 
 /* Atténuation due aux obstacles entre deux points, dans [0,1].
  * 1 = trajet dégagé, 0 = complètement bloqué. Utilisée par l'audio. */

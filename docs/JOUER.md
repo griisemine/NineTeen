@@ -80,13 +80,22 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 
 | Touche | |
 |---|---|
-| `ZQSD` / `WASD` / flèches | se déplacer |
+| `ZQSD` (AZERTY) / `WASD` (QWERTY) / flèches | se déplacer |
 | Souris | regarder |
 | `Maj` gauche | courir |
+| `Espace` | sauter |
+| `Ctrl` gauche ou `C` | s'accroupir |
 | `Échap` | libérer la souris, puis quitter |
 | `F2` | capture d'écran dans le répertoire utilisateur |
 | `F5` | basculer caméra joueur / caméra libre |
 | `F6` | caméra orbite |
+
+Les touches de déplacement sont lues par **position physique** et non par lettre : le bloc en haut
+à gauche du clavier avance, quelle que soit la disposition. C'est le même bloc de touches qui
+s'appelle ZQSD en AZERTY et WASD en QWERTY — il n'y a pas deux liaisons, il y en a une.
+
+En caméra libre (`F5`), `Espace` et `Ctrl` montent et descendent au lieu de sauter et de
+s'accroupir : ce mode n'a ni gravité ni collision, c'est un outil de cadrage.
 
 Le premier build convertit aussi les assets — la salle passe en glTF, les textures reçoivent leurs
 cartes PBR, le BVH est construit. Compter une douzaine de secondes.
