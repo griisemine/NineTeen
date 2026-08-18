@@ -70,6 +70,22 @@ que le chantier est terminé.
   volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
   explication ; la capture a donné la seconde.
 
+### Les jeux
+- **Une interface commune** (`games/games.h`) : un jeu déclare la taille de son état, ses
+  planches, ses trois sons, son vocabulaire d'événements et sept fonctions. Ce n'est pas un
+  moteur de jeu — un mini-jeu d'arcade est un état qu'on avance d'un pas fixe et qu'on dessine,
+  et c'est la seule chose qu'on abstrait.
+- **Flappy Bird**, aux cotes de 2020 au pixel près, avec sa physique réécrite en flottant.
+- **Snake** — et ce n'est pas le Snake à cases : un serpent à **angle libre** qui tourne tant
+  qu'on tient la direction, avec de la **digestion** (la bosse d'un fruit avalé descend
+  visiblement le corps) et les **trente-deux objets** de 2020, table `FRUIT_PROPRIETES`
+  recopiée intégralement. Le **hardcore est l'inverse du normal** : manger coûte cinq fois la
+  valeur du fruit, et le score vient de ceux qu'on laisse pourrir. C'est la règle la plus
+  surprenante de l'original, et elle est conservée.
+- Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
+  secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
+  pareil à 120 Hz et à 40 Hz.
+
 ### Réglages
 - **Un menu dessiné**, ouvert par `Échap` : palier de qualité, échelle de rendu, densité de
   poussière, luminosité, les quatre volumes, sensibilité de la souris. Tout est écrit dans
@@ -153,10 +169,11 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Sept des huit mini-jeux.** Flappy Bird est porté et jouable ; Snake, Tetris, Asteroid,
-  Shooter, Démineur, Pac-Man et Piano tournent encore sur le code de 2020 dans `legacy/`. Le
-  travail est mécanique — tous passent par `SDL_Renderer`, et la couche `engine/sprite/` qui les
-  recevra existe désormais — mais il représente environ 9 800 lignes.
+- **Six des huit mini-jeux.** Flappy Bird et Snake sont portés et jouables, sur leur borne
+  comme en plein écran. Tetris, Asteroid, Shooter, Démineur, Pac-Man et Piano tournent encore
+  sur le code de 2020 dans `legacy/` — environ 8 000 lignes. Ajouter un jeu est désormais une
+  ligne dans `games/games.c` : c'est ce que Snake a vérifié, et `room/main.c` n'a pas bougé
+  d'une ligne pour l'accueillir.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
   du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
   socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
@@ -174,7 +191,15 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Dix-neuf défauts trouvés en chemin, tous instructifs.
+Vingt défauts trouvés en chemin, tous instructifs.
+
+**Sept bornes sur dix-neuf affichaient la partie d'une autre.** `roomgen` nomme les matériaux
+par jeu — `ecran_snake` — et deux bornes du même jeu partageaient donc le même. Or le moteur
+allume un écran vivant en surchargeant un MATÉRIAU : jouer sur la borne Snake normale faisait
+apparaître la partie sur la borne Snake hard, à l'autre bout de la salle. Le défaut datait d'A4
+et ne pouvait pas se voir tant qu'un seul jeu était porté — il fallait deux bornes du même jeu
+dans le même cadre pour le rencontrer. La dalle d'une borne a maintenant son propre matériau,
+cloné de celui qu'elle déclare : même image d'attente, surface distincte.
 
 **Trois bogues dans un chemin qu'on croyait fini, tous trouvés en le généralisant.** En
 extrayant l'interface commune des mini-jeux (`games/games.h`), il a fallu nommer les événements

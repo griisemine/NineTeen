@@ -11,6 +11,7 @@
 add_library(nineteen_games STATIC
     games.c
     flappy/flappy.c
+    snake/snake.c
 )
 add_library(nineteen::games ALIAS nineteen_games)
 

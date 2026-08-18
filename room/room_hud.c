@@ -185,32 +185,39 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
     centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
 
     /*
-     * Deux colonnes : Flappy normal et Flappy hard. Les autres jeux
-     * apparaîtront quand ils seront portés — une colonne vide par jeu non porté
-     * donnerait un tableau surtout vide, ce qui décourage au lieu de donner
-     * envie.
+     * Une colonne par jeu PORTÉ et par difficulté. Les jeux non portés
+     * n'apparaissent pas : une colonne vide par jeu absent donnerait un tableau
+     * surtout vide, ce qui décourage au lieu de donner envie.
      */
-    static const struct { const char *game, *diff, *label; } col[2] = {
+    static const struct { const char *game, *diff, *label; } col[4] = {
         { "flappy", "normal", "FLAPPY" },
-        { "flappy", "hard",   "HARD" },
+        { "flappy", "hard",   "F.HARD" },
+        { "snake",  "normal", "SNAKE" },
+        { "snake",  "hard",   "S.HARD" },
     };
+    const int cols = (int)(sizeof col / sizeof col[0]);
 
     static const float head[4] = { 1.00f, 0.82f, 0.35f, 1.0f };
     static const float row[4]  = { 0.88f, 0.94f, 1.00f, 1.0f };
     static const float dim[4]  = { 0.44f, 0.56f, 0.70f, 1.0f };
 
-    for (int c = 0; c < 2; ++c) {
-        const float cx = w * (c == 0 ? 0.28f : 0.72f);
+    for (int c = 0; c < cols; ++c) {
+        /* Réparties régulièrement : à deux colonnes on pouvait les poser à la
+         * main, à quatre il faut compter. */
+        const float cx = w * (0.5f + (float)c) / (float)cols;
         float y = 58.0f * u;
 
-        centred(s, cx, y, 2.0f * u, head, col[c].label);
+        centred(s, cx, y, 1.8f * u, head, col[c].label);
         y = 92.0f * u;
 
         const ns_score_board *b = ns_scores_board(col[c].game, col[c].diff);
         const uint32_t count = b ? b->count : 0u;
         if (count == 0) {
-            centred(s, cx, y, 1.8f * u, dim, "AUCUN SCORE");
-            centred(s, cx, y + 34.0f * u, 1.8f * u, dim, "A TOI DE JOUER");
+            /* Deux mots courts plutôt qu'une phrase : à quatre colonnes, une
+             * colonne fait 128 points de large et « A TOI DE JOUER » en demande
+             * 151. Le texte qui déborde sur le voisin ne se lit plus du tout. */
+            centred(s, cx, y, 1.5f * u, dim, "AUCUN");
+            centred(s, cx, y + 26.0f * u, 1.5f * u, dim, "SCORE");
             continue;
         }
 
@@ -222,15 +229,15 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
              * les chiffres ne sont pas en colonne ne se lit pas d'un coup d'œil,
              * et un coup d'œil est tout ce qu'on lui accorde en passant.
              *
-             * Le nom est tronqué à quatre caractères. Ce n'est pas beaucoup, et
-             * c'est délibéré : sur une dalle lue à deux mètres, quatre grands
-             * caractères valent mieux que huit petits. Les initiales sont
-             * d'ailleurs la tradition du genre.
+             * Le nom est tronqué à TROIS caractères. C'est la tradition du
+             * genre, et c'est ici une contrainte de place : à quatre colonnes
+             * une colonne fait 128 points, et une ligne plus longue déborde sur
+             * la voisine — les deux deviennent illisibles au lieu d'une.
              *
              * Un nom vide reste vide plutôt que de devenir « ANONYME » : le jeu
              * n'a jamais demandé de nom, il n'a pas à en inventer un.
              */
-            SDL_snprintf(line, sizeof line, "%u %-4.4s %4u",
+            SDL_snprintf(line, sizeof line, "%u %-3.3s %5u",
                          i + 1u, e->name[0] ? e->name : "", e->score);
 
             /* La première ligne respire lentement : c'est le record à battre. */
@@ -238,8 +245,8 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
                 ? (0.74f + 0.26f * (float)(0.5 + 0.5 * sin(time_seconds * 2.2)))
                 : 1.0f;
             const float rgba[4] = { row[0] * pulse, row[1] * pulse, row[2] * pulse, 1.0f };
-            centred(s, cx, y, 2.2f * u, rgba, line);
-            y += 36.0f * u;
+            centred(s, cx, y, 1.6f * u, rgba, line);
+            y += 32.0f * u;
         }
     }
 

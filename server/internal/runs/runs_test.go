@@ -390,3 +390,114 @@ func TestEvenementMuetResteLimiteEnFrequence(t *testing.T) {
 		t.Fatalf("la raison devrait nommer l'événement : %s", v.Reason)
 	}
 }
+
+// Un fruit géant de Snake vaut dix fois sa valeur : jusqu'à 100 000 pour le
+// muffin rose. La borne écrite en dur était à 10 000, donc la partie était
+// refusée pour « valeur hors bornes » — sur un fruit parfaitement légitime.
+func TestFruitGeantAccepte(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "snake"
+	ctx.MaxPlausibleScore = 999_999
+
+	sub := Submission{
+		DurationMs: 20_000,
+		Events: []Event{
+			{At: 3000, Kind: "fruit", Value: 20},      // une fraise
+			{At: 9000, Kind: "fruit", Value: 100_000}, // un muffin rose géant
+			{At: 15000, Kind: "death"},
+		},
+		ClaimedScore: 100_020,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("un fruit géant est rejeté : %s", v.Reason)
+	}
+	if v.Score != 100_020 {
+		t.Fatalf("score recalculé %d, attendu 100020", v.Score)
+	}
+}
+
+// En hardcore, manger un fruit COÛTE cinq fois sa valeur et le score vient des
+// fruits qu'on laisse expirer. Le total passe donc par des valeurs négatives,
+// ce que le garde-fou refusait EN COURS DE ROUTE — rendant le mode
+// insoumettable avant même d'exister.
+func TestHardcoreNegatifTransitoireAccepte(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "snake-hard"
+
+	sub := Submission{
+		DurationMs: 20_000,
+		Events: []Event{
+			{At: 2000, Kind: "fruit", Value: -100}, // mangé : ça coûte
+			{At: 5000, Kind: "fruit", Value: -250},
+			{At: 9000, Kind: "fruit", Value: 900}, // expiré : ça rapporte
+			{At: 14000, Kind: "fruit", Value: 700},
+			{At: 18000, Kind: "death"},
+		},
+		ClaimedScore: 1250,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("une partie hardcore honnête est rejetée : %s", v.Reason)
+	}
+	if v.Score != 1250 {
+		t.Fatalf("score recalculé %d, attendu 1250", v.Score)
+	}
+}
+
+// Et une partie qui finit dans le rouge vaut zéro, pas un score négatif : on ne
+// doit rien à la salle en sortant.
+func TestScoreFinalNegatifRameneAZero(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "snake-hard"
+
+	sub := Submission{
+		DurationMs: 10_000,
+		Events: []Event{
+			{At: 2000, Kind: "fruit", Value: -500},
+			{At: 5000, Kind: "death"},
+		},
+		ClaimedScore: 0,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("partie rejetée : %s", v.Reason)
+	}
+	if v.Score != 0 {
+		t.Fatalf("score recalculé %d, attendu 0", v.Score)
+	}
+}
+
+// Les bornes restent des bornes : au-delà, c'est toujours refusé, et les jeux
+// qui n'en déclarent pas gardent celles d'avant.
+func TestValeurAuDelaDesBornesToujoursRefusee(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "snake"
+	sub := Submission{
+		DurationMs:   10_000,
+		Events:       []Event{{At: 1000, Kind: "fruit", Value: 100_001}},
+		ClaimedScore: 100_001,
+	}
+	sign(ctx, &sub)
+	if v := Verify(ctx, sub); v.Accepted {
+		t.Fatal("une valeur au-delà de la borne de Snake aurait dû être refusée")
+	}
+
+	// Tetris n'en déclare pas : il garde 0 à 10 000.
+	ctx2 := testContext()
+	sub2 := Submission{
+		DurationMs:   10_000,
+		Events:       []Event{{At: 1000, Kind: "lines", Value: 10_001}},
+		ClaimedScore: 1_000_100,
+	}
+	sign(ctx2, &sub2)
+	if v := Verify(ctx2, sub2); v.Accepted {
+		t.Fatal("les bornes par défaut ont changé pour un jeu qui n'en déclare pas")
+	}
+}

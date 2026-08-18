@@ -210,6 +210,23 @@ type gameRules struct {
 	// Nombre maximal d'événements de ce type par seconde de jeu.
 	maxRatePerSecond map[string]float64
 	minDurationMs    int64
+	// Bornes de la valeur d'un événement proportionnel. Zéro des deux côtés
+	// signifie « les valeurs par défaut », soit 0 à 10 000.
+	//
+	// Elles étaient écrites en dur, et Snake n'y rentre pas : un fruit géant
+	// vaut dix fois sa valeur — jusqu'à 100 000 pour le muffin rose — et en
+	// hardcore manger rapporte NÉGATIF (RATIO_GET_FRUIT_HARDCORE vaut −5, le
+	// score venant au contraire des fruits qu'on laisse expirer). Le mode
+	// hardcore de Snake était donc insoumettable avant d'exister.
+	valueMin, valueMax int64
+}
+
+// Bornes effectives d'un événement proportionnel.
+func (g gameRules) bounds() (int64, int64) {
+	if g.valueMin == 0 && g.valueMax == 0 {
+		return 0, 10_000
+	}
+	return g.valueMin, g.valueMax
 }
 
 func (g gameRules) compute(sub Submission, ctx Context) (int64, error) {
@@ -233,8 +250,9 @@ func (g gameRules) compute(sub Submission, ctx Context) (int64, error) {
 		}
 		if hasScale {
 			// Borne sur la valeur : sans elle, un seul événement suffirait à
-			// faire déborder l'entier et à produire un score négatif.
-			if e.Value < 0 || e.Value > 10_000 {
+			// faire déborder l'entier.
+			lo, hi := g.bounds()
+			if e.Value < lo || e.Value > hi {
 				return 0, fmt.Errorf("valeur hors bornes pour « %s »", sanitizeKind(e.Kind))
 			}
 			total += scale * e.Value
@@ -242,7 +260,11 @@ func (g gameRules) compute(sub Submission, ctx Context) (int64, error) {
 		if hasFlat {
 			total += flat
 		}
-		if total < 0 || total > math.MaxInt32 {
+		// Le débordement est vérifié À CHAQUE PAS — c'est lui qui protège. Le
+		// total NÉGATIF, lui, ne l'est plus : il est légitime et transitoire
+		// dans un jeu où certains gains sont des pertes, et le refuser en cours
+		// de route rendait le hardcore de Snake impossible à soumettre.
+		if total > math.MaxInt32 || total < math.MinInt32 {
 			return 0, fmt.Errorf("score en débordement")
 		}
 	}
@@ -255,6 +277,12 @@ func (g gameRules) compute(sub Submission, ctx Context) (int64, error) {
 					sanitizeKind(kind), rate, limit)
 			}
 		}
+	}
+
+	// Un score final négatif vaut zéro, comme l'affichage de 2020 : on ne doit
+	// rien à la salle en sortant.
+	if total < 0 {
+		total = 0
 	}
 	return total, nil
 }
@@ -287,13 +315,20 @@ var rulesTable = map[string]gameRules{
 	},
 	"snake": {
 		// Les fruits de 2020 n'ont pas tous la même valeur — de la fraise à 20
-		// au muffin rose à 10 000 — donc le barème est PROPORTIONNEL et la
-		// valeur voyage avec l'événement, bornée comme les autres.
+		// au muffin rose à 10 000, et dix fois plus en géant — donc le barème
+		// est PROPORTIONNEL et la valeur voyage avec l'événement.
+		//
+		// La borne basse est négative, et ce n'est pas une facilité : en
+		// hardcore, manger un fruit COÛTE cinq fois sa valeur et le score vient
+		// des fruits qu'on laisse expirer. C'est la règle la plus surprenante de
+		// 2020, et elle est délibérée.
 		scaled:           map[string]int64{"fruit": 1},
 		points:           map[string]int64{"bonus": 50},
 		silent:           map[string]bool{"turn": true, "death": true},
 		maxRatePerSecond: map[string]float64{"fruit": 6, "bonus": 1, "turn": 40},
 		minDurationMs:    1000,
+		valueMin:         -100_000,
+		valueMax:         100_000,
 	},
 	"tetris": {
 		silent: map[string]bool{"death": true},

@@ -97,6 +97,18 @@ s'appelle ZQSD en AZERTY et WASD en QWERTY — il n'y a pas deux liaisons, il y 
 En caméra libre (`F5`), `Espace` et `Ctrl` montent et descendent au lieu de sauter et de
 s'accroupir : ce mode n'a ni gravité ni collision, c'est un outil de cadrage.
 
+**Jouer sur une borne** : approchez-vous, `E` insère un jeton et la partie démarre **dans la
+dalle** — on reste en 3D, la tête reste libre, on voit l'écran à travers son verre bombé. Deux
+jeux sont portés : **Flappy Bird** (`Espace`) et **Snake** (les flèches, maintenues : le serpent
+tourne tant qu'on tient). `Échap` sort de la partie, pas du jeu.
+
+Les bornes Snake « hard » ne se jouent pas comme les autres, et c'est la règle de 2020 : **manger
+coûte** cinq fois la valeur du fruit, et le score vient de ceux qu'on laisse **pourrir** sur le
+terrain. Ce n'est pas un bogue, c'est le mode.
+
+Pour voir un jeu sans traverser la salle : `--game=flappy` ou `--game=snake` démarre directement
+en plein écran.
+
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
 sas d'entrée et le coin billard** ont chacun leur écho — déclaré dans `assets/scene/salle.room.json`,
 pas deviné. On l'entend en passant la porte des toilettes ; la transition prend le temps de la
@@ -171,10 +183,9 @@ un réglage a changé.
 
 Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **sept des huit mini-jeux.** Flappy Bird est porté et jouable, sur sa borne comme en plein
-  écran. Snake, Tetris, Asteroid, Shooter, Démineur, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 9 800 lignes, mécaniques à porter maintenant que la
-  couche 2D existe ;
+- **six des huit mini-jeux.** Flappy Bird et Snake sont portés et jouables, sur leur borne
+  comme en plein écran. Tetris, Asteroid, Shooter, Démineur, Pac-Man et Piano tournent encore
+  sur le code de 2020 dans `legacy/` — environ 8 000 lignes ;
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux

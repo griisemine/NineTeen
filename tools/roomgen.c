@@ -983,6 +983,45 @@ static void parse_mouldings(rg_builder *b, const tool_json *doc, const tool_json
 #define RG_CAB_H  1.86f
 #define RG_CAB_D  0.88f
 
+/*
+ * La dalle d'une borne a son PROPRE matériau, même quand deux bornes affichent
+ * le même jeu.
+ *
+ * Sans ça, `ecran_snake` était un seul matériau partagé par les deux bornes
+ * Snake — et comme le moteur allume un écran vivant en surchargeant un MATÉRIAU
+ * (`ns_renderer_set_screen`), jouer sur l'une faisait apparaître la partie sur
+ * l'autre, à l'autre bout de la salle. Sept matériaux d'écran sur dix-neuf
+ * bornes étaient dans ce cas ; le défaut ne se voyait pas tant qu'un seul jeu
+ * était porté, parce qu'il fallait deux bornes du même jeu dans le même cadre.
+ *
+ * Le clone garde la texture et les réglages : c'est la même image d'attente, ce
+ * n'est plus la même surface.
+ */
+static int clone_screen_material(rg_builder *b, int src, const char *cabinet)
+{
+    if (src < 0) return src;
+    if (b->material_count >= RG_MAX_MATERIALS) {
+        tool_fatalf("plus de %d matériaux (clone d'écran pour « %s »)",
+                    RG_MAX_MATERIALS, cabinet);
+    }
+    /* On copie la source AVANT d'écrire la destination : les deux vivent dans le
+     * même tableau, et `snprintf` d'un tampon vers un autre du même objet est un
+     * chevauchement que le compilateur signale à juste titre. */
+    char src_name[64];
+    snprintf(src_name, sizeof src_name, "%s", b->material_names[src]);
+    char src_step[24];
+    snprintf(src_step, sizeof src_step, "%s", b->material_footstep[src]);
+
+    const size_t slot = b->material_count++;
+    b->materials[slot] = b->materials[src];
+    b->material_uv[slot] = b->material_uv[src];
+    b->material_fit[slot] = b->material_fit[src];
+    snprintf(b->material_footstep[slot], sizeof b->material_footstep[slot], "%s", src_step);
+    snprintf(b->material_names[slot], sizeof b->material_names[slot], "%.40s@%.20s",
+             src_name, cabinet);
+    return (int)slot;
+}
+
 static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
                           const tool_json_value *e, const char *owner,
                           rg_cab_anchors *anchors)
@@ -998,7 +1037,7 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     tool_json_get_string(doc, e, "materialTrim", m_trim, sizeof m_trim);
 
     const int body   = material_index(b, m_body, owner);
-    const int screen = material_index(b, m_screen, owner);
+    const int screen = clone_screen_material(b, material_index(b, m_screen, owner), owner);
     anchors->screen_material = screen;
     const int marq   = material_index(b, m_marquee[0] ? m_marquee : m_body, owner);
     const int panel  = material_index(b, m_panel[0] ? m_panel : m_body, owner);

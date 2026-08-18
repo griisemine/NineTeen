@@ -100,6 +100,18 @@ nineteen_set_warnings(ns_test_flappy)
 nineteen_apply_sanitizers(ns_test_flappy)
 add_test(NAME flappy COMMAND ns_test_flappy)
 
+# Snake. Le portage convertit tout un jeu écrit en IMAGES à 30 Hz vers un pas
+# fixe en secondes ; une conversion ratée donne un jeu qui a l'air juste et se
+# joue autrement. Le cas qui justifie ce fichier à lui seul : le hardcore est
+# l'INVERSE du normal — manger coûte, laisser pourrir rapporte — et c'est
+# exactement la règle qu'on « corrigerait » par mégarde.
+add_executable(ns_test_snake test_snake.c)
+target_link_libraries(ns_test_snake PRIVATE nineteen::games)
+target_include_directories(ns_test_snake PRIVATE "${CMAKE_SOURCE_DIR}/games/snake")
+nineteen_set_warnings(ns_test_snake)
+nineteen_apply_sanitizers(ns_test_snake)
+add_test(NAME snake COMMAND ns_test_snake)
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

@@ -233,6 +233,31 @@ add_custom_command(
     VERBATIM
 )
 
+# Snake. Même principe, avec une particularité : `config.h` de 2020 emprunte
+# DEUX sons à d'autres jeux — l'explosion d'Asteroid pour la bombe, le game over
+# de Tetris. Un glob sur son propre répertoire ne les prendrait pas, et le jeu
+# tournerait muet sur ses deux moments les plus forts. Ils sont donc copiés
+# explicitement, et renommés pour que `snake.c` les cherche à un seul endroit.
+file(GLOB SNAKE_ART   "${SRC_LEGACY}/games/2_snake/Textures/*.png")
+file(GLOB SNAKE_SOUND "${SRC_LEGACY}/games/2_snake/Sound/*.wav")
+
+add_custom_command(
+    OUTPUT "${GEN}/games/snake/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/snake"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SNAKE_ART} "${GEN}/games/snake/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SNAKE_SOUND} "${GEN}/games/snake/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/7_asteroid/Sound/explo.wav" "${GEN}/games/snake/explo.wav"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav" "${GEN}/games/snake/gameover.wav"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/snake/.stamp"
+    DEPENDS ${SNAKE_ART} ${SNAKE_SOUND}
+            "${SRC_LEGACY}/games/7_asteroid/Sound/explo.wav"
+            "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav"
+    COMMENT "Copie des planches et sons de Snake"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -252,6 +277,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.scene.json"
         "${GEN}/sounds/.stamp"
         "${GEN}/games/flappy/.stamp"
+        "${GEN}/games/snake/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}
