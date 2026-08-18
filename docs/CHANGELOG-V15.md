@@ -175,6 +175,21 @@ que le chantier est terminé.
     difficultés n'ont **aucune** forme en commun, et si la forme géante **est**
     la forme normale doublée, son **pivot ne l'est pas** dans 42 cas sur 56 —
     un générateur aurait donné la bonne forme et la mauvaise rotation.
+- **Asteroid** — le vaisseau et son inertie de commande : rotation montée par
+  une **rampe de neuf images**, poussée par une **rampe de cinq**, décélération
+  de 1,015 par image, vitesse plafonnée. Les **six variétés d'astéroïdes** de 50
+  à 500 points, leurs **quatre quartiers de taille** qui multiplient ce score par
+  0,2 à 1 — un petit fragment rare vaut donc plus qu'un gros caillou commun —
+  la **fragmentation** au-dessus de 36 px, et les **cinq armes** avec leurs
+  tables de fréquence, vitesse, dégâts, rayon et durée. La **glace** ne fait
+  aucun dégât : elle gèle, et c'est la règle la plus surprenante de l'arsenal.
+  - Le vaisseau **rebondit** sur les murs au lieu de s'enrouler. Ce n'est pas ce
+    qu'on attend d'un Asteroids, c'est ce que fait celui de 2020, et c'est ce
+    qui rend le terrain lisible : on sait toujours où est son vaisseau.
+  - La couche 2D sait maintenant **tourner un quad**. Elle en avait besoin ici et
+    nulle part avant : un vaisseau qui pivote ne se dessine pas avec des
+    rectangles alignés sur les axes, et l'approcher par une pile de bandes
+    horizontales donne une écharde à quarante-cinq degrés.
 - Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
   secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
   pareil à 120 Hz et à 40 Hz.
@@ -266,9 +281,9 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Quatre des huit mini-jeux.** Flappy Bird, Snake, Démineur et Tetris sont portés et jouables,
-  sur leur borne comme en plein écran. Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 4 900 lignes. Ajouter un jeu est désormais une ligne
+- **Trois des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris et Asteroid sont portés et
+  jouables, sur leur borne comme en plein écran. Shooter, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 2 200 lignes. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
@@ -289,7 +304,21 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Trente-quatre défauts trouvés en chemin, tous instructifs.
+Trente-six défauts trouvés en chemin, tous instructifs.
+
+**Comparer deux angles bruts de part et d'autre d'un tour donne 6,28 radians de
+rotation là où il n'y en a aucune.** `BASE_ANGLE` vaut 3π/2 et le vaisseau
+normalise son cap dans (−π, π] dès la première image : l'écart mesuré n'était
+pas une rotation, c'était la normalisation. Le test de rampe s'y est fait
+prendre — il annonçait une rotation quarante fois trop rapide. L'angle de départ
+est maintenant normalisé à la source, et les écarts se mesurent modulo 2π.
+
+**Un test qui mesure le silence d'une partie finie ne mesure rien.** Le test des
+munitions laissait le vaisseau immobile au milieu du champ d'astéroïdes pendant
+trente secondes : il mourait, `tick` sortait aussitôt, et le test constatait que
+plus rien ne changeait. Il vide maintenant le terrain — il porte sur les
+munitions, pas sur la survie — et vérifie explicitement que la partie tourne
+encore.
 
 **Une pièce entièrement au-dessus du plateau tenait toujours, donc la partie de
 Tetris ne pouvait pas finir.** Une case au-dessus de la ligne 0 est acceptée par

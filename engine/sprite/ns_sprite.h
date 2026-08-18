@@ -65,7 +65,24 @@ void ns_sprite_quad(ns_sprite *s, float x, float y, float w, float h,
                     float u0, float v0, float u1, float v1, const float rgba[4]);
 
 /* Un aplat. Repose la texture blanche : à employer sans se soucier de l'état. */
+/*
+ * Les mêmes, TOURNÉS autour de leur centre.
+ *
+ * Ils arrivent avec Asteroid, et pour une raison qui ne se contourne pas : un
+ * vaisseau qui pivote ne se dessine pas avec des rectangles alignés sur les
+ * axes. Le premier jet l'approchait par une pile de bandes horizontales — ça
+ * marche pour un disque, et ça donne une écharde à quarante-cinq degrés.
+ *
+ * `angle` est en radians, dans le sens des UV (y vers le bas), donc la même
+ * convention que les angles de jeu. `cx, cy` est le CENTRE, pas le coin :
+ * tourner autour d'un coin n'a de sens pour personne.
+ */
+void ns_sprite_quad_rot(ns_sprite *s, float cx, float cy, float w, float h, float angle,
+                        float u0, float v0, float u1, float v1, const float rgba[4]);
+
 void ns_sprite_rect(ns_sprite *s, float x, float y, float w, float h, const float rgba[4]);
+void ns_sprite_rect_rot(ns_sprite *s, float cx, float cy, float w, float h, float angle,
+                        const float rgba[4]);
 
 /*
  * Du texte, en majuscules et chiffres — la fonte couvre l'ASCII imprimable.

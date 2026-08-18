@@ -382,7 +382,7 @@ static const struct {
     { "flappy",   { "pipe", "flap", "death", NULL } },
     { "snake",    { "fruit", "bonus", "turn", "death", NULL } },
     { "tetris",   { "lines", "drop", "rotate", "death", NULL } },
-    { "asteroid", { "rock", "bonus", "wave", "death", NULL } },
+    { "asteroid", { "rock", "bonus", "wave", "shot", "death", NULL } },
     { "shooter",  { "enemy", "boss", "wave", "death", NULL } },
     { "demineur", { "cell", "flag", "win", "move", "death", NULL } },
     { "pacman",   { "pellet", "power", "ghost", "level", "death", NULL } },

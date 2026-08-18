@@ -416,6 +416,24 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${GEN}/games/asteroid/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/asteroid"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/7_asteroid/Textures/background.png"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/shoot1.wav"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/explo.wav"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/big_explo.wav"
+            "${GEN}/games/asteroid/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/asteroid/.stamp"
+    DEPENDS "${SRC_LEGACY}/games/7_asteroid/Textures/background.png"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/shoot1.wav"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/explo.wav"
+            "${SRC_LEGACY}/games/7_asteroid/Sound/big_explo.wav"
+    COMMENT "Copie du fond et des sons d'Asteroid"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -438,6 +456,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/games/snake/.stamp"
         "${GEN}/games/demineur/.stamp"
         "${GEN}/games/tetris/.stamp"
+        "${GEN}/games/asteroid/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

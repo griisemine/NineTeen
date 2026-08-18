@@ -1,6 +1,8 @@
 /* ns_sprite.c — voir ns_sprite.h pour le raisonnement. */
 #include "ns_sprite.h"
 
+#include <math.h>
+
 #include "ns_core.h"
 #include "ns_shaders.h"
 
@@ -321,10 +323,46 @@ void ns_sprite_quad(ns_sprite *s, float x, float y, float w, float h,
     s->batches[s->batch_count - 1].index_count += 6;
 }
 
+void ns_sprite_quad_rot(ns_sprite *s, float cx, float cy, float w, float h, float angle,
+                        float u0, float v0, float u1, float v1, const float rgba[4])
+{
+    if (s->quad_count >= NS_SPRITE_MAX_QUADS) return;
+    if (s->batch_count == 0) use_texture(s, s->white.handle);
+
+    static const float opaque[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    const float *c = rgba ? rgba : opaque;
+
+    const float ca = cosf(angle), sa = sinf(angle);
+    const float hw = w * 0.5f, hh = h * 0.5f;
+    const float ox[4] = { -hw,  hw,  hw, -hw };
+    const float oy[4] = { -hh, -hh,  hh,  hh };
+    const float pu[4] = { u0, u1, u1, u0 };
+    const float pv[4] = { v0, v0, v1, v1 };
+
+    sprite_vertex *v = &s->cpu_verts[s->quad_count * 4];
+    for (int i = 0; i < 4; ++i) {
+        v[i].position[0] = cx + ox[i] * ca - oy[i] * sa;
+        v[i].position[1] = cy + ox[i] * sa + oy[i] * ca;
+        v[i].uv[0] = pu[i];
+        v[i].uv[1] = pv[i];
+        memcpy(v[i].color, c, sizeof(float) * 4);
+    }
+
+    s->quad_count++;
+    s->batches[s->batch_count - 1].index_count += 6;
+}
+
 void ns_sprite_rect(ns_sprite *s, float x, float y, float w, float h, const float rgba[4])
 {
     ns_sprite_texture(s, NULL);
     ns_sprite_quad(s, x, y, w, h, 0.0f, 0.0f, 1.0f, 1.0f, rgba);
+}
+
+void ns_sprite_rect_rot(ns_sprite *s, float cx, float cy, float w, float h, float angle,
+                        const float rgba[4])
+{
+    ns_sprite_texture(s, NULL);
+    ns_sprite_quad_rot(s, cx, cy, w, h, angle, 0.0f, 0.0f, 1.0f, 1.0f, rgba);
 }
 
 /* ==========================================================================

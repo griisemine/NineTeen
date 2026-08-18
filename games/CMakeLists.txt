@@ -14,6 +14,7 @@ add_library(nineteen_games STATIC
     snake/snake.c
     demineur/demineur.c
     tetris/tetris.c
+    asteroid/asteroid.c
 )
 add_library(nineteen::games ALIAS nineteen_games)
 

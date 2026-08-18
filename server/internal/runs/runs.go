@@ -352,11 +352,21 @@ var rulesTable = map[string]gameRules{
 		valueMax:         500_000,
 	},
 	"asteroid": {
-		silent:           map[string]bool{"death": true},
-		scaled:           map[string]int64{"rock": 20},
-		points:           map[string]int64{"bonus": 100, "wave": 250},
-		maxRatePerSecond: map[string]float64{"rock": 15, "bonus": 2, "wave": 0.5},
+		// « rock » et « bonus » portent les POINTS, pas le compte. Le score d'un
+		// astéroïde dépend de sa VARIÉTÉ — six, de 50 à 500 — et de son quartier
+		// de TAILLE, qui le multiplie par 0,2 à 1 ; un ramassage de points vaut
+		// 500, 1 500 ou 5 000. Aucun barème fixe ne reconstitue ça, et c'est ce
+		// qui fait qu'un petit fragment rare vaut plus qu'un gros caillou commun.
+		scaled: map[string]int64{"rock": 1, "bonus": 1},
+		points: map[string]int64{"wave": 250},
+		// « shot » est un geste : muet, mais compté — c'est sur lui que porte la
+		// limite de fréquence, et c'est la seule chose qu'un journal puisse dire
+		// d'une partie réellement jouée.
+		silent:           map[string]bool{"death": true, "shot": true},
+		maxRatePerSecond: map[string]float64{"rock": 25, "bonus": 2, "wave": 0.5, "shot": 40},
 		minDurationMs:    2000,
+		valueMin:         0,
+		valueMax:         50_000,
 	},
 	"shooter": {
 		silent:           map[string]bool{"death": true},

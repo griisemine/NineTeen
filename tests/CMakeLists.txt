@@ -112,6 +112,13 @@ nineteen_set_warnings(ns_test_snake)
 nineteen_apply_sanitizers(ns_test_snake)
 add_test(NAME snake COMMAND ns_test_snake)
 
+add_executable(ns_test_asteroid test_asteroid.c)
+target_link_libraries(ns_test_asteroid PRIVATE nineteen::games)
+target_include_directories(ns_test_asteroid PRIVATE "${CMAKE_SOURCE_DIR}/games/asteroid")
+nineteen_set_warnings(ns_test_asteroid)
+nineteen_apply_sanitizers(ns_test_asteroid)
+add_test(NAME asteroid COMMAND ns_test_asteroid)
+
 add_executable(ns_test_tetris test_tetris.c)
 target_link_libraries(ns_test_tetris PRIVATE nineteen::games nineteen::engine)
 target_include_directories(ns_test_tetris PRIVATE "${CMAKE_SOURCE_DIR}/games/tetris")

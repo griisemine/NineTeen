@@ -116,8 +116,8 @@ simultanée vaut le **double** de la précédente — un quadruple fait donc 1 5
 ligne d'**une seule couleur** vaut **dix fois** son total. Viser la couleur rapporte plus que viser
 le quadruple.
 
-Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur` ou
-`--game=tetris` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
+Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur`,
+`--game=tetris` ou `--game=asteroid` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
 la même commande rend exactement la même image.
 
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
@@ -194,9 +194,9 @@ un réglage a changé.
 
 Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **quatre des huit mini-jeux.** Flappy Bird, Snake, Démineur et Tetris sont portés et jouables,
-  sur leur borne comme en plein écran. Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 4 900 lignes ;
+- **trois des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris et Asteroid sont portés et
+  jouables, sur leur borne comme en plein écran. Shooter, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 2 200 lignes ;
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux
