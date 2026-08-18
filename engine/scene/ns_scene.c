@@ -424,6 +424,25 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
      * indexables par le `ground_material` que renvoie la collision. Le tableau
      * est alloué dans l'arène de la scène : il vit et meurt avec elle.
      */
+    const ns_json_value *dust = ns_json_get(&doc, root, "dust");
+    const int dust_count = ns_json_array_count(&doc, dust);
+    s->dust_count = 0;
+    for (int i = 0; i < dust_count && s->dust_count < NS_MAX_DUST_ZONES; ++i) {
+        const ns_json_value *e = ns_json_at(&doc, dust, i);
+        ns_dust_zone *z = &s->dust[s->dust_count++];
+        SDL_zerop(z);
+        ns_json_get_string(&doc, e, "name", z->name, sizeof z->name);
+        float v[3];
+        ns_json_get_vec3(&doc, e, "min", v, 0.0f); z->bounds.min = ns_v3_make(v[0], v[1], v[2]);
+        ns_json_get_vec3(&doc, e, "max", v, 0.0f); z->bounds.max = ns_v3_make(v[0], v[1], v[2]);
+        ns_json_get_vec3(&doc, e, "drift", z->drift, 0.0f);
+        ns_json_get_vec3(&doc, e, "color", z->color, 1.0f);
+        z->density = ns_json_get_float(&doc, e, "density", 0.5f);
+        z->size = ns_json_get_float(&doc, e, "size", 0.02f);
+        z->brightness = ns_json_get_float(&doc, e, "brightness", 0.5f);
+    }
+    if (s->dust_count) NS_INFO("%u zone(s) de poussière", s->dust_count);
+
     const ns_json_value *steps = ns_json_get(&doc, root, "materialFootsteps");
     const int step_count = ns_json_array_count(&doc, steps);
     if (step_count > 0) {

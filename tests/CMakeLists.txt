@@ -29,6 +29,19 @@ nineteen_set_warnings(ns_test_bvh)
 nineteen_apply_sanitizers(ns_test_bvh)
 add_test(NAME bvh COMMAND ns_test_bvh)
 
+# La poussière. Le système se construit ici SANS GPU — `ns_particles_create` accepte
+# un `ns_rhi *` nul et ne monte alors que sa simulation — donc ce test tourne aussi
+# sur les machines d'intégration continue de macOS et de Windows, qui n'en ont pas.
+#
+# Ce qu'il attrape : un recyclage aux bornes de zone qui laisse le nuage s'échapper.
+# La population ne bouge pas d'un grain quand ça arrive, aucune erreur n'est émise,
+# et la poussière quitte simplement les faisceaux au bout de quelques minutes.
+add_executable(ns_test_particles test_particles.c)
+target_link_libraries(ns_test_particles PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_particles)
+nineteen_apply_sanitizers(ns_test_particles)
+add_test(NAME particles COMMAND ns_test_particles)
+
 # Le solveur à deux os et la machine à états qui pose les bras. Les deux se
 # compilent depuis `room/`, comme `ns_test_bvh` le fait déjà pour la caméra : ce
 # sont des fichiers de jeu, pas de moteur, et les descendre dans `engine/` pour

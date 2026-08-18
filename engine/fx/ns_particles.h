@@ -31,6 +31,7 @@
 
 #include "ns_math.h"
 #include "ns_rhi.h"
+#include "ns_scene.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -54,6 +55,12 @@ typedef struct ns_particle_zone {
 
 #define NS_MAX_PARTICLE_ZONES 8
 
+/*
+ * `r` peut valoir NULL : on obtient alors la simulation SEULE, sans pipeline ni
+ * tampon GPU, et `ns_particles_draw` ne fait rien. C'est ce qui permet de tester
+ * le recyclage aux bornes de zone et le déterminisme là où il n'y a pas de carte
+ * graphique — l'intégration continue de macOS et de Windows, notamment.
+ */
 ns_particles *ns_particles_create(ns_rhi *r, SDL_GPUTextureFormat target_format,
                                   SDL_GPUTextureFormat depth_format,
                                   uint32_t max_particles);
@@ -66,6 +73,22 @@ void ns_particles_set_zones(ns_particles *p, const ns_particle_zone *zones, uint
 /* Facteur de densité global, 0 à 1 : c'est le levier du palier de qualité.
  * À 0 rien n'est simulé ni dessiné — pas seulement rien d'affiché. */
 void ns_particles_set_density(ns_particles *p, float factor);
+
+/*
+ * Les lumières de la salle, pour éclairer les grains.
+ *
+ * C'est LE point qui décide si la poussière se lit comme de la poussière ou
+ * comme de la neige : un grain n'est visible que s'il est DANS un faisceau. Sans
+ * cet éclairage, tous les grains brillent pareil, y compris dans les coins
+ * noirs, et l'œil y voit des flocons collés sur l'image.
+ *
+ * Le calcul est fait sur le CPU, au dessin, sur les grains qu'on garde. Trois
+ * mille grains contre quarante lumières font cent vingt mille distances par
+ * image — moins que ce que coûte une seule ligne de pixels du brouillard
+ * volumétrique. Le faire dans le shader demanderait de lier le tampon des
+ * lumières à l'étage sommet, pour la même chose.
+ */
+void ns_particles_set_lights(ns_particles *p, const ns_light_gpu *lights, uint32_t count);
 
 /* Avance la simulation d'un pas fixe. */
 void ns_particles_tick(ns_particles *p, float dt);
@@ -81,5 +104,20 @@ void ns_particles_draw(ns_rhi *r, ns_particles *p, const ns_m4 *view_proj,
                        uint32_t width, uint32_t height);
 
 uint32_t ns_particles_live(const ns_particles *p);
+
+/*
+ * L'emprise réellement occupée par les grains vivants.
+ *
+ * Sert à deux choses, et la seconde justifie à elle seule la fonction : montrer
+ * le nuage dans une vue de débogage, et VÉRIFIER le recyclage. Les grains
+ * dérivent sans jamais mourir — sortis de leur boîte ils y rentrent par la face
+ * opposée. Si ce recyclage se trompe d'axe ou de borne, le nuage s'échappe
+ * lentement de sa zone : la population reste identique, rien n'est signalé, et
+ * on ne s'en aperçoit qu'en jouant, quand la poussière a quitté les faisceaux.
+ * Comparer cette emprise aux zones déclarées est le seul contrôle qui l'attrape.
+ *
+ * Renvoie false — et laisse `out` intact — s'il n'y a aucun grain.
+ */
+bool ns_particles_cloud_bounds(const ns_particles *p, ns_aabb *out);
 
 #endif /* NS_PARTICLES_H */

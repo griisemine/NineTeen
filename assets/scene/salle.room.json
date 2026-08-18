@@ -1094,6 +1094,90 @@
       "_": "Applique murale, ambre franc."
     }
   ],
+  "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
+  "dust": [
+    {
+      "name": "poussiere_ilot",
+      "min": [
+        -3.4,
+        0.9,
+        -2.6
+      ],
+      "max": [
+        3.4,
+        2.8,
+        2.6
+      ],
+      "density": 0.85,
+      "drift": [
+        0.03,
+        -0.012,
+        0.0
+      ],
+      "size": 0.014,
+      "color": [
+        1.0,
+        0.86,
+        0.66
+      ],
+      "brightness": 0.275,
+      "_": "Sous les deux rampes de l'îlot : c'est là qu'on joue, et c'est là que les cônes de lumière tombent."
+    },
+    {
+      "name": "poussiere_allee",
+      "min": [
+        -8.6,
+        0.9,
+        -5.4
+      ],
+      "max": [
+        -2.6,
+        2.8,
+        4.2
+      ],
+      "density": 0.5,
+      "drift": [
+        -0.02,
+        -0.01,
+        0.02
+      ],
+      "size": 0.014,
+      "color": [
+        1.0,
+        0.82,
+        0.6
+      ],
+      "brightness": 0.231,
+      "_": "L'allée ouest, sous les plafonniers, jusqu'au billard."
+    },
+    {
+      "name": "poussiere_bar",
+      "min": [
+        -5.2,
+        0.9,
+        4.6
+      ],
+      "max": [
+        0.4,
+        2.8,
+        7.0
+      ],
+      "density": 0.6,
+      "drift": [
+        0.01,
+        -0.008,
+        -0.02
+      ],
+      "size": 0.014,
+      "color": [
+        1.0,
+        0.88,
+        0.7
+      ],
+      "brightness": 0.303,
+      "_": "Le comptoir, le seul endroit vraiment éclairé de la salle."
+    }
+  ],
   "_sols": "Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement.",
   "floors": [
     {

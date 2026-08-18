@@ -1847,6 +1847,54 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
      * à faire une recherche par chaîne à chaque pas, pour retrouver un index
      * qu'il avait déjà.
      */
+    /*
+     * Les zones de poussière, recopiées telles quelles depuis la description.
+     *
+     * `roomgen` ne les transforme pas — il les VALIDE et les transmet. La
+     * validation compte : une boîte vide ou inversée donnerait zéro grain sans
+     * le moindre message, et on chercherait du côté du rendu.
+     */
+    {
+        const tool_json_value *dust = tool_json_get(doc, root, "dust");
+        const int n = tool_json_array_count(doc, dust);
+        fprintf(f, "  \"dust\": [\n");
+        for (int i = 0; i < n; ++i) {
+            const tool_json_value *e = tool_json_at(doc, dust, i);
+            char name[64];
+            tool_json_get_string(doc, e, "name", name, sizeof name);
+
+            float mn[3], mx[3], col[3];
+            tool_json_get_vec3(doc, e, "min", mn, 0.0f);
+            tool_json_get_vec3(doc, e, "max", mx, 0.0f);
+            tool_json_get_vec3(doc, e, "color", col, 1.0f);
+            for (int k = 0; k < 3; ++k) {
+                if (mx[k] <= mn[k]) {
+                    tool_fatalf("zone de poussière « %s » : la boîte est vide ou inversée sur "
+                                "l'axe %d (%.3f à %.3f). Elle ne produirait aucun grain, en "
+                                "silence.", name[0] ? name : "?", k,
+                                (double)mn[k], (double)mx[k]);
+                }
+            }
+            float drift[3];
+            tool_json_get_vec3(doc, e, "drift", drift, 0.0f);
+
+            fprintf(f, "    { \"name\": \"%s\", \"min\": [%.3f, %.3f, %.3f], "
+                       "\"max\": [%.3f, %.3f, %.3f], \"density\": %.3f, "
+                       "\"drift\": [%.4f, %.4f, %.4f], \"size\": %.4f, "
+                       "\"color\": [%.3f, %.3f, %.3f], \"brightness\": %.3f }%s\n",
+                    name, (double)mn[0], (double)mn[1], (double)mn[2],
+                    (double)mx[0], (double)mx[1], (double)mx[2],
+                    (double)tool_json_get_float(doc, e, "density", 0.5f),
+                    (double)drift[0], (double)drift[1], (double)drift[2],
+                    (double)tool_json_get_float(doc, e, "size", 0.02f),
+                    (double)col[0], (double)col[1], (double)col[2],
+                    (double)tool_json_get_float(doc, e, "brightness", 0.5f),
+                    (i + 1 < n) ? "," : "");
+        }
+        fprintf(f, "  ],\n");
+        if (n) printf("  %d zone(s) de poussière\n", n);
+    }
+
     fprintf(f, "  \"materialFootsteps\": [\n");
     for (size_t i = 0; i < b->material_count; ++i) {
         fprintf(f, "    \"%s\"%s\n",

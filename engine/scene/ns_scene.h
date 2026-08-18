@@ -141,6 +141,25 @@ typedef struct ns_poi {
 #define NS_MAX_POI 32
 
 /*
+ * Une zone d'air chargé, DÉCLARÉE par la salle. Le format est celui de
+ * `ns_particle_zone` en tout point sauf le type, et c'est voulu : `engine/scene`
+ * ne doit pas dépendre de `engine/fx`, sinon charger une salle imposerait
+ * d'avoir un moteur de rendu. La conversion est une recopie, faite par
+ * l'appelant.
+ */
+typedef struct ns_dust_zone {
+    char    name[48];
+    ns_aabb bounds;
+    float   density;
+    float   drift[3];
+    float   size;
+    float   color[3];
+    float   brightness;
+} ns_dust_zone;
+
+#define NS_MAX_DUST_ZONES 8
+
+/*
  * Classe de pas d'un matériau, DÉCLARÉE par la salle.
  *
  * `ns_bvh_move_capsule` renvoie depuis M5 l'index du matériau sous les pieds,
@@ -291,6 +310,9 @@ typedef struct ns_scene {
      * pas — la salle de 2020, notamment, où l'on marche sur de la moquette par
      * défaut faute de mieux. */
     ns_footstep     *material_footstep;
+
+    ns_dust_zone     dust[NS_MAX_DUST_ZONES];
+    uint32_t         dust_count;
 
     ns_light_gpu   lights[NS_MAX_LIGHTS];
     ns_light_anim  light_anim[NS_MAX_LIGHTS];

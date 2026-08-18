@@ -49,6 +49,7 @@ typedef struct options {
     float       yaw, pitch;
     bool        has_view;
     float       exposure;
+    float       particles;  /* densité de poussière, < 0 = celle du palier */
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
     bool        bench;      /* mesure le temps GPU réel, image par image */
@@ -83,6 +84,7 @@ static void print_usage(const char *exe)
         "  --pos=X,Y,Z          place la caméra à un point précis (mode libre)\n"
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
+        "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
         "  --bench              mesure le temps GPU réel de chaque image\n"
@@ -194,6 +196,7 @@ static bool parse_options(int argc, char **argv, options *o)
     o->quality = NS_QUALITY_MEDIUM;
     o->camera_mode = ROOM_CAM_PLAYER;
     o->render_scale = 1.0f;
+    o->particles = -1.0f;       /* < 0 : on garde la densité du palier de qualité */
 
     /* Avant la ligne de commande : elle doit pouvoir tout écraser. */
     load_env_defaults(o);
@@ -251,6 +254,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->pitch = (float)SDL_atof(a + 8) * NS_DEG2RAD; o->has_view = true;
         } else if (SDL_strncmp(a, "--exposure=", 11) == 0) {
             o->exposure = (float)SDL_atof(a + 11);
+        } else if (SDL_strncmp(a, "--particles=", 12) == 0) {
+            o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
         } else if (SDL_strncmp(a, "--quality=", 10) == 0) {
             const char *q = a + 10;
             if (SDL_strcmp(q, "low") == 0)         o->quality = NS_QUALITY_LOW;
@@ -370,6 +375,7 @@ int main(int argc, char **argv)
     ns_render_settings_defaults(&rs, opt.quality);
     if (opt.render_scale > 0.0f) rs.render_scale = ns_clampf(opt.render_scale, 0.4f, 2.0f);
     if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
+    if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
     if (opt.debug_view) {
         const int v = ns_debug_view_from_name(opt.debug_view);
         if (v < 0) {
@@ -698,6 +704,26 @@ int main(int argc, char **argv)
                 (double)opt.warmup, steps, game.score);
     }
 
+    /*
+     * La poussière, déclarée par la salle. La recopie tient en huit champs et
+     * évite que `engine/scene` dépende de `engine/fx` — charger une salle ne doit
+     * pas imposer d'avoir un moteur de rendu.
+     */
+    if (scene.dust_count) {
+        ns_particle_zone zones[NS_MAX_DUST_ZONES];
+        for (uint32_t i = 0; i < scene.dust_count; ++i) {
+            const ns_dust_zone *d = &scene.dust[i];
+            SDL_zero(zones[i]);
+            zones[i].bounds = d->bounds;
+            zones[i].density = d->density;
+            SDL_memcpy(zones[i].drift, d->drift, sizeof d->drift);
+            zones[i].size = d->size;
+            SDL_memcpy(zones[i].color, d->color, sizeof d->color);
+            zones[i].brightness = d->brightness;
+        }
+        ns_renderer_set_particle_zones(renderer, zones, scene.dust_count, 0xA11CEu);
+    }
+
     room_viewmodel vmstate;
     room_viewmodel_init(&vmstate);
     (void)room_viewmodel_set_forced_pose(&vmstate, opt.pose);   /* déjà validé */
@@ -923,6 +949,7 @@ int main(int argc, char **argv)
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
             room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
+            ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
             /*
              * Le jeu avance au MÊME pas fixe que la salle. C'est ce qui le rend

@@ -18,6 +18,7 @@
 
 #include "ns_rhi.h"
 #include "ns_scene.h"
+#include "ns_particles.h"
 #include "ns_viewmodel.h"
 
 typedef struct ns_renderer ns_renderer;
@@ -82,6 +83,10 @@ typedef struct ns_render_settings {
      * c'est ce reflet qui fait comprendre qu'il y a un écran DERRIÈRE quelque
      * chose, plutôt qu'une image peinte sur une planche.
      */
+    /* Densité de poussière, 0 à 1. C'est le levier du palier de qualité, et à 0
+     * le système n'est pas seulement invisible : il n'est pas créé. */
+    float              particle_density;
+
     float              screen_curvature;
     float              screen_scanlines;
     float              screen_glass;
@@ -142,6 +147,21 @@ void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
  * `material = -1` retire la surcharge.
  */
 void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture);
+
+/*
+ * Déclare les zones de poussière. Passer `count = 0` éteint le système.
+ *
+ * La salle les déclare, comme ses lumières et ses points de vue : une zone est
+ * une boîte, une densité et un courant d'air, et c'est au décor de dire où l'air
+ * est chargé — au-dessus de l'îlot où les faisceaux tombent, pas dans les
+ * toilettes.
+ */
+void ns_renderer_set_particle_zones(ns_renderer *rd, const ns_particle_zone *zones,
+                                    uint32_t count, uint64_t seed);
+
+/* Avance la poussière d'un pas fixe. Séparé du dessin : la simulation appartient
+ * au pas de jeu, le dessin à l'image, et les deux n'ont pas la même cadence. */
+void ns_renderer_tick_particles(ns_renderer *rd, float dt);
 
 /* Redimensionne les cibles internes. Sans effet si la taille est inchangée. */
 bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t height);

@@ -1,6 +1,7 @@
 /* ns_render.c — implémentation du pipeline de rendu. */
 #include "ns_render.h"
 #include "ns_shaders.h"
+#include "ns_particles.h"
 #include "ns_viewmodel.h"
 
 #include <string.h>
@@ -178,6 +179,10 @@ struct ns_renderer {
      * l'autre — c'est lui qui porte l'adaptation. */
     ns_buffer exposure;
 
+    /* La poussière en suspension. Créée à la demande : au palier `low` elle
+     * n'existe pas du tout, plutôt que d'exister et de ne rien dessiner. */
+    ns_particles *particles;
+
     /* L'écran vivant : quel matériau, et quelle texture à sa place. */
     int32_t         screen_material;
     SDL_GPUTexture *screen_texture;
@@ -293,6 +298,18 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * Le reflet, lui, est neuf : c'est lui qui fait qu'on VOIT la vitre, et donc
      * qu'on comprend qu'il y a un écran derrière plutôt qu'une affiche.
      */
+    /*
+     * Densité de poussière par palier. `low` n'en a pas du tout — c'est le palier
+     * des machines modestes, et un grain de poussière coûte quatre sommets écrits
+     * par le CPU à chaque image.
+     */
+    switch (quality) {
+        case NS_QUALITY_LOW:    s->particle_density = 0.0f;  break;
+        case NS_QUALITY_MEDIUM: s->particle_density = 0.55f; break;
+        case NS_QUALITY_HIGH:   s->particle_density = 0.85f; break;
+        default:                s->particle_density = 1.0f;  break;
+    }
+
     s->screen_curvature = 0.16f;
     s->screen_scanlines = 0.35f;
     s->screen_glass     = 0.85f;
@@ -810,6 +827,13 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     /* Les bras. Leur absence n'est pas fatale non plus : on joue sans mains. */
     rd->pipe_viewmodel = make_viewmodel_pipeline(r, FMT_HDR);
 
+    /* La poussière. Créée seulement si le palier la demande — à `low` elle
+     * n'existe pas du tout, plutôt que d'exister et de ne rien dessiner. */
+    if (rd->settings.particle_density > 0.0f) {
+        rd->particles = ns_particles_create(r, FMT_HDR, FMT_DEPTH, 3000);
+        if (!rd->particles) NS_WARN("particules indisponibles — la salle sera sans poussière");
+    }
+
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
         || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
         || !rd->pipe_debug) {
@@ -847,6 +871,7 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
 
 void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
 {
+    if (rd && rd->particles) { ns_particles_destroy(r, rd->particles); rd->particles = NULL; }
     if (!rd) return;
     SDL_GPUDevice *dev = ns_rhi_device(r);
     if (rd->pipe_gbuffer)          SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_gbuffer);
@@ -868,6 +893,19 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     ns_buffer_destroy(r, &rd->vm_indices);
     destroy_targets(r, rd);
     ns_free(rd);
+}
+
+void ns_renderer_set_particle_zones(ns_renderer *rd, const ns_particle_zone *zones,
+                                    uint32_t count, uint64_t seed)
+{
+    if (!rd->particles) return;
+    ns_particles_set_density(rd->particles, rd->settings.particle_density);
+    ns_particles_set_zones(rd->particles, zones, count, seed);
+}
+
+void ns_renderer_tick_particles(ns_renderer *rd, float dt)
+{
+    if (rd && rd->particles) ns_particles_tick(rd->particles, dt);
 }
 
 void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture)
@@ -1628,6 +1666,23 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
      * Après le brouillard (ils le prennent), avant le halo (ils fleurissent), et
      * avant la mesure d'exposition : une main qui passe devant un néon doit peser
      * dans la luminance moyenne, sinon l'image pompe quand on lève le bras. */
+    /* --- 3b bis. La poussière ---
+     *
+     * Après le brouillard, avant les bras et le halo. L'ordre n'est pas neutre :
+     * après le brouillard, les grains flottent DANS les cônes de lumière plutôt
+     * que devant ; avant le halo, ils fleurissent, ce qui est exactement ce qui
+     * les fait exister. Avant les bras, parce qu'une poussière passe derrière une
+     * main, pas devant.
+     */
+    if (rd->particles && rd->settings.particle_density > 0.0f) {
+        ns_particles_set_lights(rd->particles, scene->lights, light_count);
+        const ns_v3 fwd = ns_v3_norm(camera->forward);
+        const ns_v3 right = ns_v3_norm(ns_v3_cross(fwd, camera->up));
+        const ns_v3 up = ns_v3_cross(right, fwd);
+        ns_particles_draw(r, rd->particles, &view_proj, camera->position, right, up,
+                          lit, rd->depth.handle, rd->width, rd->height);
+    }
+
     pass_viewmodel(r, rd, camera, &view, lit, viewmodel, light_count);
 
     /* --- 3c. Mesure de l'exposition ---
