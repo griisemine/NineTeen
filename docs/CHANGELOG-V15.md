@@ -96,42 +96,59 @@ que le chantier est terminé.
 - Audit du code d'origine : 22 constats, dont un prouvé sous AddressSanitizer et trois
   hypothèses explicitement écartées.
 
+### Jouer
+
+- **Couche 2D.** `engine/sprite/` : 4 096 quads en 128 lots, mélange alpha, police 5x7 intégrée
+  au binaire, cible redirigeable. C'est elle qui permet à un jeu de dessiner aussi bien dans la
+  dalle d'une borne que sur tout l'écran.
+- **Flappy Bird jouable**, porté depuis les 1 402 lignes de 2020. Les planches et les cotes de
+  découpe sont celles d'origine au pixel près ; les cotes du terrain viennent de ses constantes
+  (`DISTANCE_BETWEEN_OBSTACLE`, `DISTANCE_UNDER_OBSTACLE`, l'échelle 4). La physique, elle, est
+  réécrite en flottant au pas fixe : l'original intégrait en nombre d'images, ce qui rendait la
+  chute dépendante de la fréquence d'affichage.
+- **Le jeu tourne DANS la borne**, derrière son verre bombé — courbure barillet, lignes de
+  balayage, masque de phosphore, reflet de vitre —, et la tête reste libre. On peut se pencher,
+  reculer, regarder la borne d'à côté pendant qu'on joue.
+- **Les mains sur les commandes** : la gauche empoigne le manche, la droite couvre les boutons,
+  l'index s'enfonce à chaque battement d'aile. Les trois ancres d'une borne — fente, boutons,
+  sommet de la boule — sont déclarées par `roomgen` et visées par une IK à deux os avec
+  correction du bout du doigt. Vérifié à 3 cm près par `tests/test_ik.c`.
+- **La poussière** dans les faisceaux : éclairée par les lumières réelles de la salle, réponse au
+  carré pour que le grain ne se voie que DANS la lumière, et champ proche seulement — au-delà de
+  quelques mètres c'est le brouillard volumétrique qui a raison.
+- **Classement local**, écrit atomiquement, sans jamais demander de compte. Le journal de partie
+  est scellé au format exact du serveur (HMAC-SHA256, charge canonique), et
+  `tests/test_scores.c` le confronte à des vecteurs produits par le code Go lui-même.
+- **Cinq paliers de qualité chiffrés** (`potato` à `ultra`), réglables en jeu par `F7`/`F8` et
+  gardés d'une session à l'autre.
+- **Du vrai mobilier** : `roomgen` sait instancier un glTF (`tools/geo_import.c`, sur le `cgltf`
+  déjà vendoré). Tabourets de bar, canapé et extincteur viennent de modèles CC0 au lieu d'être
+  des empilements de boîtes.
+
 ---
 
 ## Ce qui reste
 
-- **Portage des mini-jeux.** Les huit jeux tournent encore sur le code de 2020 dans `legacy/`.
-  Le travail est mécanique — aucun n'utilise OpenGL, tous passent par `SDL_Renderer` et
-  partagent une signature d'entrée presque commune — mais il représente 12 000 lignes de
-  gameplay. La couche `engine/sprite/` qui les recevra reste à écrire.
-- **Audio spatialisé : branché.** miniaudio était vendoré depuis M0 et **n'avait jamais été
-  lié** ; les quatre clés `audio.*` de `ns_config.h` étaient réservées et jamais relues ; et les
-  sons de 2020 (`walk.wav`, `borne1..3`, les portes, l'ambiance) n'avaient **aucune étape de
-  copie** dans `assets/CMakeLists.txt` — le mixeur aurait pu exister, il n'aurait rien trouvé à
-  jouer. Les quatre bus, les sources positionnelles, l'occlusion amortie et les pas par matériau
-  fonctionnent. La réverbération par zone reste à faire.
-
-  Vérifié **sans carte son** : `tests/test_audio.c` fait tourner le mixeur sans périphérique et
-  rend dans un WAV, qu'il relit pour mesurer une énergie. Mesuré : une source passe de 0,216 à
-  1 m à 0,027 à 8 m, et derrière une cloison elle tombe à 0,018 contre 0,054 dégagée — atténuée
-  d'un facteur trois, **pas coupée**. Le plancher de 0,18 de `ns_bvh_occlusion_factor` est
-  intentionnel : on entend une radio à travers un mur, et c'est même à ça qu'on sait qu'il y a
-  une pièce derrière.
-
-  *Historique de cette ligne :* elle a d'abord annoncé l'occlusion comme « testée » alors
-  qu'aucun test de BVH n'existait, puis a été corrigée pour dire le contraire, puis les tests de
-  BVH ont été écrits au palier joueur. Elle est maintenant vraie dans les deux sens : la
-  fonction est testée, **et** ce qu'on en entend l'est aussi.
-- **Écrans de bornes en direct.** L'infrastructure est là (les jeux sauront dessiner dans une
-  texture cible, les bornes ont déjà leur écran repéré et leur lumière colorée) mais les écrans
-  affichent encore une texture fixe.
-- **Interaction.** Les bornes et les trois lieux du décor — billard, canapé, bar — sont
-  détectés et exposés par le moteur ; l'invite d'interaction et l'entrée dans un jeu ne sont pas
-  câblées.
+- **Sept des huit mini-jeux.** Flappy Bird est porté et jouable ; Snake, Tetris, Asteroid,
+  Shooter, Démineur, Pac-Man et Piano tournent encore sur le code de 2020 dans `legacy/`. Le
+  travail est mécanique — tous passent par `SDL_Renderer`, et la couche `engine/sprite/` qui les
+  recevra existe désormais — mais il représente environ 9 800 lignes.
+- **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
+  du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
+  socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
+  n'importe **aucun** symbole réseau, et c'est vérifiable en une commande.
+- **Un menu dessiné.** Les réglages se changent par `F7`/`F8` et se gardent ; ils ne s'affichent
+  pas encore.
+- **La réverbération par zone.** Les quatre bus, les sources positionnelles, l'occlusion amortie
+  et les pas par matériau fonctionnent ; la réverbe déclarée par zone reste à faire.
+- **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
+  pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
+  au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
+  de composer l'image finale, et je ne livre pas ce que je ne peux pas regarder.
 - **Paquets de release.** Le workflow de compilation existe ; celui qui produit AppImage, `.dmg`
   et `.msi` signés reste à écrire.
-- **Compression des textures.** Les cartes générées sont des PNG (215 Mio au total). Un passage
-  en KTX2/BC7 diviserait ça par cinq et accélérerait le chargement.
+- **Compression des textures.** Les cartes générées sont des PNG. Un passage en KTX2/BC7
+  diviserait ça par cinq et accélérerait le chargement.
 
 ---
 

@@ -163,15 +163,24 @@ un réglage a changé.
 
 ## Ce qui manque encore, dit franchement
 
-Le jeu se lance, se parcourt et se regarde. Il ne se joue pas encore complètement :
+Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **la collision n'est pas branchée** — on traverse les murs (le code existe, il n'est pas appelé) ;
-- **aucune animation de déplacement** — ni oscillation de marche, ni pas audibles ;
-- **aucun son** ;
-- **aucune interaction** avec les bornes : pas d'invite, pas d'entrée dans un jeu ;
-- les **mini-jeux** tournent encore sur le code de 2020, dans `legacy/`.
+- **sept des huit mini-jeux.** Flappy Bird est porté et jouable, sur sa borne comme en plein
+  écran. Snake, Tetris, Asteroid, Shooter, Démineur, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 9 800 lignes, mécaniques à porter maintenant que la
+  couche 2D existe ;
+- **le transport réseau**, délibérément : voir la section précédente ;
+- **un menu dessiné.** `F7` et `F8` règlent la qualité et l'échelle de rendu, et le choix est
+  gardé — mais rien ne s'affiche à l'écran pour le dire ;
+- **la réverbération par zone.** Les quatre bus, les sources positionnelles, l'occlusion amortie
+  et les pas variés selon le sol fonctionnent ; la réverbe déclarée par pièce, non ;
+- **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
+  limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux
+  vérifier, pas du moteur.
 
-C'est l'objet des paliers en cours. `docs/CHANGELOG-V15.md` dit précisément ce qui tourne.
+Cette liste a été fausse : elle annonçait encore « aucun son », « aucune interaction » et « la
+collision n'est pas branchée » longtemps après que les trois aient été livrés.
+`docs/CHANGELOG-V15.md` dit précisément ce qui tourne.
 
 ## Pour mémoire : la même chose en 2020
 
