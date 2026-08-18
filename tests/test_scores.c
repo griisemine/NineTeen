@@ -384,7 +384,7 @@ static const struct {
     { "tetris",   { "lines", "tetris", "drop", "death", NULL } },
     { "asteroid", { "rock", "bonus", "wave", "death", NULL } },
     { "shooter",  { "enemy", "boss", "wave", "death", NULL } },
-    { "demineur", { "cell", "flag", "win", "death", NULL } },
+    { "demineur", { "cell", "flag", "win", "move", "death", NULL } },
     { "pacman",   { "pellet", "power", "ghost", "level", "death", NULL } },
     { "piano",    { "note", "combo", "death", NULL } },
 };

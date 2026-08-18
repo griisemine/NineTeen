@@ -258,6 +258,19 @@ add_custom_command(
     VERBATIM
 )
 
+# Démineur : une seule planche, et aucun son propre — l'original empruntait déjà
+# les siens ailleurs.
+add_custom_command(
+    OUTPUT "${GEN}/games/demineur/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/demineur"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/6_demineur/demineur.png" "${GEN}/games/demineur/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/demineur/.stamp"
+    DEPENDS "${SRC_LEGACY}/games/6_demineur/demineur.png"
+    COMMENT "Copie de la planche du Démineur"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -278,6 +291,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/sounds/.stamp"
         "${GEN}/games/flappy/.stamp"
         "${GEN}/games/snake/.stamp"
+        "${GEN}/games/demineur/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

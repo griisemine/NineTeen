@@ -501,3 +501,88 @@ func TestValeurAuDelaDesBornesToujoursRefusee(t *testing.T) {
 		t.Fatal("les bornes par défaut ont changé pour un jeu qui n'en déclare pas")
 	}
 }
+
+// Le Démineur ouvre une CASCADE : un seul appui dévoile jusqu'à trois cents
+// cases. Le barème est donc proportionnel, et c'est le seul jeu où un
+// événement porte une quantité que le joueur ne choisit pas.
+//
+// Compter les événements plutôt que les cases aurait classé à 5 points une
+// partie affichée à 1 500 — sans que rien, côté client, ne le laisse voir.
+func TestCascadeDuDemineurCompteSesCases(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "demineur"
+
+	sub := Submission{
+		DurationMs: 20_000,
+		Events: []Event{
+			{At: 500, Kind: "move"},
+			{At: 900, Kind: "cell", Value: 42}, // une grande plage : 210 points
+			{At: 3000, Kind: "move"},
+			{At: 3400, Kind: "cell", Value: 1}, // une case seule : 5 points
+			{At: 6000, Kind: "flag"},           // 2 points
+			{At: 9000, Kind: "death"},
+		},
+		ClaimedScore: 217,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("une cascade légitime est rejetée : %s", v.Reason)
+	}
+	if v.Score != 42*5+1*5+2 {
+		t.Fatalf("score recalculé %d, attendu %d", v.Score, 42*5+1*5+2)
+	}
+}
+
+// Gagner vaut 500 points, une fois — et la limite de fréquence de « win »
+// (0,2/s) interdit d'en empiler.
+func TestVictoireDuDemineur(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "demineur"
+
+	sub := Submission{
+		DurationMs: 60_000,
+		Events: []Event{
+			{At: 1000, Kind: "cell", Value: 300},
+			{At: 2000, Kind: "win"},
+			{At: 2100, Kind: "death"},
+		},
+		ClaimedScore: 2000,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("une partie gagnée est rejetée : %s", v.Reason)
+	}
+	if v.Score != 300*5+500 {
+		t.Fatalf("score recalculé %d, attendu %d", v.Score, 300*5+500)
+	}
+}
+
+// Et la cascade reste bornée : la grille ne fait que 400 cases, donc une valeur
+// au-delà de la borne par défaut (10 000) est une invention.
+func TestCascadeImpossibleRefusee(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "demineur"
+	ctx.MaxPlausibleScore = 9_999_999
+
+	sub := Submission{
+		DurationMs: 20_000,
+		Events: []Event{
+			{At: 900, Kind: "cell", Value: 500_000},
+			{At: 1000, Kind: "death"},
+		},
+		ClaimedScore: 2_500_000,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if v.Accepted {
+		t.Fatal("une cascade de 500 000 cases sur une grille de 400 aurait dû être refusée")
+	}
+	if !strings.Contains(v.Reason, "cell") {
+		t.Fatalf("la raison devrait nommer l'événement : %s", v.Reason)
+	}
+}

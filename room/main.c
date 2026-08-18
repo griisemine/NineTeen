@@ -368,6 +368,24 @@ static const char *quality_name(ns_quality q)
 }
 
 /*
+ * Démarrer une partie, meilleur score compris.
+ *
+ * `set_best` n'était appelée qu'à la RELANCE, pour reporter le meilleur d'une
+ * partie sur la suivante. Conséquence : la toute première partie d'une session
+ * affichait « MEILLEUR 0 » sur son écran de fin, alors que le classement local
+ * connaissait la valeur et que la ligne juste au-dessous, dans le journal,
+ * l'imprimait correctement. L'écran mentait à qui n'avait pas la console.
+ *
+ * Le meilleur vient donc de `ns_scores`, qui est la seule source de vérité :
+ * `finish_run` l'y écrit avant qu'on le relise.
+ */
+static void start_run(const ns_game_api *api, void *game, uint64_t seed, bool hard)
+{
+    api->reset(game, seed, hard);
+    api->set_best(game, ns_scores_best(api->id, hard ? "hard" : "normal"));
+}
+
+/*
  * Fin de partie : le classement local d'abord, la file d'envoi ensuite.
  *
  * Extraite parce qu'elle a DEUX appelants — la boucle de jeu et l'avance rapide
@@ -906,7 +924,7 @@ int main(int argc, char **argv)
         if (LOAD_GAME(opt.game)) {
             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
             game_hard = false;
-            game_api->reset(game, seed, game_hard);
+            start_run(game_api, game, seed, game_hard);
             ns_runlog_begin(runlog, game_api->id, "normal",
                             (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
             run_ms = 0;
@@ -991,7 +1009,7 @@ int main(int argc, char **argv)
                 goto play_at_done;
             }
             game_hard = hard;
-            game_api->reset(game, 20240418, hard);
+            start_run(game_api, game, 20240418, hard);
             ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal", 20240418, NULL, 0);
             run_ms = 0;
             in_game = true;
@@ -1020,6 +1038,9 @@ play_at_done: ;
     if (in_game && opt.warmup > 0.0f) {
         const float step = (float)(1.0 / NS_DEFAULT_TICK_HZ);
         const int steps = (int)(opt.warmup / step);
+        /* Fixe, pour que deux captures identiques le restent. */
+        const uint64_t warm_seed = 20240418u;
+        int runs = 0;
         for (int k = 0; k < steps; ++k) {
             if (opt.autoplay && game_api->autopilot) game_api->autopilot(game);
             game_api->tick(game, step);
@@ -1037,13 +1058,32 @@ play_at_done: ;
             game_api->events(game, &ev);
             if (ev.blip)  ns_runlog_event(runlog, run_ms, ev.blip_kind, 0);
             if (ev.score) ns_runlog_event(runlog, run_ms, ev.score_kind, ev.score_value);
-            if (ev.die)
+            if (ev.die) {
                 last_rank = finish_run(runlog, run_ms, game_api, game,
                                        game_hard ? "hard" : "normal",
                                        opt.player, opt.offline);
+                runs++;
+                /*
+                 * On RELANCE, parce que `--warmup=N` veut dire « joue N
+                 * secondes », pas « joue jusqu'à la première mort puis attends ».
+                 *
+                 * La nuance ne se voyait pas tant que le seul jeu automatisé
+                 * était Flappy, dont le pilote survit indéfiniment. Le Démineur
+                 * a une grille minée au quart : quand la déduction s'épuise il
+                 * doit deviner, et une capture sur trois montrait un écran de
+                 * fin au lieu d'une partie. La graine dérive du numéro de
+                 * partie, donc la capture reste rejouable à l'identique.
+                 */
+                const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
+                start_run(game_api, game, seed, game_hard);
+                ns_runlog_begin(runlog, game_api->id, game_hard ? "hard" : "normal",
+                                (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+                run_ms = 0;
+            }
         }
-        NS_INFO("%s : %.1f s avancées (%d pas), score %u",
-                game_api->title, (double)opt.warmup, steps, game_api->score(game));
+        NS_INFO("%s : %.1f s avancées (%d pas), %d partie(s), score %u",
+                game_api->title, (double)opt.warmup, steps, runs + 1,
+                game_api->score(game));
     }
 
     /*
@@ -1200,10 +1240,8 @@ play_at_done: ;
                             const bool action = (ev.key.key == SDLK_SPACE
                                               || ev.key.key == SDLK_RETURN);
                             if (dead && action && dead_time > 0.8f) {
-                                const uint32_t best = game_api->best(game);
                                 const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                                game_api->reset(game, seed, game_hard);
-                                game_api->set_best(game, best);
+                                start_run(game_api, game, seed, game_hard);
                                 /* Une nouvelle partie, donc un nouveau journal :
                                  * poursuivre l'ancien enverrait au serveur deux
                                  * parties collées bout à bout. */
@@ -1316,7 +1354,7 @@ play_at_done: ;
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
                             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
                             game_hard = hard;
-                            game_api->reset(game, seed, hard);
+                            start_run(game_api, game, seed, hard);
                             ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal",
                                             (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
                             run_ms = 0;

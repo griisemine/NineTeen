@@ -354,9 +354,21 @@ var rulesTable = map[string]gameRules{
 		minDurationMs:    2000,
 	},
 	"demineur": {
-		silent:           map[string]bool{"death": true},
-		points:           map[string]int64{"cell": 5, "flag": 2, "win": 500},
-		maxRatePerSecond: map[string]float64{"cell": 15, "flag": 8, "win": 0.2},
+		// « move » est le déplacement du curseur : sur une borne il n'y a pas de
+		// souris, donc viser est un geste qu'on journalise — et qui ne rapporte
+		// RIEN. Sans lui, le client l'aurait journalisé comme « cell », qui vaut
+		// cinq points : le score recalculé n'aurait jamais collé.
+		silent: map[string]bool{"death": true, "move": true},
+		// « cell » est PROPORTIONNEL, et c'est la particularité du Démineur : un
+		// seul appui ouvre une cascade, donc un seul événement vaut autant de
+		// fois cinq points qu'il a dévoilé de cases. Compter les événements
+		// aurait classé à 5 une partie affichée à 1 500 — et la limite de
+		// fréquence porte alors sur les COUPS joués, ce qu'elle doit borner,
+		// plutôt que sur la taille des plages ouvertes, dont le joueur ne décide
+		// pas.
+		scaled:           map[string]int64{"cell": 5},
+		points:           map[string]int64{"flag": 2, "win": 500},
+		maxRatePerSecond: map[string]float64{"cell": 15, "flag": 8, "win": 0.2, "move": 30},
 		minDurationMs:    1000,
 	},
 	"pacman": {

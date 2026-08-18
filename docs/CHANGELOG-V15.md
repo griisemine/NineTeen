@@ -122,9 +122,27 @@ que le chantier est terminé.
   recopiée intégralement. Le **hardcore est l'inverse du normal** : manger coûte cinq fois la
   valeur du fruit, et le score vient de ceux qu'on laisse pourrir. C'est la règle la plus
   surprenante de l'original, et elle est conservée.
+- **Démineur** — la grille de **16 x 25** et ses **100 bombes** (le quart des cases, comme
+  l'original), le découpage de `demineur.png` en tuiles de 54 x 54 à leurs positions exactes,
+  et la règle qui distingue un démineur d'une loterie : **les bombes ne sont posées qu'après le
+  premier dévoilement**, en épargnant la case jouée et ses huit voisines.
+  - **Une borne n'a pas de souris.** Le curseur se déplace au manche, case par case, et
+    **maintenir une direction fait défiler** — sans quoi traverser vingt-cinq colonnes
+    demanderait vingt-cinq appuis. C'est la seule liberté prise avec le jeu d'origine, et elle
+    est prise parce que le contraire rendrait le jeu injouable là où il est censé se jouer.
+  - Le joueur automatique **déduit** au lieu de tirer au sort, et quand la déduction s'épuise il
+    **estime le risque** de chaque case fermée à partir des chiffres voisins plutôt que d'ouvrir
+    la première venue. Mesuré sur 200 parties : 99,5 cases ouvertes en moyenne contre 84,8, et
+    10,4 s de survie contre 8,6. Il ne gagne jamais — une grille minée au quart ne se gagne pas
+    par déduction locale — et c'est dit plutôt que caché : il sert à prouver qu'on peut
+    enchaîner des milliers de pas sans NaN ni fuite, pas à jouer à notre place.
 - Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
   secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
   pareil à 120 Hz et à 40 Hz.
+- **Le classement de la borne se construit tout seul** depuis la table des jeux portés, et
+  **tourne les pages** toutes les six secondes : quatre colonnes à la fois, en grand. La dalle
+  fait 62 cm et se lit à deux mètres et demi — y serrer seize colonnes donnerait un tableau
+  complet et illisible, ce qui est pire qu'un tableau incomplet.
 
 ### Réglages
 - **Un menu dessiné**, ouvert par `Échap` : palier de qualité, échelle de rendu, densité de
@@ -209,11 +227,11 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Six des huit mini-jeux.** Flappy Bird et Snake sont portés et jouables, sur leur borne
-  comme en plein écran. Tetris, Asteroid, Shooter, Démineur, Pac-Man et Piano tournent encore
-  sur le code de 2020 dans `legacy/` — environ 8 000 lignes. Ajouter un jeu est désormais une
-  ligne dans `games/games.c` : c'est ce que Snake a vérifié, et `room/main.c` n'a pas bougé
-  d'une ligne pour l'accueillir.
+- **Cinq des huit mini-jeux.** Flappy Bird, Snake et Démineur sont portés et jouables, sur leur
+  borne comme en plein écran. Tetris, Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 7 200 lignes. Ajouter un jeu est désormais une ligne
+  dans `games/games.c` : c'est ce que Snake a vérifié, et Démineur l'a confirmé sans que
+  `room/main.c` ait à connaître son nom.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
   du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
   socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
@@ -232,7 +250,32 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Vingt-quatre défauts trouvés en chemin, tous instructifs.
+Vingt-huit défauts trouvés en chemin, tous instructifs.
+
+**Un jeu qui compte par PLAGES ne rentre pas dans une interface qui compte par UNITÉS.** Le
+Démineur ouvre une cascade : un seul appui dévoile jusqu'à trois cents cases. Or
+`ns_game_events` rend UN gain par image — ce qui suffisait à Flappy (un tuyau) et à Snake (un
+fruit), donc la question ne s'était jamais posée. Résultat : le score affiché montait de cinq
+fois cent, et le journal disait « une case ». Comme le serveur ne croit pas le score mais le
+RECALCULE à partir du journal, une partie affichée à 1 500 points aurait été classée à 5 — sans
+qu'aucun message ne le signale, l'envoi étant « au mieux ». Corrigé des deux côtés : « cell »
+porte sa quantité et le barème du serveur devient proportionnel, ce qui a l'avantage de faire
+porter la limite de fréquence sur les COUPS joués — que le joueur choisit — au lieu de la taille
+des plages ouvertes, qu'il subit.
+
+**Deux conséquences du même défaut, trouvées dans la foulée.** La victoire écrasait le gain de
+la cascade qui l'avait produite, puisque les deux se disputaient le même drapeau. Et surtout :
+**gagner ne finissait pas la partie**. `room/main.c` scelle le journal, enregistre le meilleur
+score et met la partie en file d'attente sur le seul événement `die`, que seule la mort levait —
+une partie gagnée disparaissait donc entièrement, meilleur score local compris. La file
+d'événements se vide maintenant AVANT que la fin soit annoncée, parce qu'un gain publié après
+`finish_run` n'existe pas.
+
+**L'écran de fin annonçait « MEILLEUR 0 » alors que le journal imprimait la bonne valeur.**
+`set_best` n'était appelée qu'à la relance, pour reporter le meilleur d'une partie sur la
+suivante ; la PREMIÈRE partie d'une session affichait donc zéro, tous jeux confondus, alors que
+`ns_scores` connaissait la valeur. Le meilleur vient maintenant du classement local à chaque
+démarrage de partie, aux quatre endroits qui en démarrent une.
 
 **Sept bornes sur dix-neuf affichaient la partie d'une autre.** `roomgen` nomme les matériaux
 par jeu — `ecran_snake` — et deux bornes du même jeu partageaient donc le même. Or le moteur

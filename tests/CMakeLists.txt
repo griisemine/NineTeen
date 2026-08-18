@@ -112,6 +112,13 @@ nineteen_set_warnings(ns_test_snake)
 nineteen_apply_sanitizers(ns_test_snake)
 add_test(NAME snake COMMAND ns_test_snake)
 
+add_executable(ns_test_demineur test_demineur.c)
+target_link_libraries(ns_test_demineur PRIVATE nineteen::games)
+target_include_directories(ns_test_demineur PRIVATE "${CMAKE_SOURCE_DIR}/games/demineur")
+nineteen_set_warnings(ns_test_demineur)
+nineteen_apply_sanitizers(ns_test_demineur)
+add_test(NAME demineur COMMAND ns_test_demineur)
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

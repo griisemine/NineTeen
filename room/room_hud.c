@@ -1,6 +1,7 @@
 /* room_hud.c — voir room_hud.h pour le raisonnement. */
 #include "room_hud.h"
 
+#include "games.h"
 #include "ns_online.h"
 
 #include "ns_core.h"
@@ -10,6 +11,10 @@
 
 #include <math.h>
 #include <stdio.h>
+
+/* Huit jeux, deux difficultés : la borne ne montrera jamais plus de colonnes
+ * que ça, quoi qu'il arrive à `g_games[]`. */
+#define NS_HUD_MAX_COLUMNS 16
 
 /* Les couleurs de l'affichage. Ambrées comme la salle : un HUD blanc pur sur une
  * ambiance tungstène se lit comme une capture d'écran collée par-dessus. */
@@ -187,26 +192,67 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
     centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
 
     /*
-     * Une colonne par jeu PORTÉ et par difficulté. Les jeux non portés
-     * n'apparaissent pas : une colonne vide par jeu absent donnerait un tableau
-     * surtout vide, ce qui décourage au lieu de donner envie.
+     * Les colonnes viennent des jeux PORTÉS, et elles défilent.
+     *
+     * Elles étaient écrites à la main, quatre lignes à rallonger à chaque
+     * portage — donc oubliées un jour ou l'autre. Elles se construisent
+     * maintenant depuis `ns_game_at`, comme tout ce qui touche aux jeux depuis
+     * B12 : un jeu porté apparaît au classement sans qu'on y pense.
+     *
+     * Mais on n'en affiche que QUATRE à la fois, et c'est le point important.
+     * La dalle fait 62 cm et se lit à deux mètres et demi ; les cotes ont été
+     * réglées deux fois pour ça (voir plus haut). Serrer huit colonnes dedans
+     * rendrait le tableau complet et illisible, ce qui est pire qu'incomplet.
+     * On tourne donc les pages toutes les six secondes — le temps de lire
+     * quatre colonnes en passant, et de voir qu'il y en a d'autres.
      */
-    static const struct { const char *game, *diff, *label; } col[4] = {
-        { "flappy", "normal", "FLAPPY" },
-        { "flappy", "hard",   "F.HARD" },
-        { "snake",  "normal", "SNAKE" },
-        { "snake",  "hard",   "S.HARD" },
-    };
-    const int cols = (int)(sizeof col / sizeof col[0]);
+    struct column { const char *game, *diff, *label; };
+    struct column all[NS_HUD_MAX_COLUMNS];
+    char hard_label[NS_HUD_MAX_COLUMNS][8];
+    int total = 0;
+
+    for (int i = 0; i < ns_game_count() && total + 2 <= NS_HUD_MAX_COLUMNS; ++i) {
+        const ns_game_api *api = ns_game_at(i);
+        if (!api) continue;
+        all[total].game = api->id;
+        all[total].diff = "normal";
+        all[total].label = api->label;
+        total++;
+        /* « SNAKE » devient « S.HARD » : l'initiale suffit à distinguer, et six
+         * caractères est tout ce qu'une colonne accepte. */
+        SDL_snprintf(hard_label[total], sizeof hard_label[total], "%c.HARD",
+                     api->label[0] ? api->label[0] : '?');
+        all[total].game = api->id;
+        all[total].diff = "hard";
+        all[total].label = hard_label[total];
+        total++;
+    }
+    if (total == 0) {
+        centred(s, w * 0.5f, 130.0f * u, 2.0f * u, title, "AUCUN JEU PORTE");
+        return;
+    }
+
+    const int cols = (total < 4) ? total : 4;
+    const int pages = (total + cols - 1) / cols;
+    const int page = pages > 1 ? (int)((time_seconds / 6.0)) % pages : 0;
+    const int first = page * cols;
+    const struct column *col = &all[first];
+    const int shown = (total - first < cols) ? (total - first) : cols;
 
     static const float head[4] = { 1.00f, 0.82f, 0.35f, 1.0f };
     static const float row[4]  = { 0.88f, 0.94f, 1.00f, 1.0f };
     static const float dim[4]  = { 0.44f, 0.56f, 0.70f, 1.0f };
 
-    for (int c = 0; c < cols; ++c) {
+    /* La dernière page peut être incomplète : on la CENTRE plutôt que de la
+     * laisser calée à gauche avec un demi-tableau vide à droite. La largeur de
+     * colonne, elle, ne bouge pas d'une page à l'autre — sinon le tableau
+     * semblerait respirer à chaque changement. */
+    const float page_shift = w * (float)(cols - shown) / (2.0f * (float)cols);
+
+    for (int c = 0; c < shown; ++c) {
         /* Réparties régulièrement : à deux colonnes on pouvait les poser à la
          * main, à quatre il faut compter. */
-        const float cx = w * (0.5f + (float)c) / (float)cols;
+        const float cx = page_shift + w * (0.5f + (float)c) / (float)cols;
         float y = 58.0f * u;
 
         centred(s, cx, y, 1.8f * u, head, col[c].label);
@@ -276,5 +322,13 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
         centred(s, w * 0.5f, 274.0f * u, 1.3f * u, dim, "SCORES LOCAUX CI-DESSUS");
     } else {
         centred(s, w * 0.5f, 258.0f * u, 1.6f * u, dim, "SCORES LOCAUX");
+    }
+
+    /* Dire qu'il y a une suite. Un tableau qui change tout seul sans l'annoncer
+     * ressemble à un bogue ; annoncé, il invite à attendre la page d'après. */
+    if (pages > 1) {
+        char tag[16];
+        SDL_snprintf(tag, sizeof tag, "%d/%d", page + 1, pages);
+        centred(s, w * 0.94f, 16.0f * u, 1.6f * u, dim, tag);
     }
 }
