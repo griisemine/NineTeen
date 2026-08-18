@@ -310,6 +310,17 @@ static void test_walk_swing_follows_distance(void)
           "opposition exacte : %.4f et %.4f devraient s'annuler", (double)dr, (double)dl);
 }
 
+/* Le bout du doigt d'un segment de main : son origine est le POIGNET, et la main
+ * fait 10 cm. Le maillage est modelé le long de −Z local, donc le bout est
+ * l'origine moins la troisième colonne, mise à l'échelle par la longueur. */
+static ns_v3 fingertip(const ns_viewmodel_pose *pose, int hand)
+{
+    const ns_m4 *h = &pose->segment[hand];
+    const ns_v3 wrist = ns_v3_make(h->m[3][0], h->m[3][1], h->m[3][2]);
+    const ns_v3 dir = ns_v3_make(-h->m[2][0], -h->m[2][1], -h->m[2][2]);
+    return ns_v3_add(wrist, ns_v3_scale(dir, pose->length[hand]));
+}
+
 static void test_sequence(void)
 {
     room_camera cam = make_player();
@@ -408,6 +419,82 @@ static void test_sequence(void)
     CHECK(closest_panel < 0.03f, "le doigt atteint le bouton (%.3f m)", (double)closest_panel);
 }
 
+/*
+ * Les deux mains sur les commandes, pendant la partie.
+ *
+ * Ce que ce test attrape, et pourquoi il ne pouvait pas être écrit avant : la
+ * portée d'un bras (57 cm), la distance à laquelle la capsule arrête le joueur
+ * (1,01 m du meuble) et la position des commandes sur le panneau incliné sont
+ * trois cotes réglées dans trois fichiers différents — `room_viewmodel.c`,
+ * `ns_bvh.c`, `roomgen.c`. Tant que les bras pendaient le long du corps, elles
+ * pouvaient diverger sans que rien ne le dise. Depuis qu'on JOUE sur la borne,
+ * une divergence de quatre centimètres suffit à laisser les deux mains tendues
+ * juste au-dessus des commandes sans jamais les toucher — c'est exactement ce
+ * qui est arrivé, et c'est ce que ce test verrouille.
+ */
+static void test_play_hands_on_controls(void)
+{
+    room_camera cam = make_player();
+    room_viewmodel vm;
+    room_viewmodel_init(&vm);
+    for (int i = 0; i < 120; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+
+    /* La même borne que `test_sequence`, plus le manche. Les trois ancres
+     * désignent des points qu'on TOUCHE : la fente, le dessus des pastilles, le
+     * sommet de la boule — 10,2 cm au-dessus de la tôle, cotes de
+     * `build_cabinet`. C'est la pose qui ajoute l'épaisseur de la main. */
+    ns_cabinet cab;
+    memset(&cab, 0, sizeof cab);
+    SDL_strlcpy(cab.name, "borne_test", sizeof cab.name);
+    SDL_strlcpy(cab.game, "flappy", sizeof cab.game);
+    cab.screen_normal = ns_v3_make(-1.0f, 0.0f, 0.0f);
+    cab.coin_slot    = ns_v3_make(1.01f - 0.452f,  0.650f,  0.0f);
+    cab.panel_centre = ns_v3_make(1.01f - 0.5225f, 0.996f,  0.0575f);
+    /* Lacet nul regarde vers +X, donc « à gauche du joueur » est −Z. */
+    cab.stick_top    = ns_v3_make(1.01f - 0.4400f, 1.072f, -0.2000f);
+
+    room_viewmodel_start_playing(&vm, &cab);
+    CHECK(room_viewmodel_is_playing(&vm), "on est en jeu");
+    CHECK(!vm.token_visible, "le jeton n'est plus en main : il est dans la machine");
+
+    /* Deux secondes : le penchement est amorti, il lui faut le temps d'arriver. */
+    float best_l = 1e9f, best_r = 1e9f, max_press = 0.0f;
+    for (int i = 0; i < 240; ++i) {
+        room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+        if (i == 150) room_viewmodel_tap(&vm);       /* un battement d'aile */
+        max_press = ns_maxf(max_press, vm.press_depth);
+
+        ns_viewmodel_pose pose;
+        room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
+        for (int s = 0; s < NS_VM_SEGMENT_COUNT; ++s) {
+            CHECK(finite_m4(&pose.segment[s]), "pas %d, segment %d : matrice finie", i, s);
+        }
+        CHECK(room_viewmodel_is_playing(&vm), "on reste en jeu tant qu'on ne l'arrête pas");
+
+        best_l = ns_minf(best_l, ns_v3_dist(fingertip(&pose, NS_VM_HAND_L), cab.stick_top));
+        best_r = ns_minf(best_r, ns_v3_dist(fingertip(&pose, NS_VM_HAND_R), cab.panel_centre));
+    }
+
+    printf("  jeu : doigt gauche à %.3f m du manche, droit à %.3f m des boutons\n",
+           (double)best_l, (double)best_r);
+    /* Trois centimètres, le même seuil que la séquence du jeton — et pour la
+     * même raison : c'est la distance à laquelle une main se voit flotter
+     * au-dessus de ce qu'elle est censée tenir. */
+    CHECK(best_l < 0.03f, "la main gauche tient le manche (%.3f m)", (double)best_l);
+    CHECK(best_r < 0.03f, "la main droite couvre les boutons (%.3f m)", (double)best_r);
+    CHECK(max_press > 0.4f, "le battement enfonce l'index (%.2f)", (double)max_press);
+
+    /* Le doigt REMONTE : sinon le battement suivant ne se verrait pas. */
+    for (int i = 0; i < 120; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    CHECK(vm.press_depth < 0.05f, "et il remonte entre deux battements (%.2f)",
+          (double)vm.press_depth);
+
+    room_viewmodel_stop_playing(&vm);
+    CHECK(!room_viewmodel_is_playing(&vm), "on quitte le jeu");
+    for (int i = 0; i < 240; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    CHECK(vm.state == ROOM_VM_IDLE, "et les mains reviennent au repos");
+}
+
 static void test_forced_pose(void)
 {
     room_viewmodel vm;
@@ -438,6 +525,7 @@ int main(void)
     test_pose_finite();
     test_walk_swing_follows_distance();
     test_sequence();
+    test_play_hands_on_controls();
     test_forced_pose();
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

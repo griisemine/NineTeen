@@ -208,6 +208,7 @@ typedef struct ns_cabinet {
     int32_t screen_material;
     ns_v3   panel_centre;        /* dessus de la grappe de boutons */
     ns_v3   coin_slot;           /* fente à jetons, sur la face avant */
+    ns_v3   stick_top;           /* là où la main gauche empoigne le manche */
     bool    attract;
 } ns_cabinet;
 

@@ -614,6 +614,10 @@ int main(int argc, char **argv)
     }
     /* La borne devant laquelle on joue, et son matériau de dalle. */
     int32_t playing_material = -1;
+    /* La borne sur laquelle on joue. Sert à poser les mains sur ses commandes —
+     * et seulement à ça : la scène ne bouge pas pendant une partie, donc un
+     * pointeur suffit là où la machine à états, elle, recopie ses cibles. */
+    const ns_cabinet *playing_cab = NULL;
     bool    fullscreen_game = false;
 
     /* Les trois sons du jeu, ceux de 2020. Le jeu ne connaît pas le mixeur : il
@@ -654,13 +658,21 @@ int main(int argc, char **argv)
         } else {
             cam.mode = ROOM_CAM_PLAYER;
             /*
-             * On recule de 35 cm par rapport à l'ancre déclarée. L'ancre place le
-             * joueur à 70 cm de la dalle — la bonne distance pour ATTEINDRE les
-             * boutons, pas pour VOIR la borne : à 70 cm le caisson remplit tout
-             * le cadre et l'écran sort par le bas. Un joueur recule d'ailleurs
-             * naturellement dès qu'il ne tend plus le bras.
+             * **On se place sur l'ancre, sans reculer.**
+             *
+             * Le premier jet reculait de 35 cm « pour voir la borne », à une
+             * époque où la dalle était en 4:3 et sortait du cadre par le bas.
+             * Elle est en 16:9 depuis, donc plus basse, et le recul coûtait
+             * cher : il portait le panneau de commande à 1,05 m de l'épaule pour
+             * 57 cm de bras. Les mains ne pouvaient pas se poser sur les
+             * commandes — on voyait la partie tourner et deux bras tendus vers
+             * rien.
+             *
+             * L'ancre est calculée pour qu'on ATTEIGNE les boutons. C'est aussi
+             * là que la collision arrête le joueur qui vient jouer. S'y placer,
+             * c'est donc cadrer ce que le jeu cadre vraiment.
              */
-            const ns_v3 back = ns_v3_scale(pick->screen_normal, 0.35f);
+            const ns_v3 back = ns_v3_zero();
             cam.position = cam.prev_position = ns_v3_make(pick->player_anchor.x + back.x,
                                                           pick->player_anchor.y + cam.eye_height,
                                                           pick->player_anchor.z + back.z);
@@ -678,6 +690,10 @@ int main(int argc, char **argv)
             in_game = true;
             fullscreen_game = false;
             playing_material = pick->screen_material;
+            /* Personne n'a inséré de jeton ici : la boucle posera les mains sur
+             * les commandes dès le premier pas. Sans ça, la capture montrait la
+             * partie tourner dans la dalle et les bras pendre hors du cadre. */
+            playing_cab = pick;
             NS_INFO("borne « %s » (%s, %s) : partie dans la dalle, matériau %d",
                     pick->name, pick->game, hard ? "hard" : "normal", pick->screen_material);
         }
@@ -798,6 +814,8 @@ int main(int argc, char **argv)
                         /* Quitter la partie rend la salle, pas le bureau. */
                         in_game = false;
                         playing_material = -1;
+                        playing_cab = NULL;
+                        room_viewmodel_stop_playing(&vmstate);
                         NS_INFO("Flappy Bird : score %u, meilleur %u", game.score, game.best);
                         break;
                     }
@@ -887,6 +905,7 @@ int main(int argc, char **argv)
                              */
                             playing_material = near->screen_material;
                             fullscreen_game = false;
+                            playing_cab = near;
                         }
                     }
                     break;
@@ -948,6 +967,21 @@ int main(int argc, char **argv)
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
+
+            /*
+             * Les mains se posent sur les commandes dès que la séquence du jeton
+             * est finie — c'est-à-dire dès que la machine à états est retombée au
+             * repos avec une partie en cours.
+             *
+             * Le raccordement est fait ici plutôt que dans la machine à états
+             * parce que c'est `main` qui sait s'il y a une partie : le viewmodel
+             * ne connaît ni Flappy ni le plein écran, et lui apprendre l'un ou
+             * l'autre le lierait au jeu qu'il anime.
+             */
+            if (in_game && !fullscreen_game && playing_cab
+                && vmstate.state == ROOM_VM_IDLE) {
+                room_viewmodel_start_playing(&vmstate, playing_cab);
+            }
             room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
             ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
@@ -960,7 +994,13 @@ int main(int argc, char **argv)
             if (in_game) {
                 if (opt.autoplay) flappy_autopilot(&game);
                 flappy_tick(&game, (float)clock.tick_seconds);
-                if (game.flapped)    ns_audio_play(sfx_flap, NS_BUS_SFX, 0.55f, 1.0f);
+                if (game.flapped) {
+                    ns_audio_play(sfx_flap, NS_BUS_SFX, 0.55f, 1.0f);
+                    /* Le jeu ne connaît pas les bras, et c'est voulu : il ne
+                     * publie qu'un événement, et c'est ici qu'on le relaie à
+                     * l'index droit. Le même événement sert déjà au son. */
+                    room_viewmodel_tap(&vmstate);
+                }
                 if (game.scored_now) { ns_audio_play(sfx_score, NS_BUS_SFX, 0.7f, 1.0f);
                                        NS_INFO("Flappy : %u", game.score); }
                 if (game.died_now)   { ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);

@@ -782,3 +782,77 @@ void geo_wall_run(geo_mesh *m, const geo_wall_desc *d)
     free(dir); free(seg_len); free(seg_start);
     free(inner); free(outer); free(slots);
 }
+
+/* ========================================================================== */
+/* Cylindre                                                                   */
+/* ========================================================================== */
+
+void geo_cylinder(geo_mesh *m, float r_bottom, float r_top, float height,
+                  int sides, bool cap_bottom, bool cap_top,
+                  const geo_uv *uv, int32_t material)
+{
+    const geo_uv fallback = geo_uv_tile(1.0f);
+    if (!uv) uv = &fallback;
+
+    if (sides < 3) {
+        tool_fatalf("geo_cylinder : %d côtés, il en faut au moins trois", sides);
+    }
+    if (height <= 1e-5f || (r_bottom <= 1e-5f && r_top <= 1e-5f)) {
+        tool_fatalf("geo_cylinder : dimension nulle ou négative (r %.4f -> %.4f, h %.4f)",
+                    (double)r_bottom, (double)r_top, (double)height);
+    }
+
+    const float mpt = (uv->metres_per_tile > 1e-6f) ? uv->metres_per_tile : 1.0f;
+    const float circ = NS_TAU * ns_maxf(r_bottom, r_top);
+
+    /* La pente de la paroi entre dans la normale : sans ça un cône tronqué
+     * s'éclaire comme un cylindre, et son arête haute accroche une lumière
+     * qu'elle ne devrait pas avoir. */
+    const float slope = (r_bottom - r_top) / height;
+    const float nlen = sqrtf(1.0f + slope * slope);
+
+    uint32_t *ring_lo = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)(sides + 1));
+    uint32_t *ring_hi = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)(sides + 1));
+    if (!ring_lo || !ring_hi) tool_fatalf("geo_cylinder : mémoire");
+
+    for (int i = 0; i <= sides; ++i) {
+        const float a = (float)i / (float)sides * NS_TAU;
+        const float ca = cosf(a), sa = sinf(a);
+        const ns_v3 n = ns_v3_make(ca / nlen, slope / nlen, sa / nlen);
+        const float u = (circ * (float)i / (float)sides) / mpt;
+        ring_lo[i] = geo_mesh_push_vertex(m, ns_v3_make(ca * r_bottom, 0.0f, sa * r_bottom),
+                                          n, u, 0.0f);
+        ring_hi[i] = geo_mesh_push_vertex(m, ns_v3_make(ca * r_top, height, sa * r_top),
+                                          n, u, height / mpt);
+    }
+    for (int i = 0; i < sides; ++i) {
+        geo_mesh_push_tri(m, ring_lo[i], ring_hi[i], ring_hi[i + 1], material);
+        geo_mesh_push_tri(m, ring_lo[i], ring_hi[i + 1], ring_lo[i + 1], material);
+    }
+
+    for (int cap = 0; cap < 2; ++cap) {
+        const bool want = cap ? cap_top : cap_bottom;
+        const float r = cap ? r_top : r_bottom;
+        if (!want || r <= 1e-5f) continue;
+
+        const float y = cap ? height : 0.0f;
+        const ns_v3 n = ns_v3_make(0.0f, cap ? 1.0f : -1.0f, 0.0f);
+        const uint32_t centre = geo_mesh_push_vertex(m, ns_v3_make(0.0f, y, 0.0f), n,
+                                                     0.5f * r / mpt, 0.5f * r / mpt);
+        uint32_t first = 0, prev = 0;
+        for (int i = 0; i <= sides; ++i) {
+            const float a = (float)i / (float)sides * NS_TAU;
+            const float ca = cosf(a), sa = sinf(a);
+            const uint32_t v = geo_mesh_push_vertex(m, ns_v3_make(ca * r, y, sa * r), n,
+                                                    (0.5f + ca * 0.5f) * r / mpt,
+                                                    (0.5f + sa * 0.5f) * r / mpt);
+            if (i == 0) { first = v; prev = v; continue; }
+            if (cap) geo_mesh_push_tri(m, centre, prev, v, material);
+            else     geo_mesh_push_tri(m, centre, v, prev, material);
+            prev = v;
+        }
+        (void)first;
+    }
+
+    free(ring_lo); free(ring_hi);
+}

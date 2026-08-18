@@ -737,7 +737,10 @@ static SDL_GPUGraphicsPipeline *make_viewmodel_pipeline(ns_rhi *r, SDL_GPUTextur
 /* Construit la géométrie des bras et la téléverse une fois pour toutes. */
 static void build_viewmodel(ns_rhi *r, ns_renderer *rd)
 {
-    enum { MAX_V = 2048, MAX_I = 4096 };
+    /* Relevé de 2048/4096 : les mains à doigts (six troncs chacune au lieu d'un)
+     * portent le maillage de ~350 à ~950 sommets, et la marge d'un facteur deux
+     * est ce qui permet d'ajouter un segment sans rouvrir ce fichier. */
+    enum { MAX_V = 4096, MAX_I = 8192 };
     static ns_vertex verts[MAX_V];
     static uint32_t  indices[MAX_I];
 

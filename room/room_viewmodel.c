@@ -92,6 +92,9 @@ static float state_duration(room_vm_state s)
         case ROOM_VM_REACH:  return VM_T_REACH;
         case ROOM_VM_INSERT: return VM_T_INSERT;
         case ROOM_VM_PRESS:  return VM_T_PRESS;
+        /* ROOM_VM_PLAY n'a pas de durée : il dure la partie. Renvoyer 0 le fait
+         * tomber dans la branche « pas d'avancement » de `tick`, ce qui est
+         * exactement le comportement voulu. */
         case ROOM_VM_RETURN: return VM_T_RETURN;
         default:             return 0.0f;
     }
@@ -198,12 +201,45 @@ bool room_viewmodel_interact(room_viewmodel *vm, const ns_cabinet *cab)
 
     vm->target_coin   = cab->coin_slot;
     vm->target_panel  = cab->panel_centre;
+    vm->target_stick  = cab->stick_top;
     vm->target_normal = cab->screen_normal;
     vm->has_target    = true;
     vm->state         = ROOM_VM_REACH;
     vm->elapsed       = 0.0f;
     vm->token_visible = true;
     return true;
+}
+
+void room_viewmodel_start_playing(room_viewmodel *vm, const ns_cabinet *cab)
+{
+    if (!vm || !cab) return;
+    vm->target_coin   = cab->coin_slot;
+    vm->target_panel  = cab->panel_centre;
+    vm->target_stick  = cab->stick_top;
+    vm->target_normal = cab->screen_normal;
+    vm->has_target    = true;
+    vm->state         = ROOM_VM_PLAY;
+    vm->elapsed       = 0.0f;
+    vm->token_visible = false;   /* le jeton est dans la machine */
+    vm->reach_checked = false;
+}
+
+void room_viewmodel_stop_playing(room_viewmodel *vm)
+{
+    if (!vm || vm->state != ROOM_VM_PLAY) return;
+    vm->state   = ROOM_VM_RETURN;
+    vm->elapsed = 0.0f;
+    vm->tap     = 0.0f;
+}
+
+void room_viewmodel_tap(room_viewmodel *vm)
+{
+    if (vm && vm->state == ROOM_VM_PLAY) vm->tap = 1.0f;
+}
+
+bool room_viewmodel_is_playing(const room_viewmodel *vm)
+{
+    return vm && vm->state == ROOM_VM_PLAY;
 }
 
 /* --------------------------------------------------------------------------
@@ -231,6 +267,19 @@ static ns_v3 lean_for(room_vm_state s, float t)
         case ROOM_VM_REACH:  return ns_v3_scale(ns_v3_make(0.0f, -0.10f, 0.14f), k);
         case ROOM_VM_INSERT: return ns_v3_make(0.0f, -0.28f, 0.34f);
         case ROOM_VM_PRESS:  return ns_v3_make(0.0f, -0.10f, 0.16f);
+        /* Penché en avant, et il y reste : c'est la posture de quelqu'un qui
+         * joue, et c'est aussi ce qui met les commandes à portée. Sans ce
+         * décalage d'épaules, les deux poignets butent sur la limite de 57 cm et
+         * les bras restent tendus comme deux barres. */
+        /*
+         * 42 cm en avant, et le chiffre est mesuré, pas choisi : à 32 cm le
+         * contrôle de portée annonçait « boutons à 0,61 m pour 0,57 m de
+         * portée » — quatre centimètres de trop, donc une main droite tendue
+         * juste au-dessus des boutons sans jamais les toucher. C'est aussi la
+         * posture réelle : on se penche SUR un panneau d'arcade, on ne joue pas
+         * bras tendus.
+         */
+        case ROOM_VM_PLAY:   return ns_v3_make(0.0f, -0.16f, 0.42f);
         case ROOM_VM_RETURN: return ns_v3_scale(ns_v3_make(0.0f, -0.10f, 0.16f), 1.0f - k);
         default:             return ns_v3_zero();
     }
@@ -325,6 +374,7 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     vm->prev_wrist_r = vm->wrist_r;
     vm->prev_lean = vm->lean;
     vm->prev_press_depth = vm->press_depth;
+    vm->prev_tap = vm->tap;
     vm->prev_insert_push = vm->insert_push;
     vm->clock += dt;
 
@@ -343,7 +393,21 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
         }
         vm->elapsed = state_duration(vm->state) * 0.82f;
         vm->token_visible = (vm->state == ROOM_VM_REACH || vm->state == ROOM_VM_INSERT);
+    } else if (vm->state == ROOM_VM_PLAY) {
+        /* `elapsed` avance aussi en jeu — il ne déclenche simplement aucune
+         * transition. Il sert au contrôle de portée, qui doit attendre que le
+         * penchement amorti soit arrivé : mesuré au premier pas, il donnerait la
+         * distance de la posture debout et crierait au loup à chaque partie. */
+        vm->elapsed += dt;
     } else if (vm->state != ROOM_VM_IDLE) {
+        /*
+         * `ROOM_VM_PLAY` est explicitement exclu, et l'oubli coûtait cher : sa
+         * durée valant zéro, `elapsed >= dur` est vrai dès le premier pas, la
+         * branche par défaut du `switch` le renvoyait à `IDLE` en effaçant sa
+         * cible, et les mains repartaient le long du corps avant d'avoir touché
+         * une commande. Un état sans durée doit être écarté de l'avancement, pas
+         * lui être soumis avec une durée nulle.
+         */
         vm->elapsed += dt;
         const float dur = state_duration(vm->state);
         if (vm->elapsed >= dur) {
@@ -368,6 +432,14 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     float press = 0.0f;
     if (vm->state == ROOM_VM_PRESS) {
         press = (t < 0.35f) ? (t / 0.35f) : ns_maxf(0.0f, 1.0f - (t - 0.35f) / 0.65f);
+    } else if (vm->state == ROOM_VM_PLAY) {
+        /* Pendant la partie, c'est le jeu qui commande l'index : chaque battement
+         * met `tap` à 1 et il retombe en un dixième de seconde. Le décrément est
+         * linéaire et non amorti — un amortissement exponentiel laisserait une
+         * traîne, donc un doigt jamais tout à fait revenu, donc pas d'appui
+         * visible au battement suivant. */
+        vm->tap = ns_maxf(0.0f, vm->tap - dt * 10.0f);
+        press = vm->tap;
     }
     vm->press_depth = ns_damp(vm->press_depth, press, 24.0f, dt);
 
@@ -407,7 +479,64 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     const float breath = sinf(bob.breath * 1.9f) * 0.008f * rest;
     want_l.y += breath; want_r.y += breath;
 
-    if (vm->has_target && vm->state != ROOM_VM_IDLE && vm->state != ROOM_VM_RETURN) {
+    if (vm->state == ROOM_VM_PLAY && vm->has_target) {
+        /*
+         * Les DEUX mains, et chacune sur sa commande : la gauche sur le manche,
+         * la droite sur les boutons. C'est le seul état où la main gauche a une
+         * cible — partout ailleurs elle suit le corps.
+         *
+         * Chaque épaule reçoit son propre décalage latéral : viser le manche
+         * depuis l'épaule DROITE croiserait les bras devant le torse, ce qui se
+         * voit immédiatement et n'a aucune raison d'être.
+         */
+        const ns_v3 lean = vm->lean;
+        const ns_v3 sh_l_cam = ns_v3_add(ns_v3_make(-VM_SHOULDER_X, VM_SHOULDER_Y, VM_SHOULDER_Z), lean);
+        const ns_v3 sh_r_cam = ns_v3_add(ns_v3_make( VM_SHOULDER_X, VM_SHOULDER_Y, VM_SHOULDER_Z), lean);
+        const ns_v3 sh_l = to_world(&b, sh_l_cam);
+        const ns_v3 sh_r = to_world(&b, sh_r_cam);
+
+        /* Le poignet se pose une paume au-dessus de la commande : les ancres
+         * désignent la surface touchée, pas l'articulation. */
+        const ns_v3 up = ns_v3_make(0.0f, VM_HAND * 0.35f, 0.0f);
+        const ns_v3 grip  = ns_v3_add(vm->target_stick, up);
+        const ns_v3 above = ns_v3_add(vm->target_panel, up);
+
+        want_l = to_camera(&b, clamp_reach(sh_l, grip,  VM_REACH));
+        want_r = to_camera(&b, clamp_reach(sh_r, above, VM_REACH));
+
+        /*
+         * Si les commandes sont hors d'atteinte, on le DIT.
+         *
+         * `clamp_reach` ne peut pas échouer : elle pose le poignet à 57 cm dans
+         * la bonne direction et rend un bras parfaitement tendu vers un point
+         * qu'il ne touche pas. À l'image, ce sont deux tubes qui pointent vers
+         * rien — et rien n'indique pourquoi. C'est exactement le silence qu'on
+         * a passé le projet à retirer : la géométrie d'une borne, la position
+         * d'arrêt de la capsule et la longueur d'un bras sont trois cotes
+         * réglées dans trois fichiers différents, et il n'y a qu'ici qu'on peut
+         * constater qu'elles ne sont plus d'accord.
+         *
+         * Une fois par entrée en jeu, pas une fois par image.
+         */
+        if (!vm->reach_checked && vm->elapsed > 0.8f) {
+            vm->reach_checked = true;
+            const float dl = ns_v3_dist(sh_l, grip), dr = ns_v3_dist(sh_r, above);
+            const float worst = ns_maxf(dl, dr);
+            if (worst > VM_REACH + 0.02f) {
+                NS_WARN("bras : commandes à %.2f m d'une épaule pour %.2f m de portée — "
+                        "les mains resteront tendues sans les toucher "
+                        "(manche %.2f m, boutons %.2f m)",
+                        (double)worst, (double)VM_REACH, (double)dl, (double)dr);
+            }
+        }
+
+        /* Le tremblement du jeu, sur les deux mains : quelques millimètres, à
+         * une fréquence assez haute pour se lire comme de la tension et pas
+         * comme une respiration. Sans lui, deux mains posées sur des commandes
+         * pendant une partie entière se lisent comme une image fixe. */
+        const float j = sinf(vm->clock * 11.0f) * 0.0035f;
+        want_l.y += j; want_r.y -= j * 0.7f;
+    } else if (vm->has_target && vm->state != ROOM_VM_IDLE && vm->state != ROOM_VM_RETURN) {
         const ns_v3 shoulder_cam = ns_v3_add(
             ns_v3_make(VM_SHOULDER_X, VM_SHOULDER_Y, VM_SHOULDER_Z), vm->lean);
         const ns_v3 shoulder_world = to_world(&b, shoulder_cam);
@@ -507,7 +636,18 @@ static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
     ns_ik2 ik = ns_ik_two_bone(shoulder, wrist, pole, VM_UPPER, VM_FORE);
     ns_v3  dir = hand_direction(b, &ik, finger_curl);
 
-    if (tip_world) {
+    /*
+     * DEUX itérations correctrices, pas une.
+     *
+     * Chacune déplace le poignet du vecteur qui sépare le bout du doigt de sa
+     * cible, puis re-résout — mais la re-résolution change la direction de la
+     * main, donc corrige un peu à côté. C'est un point fixe, et il converge
+     * vite : mesuré par `test_ik` sur la pose de jeu, le bout du doigt passe de
+     * 3,9 cm à 1,2 cm du manche entre une itération et deux, et de 1,5 cm à
+     * 0,5 cm du bouton pendant la séquence du jeton. Le résidu qui reste tient
+     * à la portée du bras, pas à la convergence.
+     */
+    for (int pass = 0; tip_world && pass < 2; ++pass) {
         const ns_v3 tip = ns_v3_add(ik.end, ns_v3_scale(dir, VM_HAND));
         wrist = clamp_reach(shoulder, ns_v3_add(wrist, ns_v3_sub(*tip_world, tip)),
                             VM_REACH);
@@ -563,7 +703,29 @@ void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
         tip = &tip_target;
     }
 
-    pose_arm(out, &b, false, sl, wl, 0.0f, NULL);
+    /*
+     * En jeu, les DEUX mains visent — et c'est le seul moment où la gauche a une
+     * cible de bout de doigt.
+     *
+     * Sans ça, `hand_direction` prolongeait simplement l'avant-bras avec une
+     * flexion fixe : les mains arrivaient au-dessus des commandes, doigts
+     * tendus vers l'avant, à survoler un manche qu'elles ne touchaient pas. Le
+     * mécanisme pour les poser existait depuis A7 — la seconde résolution
+     * corrective qui amène le BOUT du doigt sur un point — et n'était employé
+     * que pour la fente et le bouton.
+     */
+    ns_v3 tip_l_target;
+    const ns_v3 *tip_l = NULL;
+    if (vm->state == ROOM_VM_PLAY && vm->has_target) {
+        tip_l_target = vm->target_stick;
+        tip_l = &tip_l_target;
+        /* Le doigt droit se pose sur les boutons et les enfonce au battement. */
+        tip_target = ns_v3_add(vm->target_panel,
+                               ns_v3_make(0.0f, 0.010f * (1.0f - press), 0.0f));
+        tip = &tip_target;
+    }
+
+    pose_arm(out, &b, false, sl, wl, 0.0f, tip_l);
     pose_arm(out, &b, true,  sr, wr, press, tip);
 
     /*

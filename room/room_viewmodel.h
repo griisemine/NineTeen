@@ -9,7 +9,9 @@
  * Espace de travail
  * -----------------
  * Les ancres sont écrites en **espace caméra** — X à droite, Y en haut, Z vers
- * l'arrière — puis converties en monde à la toute fin. C'est le seul repère où
+ * l'AVANT (`to_world` projette sur `camera.forward` ; le commentaire disait
+ * « l'arrière », et une épaule à `z = -0,075` est bien 7,5 cm derrière l'œil) —
+ * puis converties en monde à la toute fin. C'est le seul repère où
  * « l'épaule est vingt centimètres sous l'œil et dix-huit à droite » veut dire
  * quelque chose. Les écrire en monde obligerait à les recomposer à chaque
  * changement d'orientation, et à se tromper de signe une fois sur deux.
@@ -46,6 +48,20 @@ typedef enum room_vm_state {
     ROOM_VM_REACH,        /* la main droite part vers la fente */
     ROOM_VM_INSERT,       /* le jeton entre ; il disparaît à la fin */
     ROOM_VM_PRESS,        /* l'index descend sur le bouton */
+    /*
+     * La partie est lancée : les DEUX mains sont sur les commandes — la gauche
+     * empoigne le manche, la droite couvre les boutons — et elles y restent.
+     *
+     * C'est le seul état qui ne se termine pas tout seul : il dure ce que dure
+     * la partie, et c'est `room_viewmodel_stop_playing()` qui en sort. En faire
+     * un état à durée fixe reviendrait à retirer les mains des commandes au
+     * bout d'une demi-seconde de jeu.
+     *
+     * Pourquoi il fallait l'ajouter : sans lui, on lançait une partie sur une
+     * borne et les bras retombaient aussitôt le long du corps, hors du cadre.
+     * On voyait la partie tourner dans la dalle sans personne pour la jouer.
+     */
+    ROOM_VM_PLAY,
     ROOM_VM_RETURN,       /* retour au repos */
     ROOM_VM_STATE_COUNT
 } room_vm_state;
@@ -59,8 +75,19 @@ typedef struct room_viewmodel {
      * survivrait à l'objet qu'il désigne. */
     ns_v3 target_coin;
     ns_v3 target_panel;
+    ns_v3 target_stick;
     ns_v3 target_normal;
     bool  has_target;
+
+    /* Le battement du jeu, répercuté sur l'index droit. Mis à 1 par
+     * `room_viewmodel_tap()`, il retombe tout seul : le geste doit être plus
+     * court que l'intervalle entre deux battements, sinon le doigt reste enfoncé
+     * et l'animation disparaît au moment précis où l'on joue le plus vite. */
+    float tap, prev_tap;
+
+    /* Le contrôle de portée n'est fait qu'une fois par partie : à chaque image
+     * il produirait le même avertissement soixante fois par seconde. */
+    bool  reach_checked;
 
     /* Poignets et épaules lissés, en espace caméra. C'est ce lissage qui fait la
      * différence entre un bras qui se tend et un bras qui se téléporte : la
@@ -99,6 +126,23 @@ bool room_viewmodel_set_forced_pose(room_viewmodel *vm, const char *name);
  * Renvoie true si le geste a démarré.
  */
 bool room_viewmodel_interact(room_viewmodel *vm, const ns_cabinet *cab);
+
+/*
+ * Pose les mains sur les commandes de `cab` et les y laisse. À appeler quand la
+ * partie démarre — y compris quand elle démarre sans geste préalable, comme avec
+ * `--play-at=`, où personne n'a inséré de jeton.
+ */
+void room_viewmodel_start_playing(room_viewmodel *vm, const ns_cabinet *cab);
+
+/* Rend les mains au repos. Sans effet si on ne jouait pas. */
+void room_viewmodel_stop_playing(room_viewmodel *vm);
+
+/* Un appui : l'index droit descend puis remonte. Le jeu ne connaît pas les bras,
+ * c'est l'appelant qui relaie son événement de battement. */
+void room_viewmodel_tap(room_viewmodel *vm);
+
+/* Vrai tant que les mains sont sur les commandes. */
+bool room_viewmodel_is_playing(const room_viewmodel *vm);
 
 /* La borne à portée de main, ou NULL. Simple relais vers
  * `ns_scene_nearest_cabinet`, écrite depuis M4 et jamais appelée jusqu'ici. */

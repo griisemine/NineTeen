@@ -349,6 +349,23 @@
       "uvMetres": 0.6
     },
     {
+      "_": "Les boutons d'arcade. Ils étaient du matériau du panneau : quatre pastilles bordeaux sur un panneau bordeaux, invisibles dès que la main s'en approchait. Un bouton d'arcade est en plastique translucide vif et brillant — c'est ce qui le rend identifiable d'un coup d'œil, ce qui est très exactement sa fonction.",
+      "name": "bouton_rouge",
+      "texture": "painted_panel.jpg",
+      "baseColor": [0.72, 0.07, 0.09, 1.0],
+      "roughness": 0.34,
+      "metallic": 0.0,
+      "uvMetres": 0.12
+    },
+    {
+      "name": "bouton_jaune",
+      "texture": "painted_panel.jpg",
+      "baseColor": [0.80, 0.56, 0.05, 1.0],
+      "roughness": 0.34,
+      "metallic": 0.0,
+      "uvMetres": 0.12
+    },
+    {
       "name": "ecran_flappy_facile",
       "texture": "flappy_easy_font.jpg",
       "roughness": 0.12,

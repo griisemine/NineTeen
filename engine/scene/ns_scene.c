@@ -269,6 +269,32 @@ static void derive_hand_anchors(ns_cabinet *cab)
         centre.x + fwd.x * (fabsf(fwd.x) > 0.5f ? half.x * 1.02f : 0.0f),
         cab->bounds.min.y + extent.y * 0.28f,
         centre.z + fwd.z * (fabsf(fwd.z) > 0.5f ? half.z * 1.02f : 0.0f));
+
+}
+
+/*
+ * Le manche, déduit du panneau — et déduit SÉPARÉMENT du reste.
+ *
+ * Une salle décrite avant que `stickTop` existe déclare bien son panneau et sa
+ * fente : redériver les trois parce qu'il en manque un remplacerait deux cotes
+ * justes par deux approximations. Cette fonction ne touche donc qu'au manche, et
+ * elle part de `panel_centre`, qu'il soit déclaré ou déduit.
+ *
+ * « À gauche du panneau » s'entend du point de vue du joueur, pas du monde : on
+ * tourne la normale d'un quart de tour autour de la verticale, ce qui vaut pour
+ * les quatre orientations sans avoir à les énumérer.
+ */
+static void derive_stick_anchor(ns_cabinet *cab)
+{
+    const ns_v3 extent = ns_aabb_extent(cab->bounds);
+    const ns_v3 half   = ns_v3_scale(extent, 0.5f);
+    const ns_v3 fwd    = cab->screen_normal;
+    const ns_v3 left   = ns_v3_make(-fwd.z, 0.0f, fwd.x);
+    const float side   = ns_maxf(fabsf(half.x), fabsf(half.z)) * 0.28f;
+
+    cab->stick_top = ns_v3_add(cab->panel_centre,
+                               ns_v3_add(ns_v3_scale(left, side),
+                                         ns_v3_make(0.0f, extent.y * 0.035f, 0.0f)));
 }
 
 /*
@@ -401,6 +427,8 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
             c->panel_centre = ns_v3_make(v[0], v[1], v[2]);
             ns_json_get_vec3(&doc, e, "coinSlot", v, NAN);
             c->coin_slot = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "stickTop", v, NAN);
+            c->stick_top = ns_v3_make(v[0], v[1], v[2]);
 
             /* Deux scalaires plutôt qu'un couple : le lecteur du moteur n'a que
              * `vec3`, et lui faire lire un tableau de deux éléments demanderait
@@ -413,6 +441,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
              * absence se distingue d'un zéro légitime — l'origine du monde est une
              * coordonnée valide, et une borne pourrait s'y trouver. */
             if (isnan(c->panel_centre.x) || isnan(c->coin_slot.x)) derive_hand_anchors(c);
+            if (isnan(c->stick_top.x)) derive_stick_anchor(c);
 
             s->cabinet_count++;
         }
@@ -590,6 +619,7 @@ static void load_cabinet_assignment(ns_scene *s, const char *logical)
         cab->player_anchor.y = cab->bounds.min.y;
         cab->screen_material = -1;   /* la salle de 2020 ne le déclare pas */
         derive_hand_anchors(cab);
+        derive_stick_anchor(cab);
     }
 
     NS_INFO("%u bornes affectées à un jeu", assigned);

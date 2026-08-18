@@ -98,6 +98,7 @@ typedef struct rg_cabinet {
     int   screen_material;      /* index du matériau de la dalle */
     float panel_centre[3];      /* là où la main appuie */
     float coin_slot[3];         /* là où le jeton entre */
+    float stick_top[3];         /* là où la main gauche empoigne */
     bool  attract;
 } rg_cabinet;
 
@@ -118,6 +119,7 @@ typedef struct rg_cab_anchors {
     float screen_size[2];
     float panel[3];     /* centre de la grappe de boutons, sur la face du dessus */
     float coin[3];      /* fente à jetons, sur la face avant de la trappe */
+    float stick[3];     /* le dessus de la boule du joystick */
 } rg_cab_anchors;
 
 typedef struct rg_poi {
@@ -1113,12 +1115,38 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     }
 
     /* --- panneau de commande, joystick, boutons --------------------------- */
+    /*
+     * Le panneau est INCLINÉ, et tout ce qui se pose dessus doit suivre.
+     *
+     * Le premier jet posait le manche et les boutons à des hauteurs fixes, en
+     * ignorant les 9° du panneau. Résultat mesuré : l'embase du manche flottait
+     * 1,9 cm au-dessus de la tôle, la rangée de boutons la plus proche
+     * dépassait de 1,2 mm — donc invisible — et la rangée du fond flottait de
+     * 8 mm. Personne ne l'avait vu parce que jusqu'à ce que les mains se posent
+     * dessus, on ne regardait jamais un panneau de commande d'aussi près.
+     *
+     * `panel_surface(dz)` rend la hauteur de la face supérieure à `dz` du centre
+     * du panneau, en tenant compte de l'inclinaison. Une rotation de +θ autour
+     * de X envoie (y, z) sur (y cos θ − z sin θ, ...), d'où le signe.
+     */
+    /*
+     * Attention au repère de `geo_box` : elle occupe Y de 0 à `size.y`, pas
+     * −size.y/2 à +size.y/2. C'est écrit dans son en-tête, et l'oublier ici a
+     * coûté une passe complète — la première version de ce calcul employait la
+     * DEMI-hauteur et plaçait donc toute la quincaillerie 2,8 cm trop bas,
+     * c'est-à-dire dans la tôle.
+     */
+    const float PANEL_Y = 0.93f, PANEL_H = 0.055f, PANEL_Z = hd + 0.10f;
+    const float PANEL_PITCH = 9.0f * NS_DEG2RAD;
+    #define panel_surface(dz) \
+        (PANEL_Y + PANEL_H * cosf(PANEL_PITCH) - (dz) * sinf(PANEL_PITCH))
+
     geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(RG_CAB_W - 0.02f, 0.055f, 0.30f), 0.010f,
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.02f, PANEL_H, 0.30f), 0.010f,
             GEO_FACE_NO_BOTTOM, &uv_trim, panel);
     x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.93f, hd + 0.10f);
-    x.pitch = 9.0f * NS_DEG2RAD;
+    x.origin = ns_v3_make(0.0f, PANEL_Y, PANEL_Z);
+    x.pitch = PANEL_PITCH;
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);
 
@@ -1132,26 +1160,89 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);
 
+    /*
+     * Le manche : une embase, une tige, une boule — et non plus un cube.
+     *
+     * Le premier jet était une seule boîte de 5 cm chanfreinée à 12 mm. Une fois
+     * les mains posées sur les commandes, ce cube gris se lit pour ce qu'il est :
+     * un cube. Trois boîtes suffisent à en faire un manche, et la boule est
+     * simplement une boîte de 42 mm chanfreinée à 19 mm — le chanfrein y mange
+     * presque tout, ce qui donne un solide à vingt-six faces qu'on ne distingue
+     * pas d'une sphère à cette taille, sans avoir à écrire un générateur de
+     * révolution pour ce seul objet.
+     */
     const int stick_mat = material_index(b, m_trim[0] ? m_trim : m_body, owner);
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.05f, 0.085f, 0.05f), 0.012f, GEO_FACE_NO_BOTTOM,
-            &uv_trim, stick_mat);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(-0.20f, 0.97f, hd + 0.10f);
-    x.roll = 0.16f;
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
+    /* Posé SUR la tôle, embase à demi enfoncée : 6 mm de la boîte d'embase sous
+     * la surface, ce qui la fait tenir au lieu de flotter. */
+    const ns_v3 stick_at = ns_v3_make(-0.20f, panel_surface(0.0f) - 0.006f, PANEL_Z);
+
+    struct { float r0, r1, h, dy; bool cap_lo, cap_hi; float roll; } stick[5] = {
+        { 0.036f, 0.032f, 0.010f, 0.000f, false, true,  0.0f  },  /* embase          */
+        { 0.010f, 0.009f, 0.055f, 0.008f, false, false, 0.16f },  /* tige            */
+        { 0.014f, 0.021f, 0.010f, 0.060f, false, false, 0.16f },  /* raccord         */
+        { 0.021f, 0.021f, 0.020f, 0.070f, false, false, 0.16f },  /* ventre de boule */
+        { 0.021f, 0.006f, 0.012f, 0.090f, false, true,  0.16f },  /* calotte         */
+    };
+    for (int i = 0; i < 5; ++i) {
+        geo_mesh_init(&part);
+        geo_cylinder(&part, stick[i].r0, stick[i].r1, stick[i].h, 14,
+                     stick[i].cap_lo, stick[i].cap_hi, &uv_trim, stick_mat);
+        x = GEO_XFORM_IDENTITY;
+        x.origin = ns_v3_make(stick_at.x, stick_at.y + stick[i].dy, stick_at.z);
+        x.roll = stick[i].roll;   /* l'embase reste à plat, le manche penche */
+        geo_mesh_append(out, &part, &x, -1);
+        geo_mesh_free(&part);
+    }
+
+    /*
+     * Le SOMMET DE LA BOULE — un point qu'on touche, exactement comme
+     * `panel` désigne le dessus des pastilles et `coin` la fente. Les trois
+     * ancres d'une borne ont la même sémantique, et il a fallu qu'elles ne
+     * l'aient pas pour qu'on s'en aperçoive : la première version donnait ici le
+     * point où se pose le POIGNET, une paume plus haut, et la main gauche
+     * refermait ses doigts à trois centimètres au-dessus du manche.
+     *
+     * C'est la pose qui ajoute la paume, parce que c'est elle qui sait de quelle
+     * longueur est une main. La cote sort d'ici pour la même raison que les deux
+     * autres : elle est écrite à dix lignes de la géométrie qu'elle désigne.
+     *
+     * 0,102 = les quatre tronçons empilés : embase 0,010 (dont 0,006 enfoncés),
+     * tige 0,055, raccord 0,010, ventre 0,020, calotte 0,012.
+     */
+    anchors->stick[0] = stick_at.x;
+    anchors->stick[1] = stick_at.y + 0.102f;
+    anchors->stick[2] = stick_at.z;
+
+    /*
+     * Les boutons sont VIFS, et pas du matériau du panneau.
+     *
+     * Ils l'étaient : quatre pastilles bordeaux sur un panneau bordeaux, donc
+     * invisibles — et le défaut ne se voyait qu'une fois les mains posées
+     * dessus, parce qu'avant ça on ne regardait jamais un panneau de commande de
+     * si près. Un bouton d'arcade est en plastique vif et brillant, et c'est
+     * exactement sa fonction : se trouver sans être cherché.
+     */
+    const int btn_mat[2] = { material_index(b, "bouton_rouge", owner),
+                             material_index(b, "bouton_jaune", owner) };
+    const geo_uv uv_btn = material_uv(b, btn_mat[0]);
 
     float btn_x = 0.0f, btn_y = 0.0f, btn_z = 0.0f;
     for (int i = 0; i < 4; ++i) {
+        /* La pastille dépasse de 5 mm de la tôle, à la hauteur que l'inclinaison
+         * lui donne — et non à une hauteur fixe, qui noyait une rangée dans le
+         * panneau et faisait flotter l'autre. */
+        const float bz = hd + 0.045f + (float)(i / 2) * 0.075f;
         const ns_v3 at = ns_v3_make(0.02f + (float)(i % 2) * 0.075f,
-                                    0.958f + (float)(i / 2) * 0.004f,
-                                    hd + 0.045f + (float)(i / 2) * 0.075f);
+                                    panel_surface(bz - PANEL_Z) - 0.003f,
+                                    bz);
         btn_x += at.x * 0.25f; btn_y += at.y * 0.25f; btn_z += at.z * 0.25f;
 
+        /* Rond et bombé : 19 mm de rayon en bas, 16 en haut. Un bouton d'arcade
+         * est une pastille convexe, et c'est le bombé qui accroche la lumière
+         * du plafonnier — un palet plat reste éteint quel que soit l'éclairage. */
         geo_mesh_init(&part);
-        geo_box(&part, ns_v3_make(0.038f, 0.016f, 0.038f), 0.007f,
-                GEO_FACE_NO_BOTTOM, &uv_trim, panel);
+        geo_cylinder(&part, 0.019f, 0.016f, 0.014f, 16, false, true, &uv_btn,
+                     btn_mat[i % 2]);
         x = GEO_XFORM_IDENTITY;
         x.origin = at;
         x.pitch = 9.0f * NS_DEG2RAD;
@@ -1164,7 +1255,7 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * s'enfonce dans le panneau — le genre de détail qui ne se voit qu'une fois
      * les bras à l'écran, et qui coûte alors une heure à retrouver. */
     anchors->panel[0] = btn_x;
-    anchors->panel[1] = btn_y + 0.013f;
+    anchors->panel[1] = btn_y + 0.014f;   /* hauteur de pastille, moins l'enfoncement */
     anchors->panel[2] = btn_z;
 
     /* --- trappe à jetons --------------------------------------------------
@@ -1262,6 +1353,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         RG_TO_WORLD(cab->screen_center, anchors.screen);
         RG_TO_WORLD(cab->panel_centre,  anchors.panel);
         RG_TO_WORLD(cab->coin_slot,     anchors.coin);
+        RG_TO_WORLD(cab->stick_top,     anchors.stick);
 #undef RG_TO_WORLD
 
         cab->screen_normal[0] = s;
@@ -1845,12 +1937,15 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
          * un jeu : le moteur remplace la texture de CE matériau-là, sans avoir à
          * deviner lequel des lots d'une borne est son écran. */
         fprintf(f, "      \"screenMaterial\": %d,\n", c->screen_material);
-        fprintf(f, "      \"panelCentre\": [%.4f, %.4f, %.4f], "
-                   "\"coinSlot\": [%.4f, %.4f, %.4f] }%s\n",
+        fprintf(f, "      \"panelCentre\": [%.4f, %.4f, %.4f],\n"
+                   "      \"coinSlot\": [%.4f, %.4f, %.4f],\n"
+                   "      \"stickTop\": [%.4f, %.4f, %.4f] }%s\n",
                 (double)c->panel_centre[0], (double)c->panel_centre[1],
                 (double)c->panel_centre[2],
                 (double)c->coin_slot[0], (double)c->coin_slot[1],
                 (double)c->coin_slot[2],
+                (double)c->stick_top[0], (double)c->stick_top[1],
+                (double)c->stick_top[2],
                 (i + 1 < b->cabinet_count) ? "," : "");
     }
     fprintf(f, "  ],\n");

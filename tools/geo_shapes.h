@@ -105,6 +105,34 @@ void geo_box(geo_mesh *m, ns_v3 size, float chamfer, uint32_t faces,
              const geo_uv *uv, int32_t material);
 
 /* ========================================================================== */
+/* Cylindre                                                                   */
+/* ========================================================================== */
+
+/*
+ * Cylindre (ou cône tronqué) **posé sur Y = 0**, comme `geo_box` : il occupe
+ * Y de 0 à `height`, centré en X/Z. Même convention, pour la même raison — on
+ * place un objet par son empreinte au sol.
+ *
+ * Pourquoi il manquait, et pourquoi c'est un manque et pas un oubli : jusqu'ici
+ * tout ce qui était rond dans la salle était une boîte chanfreinée, et ça
+ * tenait tant qu'on la voyait de loin. Un bouton d'arcade de 38 mm regardé à
+ * soixante centimètres — ce que fait le joueur dès qu'il pose les mains sur les
+ * commandes — est un carré, et se lit comme tel. Les tabourets, les gobelets,
+ * les tubes et les pieds de table posent la même question.
+ *
+ * `r_top` différent de `r_bottom` donne un cône tronqué : c'est ce qui fait un
+ * bouton bombé plutôt qu'un palet, et un pied de tabouret qui s'évase.
+ *
+ * Les UV : la face latérale est dépliée en bande (u = tour, v = hauteur, à
+ * l'échelle de `uv`), les faces planes sont projetées en disque. Un cylindre a
+ * une couture — un tour complet ne peut pas se replier sans elle — et elle est
+ * placée en −X, du côté qu'on regarde le moins.
+ */
+void geo_cylinder(geo_mesh *m, float r_bottom, float r_top, float height,
+                  int sides, bool cap_bottom, bool cap_top,
+                  const geo_uv *uv, int32_t material);
+
+/* ========================================================================== */
 /* Plan subdivisé                                                             */
 /* ========================================================================== */
 

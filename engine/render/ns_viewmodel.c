@@ -113,6 +113,86 @@ static void vm_prism(vm_build *b, float r0, float r1, float flatten)
     }
 }
 
+/*
+ * Un tronc de prisme entre deux hauteurs locales, avec un décalage latéral qui
+ * peut varier d'un bout à l'autre — c'est ce dernier point qui permet au pouce
+ * de s'écarter, et aux doigts de ne pas être quatre tubes parallèles.
+ *
+ * Rappel du repère local, parce que c'est ce qui trompe : X et Y sont en MÈTRES
+ * et Z est normalisé de 0 à −1, la matrice de pose lui donnant sa longueur. Un
+ * doigt qui va de −0,52 à −1,0 dans une main de 10 cm mesure donc 4,8 cm.
+ */
+static void vm_digit(vm_build *b, float x0, float x1, float y0, float y1,
+                     float r0, float r1, float flatten, float z0, float z1)
+{
+    const uint32_t base = b->vertex_count;
+    for (int i = 0; i <= VM_SIDES; ++i) {
+        const float a = (float)i / (float)VM_SIDES * NS_TAU;
+        const float ca = cosf(a), sa = sinf(a);
+        const ns_v3 n = ns_v3_norm(ns_v3_make(ca, sa / ns_maxf(flatten, 0.05f), 0.0f));
+        const float u = (float)i / (float)VM_SIDES;
+        vm_vertex(b, ns_v3_make(x0 + ca * r0, y0 + sa * r0 * flatten, z0), n, u, 0.0f);
+        vm_vertex(b, ns_v3_make(x1 + ca * r1, y1 + sa * r1 * flatten, z1), n, u, 1.0f);
+    }
+    for (int i = 0; i < VM_SIDES; ++i) {
+        const uint32_t v0 = base + (uint32_t)(i * 2);
+        vm_tri(b, v0, v0 + 1, v0 + 3);
+        vm_tri(b, v0, v0 + 3, v0 + 2);
+    }
+    for (int end = 0; end < 2; ++end) {
+        const float z = end ? z1 : z0;
+        const float r = end ? r1 : r0;
+        const float cx = end ? x1 : x0, cy = end ? y1 : y0;
+        const ns_v3 n = ns_v3_make(0.0f, 0.0f, end ? -1.0f : 1.0f);
+        const uint32_t centre = b->vertex_count;
+        vm_vertex(b, ns_v3_make(cx, cy, z), n, 0.5f, 0.5f);
+        for (int i = 0; i <= VM_SIDES; ++i) {
+            const float a = (float)i / (float)VM_SIDES * NS_TAU;
+            vm_vertex(b, ns_v3_make(cx + cosf(a) * r, cy + sinf(a) * r * flatten, z), n,
+                      0.5f + cosf(a) * 0.5f, 0.5f + sinf(a) * 0.5f);
+        }
+        for (int i = 0; i < VM_SIDES; ++i) {
+            if (end) vm_tri(b, centre, centre + 1 + (uint32_t)i, centre + 2 + (uint32_t)i);
+            else     vm_tri(b, centre, centre + 2 + (uint32_t)i, centre + 1 + (uint32_t)i);
+        }
+    }
+}
+
+/*
+ * Une main : une paume aplatie, quatre doigts et un pouce.
+ *
+ * Pourquoi ça valait les cent triangles. Le premier jet faisait la main avec le
+ * même prisme effilé que l'avant-bras, juste un peu plus plat. Dans le seul plan
+ * où on la voit vraiment — les deux mains posées sur les commandes, en bas du
+ * cadre — elle se lisait comme un tube coupé net : pas de doigts, donc pas de
+ * main, donc deux saucisses posées sur un panneau. Aucun réglage de pose ne
+ * rattrape ça, parce que le défaut n'est pas dans la pose.
+ *
+ * Les longueurs de doigts sont celles d'une main d'adulte ramenées à la
+ * proportion : majeur le plus long, index et annulaire un peu moins,
+ * auriculaire nettement plus court, pouce écarté et arrêté à mi-paume.
+ */
+static void vm_hand(vm_build *b, bool right)
+{
+    const float sx = right ? 1.0f : -1.0f;   /* le pouce change de côté */
+
+    /* La paume. Plus large que l'avant-bras et deux fois plus plate. */
+    vm_digit(b, 0.0f, 0.0f, 0.0f, 0.0f, 0.040f, 0.037f, 0.50f, 0.0f, -0.54f);
+
+    /* Les quatre doigts, légèrement en éventail et refermés vers la paume. */
+    static const float span[4] = { -0.0285f, -0.0095f, 0.0095f, 0.0285f };
+    static const float tip[4]  = { -0.96f, -1.00f, -0.95f, -0.84f };
+    for (int i = 0; i < 4; ++i) {
+        const float x0 = span[i] * sx;
+        const float x1 = x0 * 1.14f;                 /* l'éventail */
+        vm_digit(b, x0, x1, 0.0f, -0.004f, 0.0098f, 0.0080f, 0.90f, -0.50f, tip[i]);
+    }
+
+    /* Le pouce : écarté vers l'extérieur, plus court, plus épais. */
+    vm_digit(b, 0.030f * sx, 0.052f * sx, 0.004f, -0.002f,
+             0.0125f, 0.0100f, 0.90f, -0.20f, -0.62f);
+}
+
 /* Le jeton : un disque épais, couché dans le plan XY local, épaisseur sur Z.
  * Modélisé à sa vraie taille (24 mm de diamètre, 2 mm d'épaisseur) plutôt qu'à
  * l'unité — il n'a aucune raison d'être mis à l'échelle par la pose. */
@@ -170,7 +250,7 @@ void ns_viewmodel_build(ns_vertex *verts, uint32_t vert_cap, uint32_t *out_vert_
     struct { float r0, r1, flatten; } shape[NS_VM_SEGMENT_COUNT] = {
         { 0.055f, 0.048f, 1.00f },   /* manche gauche */
         { 0.044f, 0.034f, 1.00f },   /* avant-bras gauche */
-        { 0.036f, 0.030f, 0.55f },   /* main gauche, aplatie */
+        { 0.036f, 0.030f, 0.55f },   /* main gauche — voir vm_hand, ces valeurs ne servent plus */
         { 0.055f, 0.048f, 1.00f },
         { 0.044f, 0.034f, 1.00f },
         { 0.036f, 0.030f, 0.55f },
@@ -179,8 +259,9 @@ void ns_viewmodel_build(ns_vertex *verts, uint32_t vert_cap, uint32_t *out_vert_
 
     for (int s = 0; s < NS_VM_SEGMENT_COUNT; ++s) {
         first_index[s] = b.index_count;
-        if (s == NS_VM_TOKEN) vm_token(&b);
-        else                  vm_prism(&b, shape[s].r0, shape[s].r1, shape[s].flatten);
+        if (s == NS_VM_TOKEN)                                 vm_token(&b);
+        else if (s == NS_VM_HAND_L || s == NS_VM_HAND_R)      vm_hand(&b, s == NS_VM_HAND_R);
+        else                                                  vm_prism(&b, shape[s].r0, shape[s].r1, shape[s].flatten);
         index_count[s] = b.index_count - first_index[s];
     }
 
