@@ -1188,6 +1188,22 @@
       ],
       "intensity": 38.0,
       "range": 3.2
+    },
+    {
+      "_": "Au-dessus de la borne de classement. C'est la première borne qu'on croise en descendant l'allée, et la seule qui donne envie de rejouer : elle mérite d'être vue avant d'être atteinte. Sans elle, la mesure donnait 28/10/5 de moyenne sur ce cadrage — un rectangle sombre dans le noir.",
+      "name": "plafonnier_classement",
+      "at": [
+        0.0,
+        2.74,
+        -3.1
+      ],
+      "colour": [
+        1.0,
+        0.83,
+        0.62
+      ],
+      "intensity": 82.0,
+      "range": 4.4
     }
   ],
   "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
@@ -1855,15 +1871,15 @@
       "at": [
         0.0,
         0.12,
-        -3.1
+        -3.45
       ],
-      "yaw": 180.0,
+      "yaw": 0.0,
       "materialBody": "caisson_leaderboard",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_classement",
       "marquee": "marquee_nineteen",
-      "_": "Sur son marquage au sol, à 2,2 m de l'îlot : c'est la borne qu'on rencontre en premier, l'îlot juste derrière. Elle en était à 6 m."
+      "_": "La borne de classement, FACE À L'ENTRÉE. Elle avait un lacet de 180° : son écran regardait le mur sud, et le joueur qui descendait l'allée depuis le sas rencontrait son dos — un panneau rouge nu, en plein axe. C'est la première borne qu'on croise, c'est la seule dont le classement donne envie de rejouer, et elle tournait le dos à tout le monde. Reculée de 35 cm en la retournant : sa face avant venait sinon buter sur le point de vue `allee`, et roomgen refuse un cadrage posé dans un solide — il rendrait un cadre noir."
     }
   ],
   "_moulures": "Plinthes, corniche, cimaise, nez de marche. Ce sont elles qui font le bâti : sans moulure, une géométrie générée se lit comme un assemblage de boîtes, quel que soit le soin mis aux textures.",
@@ -2087,12 +2103,12 @@
           "material": "billard_tapis",
           "at": [
             0.0,
-            0.716,
+            0.784,
             0.0
           ],
           "size": [
             2.1,
-            0.02,
+            0.014,
             1.1
           ],
           "chamfer": 0.004
@@ -2102,7 +2118,7 @@
           "material": "billard_bois",
           "at": [
             0.0,
-            0.735,
+            0.784,
             -0.551
           ],
           "size": [
@@ -2117,7 +2133,7 @@
           "material": "billard_bois",
           "at": [
             0.0,
-            0.735,
+            0.784,
             0.551
           ],
           "size": [
@@ -2132,7 +2148,7 @@
           "material": "billard_bois",
           "at": [
             -0.974,
-            0.735,
+            0.784,
             0.0
           ],
           "size": [
@@ -2147,7 +2163,7 @@
           "material": "billard_bois",
           "at": [
             0.974,
-            0.735,
+            0.784,
             0.0
           ],
           "size": [
@@ -2217,7 +2233,8 @@
           ],
           "chamfer": 0.012
         }
-      ]
+      ],
+      "_": "Le billard. Son tapis était NOYÉ dans le bâti : `geo_box` occupe Y de 0 à `size.y`, donc le corps en bois posé à 0,584 sur 0,20 de haut montait à 0,784, tandis que le drap posé à 0,716 sur 0,02 s'arrêtait à 0,736 — cinq centimètres SOUS le bois qui le recouvrait. Le feutre vert n'a jamais été visible depuis A4, et l'on ne voyait qu'une dalle noire. Mesuré en albédo : (9, 7, 6) là où la texture donne un vert franc."
     },
     {
       "name": "bar_accueil",
@@ -3332,11 +3349,11 @@
       "position": [
         0.0,
         1.7,
-        -1.3
+        -1.9
       ],
       "yaw": 270.0,
-      "pitch": -4.0,
-      "_": "La borne de classement, l'îlot juste derrière. C'est le cadrage qui montre le reproche corrigé : elle était à 6 m de l'îlot, elle est à 2,2 m."
+      "pitch": -6.0,
+      "_": "La borne de classement, vue depuis l'allée — c'est-à-dire d'où l'on vient. Elle était à 6 m de l'îlot, elle est à 2,2 m ; et depuis B3 elle regarde enfin dans la bonne direction."
     },
     {
       "name": "toilettes",
