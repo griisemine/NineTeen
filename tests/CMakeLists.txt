@@ -36,8 +36,12 @@ add_test(NAME bvh COMMAND ns_test_bvh)
 # dans `engine/net/ns_runlog.c`. Une divergence d'un octet invaliderait toutes
 # les parties, avec pour seul symptôme un « sceau invalide » côté serveur. Les
 # vecteurs employés ici sont produits par le code Go lui-même.
+# Il lie AUSSI `nineteen::games` : depuis que les jeux déclarent le vocabulaire
+# d'événements qu'ils émettent, ce test confronte celui de chaque jeu porté à la
+# table du serveur Go. Sans lui, un nom générique côté client faisait rejeter la
+# partie entière — silencieusement, l'envoi étant « au mieux, jamais bloquant ».
 add_executable(ns_test_scores test_scores.c)
-target_link_libraries(ns_test_scores PRIVATE nineteen::engine)
+target_link_libraries(ns_test_scores PRIVATE nineteen::engine nineteen::games)
 nineteen_set_warnings(ns_test_scores)
 nineteen_apply_sanitizers(ns_test_scores)
 add_test(NAME scores COMMAND ns_test_scores)

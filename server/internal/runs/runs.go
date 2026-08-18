@@ -195,6 +195,18 @@ type gameRules struct {
 	// Points proportionnels à la valeur de l'événement, pour les jeux dont le
 	// gain dépend d'une quantité (lignes simultanées, taille d'astéroïde).
 	scaled map[string]int64
+	// Événements qui ne rapportent RIEN mais qu'on accepte : les gestes du
+	// joueur et la mort.
+	//
+	// Ils manquaient, et la table se contredisait : `flap` était limité en
+	// fréquence — donc attendu — alors qu'un événement absent de `points` et de
+	// `scaled` provoque un refus sec. Résultat, TOUTE partie de Flappy soumise
+	// par le client était rejetée avec « événement inconnu « flap » », et rien
+	// côté client ne pouvait le prévoir : il ne voyait qu'un envoi refusé.
+	//
+	// Ils comptent pour l'anti-triche : c'est sur eux que portent les limites de
+	// fréquence, et c'est ce qui distingue une partie jouée d'un score inventé.
+	silent map[string]bool
 	// Nombre maximal d'événements de ce type par seconde de jeu.
 	maxRatePerSecond map[string]float64
 	minDurationMs    int64
@@ -214,6 +226,9 @@ func (g gameRules) compute(sub Submission, ctx Context) (int64, error) {
 		flat, hasFlat := g.points[e.Kind]
 		scale, hasScale := g.scaled[e.Kind]
 		if !hasFlat && !hasScale {
+			if g.silent[e.Kind] {
+				continue // compté pour la fréquence, sans valeur
+			}
 			return 0, fmt.Errorf("événement inconnu « %s » au rang %d", sanitizeKind(e.Kind), i)
 		}
 		if hasScale {
@@ -266,15 +281,22 @@ func sanitizeKind(k string) string {
 var rulesTable = map[string]gameRules{
 	"flappy": {
 		points:           map[string]int64{"pipe": 1},
+		silent:           map[string]bool{"flap": true, "death": true},
 		maxRatePerSecond: map[string]float64{"pipe": 3, "flap": 12},
 		minDurationMs:    500,
 	},
 	"snake": {
-		points:           map[string]int64{"fruit": 10, "bonus": 50},
-		maxRatePerSecond: map[string]float64{"fruit": 6, "bonus": 1},
+		// Les fruits de 2020 n'ont pas tous la même valeur — de la fraise à 20
+		// au muffin rose à 10 000 — donc le barème est PROPORTIONNEL et la
+		// valeur voyage avec l'événement, bornée comme les autres.
+		scaled:           map[string]int64{"fruit": 1},
+		points:           map[string]int64{"bonus": 50},
+		silent:           map[string]bool{"turn": true, "death": true},
+		maxRatePerSecond: map[string]float64{"fruit": 6, "bonus": 1, "turn": 40},
 		minDurationMs:    1000,
 	},
 	"tetris": {
+		silent: map[string]bool{"death": true},
 		// Barème classique : quatre lignes d'un coup valent bien plus que
 		// quatre lignes séparées.
 		scaled:           map[string]int64{"lines": 100},
@@ -283,28 +305,33 @@ var rulesTable = map[string]gameRules{
 		minDurationMs:    2000,
 	},
 	"asteroid": {
+		silent:           map[string]bool{"death": true},
 		scaled:           map[string]int64{"rock": 20},
 		points:           map[string]int64{"bonus": 100, "wave": 250},
 		maxRatePerSecond: map[string]float64{"rock": 15, "bonus": 2, "wave": 0.5},
 		minDurationMs:    2000,
 	},
 	"shooter": {
+		silent:           map[string]bool{"death": true},
 		scaled:           map[string]int64{"enemy": 15},
 		points:           map[string]int64{"boss": 2000, "wave": 300},
 		maxRatePerSecond: map[string]float64{"enemy": 20, "boss": 0.2, "wave": 0.5},
 		minDurationMs:    2000,
 	},
 	"demineur": {
+		silent:           map[string]bool{"death": true},
 		points:           map[string]int64{"cell": 5, "flag": 2, "win": 500},
 		maxRatePerSecond: map[string]float64{"cell": 15, "flag": 8, "win": 0.2},
 		minDurationMs:    1000,
 	},
 	"pacman": {
+		silent:           map[string]bool{"death": true},
 		points:           map[string]int64{"pellet": 10, "power": 50, "ghost": 200, "level": 1000},
 		maxRatePerSecond: map[string]float64{"pellet": 10, "power": 1, "ghost": 2, "level": 0.1},
 		minDurationMs:    2000,
 	},
 	"piano": {
+		silent:           map[string]bool{"death": true},
 		points:           map[string]int64{"note": 5, "combo": 25},
 		maxRatePerSecond: map[string]float64{"note": 14, "combo": 4},
 		minDurationMs:    1000,

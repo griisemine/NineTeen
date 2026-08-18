@@ -174,7 +174,22 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Seize défauts trouvés en chemin, tous instructifs.
+Dix-neuf défauts trouvés en chemin, tous instructifs.
+
+**Trois bogues dans un chemin qu'on croyait fini, tous trouvés en le généralisant.** En
+extrayant l'interface commune des mini-jeux (`games/games.h`), il a fallu nommer les événements
+qu'un jeu émet — et c'est là que ça s'est vu. (1) Le serveur Go **refuse sèchement** un événement
+dont le nom n'est pas dans sa table ; le client émettait « flap », « score » et « death » quand la
+table de Flappy n'accepte que « pipe ». Toute partie soumise était rejetée en bloc, et personne ne
+le voyait : l'envoi est « au mieux, jamais bloquant », donc un refus ne remonte nulle part. (2) La
+table du serveur se contredisait : elle limitait la fréquence de « flap » — donc l'attendait — tout
+en refusant tout événement absent de son barème. (3) `flappy_tick` remettait ses drapeaux
+d'événement à zéro EN TÊTE, alors que `flappy_flap` est appelée depuis le gestionnaire
+d'événements, donc avant la boucle de pas fixe : le battement était effacé avant d'être lu. Le son
+du battement n'a jamais été joué, l'index droit n'a jamais tapé sur le bouton, et « flap » n'est
+jamais entré dans le journal. Trois tests neufs les tiennent maintenant, deux en C et un en Go,
+parce que le vocabulaire est écrit dans les deux langages et que rien d'autre ne les tient
+d'accord.
 
 **Un preset qui ne construit pas ne dit rien, et personne ne s'en aperçoit.** Le preset
 `linux-x64-asan` ne LIAIT pas : `ns_test_render` était la seule cible de test à ne pas appeler

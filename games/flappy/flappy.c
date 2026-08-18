@@ -242,7 +242,18 @@ static bool hits_anything(const flappy *g)
 
 void flappy_tick(flappy *g, float dt)
 {
-    g->flapped = g->scored_now = g->died_now = false;
+    /*
+     * `flapped` n'est PAS remis à zéro ici, et c'est une correction.
+     *
+     * Il l'était, en tête de `tick` — or `flappy_flap` est appelée depuis le
+     * gestionnaire d'événements, donc AVANT la boucle de pas fixe de l'image.
+     * Le drapeau était donc effacé avant que quiconque puisse le lire : le son
+     * du battement n'a jamais été joué, l'index droit n'a jamais tapé sur le
+     * bouton, et l'événement « flap » n'est jamais entré dans le journal de
+     * partie. C'est `flappy_events` qui consomme désormais les trois drapeaux,
+     * ce qui les rend indépendants du moment où ils ont été levés.
+     */
+    g->scored_now = g->died_now = false;
     g->wing_time += dt;
 
     if (g->phase == FLAPPY_READY) {
@@ -517,3 +528,80 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
         }
     }
 }
+
+/* ==========================================================================
+ * L'adaptation à `ns_game_api`
+ * ==========================================================================
+ * Des enveloppes, pas une réécriture. Flappy garde son API typée — c'est elle
+ * que `tests/test_flappy.c` interroge, et un test qui passe par un pointeur de
+ * fonction ne vérifie plus les types.
+ * ========================================================================== */
+
+static void fl_reset(void *g, uint64_t seed, bool hard) { flappy_reset((flappy *)g, seed, hard); }
+
+static void fl_press(void *g, ns_game_button b)
+{
+    /* Toutes les touches battent des ailes. Sur une borne il n'y a qu'un bouton
+     * qui compte, et chercher lequel n'apprend rien à personne. */
+    (void)b;
+    flappy_flap((flappy *)g);
+}
+
+static void fl_tick(void *g, float dt) { flappy_tick((flappy *)g, dt); }
+
+static void fl_draw(ns_sprite *s, const void *g, const void *a, float w, float h)
+{
+    flappy_draw(s, (const flappy *)g, (const flappy_art *)a, w, h);
+}
+
+static bool fl_art_load(ns_rhi *r, void *a) { return flappy_art_load(r, (flappy_art *)a); }
+static void fl_art_free(ns_rhi *r, void *a) { flappy_art_free(r, (flappy_art *)a); }
+static bool fl_autopilot(void *g)           { return flappy_autopilot((flappy *)g); }
+
+static uint32_t fl_score(const void *g)    { return ((const flappy *)g)->score; }
+static uint32_t fl_best(const void *g)     { return ((const flappy *)g)->best; }
+static void     fl_set_best(void *g, uint32_t b) { ((flappy *)g)->best = b; }
+
+static bool fl_dead(const void *g, float *dead_time)
+{
+    const flappy *f = (const flappy *)g;
+    if (dead_time) *dead_time = f->dead_time;
+    return f->phase == FLAPPY_DEAD;
+}
+
+/*
+ * Le vocabulaire du serveur pour Flappy : un tuyau franchi vaut un point
+ * (« pipe »), le battement d'aile ne vaut rien mais il est limité en fréquence,
+ * la mort clôt la partie. Ce sont les noms de `rulesTable["flappy"]`, pas des
+ * noms choisis ici.
+ */
+static const char *const fl_kinds[] = { "pipe", "flap", "death", NULL };
+
+static void fl_events(void *g, ns_game_events *out)
+{
+    flappy *f = (flappy *)g;
+    out->blip        = f->flapped;
+    out->blip_kind   = "flap";
+    out->score       = f->scored_now;
+    out->score_kind  = "pipe";
+    out->score_value = 1;
+    out->die         = f->died_now;
+
+    /* Consommés : lus une fois, une seule. Sans ça un battement levé par le
+     * gestionnaire d'événements serait relayé à chaque image jusqu'au suivant. */
+    f->flapped = f->scored_now = f->died_now = false;
+}
+
+const ns_game_api g_flappy_api = {
+    .id = "flappy", .title = "FLAPPY BIRD", .label = "FLAPPY",
+    .state_size = sizeof(flappy), .art_size = sizeof(flappy_art),
+    .sound_blip = "games/flappy/flap.wav",
+    .sound_score = "games/flappy/score.wav",
+    .sound_die = "games/flappy/hurt.wav",
+    .art_load = fl_art_load, .art_free = fl_art_free,
+    .reset = fl_reset, .press = fl_press, .hold = NULL,
+    .tick = fl_tick, .draw = fl_draw, .autopilot = fl_autopilot,
+    .event_kinds = fl_kinds,
+    .score = fl_score, .best = fl_best, .set_best = fl_set_best,
+    .dead = fl_dead, .events = fl_events,
+};

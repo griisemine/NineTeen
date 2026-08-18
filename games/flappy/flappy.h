@@ -31,6 +31,7 @@
 #ifndef NS_FLAPPY_H
 #define NS_FLAPPY_H
 
+#include "games.h"
 #include "ns_math.h"
 #include "ns_sprite.h"
 
@@ -119,5 +120,8 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
  * À appeler juste avant `flappy_tick`. Renvoie true s'il a battu des ailes.
  */
 bool flappy_autopilot(flappy *g);
+
+/* La même chose, vue par `room/` : voir `games/games.h`. */
+extern const ns_game_api g_flappy_api;
 
 #endif /* NS_FLAPPY_H */

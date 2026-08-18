@@ -300,3 +300,93 @@ func TestPayloadCanoniqueStable(t *testing.T) {
 		t.Fatalf("payload canonique modifié :\n  obtenu : %s\n  attendu : %s", got, want)
 	}
 }
+
+// La partie que le client produit RÉELLEMENT, avec le vocabulaire qu'il émet.
+//
+// C'est le test qui manquait des deux côtés. Le client émettait « flap » pour
+// chaque battement d'aile et « death » à la fin ; la table ne connaissait ni
+// l'un ni l'autre dans `points`, et un événement absent de `points` et de
+// `scaled` est refusé SÈCHEMENT. Toute partie de Flappy soumise était donc
+// rejetée en bloc — sans que personne le voie, l'envoi côté client étant « au
+// mieux, jamais bloquant ».
+//
+// `tests/test_scores.c` tient le même invariant depuis le C. Les deux tables
+// sont écrites dans deux langages ; ce sont ces deux tests qui les tiennent
+// d'accord.
+func TestVocabulaireDuClientAccepte(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "flappy"
+
+	// Une minute de jeu, trois tuyaux franchis, des battements entre les deux.
+	sub := Submission{
+		DurationMs: 12_000,
+		Events: []Event{
+			{At: 500, Kind: "flap", Value: 0},
+			{At: 1200, Kind: "flap", Value: 0},
+			{At: 2000, Kind: "pipe", Value: 1},
+			{At: 2600, Kind: "flap", Value: 0},
+			{At: 4000, Kind: "pipe", Value: 1},
+			{At: 5100, Kind: "flap", Value: 0},
+			{At: 6000, Kind: "pipe", Value: 1},
+			{At: 6400, Kind: "death", Value: 0},
+		},
+		ClaimedScore: 3,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("la partie que le client produit est rejetée : %s", v.Reason)
+	}
+	if v.Score != 3 {
+		t.Fatalf("score recalculé %d, attendu 3", v.Score)
+	}
+}
+
+// Les événements muets ne doivent RIEN rapporter : les accepter ne doit pas
+// ouvrir une voie pour gonfler un score en battant des ailes.
+func TestEvenementsMuetsNeRapportentRien(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "flappy"
+
+	sub := Submission{
+		DurationMs: 10_000,
+		Events: []Event{
+			{At: 100, Kind: "flap", Value: 9999},
+			{At: 200, Kind: "flap", Value: 9999},
+			{At: 300, Kind: "death", Value: 9999},
+		},
+		ClaimedScore: 0,
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if !v.Accepted {
+		t.Fatalf("une partie sans point devrait rester valide : %s", v.Reason)
+	}
+	if v.Score != 0 {
+		t.Fatalf("les événements muets ont rapporté %d points", v.Score)
+	}
+}
+
+// Et la limite de fréquence continue de s'appliquer à un événement muet : c'est
+// tout ce à quoi il sert.
+func TestEvenementMuetResteLimiteEnFrequence(t *testing.T) {
+	ctx := testContext()
+	ctx.GameSlug = "flappy"
+
+	// 12 battements par seconde au maximum : on en met 200 en 10 s.
+	sub := Submission{DurationMs: 10_000, ClaimedScore: 0}
+	for i := 0; i < 200; i++ {
+		sub.Events = append(sub.Events, Event{At: int64(i * 50), Kind: "flap"})
+	}
+	sign(ctx, &sub)
+
+	v := Verify(ctx, sub)
+	if v.Accepted {
+		t.Fatal("200 battements en 10 s auraient dû être refusés")
+	}
+	if !strings.Contains(v.Reason, "flap") {
+		t.Fatalf("la raison devrait nommer l'événement : %s", v.Reason)
+	}
+}

@@ -20,6 +20,7 @@
  * avec son propre contexte de test, et recopiés ici.
  */
 #include "ns_runlog.h"
+#include "games.h"
 #include "ns_scores.h"
 #include "ns_core.h"
 
@@ -355,6 +356,130 @@ static void test_scores_survives_corruption(void)
     CHECK(b->entry[0].score == 500, "et la meilleure est correcte (%u)", b->entry[0].score);
 }
 
+/* ==========================================================================
+ * Le vocabulaire d'événements, confronté à celui du serveur
+ * ==========================================================================
+ * LE test qui manquait, et qui aurait épargné un bogue silencieux.
+ *
+ * `server/internal/runs/runs.go` refuse SÈCHEMENT un événement dont le nom
+ * n'est pas dans sa table — « événement inconnu ». Le client émettait « flap »,
+ * « score » et « death » pour Flappy, là où le serveur n'attend que « pipe »
+ * (un point), « flap » et « death ». Toute partie soumise était donc rejetée en
+ * bloc, et rien côté client ne pouvait le prévoir : il ne voyait qu'un envoi
+ * refusé, et l'envoi étant « au mieux, jamais bloquant », personne ne le voyait
+ * du tout.
+ *
+ * La table ci-dessous est recopiée à la main depuis le Go. C'est assumé : il
+ * n'y a pas de format partagé entre les deux, et une copie VÉRIFIÉE vaut mieux
+ * qu'une copie tacite. Le jour où le serveur change, ce test tombe.
+ * ========================================================================== */
+
+/* rulesTable de `server/internal/runs/runs.go`, à la date de ce test. */
+static const struct {
+    const char *game;
+    const char *kinds[8];    /* points + scaled + silent, terminé par NULL */
+} g_server_vocab[] = {
+    { "flappy",   { "pipe", "flap", "death", NULL } },
+    { "snake",    { "fruit", "bonus", "turn", "death", NULL } },
+    { "tetris",   { "lines", "tetris", "drop", "death", NULL } },
+    { "asteroid", { "rock", "bonus", "wave", "death", NULL } },
+    { "shooter",  { "enemy", "boss", "wave", "death", NULL } },
+    { "demineur", { "cell", "flag", "win", "death", NULL } },
+    { "pacman",   { "pellet", "power", "ghost", "level", "death", NULL } },
+    { "piano",    { "note", "combo", "death", NULL } },
+};
+
+static bool vocab_has(const char *const *list, const char *needle)
+{
+    for (int i = 0; list[i]; ++i) if (SDL_strcmp(list[i], needle) == 0) return true;
+    return false;
+}
+
+static void test_event_vocabulary_matches_server(void)
+{
+    CHECK(ns_game_count() > 0, "au moins un jeu est porté (%d)", ns_game_count());
+
+    for (int i = 0; i < ns_game_count(); ++i) {
+        const ns_game_api *api = ns_game_at(i);
+        CHECK(api != NULL, "le jeu %d existe", i);
+        if (!api) continue;
+
+        /* Le serveur connaît-il ce jeu ? */
+        const char *const *server = NULL;
+        for (size_t j = 0; j < sizeof g_server_vocab / sizeof g_server_vocab[0]; ++j) {
+            if (SDL_strcmp(g_server_vocab[j].game, api->id) == 0) {
+                server = g_server_vocab[j].kinds;
+                break;
+            }
+        }
+        CHECK(server != NULL, "le serveur connaît « %s »", api->id);
+        if (!server) continue;
+
+        CHECK(api->event_kinds != NULL, "« %s » déclare son vocabulaire", api->id);
+        if (!api->event_kinds) continue;
+
+        /* Chaque nom que le jeu peut émettre doit être accepté. L'inverse n'est
+         * PAS vrai : le serveur peut connaître des événements qu'un portage
+         * n'émet pas encore. */
+        for (int k = 0; api->event_kinds[k]; ++k) {
+            CHECK(vocab_has(server, api->event_kinds[k]),
+                  "« %s » : le serveur accepte « %s »", api->id, api->event_kinds[k]);
+        }
+        /* La mort clôt toute partie : `finish_run` l'émet sans passer par le
+         * jeu, donc elle doit être déclarée quoi qu'il arrive. */
+        CHECK(vocab_has(api->event_kinds, "death"),
+              "« %s » déclare « death »", api->id);
+    }
+}
+
+/* Un jeu doit AUSSI produire les noms qu'il déclare — une table exacte et un
+ * `events` qui dit autre chose ne prouveraient rien. */
+static void test_events_use_declared_kinds(void)
+{
+    for (int i = 0; i < ns_game_count(); ++i) {
+        const ns_game_api *api = ns_game_at(i);
+        if (!api || !api->event_kinds) continue;
+
+        void *g = SDL_calloc(1, api->state_size);
+        CHECK(g != NULL, "l'état de « %s » s'alloue", api->id);
+        if (!g) continue;
+
+        api->reset(g, 424242u, false);
+
+        /* On joue jusqu'à voir au moins un blip et un gain, ou jusqu'à la mort.
+         * L'autopilote est là pour ça : il ne prouve pas que le jeu est amusant,
+         * il prouve qu'on peut le faire tourner. */
+        bool saw_blip = false, saw_score = false;
+        const float step = 1.0f / 120.0f;
+        for (int t = 0; t < 120 * 60 && !(saw_blip && saw_score); ++t) {
+            if (api->autopilot) api->autopilot(g);
+            api->tick(g, step);
+
+            ns_game_events ev; SDL_zero(ev);
+            api->events(g, &ev);
+            if (ev.blip) {
+                saw_blip = true;
+                CHECK(ev.blip_kind && vocab_has(api->event_kinds, ev.blip_kind),
+                      "« %s » : le geste émis (« %s ») est déclaré",
+                      api->id, ev.blip_kind ? ev.blip_kind : "(nul)");
+            }
+            if (ev.score) {
+                saw_score = true;
+                CHECK(ev.score_kind && vocab_has(api->event_kinds, ev.score_kind),
+                      "« %s » : le gain émis (« %s ») est déclaré",
+                      api->id, ev.score_kind ? ev.score_kind : "(nul)");
+                CHECK(ev.score_value >= 0 && ev.score_value <= 10000,
+                      "« %s » : la valeur du gain tient dans les bornes du serveur"
+                      " (%lld)", api->id, (long long)ev.score_value);
+            }
+            if (api->dead(g, NULL)) break;
+        }
+        CHECK(saw_blip, "« %s » : un geste a été observé en une minute", api->id);
+        CHECK(saw_score, "« %s » : un gain a été observé en une minute", api->id);
+        SDL_free(g);
+    }
+}
+
 /* ========================================================================== */
 
 int main(void)
@@ -371,6 +496,8 @@ int main(void)
     test_hmac_vectors();
     test_base64_raw();
     test_canonical_matches_server();
+    test_event_vocabulary_matches_server();
+    test_events_use_declared_kinds();
     test_canonical_empty();
     test_unauthenticated_is_not_queued();
     test_queue_writes_one_file();

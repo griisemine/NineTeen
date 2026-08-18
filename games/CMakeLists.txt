@@ -9,6 +9,7 @@
 # sa propre fenêtre et faisait tourner sa propre boucle.
 
 add_library(nineteen_games STATIC
+    games.c
     flappy/flappy.c
 )
 add_library(nineteen::games ALIAS nineteen_games)

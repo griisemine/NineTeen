@@ -21,7 +21,7 @@
 #include "ns_scene.h"
 #include "ns_sprite.h"
 
-#include "flappy/flappy.h"
+#include "games.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -105,7 +105,7 @@ static void print_usage(const char *exe)
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
         "  --bench              mesure le temps GPU réel de chaque image\n"
-        "  --game=NOM           démarre directement dans un mini-jeu (flappy)\n"
+        "  --game=NOM           démarre directement dans un mini-jeu\n"
         "  --autoplay           le mini-jeu se joue tout seul (captures, CI)\n"
         "  --warmup=S           avance le mini-jeu de S secondes avant de rendre\n"
         "  --play-at=BORNE      se place devant la borne nommée et lance sa partie,\n"
@@ -375,26 +375,72 @@ static const char *quality_name(ns_quality q)
  * est acquis AVANT qu'on se demande s'il y a un réseau. C'était l'erreur de
  * fond de 2020 — sans serveur, la partie n'existait pas.
  */
-static uint32_t finish_run(ns_runlog *log, int64_t run_ms, const flappy *game,
+static uint32_t finish_run(ns_runlog *log, int64_t run_ms,
+                           const ns_game_api *api, const void *game,
+                           const char *difficulty,
                            const char *player, bool offline)
 {
-    const char *difficulty = game->hard ? "hard" : "normal";
+    const uint32_t score = api->score(game);
 
     ns_runlog_event(log, run_ms, "death", 0);
-    ns_runlog_end(log, run_ms, (int64_t)game->score);
+    ns_runlog_end(log, run_ms, (int64_t)score);
 
-    const uint32_t rank = ns_scores_record("flappy", difficulty, game->score,
+    const uint32_t rank = ns_scores_record(api->id, difficulty, score,
                                            (uint32_t)run_ms, player);
     ns_scores_save();
-    NS_INFO("Flappy : perdu à %u en %.1f s — %s, meilleur local %u",
-            game->score, (double)run_ms / 1000.0,
+    NS_INFO("%s : perdu à %u en %.1f s — %s, meilleur local %u",
+            api->title, score, (double)run_ms / 1000.0,
             rank ? "classé" : "hors classement",
-            ns_scores_best("flappy", difficulty));
+            ns_scores_best(api->id, difficulty));
 
     /* Au mieux, jamais bloquant. Sans secret de partie — c'est-à-dire hors
      * ligne — la mise en file refuse d'elle-même : voir `ns_runlog_enqueue`. */
     if (!offline) (void)ns_runlog_enqueue(log);
     return rank;
+}
+
+/*
+ * Charge un mini-jeu : son état, ses planches, ses trois sons.
+ *
+ * Un seul jeu vit à la fois — on ne joue pas à deux bornes en même temps — donc
+ * le précédent est libéré. Recharger le MÊME jeu ne refait rien : à la borne on
+ * relance une partie plusieurs fois de suite, et recharger cinq planches à
+ * chaque jeton se verrait.
+ *
+ * Renvoie NULL si le jeu n'est pas porté. Ce n'est pas une erreur : dix-neuf
+ * bornes déclarent huit jeux, et tous ne sont pas là.
+ */
+static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char *id,
+                                    const ns_game_api **cur, void **state, void **art,
+                                    int *blip, int *score, int *die)
+{
+    const ns_game_api *api = ns_game_find(id);
+    if (!api || !sprites) return NULL;
+    if (*cur == api) return api;
+
+    if (*cur) {
+        if (*art) { (*cur)->art_free(rhi, *art); SDL_free(*art); *art = NULL; }
+        SDL_free(*state); *state = NULL;
+    }
+
+    *state = SDL_calloc(1, api->state_size);
+    *art   = SDL_calloc(1, api->art_size);
+    if (!*state || !*art) {
+        SDL_free(*state); SDL_free(*art);
+        *state = *art = NULL;
+        *cur = NULL;
+        NS_WARN("« %s » : mémoire indisponible", api->id);
+        return NULL;
+    }
+    if (!api->art_load(rhi, *art)) {
+        NS_WARN("« %s » : planches indisponibles, le jeu tournera sans image", api->id);
+    }
+    *blip  = api->sound_blip  ? ns_audio_load(api->sound_blip)  : -1;
+    *score = api->sound_score ? ns_audio_load(api->sound_score) : -1;
+    *die   = api->sound_die   ? ns_audio_load(api->sound_die)   : -1;
+
+    *cur = api;
+    return api;
 }
 
 int main(int argc, char **argv)
@@ -705,8 +751,20 @@ int main(int argc, char **argv)
      * ainsi vaut mieux qu'un `if` qui prétendrait le contraire.
      */
     ns_sprite *sprites = ns_sprite_create(rhi, ns_rhi_swapchain_format(rhi));
-    flappy_art flappy_assets;
-    flappy game;
+
+    /*
+     * Le jeu en cours, par POINTEUR sur son interface.
+     *
+     * `main.c` nommait « flappy » à quinze endroits. Ajouter les sept jeux
+     * restants sur ce modèle aurait voulu dire cent-cinq modifications ici, dans
+     * un fichier qui gère déjà la salle, la caméra, le son et le classement.
+     * Les états sont alloués une fois, à la taille que chaque jeu déclare.
+     */
+    const ns_game_api *game_api = NULL;   /* le jeu chargé, NULL si aucun */
+    void *game = NULL;                    /* son état */
+    void *game_art = NULL;                /* ses planches */
+    bool  game_hard = false;
+    int   sfx_blip = -1, sfx_score = -1, sfx_die = -1;
     bool in_game = false;
     /*
      * Le journal de la partie en cours, et son horloge de simulation.
@@ -729,8 +787,16 @@ int main(int argc, char **argv)
                     pending, ns_runlog_queue_dir());
         }
     }
-    if (sprites) flappy_art_load(rhi, &flappy_assets);
-    else         SDL_zero(flappy_assets);
+    /*
+     * Le chargement d'un jeu : son état, ses planches, ses trois sons.
+     *
+     * Un seul jeu vit à la fois — on ne joue pas à deux bornes en même temps —
+     * donc on libère le précédent. Recharger le MÊME jeu ne refait rien : à la
+     * borne on relance une partie plusieurs fois de suite, et recharger cinq
+     * planches à chaque jeton se verrait.
+     */
+    #define LOAD_GAME(id) load_game(rhi, sprites, (id), &game_api, &game, &game_art, \
+                                    &sfx_blip, &sfx_score, &sfx_die)
 
     /*
      * La dalle sur laquelle le jeu tourne : une cible de rendu 512 x 288, du même
@@ -808,25 +874,24 @@ int main(int argc, char **argv)
     /* Le rang de la dernière partie, pour l'écran de fin. */
     uint32_t last_rank = 0;
 
-    /* Les trois sons du jeu, ceux de 2020. Le jeu ne connaît pas le mixeur : il
-     * lève des drapeaux d'événement, et c'est ici qu'on les entend. */
-    const int sfx_flap  = ns_audio_load("games/flappy/flap.wav");
-    const int sfx_hurt  = ns_audio_load("games/flappy/hurt.wav");
-    const int sfx_score = ns_audio_load("games/flappy/score.wav");
-
     if (opt.game && sprites) {
-        if (SDL_strcasecmp(opt.game, "flappy") == 0) {
+        if (LOAD_GAME(opt.game)) {
             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-            flappy_reset(&game, seed, false);
-            ns_runlog_begin(runlog, "flappy", "normal",
+            game_hard = false;
+            game_api->reset(game, seed, game_hard);
+            ns_runlog_begin(runlog, game_api->id, "normal",
                             (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
             run_ms = 0;
             in_game = true;
             fullscreen_game = true;      /* `--game=` est le mode plein écran */
-            NS_INFO("Flappy Bird : partie démarrée");
-
+            NS_INFO("%s : partie démarrée", game_api->title);
         } else {
-            NS_WARN("--game=%s inconnu (flappy)", opt.game);
+            char known[256]; known[0] = '\0';
+            for (int i = 0; i < ns_game_count(); ++i) {
+                if (i) SDL_strlcat(known, ", ", sizeof known);
+                SDL_strlcat(known, ns_game_at(i)->id, sizeof known);
+            }
+            NS_WARN("--game=%s : pas encore porté (%s)", opt.game, known);
         }
     }
 
@@ -878,8 +943,14 @@ int main(int argc, char **argv)
             cam.velocity = ns_v3_zero();
 
             const bool hard = (SDL_strcasecmp(pick->difficulty, "hard") == 0);
-            flappy_reset(&game, 20240418, hard);
-            ns_runlog_begin(runlog, "flappy", hard ? "hard" : "normal", 20240418, NULL, 0);
+            if (!LOAD_GAME(pick->game)) {
+                NS_WARN("borne « %s » : « %s » n'est pas encore porté",
+                        pick->name, pick->game);
+                goto play_at_done;
+            }
+            game_hard = hard;
+            game_api->reset(game, 20240418, hard);
+            ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal", 20240418, NULL, 0);
             run_ms = 0;
             in_game = true;
             fullscreen_game = false;
@@ -891,6 +962,7 @@ int main(int argc, char **argv)
             NS_INFO("borne « %s » (%s, %s) : partie dans la dalle, matériau %d",
                     pick->name, pick->game, hard ? "hard" : "normal", pick->screen_material);
         }
+play_at_done: ;
     }
 
     /*
@@ -907,8 +979,8 @@ int main(int argc, char **argv)
         const float step = (float)(1.0 / NS_DEFAULT_TICK_HZ);
         const int steps = (int)(opt.warmup / step);
         for (int k = 0; k < steps; ++k) {
-            if (opt.autoplay) flappy_autopilot(&game);
-            flappy_tick(&game, step);
+            if (opt.autoplay && game_api->autopilot) game_api->autopilot(game);
+            game_api->tick(game, step);
             /*
              * L'avance rapide tient le journal comme la boucle normale.
              *
@@ -919,12 +991,17 @@ int main(int argc, char **argv)
              * doit rester la seule différence entre les deux boucles.
              */
             run_ms += (int64_t)(step * 1000.0f + 0.5f);
-            if (game.flapped)    ns_runlog_event(runlog, run_ms, "flap", 0);
-            if (game.scored_now) ns_runlog_event(runlog, run_ms, "score", 1);
-            if (game.died_now)   last_rank = finish_run(runlog, run_ms, &game, opt.player, opt.offline);
+            ns_game_events ev; SDL_zero(ev);
+            game_api->events(game, &ev);
+            if (ev.blip)  ns_runlog_event(runlog, run_ms, ev.blip_kind, 0);
+            if (ev.score) ns_runlog_event(runlog, run_ms, ev.score_kind, ev.score_value);
+            if (ev.die)
+                last_rank = finish_run(runlog, run_ms, game_api, game,
+                                       game_hard ? "hard" : "normal",
+                                       opt.player, opt.offline);
         }
-        NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
-                (double)opt.warmup, steps, game.score);
+        NS_INFO("%s : %.1f s avancées (%d pas), score %u",
+                game_api->title, (double)opt.warmup, steps, game_api->score(game));
     }
 
     /*
@@ -1048,7 +1125,8 @@ int main(int argc, char **argv)
                         playing_material = -1;
                         playing_cab = NULL;
                         room_viewmodel_stop_playing(&vmstate);
-                        NS_INFO("Flappy Bird : score %u, meilleur %u", game.score, game.best);
+                        NS_INFO("%s : score %u, meilleur %u", game_api->title,
+                                game_api->score(game), game_api->best(game));
                         break;
                     }
                     room_menu_open(&menu);
@@ -1065,35 +1143,51 @@ int main(int argc, char **argv)
                     ns_rhi_request_screenshot(rhi, shot);
                     break;
                 }
-                case SDLK_SPACE:
+                case SDLK_SPACE: case SDLK_RETURN:
+                case SDLK_UP: case SDLK_DOWN: case SDLK_LEFT: case SDLK_RIGHT:
                     if (in_game) {
-                        /* En partie, l'espace bat des ailes. Après la mort il
-                         * relance — mais seulement une fois la chute finie,
-                         * sinon un appui maintenu au moment du choc redémarre
-                         * avant qu'on ait vu ce qui s'est passé. */
+                        /*
+                         * En partie, le clavier appartient au jeu. Après la mort
+                         * l'action relance — mais seulement une fois la chute
+                         * finie, sinon un appui maintenu au moment du choc
+                         * redémarre avant qu'on ait vu ce qui s'est passé.
+                         */
                         if (!ev.key.repeat) {
-                            if (game.phase == FLAPPY_DEAD && game.dead_time > 0.8f) {
-                                const uint32_t best = game.best;
+                            float dead_time = 0.0f;
+                            const bool dead = game_api->dead(game, &dead_time);
+                            const bool action = (ev.key.key == SDLK_SPACE
+                                              || ev.key.key == SDLK_RETURN);
+                            if (dead && action && dead_time > 0.8f) {
+                                const uint32_t best = game_api->best(game);
                                 const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                                flappy_reset(&game, seed, game.hard);
-                                game.best = best;
+                                game_api->reset(game, seed, game_hard);
+                                game_api->set_best(game, best);
                                 /* Une nouvelle partie, donc un nouveau journal :
                                  * poursuivre l'ancien enverrait au serveur deux
                                  * parties collées bout à bout. */
-                                ns_runlog_begin(runlog, "flappy",
-                                                game.hard ? "hard" : "normal",
+                                ns_runlog_begin(runlog, game_api->id,
+                                                game_hard ? "hard" : "normal",
                                                 (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull),
                                                 NULL, 0);
                                 run_ms = 0;
                             } else {
-                                flappy_flap(&game);
+                                ns_game_button b = NS_GAME_ACTION;
+                                switch (ev.key.key) {
+                                    case SDLK_UP:    b = NS_GAME_UP; break;
+                                    case SDLK_DOWN:  b = NS_GAME_DOWN; break;
+                                    case SDLK_LEFT:  b = NS_GAME_LEFT; break;
+                                    case SDLK_RIGHT: b = NS_GAME_RIGHT; break;
+                                    default: break;
+                                }
+                                game_api->press(game, b);
                             }
                         }
                         break;
                     }
-                    /* Le saut est une transition, pas un état : lu en événement
-                     * pour qu'un appui bref ne se perde pas entre deux pas. */
-                    if (!ev.key.repeat) cam.jump_requested = true;
+                    /* Hors partie, seule l'espace veut dire quelque chose. Le saut
+                     * est une transition, pas un état : lu en événement pour qu'un
+                     * appui bref ne se perde pas entre deux pas. */
+                    if (ev.key.key == SDLK_SPACE && !ev.key.repeat) cam.jump_requested = true;
                     break;
                 case SDLK_F5:
                     cam.mode = (cam.mode == ROOM_CAM_FREE) ? ROOM_CAM_PLAYER : ROOM_CAM_FREE;
@@ -1176,11 +1270,12 @@ int main(int argc, char **argv)
                          * lisait : dix-neuf bornes affectées à un jeu, et aucune
                          * qui en lançait un.
                          */
-                        if (sprites && SDL_strcasecmp(near->game, "flappy") == 0) {
+                        if (LOAD_GAME(near->game)) {
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
                             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                            flappy_reset(&game, seed, hard);
-                            ns_runlog_begin(runlog, "flappy", hard ? "hard" : "normal",
+                            game_hard = hard;
+                            game_api->reset(game, seed, hard);
+                            ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal",
                                             (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
                             run_ms = 0;
                             in_game = true;
@@ -1195,6 +1290,12 @@ int main(int argc, char **argv)
                             playing_material = near->screen_material;
                             fullscreen_game = false;
                             playing_cab = near;
+                        } else {
+                            /* Le jeton part quand même : le geste est celui de la
+                             * salle, pas celui du jeu. Mais on le DIT, plutôt que
+                             * de laisser croire à une borne cassée. */
+                            NS_INFO("borne « %s » : « %s » n'est pas encore porté",
+                                    near->name, near->game);
                         }
                     }
                     break;
@@ -1322,8 +1423,20 @@ int main(int argc, char **argv)
              */
             room_menu_update(&menu, (float)clock.tick_seconds);
             if (in_game && !menu.open) {
-                if (opt.autoplay) flappy_autopilot(&game);
-                flappy_tick(&game, (float)clock.tick_seconds);
+                if (opt.autoplay && game_api->autopilot) game_api->autopilot(game);
+                /* Les maintiens : un jeu qui tourne à l'angle (le serpent) a
+                 * besoin de savoir qu'on tient la direction, pas qu'on l'a
+                 * pressée. Ceux qui n'en veulent pas laissent le pointeur nul. */
+                if (game_api->hold) {
+                    bool held[NS_GAME_BUTTON_COUNT] = { false };
+                    held[NS_GAME_UP]     = keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_W];
+                    held[NS_GAME_DOWN]   = keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_S];
+                    held[NS_GAME_LEFT]   = keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_A];
+                    held[NS_GAME_RIGHT]  = keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D];
+                    held[NS_GAME_ACTION] = keys[SDL_SCANCODE_SPACE];
+                    game_api->hold(game, held);
+                }
+                game_api->tick(game, (float)clock.tick_seconds);
                 /*
                  * L'horloge de la partie est celle de la SIMULATION, pas celle
                  * du mur : elle avance d'un pas fixe. C'est ce qui rend le
@@ -1332,22 +1445,26 @@ int main(int argc, char **argv)
                  */
                 run_ms += (int64_t)(clock.tick_seconds * 1000.0 + 0.5);
 
-                if (game.flapped) {
-                    ns_audio_play(sfx_flap, NS_BUS_SFX, 0.55f, 1.0f);
+                ns_game_events gev; SDL_zero(gev);
+                game_api->events(game, &gev);
+                if (gev.blip) {
+                    ns_audio_play(sfx_blip, NS_BUS_SFX, 0.55f, 1.0f);
                     /* Le jeu ne connaît pas les bras, et c'est voulu : il ne
                      * publie qu'un événement, et c'est ici qu'on le relaie à
                      * l'index droit. Le même événement sert déjà au son. */
                     room_viewmodel_tap(&vmstate);
-                    ns_runlog_event(runlog, run_ms, "flap", 0);
+                    ns_runlog_event(runlog, run_ms, gev.blip_kind, 0);
                 }
-                if (game.scored_now) {
+                if (gev.score) {
                     ns_audio_play(sfx_score, NS_BUS_SFX, 0.7f, 1.0f);
-                    NS_INFO("Flappy : %u", game.score);
-                    ns_runlog_event(runlog, run_ms, "score", 1);
+                    NS_INFO("%s : %u", game_api->title, game_api->score(game));
+                    ns_runlog_event(runlog, run_ms, gev.score_kind, gev.score_value);
                 }
-                if (game.died_now) {
-                    ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);
-                    last_rank = finish_run(runlog, run_ms, &game, opt.player, opt.offline);
+                if (gev.die) {
+                    ns_audio_play(sfx_die, NS_BUS_SFX, 0.8f, 1.0f);
+                    last_rank = finish_run(runlog, run_ms, game_api, game,
+                                           game_hard ? "hard" : "normal",
+                                           opt.player, opt.offline);
                 }
             }
         }
@@ -1423,7 +1540,7 @@ int main(int argc, char **argv)
 
             if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
-                flappy_draw(sprites, &game, &flappy_assets, 512.0f, 288.0f);
+                game_api->draw(sprites, game, game_art, 512.0f, 288.0f);
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                 ns_sprite_end(rhi, sprites, screen_rt.handle, 512, 288, off);
                 ns_renderer_set_screen(renderer, playing_material, screen_rt.handle);
@@ -1442,8 +1559,13 @@ int main(int argc, char **argv)
                  * sur un 4/3, et c'est lui qui se centre.
                  */
                 const float aspect = (float)w / (float)ns_maxf(1.0f, (float)h);
-                ns_sprite_begin(sprites, FLAPPY_H * aspect, FLAPPY_H);
-                flappy_draw(sprites, &game, &flappy_assets, FLAPPY_H * aspect, FLAPPY_H);
+                /* 1080 de haut : le repère logique des jeux de 2020, à l'échelle
+                 * 4 comme le faisait leur `SCALE_TO_FIT`. La largeur suit
+                 * l'aspect de la fenêtre, donc le jeu garde ses proportions sur
+                 * un 16/9 comme sur un 4/3, et c'est lui qui se centre. */
+                const float logical_h = 1080.0f;
+                ns_sprite_begin(sprites, logical_h * aspect, logical_h);
+                game_api->draw(sprites, game, game_art, logical_h * aspect, logical_h);
                 static const float night[4] = { 0.02f, 0.02f, 0.03f, 1.0f };
                 ns_sprite_end(rhi, sprites, target, w, h, night);
                 ns_rhi_end_frame(rhi);
@@ -1451,8 +1573,9 @@ int main(int argc, char **argv)
                 if (opt.screenshot && frames_rendered >= opt.frames) {
                     ns_rhi_capture_texture_png(rhi, target, w, h,
                                                ns_rhi_swapchain_format(rhi), opt.screenshot);
-                    NS_INFO("capture : Flappy Bird, score %u, %u quads en %u lot(s)",
-                            game.score, ns_sprite_quad_count(sprites),
+                    NS_INFO("capture : %s, score %u, %u quads en %u lot(s)",
+                            game_api->title, game_api->score(game),
+                            ns_sprite_quad_count(sprites),
                             ns_sprite_batch_count(sprites));
                     ns_texture_destroy(rhi, &offscreen);
                     running = false;
@@ -1482,9 +1605,9 @@ int main(int argc, char **argv)
                 hud.can_interact = !room_viewmodel_is_playing(&vmstate)
                                 && vmstate.state == ROOM_VM_IDLE;
                 hud.playing = in_game;
-                hud.score = game.score;
-                hud.best = game.best;
-                hud.dead = (game.phase == FLAPPY_DEAD);
+                hud.score = in_game ? game_api->score(game) : 0u;
+                hud.best  = in_game ? game_api->best(game) : 0u;
+                hud.dead  = in_game && game_api->dead(game, NULL);
                 hud.settings_timer = settings_banner;
                 hud.quality_name = quality_name(rs.quality);
                 hud.render_scale = rs.render_scale;
@@ -1564,7 +1687,11 @@ int main(int argc, char **argv)
      * elle est arrivée avec la borne de classement et personne ne l'a vue, parce
      * qu'on ne regarde le rapport d'ASan que quand on le cherche. */
     ns_texture_destroy(rhi, &board_rt);
-    flappy_art_free(rhi, &flappy_assets);
+    if (game_api) {
+        if (game_art) game_api->art_free(rhi, game_art);
+        SDL_free(game_art);
+        SDL_free(game);
+    }
 
     /* Les réglages suivent le joueur d'une session à l'autre. Le MÊME chemin que
      * la fermeture du menu : deux écritures parallèles finiraient par diverger,
