@@ -349,10 +349,51 @@
       "uvMetres": 0.6
     },
     {
+      "_": "Les matériaux des modèles CC0 importés. Un par matériau du glTF : le modèle apporte sa géométrie et ses UV, la salle décide de la matière — c'est ce qui garde une seule table de matériaux, donc un seul endroit où régler l'aspect de la salle. Ils sont en mode `fit` par nature : les UV viennent du modèle et ne se pavent pas.",
+      "name": "tabouret_bar",
+      "texture": "bar_chair_round_01_diff_1k.jpg",
+      "roughness": 0.55,
+      "metallic": 0.15,
+      "fit": true
+    },
+    {
+      "name": "canape_tissu",
+      "texture": "sofa_03_diff_1k.jpg",
+      "roughness": 0.88,
+      "metallic": 0.0,
+      "fit": true
+    },
+    {
+      "name": "extincteur_corps",
+      "texture": "korean_fire_extinguisher_01_body_diff_1k.jpg",
+      "roughness": 0.35,
+      "metallic": 0.3,
+      "fit": true
+    },
+    {
+      "name": "extincteur_verre",
+      "texture": "korean_fire_extinguisher_01_glass_diff_1k.jpg",
+      "roughness": 0.12,
+      "metallic": 0.1,
+      "fit": true
+    },
+    {
+      "name": "extincteur_papier",
+      "texture": "korean_fire_extinguisher_01_paper_diff_1k.jpg",
+      "roughness": 0.82,
+      "metallic": 0.0,
+      "fit": true
+    },
+    {
       "_": "Les boutons d'arcade. Ils étaient du matériau du panneau : quatre pastilles bordeaux sur un panneau bordeaux, invisibles dès que la main s'en approchait. Un bouton d'arcade est en plastique translucide vif et brillant — c'est ce qui le rend identifiable d'un coup d'œil, ce qui est très exactement sa fonction.",
       "name": "bouton_rouge",
       "texture": "painted_panel.jpg",
-      "baseColor": [0.72, 0.07, 0.09, 1.0],
+      "baseColor": [
+        0.72,
+        0.07,
+        0.09,
+        1.0
+      ],
       "roughness": 0.34,
       "metallic": 0.0,
       "uvMetres": 0.12
@@ -360,7 +401,12 @@
     {
       "name": "bouton_jaune",
       "texture": "painted_panel.jpg",
-      "baseColor": [0.80, 0.56, 0.05, 1.0],
+      "baseColor": [
+        0.8,
+        0.56,
+        0.05,
+        1.0
+      ],
       "roughness": 0.34,
       "metallic": 0.0,
       "uvMetres": 0.12
@@ -585,7 +631,8 @@
       "name": "comptoir",
       "texture": "desk.jpg",
       "roughness": 0.42,
-      "uvMetres": 1.0
+      "uvMetres": 2.6,
+      "_": "Le motif du comptoir de 2020, à 2,6 m par répétition au lieu de 1,0. À un mètre il se lisait comme du bruit coloré ; à cette échelle on distingue les triangles, et c'est ce qu'ils sont."
     },
     {
       "name": "cuir",
@@ -941,15 +988,15 @@
       "at": [
         -4.4,
         2.74,
-        6.2
+        5.35
       ],
       "color": [
         1.0,
         0.83,
         0.63
       ],
-      "intensity": 88.0,
-      "range": 5.2,
+      "intensity": 96.0,
+      "range": 5.6,
       "radius": 0.42,
       "ceilingPanel": true,
       "panelSize": [
@@ -964,7 +1011,7 @@
           0.0
         ]
       },
-      "_": "Le comptoir est le seul endroit où l'on a besoin d'y voir vraiment. Un peu plus net que l'allée, sans virer au blanc."
+      "_": "Deux plafonniers AU-DESSUS DU CLIENT, pas au-dessus du barman. Ils étaient à z 6,2 quand le comptoir est à 6,3 : la face qu'on regarde en s'approchant était dans leur ombre, et le point de vue `bar` rendait une image entièrement noire — la géométrie était juste, l'éclairage était du mauvais côté du meuble."
     },
     {
       "name": "plafonnier_sud",
@@ -1109,6 +1156,38 @@
         ]
       },
       "_": "Applique murale, ambre franc."
+    },
+    {
+      "_": "La suspension du billard. Le coin ouest recevait 9 d'éclairement du plafonnier d'allée le plus proche, à 3,2 m : la table, les tabourets et le mur y étaient illisibles. Une table de billard a sa propre lampe, basse et chaude — c'est aussi ce qui la désigne comme un endroit où l'on va.",
+      "name": "suspension_billard",
+      "at": [
+        -7.2,
+        2.05,
+        -1.6
+      ],
+      "colour": [
+        1.0,
+        0.76,
+        0.48
+      ],
+      "intensity": 76.0,
+      "range": 4.2
+    },
+    {
+      "_": "Le coin technique, où sont les caisses. Faible : on n'y joue pas, on doit seulement voir qu'il existe.",
+      "name": "applique_technique",
+      "at": [
+        -8.6,
+        2.25,
+        0.4
+      ],
+      "colour": [
+        1.0,
+        0.82,
+        0.6
+      ],
+      "intensity": 38.0,
+      "range": 3.2
     }
   ],
   "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
@@ -2216,7 +2295,8 @@
       ]
     },
     {
-      "name": "tabouret",
+      "_": "Trois vrais tabourets au lieu de trois boîtes empilées. Le modèle fait 0,75 m de haut pour un comptoir à 1,25 : c'est la proportion d'un vrai tabouret de bar, celle qu'un empilement paramétrique n'avait aucune raison de trouver.",
+      "name": "tabouret_bar",
       "at": [
         -4.2,
         0.0,
@@ -2224,179 +2304,29 @@
       ],
       "yaw": 0.0,
       "repeat": {
-        "count": 4,
+        "count": 2,
         "step": [
-          1.043,
+          1.25,
           0.0,
           0.0
         ],
-        "yawStep": 17.0
+        "yawStep": 26.0
       },
-      "parts": [
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.0,
-            0.622,
-            0.0
-          ],
-          "size": [
-            0.34,
-            0.09,
-            0.34
-          ],
-          "chamfer": 0.03
-        },
-        {
-          "type": "box",
-          "material": "borne_cadre",
-          "at": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "size": [
-            0.08,
-            0.66,
-            0.08
-          ],
-          "chamfer": 0.01
-        },
-        {
-          "type": "box",
-          "material": "borne_cadre",
-          "at": [
-            0.0,
-            0.009,
-            0.0
-          ],
-          "size": [
-            0.34,
-            0.03,
-            0.34
-          ],
-          "chamfer": 0.008
-        }
-      ]
+      "model": "cc0/models/bar_chair_round_01/bar_chair_round_01.gltf",
+      "material": "tabouret_bar"
     },
     {
+      "_": "Un vrai canapé, 2,73 m de large. Il remplace quatre boîtes qui se lisaient comme quatre boîtes.",
       "name": "canape",
       "at": [
-        6.4,
+        6.1,
         0.0,
-        -4.8
+        -4.6
       ],
-      "yaw": 215.0,
-      "poi": "canape",
-      "anchor": [
-        0.0,
-        0.0,
-        0.844
-      ],
-      "parts": [
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "size": [
-            2.1,
-            0.42,
-            0.86
-          ],
-          "chamfer": 0.05
-        },
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.0,
-            0.396,
-            -0.267
-          ],
-          "size": [
-            2.1,
-            0.44,
-            0.26
-          ],
-          "chamfer": 0.05
-        },
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            -0.826,
-            0.396,
-            0.0
-          ],
-          "size": [
-            0.2,
-            0.26,
-            0.86
-          ],
-          "chamfer": 0.05
-        },
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.826,
-            0.396,
-            0.0
-          ],
-          "size": [
-            0.2,
-            0.26,
-            0.86
-          ],
-          "chamfer": 0.05
-        }
-      ]
-    },
-    {
-      "name": "canape_angle",
-      "at": [
-        7.2,
-        0.0,
-        -1.4
-      ],
-      "yaw": 285.0,
-      "parts": [
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "size": [
-            1.6,
-            0.42,
-            0.86
-          ],
-          "chamfer": 0.05
-        },
-        {
-          "type": "box",
-          "material": "cuir",
-          "at": [
-            0.0,
-            0.396,
-            -0.267
-          ],
-          "size": [
-            1.6,
-            0.44,
-            0.26
-          ],
-          "chamfer": 0.05
-        }
-      ]
+      "yaw": 205.0,
+      "model": "cc0/models/sofa_03/sofa_03.gltf",
+      "material": "canape_tissu",
+      "poi": "canape"
     },
     {
       "name": "table_basse",
@@ -3312,6 +3242,23 @@
           ],
           "chamfer": 0.0
         }
+      ]
+    },
+    {
+      "_": "L'extincteur réglementaire, à 1,10 m du sol comme le veut l'usage. Il porte trois matériaux — corps, verre du manomètre, étiquette — et c'est très exactement ce qui distingue un modèle d'une boîte peinte : sans la table de correspondance, tout l'objet serait rouge mat.",
+      "name": "extincteur",
+      "at": [
+        9.42,
+        1.1,
+        -0.4
+      ],
+      "yaw": 270.0,
+      "model": "cc0/models/korean_fire_extinguisher_01/korean_fire_extinguisher_01.gltf",
+      "material": "extincteur_corps",
+      "materials": [
+        "extincteur_corps",
+        "extincteur_verre",
+        "extincteur_papier"
       ]
     }
   ],

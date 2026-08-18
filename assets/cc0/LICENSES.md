@@ -46,6 +46,38 @@ pour ce qu'il sert ici — donne exactement ça : neutre, à grain fin, et il pr
 la teinte de chaque jeu sans imposer de motif. Le volet roulant garde le seul
 emploi qui lui convienne vraiment, les rails du faux plafond.
 
+## Modèles
+
+`assets/cc0/models/` porte des **modèles 3D**, instanciés dans la salle par le
+type `"model"` de `roomgen`. Même règle que pour les textures : seul l'albédo est
+versionné, la normale et l'ORM sont dérivées au build par `texgen`.
+
+| Modèle | Source | Licence | Emploi |
+|---|---|---|---|
+| `bar_chair_round_01` | [Poly Haven](https://polyhaven.com/a/bar_chair_round_01) | CC0 1.0 | Deux tabourets au comptoir |
+| `sofa_03` | [Poly Haven](https://polyhaven.com/a/sofa_03) | CC0 1.0 | Le canapé du coin salon |
+| `korean_fire_extinguisher_01` | [Poly Haven](https://polyhaven.com/a/korean_fire_extinguisher_01) | CC0 1.0 | L'extincteur du mur est |
+
+### Pourquoi si peu, alors que le mécanisme en accepte autant qu'on veut
+
+Ce n'est pas un choix esthétique, c'est une limite de ce que je peux VÉRIFIER
+depuis ce conteneur. Le rendu y tourne sur lavapipe, un rasteriseur logiciel.
+Au-delà d'environ **160 000 sommets** de scène, il cesse de composer l'image
+finale : le G-buffer et la cible HDR restent corrects — mesurés — mais la passe
+de tone mapping ne produit plus rien et la capture sort noire, sans une seule
+erreur émise. Le seuil n'est même pas monotone : la même scène passe en
+720 x 405 et échoue en 640 x 360.
+
+Ces modèles sont taillés pour le cinéma : **14 000 triangles pour un tabouret**,
+8 000 pour un canapé. Quatre meubles suffisent à doubler le poids d'une salle
+dont toute l'architecture en fait 19 000. Un vrai GPU n'y verrait rien, mais je
+ne peux pas l'affirmer sans l'avoir vu, et je refuse de livrer une salle que je
+ne peux pas regarder.
+
+Ce qui débloquerait la suite, dans l'ordre : un décimateur de maillage dans
+`tools/` (les modèles n'ont pas besoin du dixième de leur définition à deux
+mètres), ou une vérification sur une vraie carte graphique.
+
 Résolution rapportée : **1024 × 1024**, l'albédo seul, en JPEG. Le 2K et le 4K
 existent en amont ; ils ne servent à rien sur un caisson de 72 cm vu à un mètre,
 et ils auraient multiplié par quatre le poids pour un texel qu'aucun écran ne

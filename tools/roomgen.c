@@ -29,6 +29,7 @@
  * défaut se découvre à l'exécution, deux étapes plus loin, dans un message qui
  * parle d'octets.
  */
+#include "geo_import.h"
 #include "geo_shapes.h"
 #include "gltf_write.h"
 #include "tool_json.h"
@@ -49,7 +50,7 @@
  */
 #define RG_MAX_MATERIALS   128
 #define RG_MAX_TEXTURE_DIRS 4
-#define RG_MAX_TEXTURES    64
+#define RG_MAX_TEXTURES    128   /* relevé de 64 : les douze albédos des modèles CC0 ont fait déborder */
 #define RG_MAX_LIGHTS     128        /* NS_MAX_LIGHTS */
 #define RG_MAX_OBJECTS   1024        /* NS_MAX_OBJECTS */
 #define RG_MAX_CABINETS    24        /* NS_MAX_CABINETS */
@@ -161,6 +162,13 @@ typedef struct rg_builder {
     /* Classe de pas, déclarée par le matériau. Vide = on ne marche pas dessus. */
     char          material_footstep[RG_MAX_MATERIALS][24];
     size_t        material_count;
+
+    /* Racine des assets, pour résoudre `"model": "cc0/models/..."`. Elle est
+     * donnée en ligne de commande plutôt que déduite du chemin du fichier de
+     * salle : le fichier de salle est une SOURCE de build, et rien ne garantit
+     * qu'il soit rangé au même endroit que les assets qu'il désigne. */
+    char asset_root[512];
+    size_t imported_triangles;
 
     const char *textures[RG_MAX_TEXTURES];
     char        texture_storage[RG_MAX_TEXTURES][128];
@@ -1396,9 +1404,83 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
 static void emit_prop_parts(rg_builder *b, const tool_json *doc, const tool_json_value *e,
                             geo_mesh *out, const char *owner)
 {
+    /*
+     * Un objet est SOIT un empilement de morceaux paramétriques, SOIT un modèle
+     * importé — jamais les deux.
+     *
+     * Les deux voies partagent tout le reste : le nommage des instances, la
+     * répétition, le point d'intérêt déclaré, l'enregistrement du solide et le
+     * contrôle de chevauchement. C'est ce qui justifie de brancher ici plutôt
+     * que d'ajouter une liste « models » à côté : le mobilier importé est du
+     * mobilier, il n'a aucune raison d'avoir sa propre plomberie.
+     */
+    char model_src[192];
+    tool_json_get_string(doc, e, "model", model_src, sizeof model_src);
+    if (model_src[0]) {
+        char mat_name[64];
+        tool_json_get_string(doc, e, "material", mat_name, sizeof mat_name);
+        if (!mat_name[0]) {
+            tool_fatalf("« %s » : un modèle importé doit déclarer son \"material\" — "
+                        "le glTF apporte sa géométrie et ses UV, la salle décide "
+                        "de la matière", owner);
+        }
+        const int mat = material_index(b, mat_name, owner);
+
+        /*
+         * La correspondance de matériaux, primitive par primitive. Un poste de
+         * radio a un corps et des haut-parleurs, un extincteur un corps, un verre
+         * et une étiquette : sans cette table, tout l'objet prendrait la même
+         * matière et l'on perdrait précisément ce qui distingue un vrai modèle
+         * d'une boîte peinte.
+         */
+        int32_t by_index[8];
+        size_t  by_index_count = 0;
+        const tool_json_value *mats = tool_json_get(doc, e, "materials");
+        const int mats_count = tool_json_array_count(doc, mats);
+        if (mats_count > (int)(sizeof by_index / sizeof by_index[0])) {
+            tool_fatalf("« %s » : %d matériaux déclarés, %zu au maximum",
+                        owner, mats_count, sizeof by_index / sizeof by_index[0]);
+        }
+        for (int i = 0; i < mats_count; ++i) {
+            char n[64];
+            tool_json_string_at(doc, mats, i, n, sizeof n);
+            by_index[by_index_count++] = n[0] ? material_index(b, n, owner) : -1;
+        }
+
+        if (!b->asset_root[0]) {
+            tool_fatalf("« %s » : un modèle est demandé mais --assets= n'a pas été "
+                        "donné — le chemin « %s » ne peut pas être résolu",
+                        owner, model_src);
+        }
+        char path[768];
+        snprintf(path, sizeof path, "%s/%s", b->asset_root, model_src);
+
+        geo_xform mx = GEO_XFORM_IDENTITY;
+        mx.scale = tool_json_get_float(doc, e, "scale", 1.0f);
+        if (mx.scale <= 0.0f) {
+            tool_fatalf("« %s » : échelle %.4f — nulle ou négative", owner, (double)mx.scale);
+        }
+        /* Le modèle peut avoir besoin de son propre calage vertical : les
+         * modèles de Poly Haven posent leur origine au sol, mais un extincteur
+         * s'accroche au mur. */
+        float lift[3];
+        tool_json_get_vec3(doc, e, "modelOffset", lift, 0.0f);
+        mx.origin = ns_v3_make(lift[0], lift[1], lift[2]);
+        mx.pitch = tool_json_get_float(doc, e, "modelPitch", 0.0f) * NS_DEG2RAD;
+        mx.roll  = tool_json_get_float(doc, e, "modelRoll", 0.0f) * NS_DEG2RAD;
+
+        const size_t tri = geo_import_gltf(out, path, &mx, mat,
+                                           by_index_count ? by_index : NULL,
+                                           by_index_count, owner);
+        b->imported_triangles += tri;
+        return;
+    }
+
     const tool_json_value *parts = tool_json_get(doc, e, "parts");
     const int count = tool_json_array_count(doc, parts);
-    if (count <= 0) tool_fatalf("« %s » n'a aucun morceau (\"parts\")", owner);
+    if (count <= 0) {
+        tool_fatalf("« %s » n'a ni morceaux (\"parts\") ni modèle (\"model\")", owner);
+    }
 
     for (int i = 0; i < count; ++i) {
         const tool_json_value *p = tool_json_at(doc, parts, i);
@@ -2043,7 +2125,7 @@ static void usage(void)
 {
     fprintf(stderr,
         "usage : roomgen <salle.room.json> <sortie.gltf> [--textures=REP]\n"
-        "                [--expect-textures=N]\n"
+        "                [--expect-textures=N] [--assets=REP]\n"
         "\n"
         "  --textures=REP        vérifie que chaque texture nommée existe dans REP.\n"
         "                        Sans cette option, une faute de frappe se découvre\n"
@@ -2052,7 +2134,12 @@ static void usage(void)
         "                        CMake y met le nombre de fichiers réellement\n"
         "                        présents : une texture d'origine qui cesserait\n"
         "                        d'être employée casse alors le build au lieu de\n"
-        "                        disparaître du décor sans un mot.\n");
+        "                        disparaître du décor sans un mot.\n"
+        "  --assets=REP          racine à laquelle sont résolus les chemins de\n"
+        "                        modèles (\"model\": \"cc0/models/...\"). Donnée\n"
+        "                        plutôt que déduite : le fichier de salle est une\n"
+        "                        source de build, rien ne le range à côté de ses\n"
+        "                        assets.\n");
     exit(2);
 }
 
@@ -2062,6 +2149,7 @@ int main(int argc, char **argv)
     const char *texture_dirs[RG_MAX_TEXTURE_DIRS];
     size_t texture_dir_count = 0;
     int expect_textures = -1;
+    const char *asset_root = NULL;
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--textures=", 11) == 0) {
             if (texture_dir_count >= RG_MAX_TEXTURE_DIRS) {
@@ -2071,6 +2159,9 @@ int main(int argc, char **argv)
         }
         else if (strncmp(argv[i], "--expect-textures=", 18) == 0) {
             expect_textures = atoi(argv[i] + 18);
+        }
+        else if (strncmp(argv[i], "--assets=", 9) == 0) {
+            asset_root = argv[i] + 9;
         }
         else if (argv[i][0] == '-') usage();
         else if (!in_path) in_path = argv[i];
@@ -2104,6 +2195,7 @@ int main(int argc, char **argv)
     for (size_t d = 0; d < texture_dir_count; ++d) b.texture_dirs[d] = texture_dirs[d];
     b.texture_dir_count = texture_dir_count;
     b.expect_textures = expect_textures;
+    if (asset_root) snprintf(b.asset_root, sizeof b.asset_root, "%s", asset_root);
 
     const tool_json_value *room = tool_json_get(&doc, root, "room");
     if (!room) tool_fatalf("%s : pas de bloc \"room\"", in_path);

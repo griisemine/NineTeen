@@ -209,6 +209,21 @@ static inline bool tool_json_get_bool(const tool_json *doc, const tool_json_valu
     return tool_json_value_float(doc, v, fallback ? 1.0f : 0.0f) != 0.0f;
 }
 
+/* La i-ème chaîne d'un tableau. Vide si l'entrée n'en est pas une — un tableau
+ * de matériaux dont une case est nulle veut dire « garde le matériau par
+ * défaut », pas « erreur ». */
+static inline void tool_json_string_at(const tool_json *doc, const tool_json_value *arr,
+                                       int index, char *out, size_t cap)
+{
+    out[0] = '\0';
+    const tool_json_value *v = tool_json_at(doc, arr, index);
+    if (!v || v->tok.type != JSMN_STRING) return;
+    const size_t n = (size_t)(v->tok.end - v->tok.start);
+    const size_t take = (n < cap - 1) ? n : cap - 1;
+    memcpy(out, doc->text + v->tok.start, take);
+    out[take] = '\0';
+}
+
 static inline void tool_json_get_string(const tool_json *doc, const tool_json_value *obj,
                                         const char *key, char *out, size_t out_size)
 {

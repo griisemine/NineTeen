@@ -28,6 +28,13 @@ file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 # Le nombre de textures d'origine, compté ici plutôt qu'écrit à la main : c'est ce
 # qui fait qu'une image qui cesserait d'être employée casse le build au lieu de
 # disparaître du décor en silence.
+# Les modèles CC0 : listés en dépendance pour que remplacer un tabouret refasse
+# la salle. `CONFIGURE_DEPENDS` parce qu'en ajouter un ne doit pas demander de
+# savoir qu'il faut relancer la configuration.
+file(GLOB CC0_MODELS CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.gltf"
+     "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.bin")
+
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
@@ -43,7 +50,10 @@ add_custom_command(
                     "--textures=${SRC_ROOM}/textures"
                     "--textures=${CMAKE_CURRENT_SOURCE_DIR}/cc0"
                     "--expect-textures=${ROOM_TEXTURE_COUNT}"
+                    # Racine des modèles CC0 instanciés dans la salle.
+                    "--assets=${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
+            ${CC0_MODELS}
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
@@ -126,6 +136,10 @@ add_custom_command(
 #
 # Voir `assets/cc0/LICENSES.md` pour l'origine et la licence de chaque fichier.
 file(GLOB LEGACY_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+# Un seul répertoire pour TOUS les albédos rapportés, y compris ceux des modèles.
+# Poly Haven les range dans un sous-dossier par modèle ; on les remonte ici parce
+# que la chaîne (copie, puis normale et ORM dérivées par `texgen`) est la même
+# pour tous, et qu'un chemin par modèle ne ferait qu'ajouter des cas.
 file(GLOB CC0_TEXTURES    "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                           "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 set(ROOM_TEXTURES ${LEGACY_TEXTURES} ${CC0_TEXTURES})
