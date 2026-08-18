@@ -38,7 +38,17 @@
 /* Budgets. Ils viennent des constantes du moteur (engine/scene/ns_scene.h) ou
  * d'une mesure : l'ancienne salle fait 102 231 triangles, et un plafond de dalles
  * plus des chanfreins partout montent vite. Dépassement = arrêt. */
-#define RG_MAX_MATERIALS   64
+/*
+ * 64 était le budget d'origine, et il était plein au dernier octet. Le porter à
+ * 128 n'est pas un renoncement : c'est ce qui permet de donner à chaque famille
+ * de bornes sa propre teinte de caisson, et une salle d'arcade est justement un
+ * endroit où rien n'a la même couleur que son voisin. Le moteur, lui, n'a aucune
+ * limite fixe — il alloue les matériaux dans son arène — donc le seul coût est
+ * ce tableau et un changement de matériau de plus par lot, ce qui ne se mesure
+ * pas face à 600 tirages.
+ */
+#define RG_MAX_MATERIALS   128
+#define RG_MAX_TEXTURE_DIRS 4
 #define RG_MAX_TEXTURES    64
 #define RG_MAX_LIGHTS     128        /* NS_MAX_LIGHTS */
 #define RG_MAX_OBJECTS   1024        /* NS_MAX_OBJECTS */
@@ -184,8 +194,18 @@ typedef struct rg_builder {
      * finit par mentir. */
     ns_aabb last_bounds;
 
-    const char *texture_dir;    /* pour vérifier l'existence, NULL si non fourni */
+    /*
+     * Les répertoires où chercher une texture nommée. Il y en a deux : les 58
+     * images de 2020, et les albédos CC0 rapportés là où le modèle d'origine
+     * n'avait qu'un aplat de couleur. `--textures=` est donc répétable plutôt
+     * que d'exiger de tout entasser dans un seul dossier — mélanger l'art
+     * d'origine et l'art rapporté rendrait impossible de dire, plus tard, d'où
+     * vient quoi.
+     */
+    const char *texture_dirs[RG_MAX_TEXTURE_DIRS];
+    size_t      texture_dir_count;
     int expect_textures;        /* < 0 : pas de contrôle de couverture */
+    size_t      retired_count;  /* images déclarées volontairement inemployées */
 } rg_builder;
 
 /* Enregistre le dernier objet émis comme obstacle. Appelé explicitement par les
@@ -451,13 +471,23 @@ static int texture_index(rg_builder *b, const char *file, const char *used_by)
     /* Une texture nommée mais absente donnerait, à l'exécution, un substitut
      * procédural et un avertissement noyé dans le journal. La faute de frappe se
      * paie ici, au build, avec le nom du matériau fautif. */
-    if (b->texture_dir) {
-        char path[512];
-        snprintf(path, sizeof path, "%s/%s", b->texture_dir, file);
-        FILE *f = fopen(path, "rb");
-        if (!f) tool_fatalf("le matériau « %s » réclame la texture « %s », absente de %s",
-                            used_by, file, b->texture_dir);
-        fclose(f);
+    if (b->texture_dir_count) {
+        bool found = false;
+        for (size_t d = 0; d < b->texture_dir_count && !found; ++d) {
+            char path[512];
+            snprintf(path, sizeof path, "%s/%s", b->texture_dirs[d], file);
+            FILE *f = fopen(path, "rb");
+            if (f) { fclose(f); found = true; }
+        }
+        if (!found) {
+            char dirs[1024] = { 0 };
+            for (size_t d = 0; d < b->texture_dir_count; ++d) {
+                snprintf(dirs + strlen(dirs), sizeof dirs - strlen(dirs),
+                         "%s%s", d ? ", " : "", b->texture_dirs[d]);
+            }
+            tool_fatalf("le matériau « %s » réclame la texture « %s », absente de %s",
+                        used_by, file, dirs);
+        }
     }
 
     const size_t idx = b->texture_count++;
@@ -1820,10 +1850,17 @@ static void usage(void)
 
 int main(int argc, char **argv)
 {
-    const char *in_path = NULL, *out_path = NULL, *texture_dir = NULL;
+    const char *in_path = NULL, *out_path = NULL;
+    const char *texture_dirs[RG_MAX_TEXTURE_DIRS];
+    size_t texture_dir_count = 0;
     int expect_textures = -1;
     for (int i = 1; i < argc; ++i) {
-        if (strncmp(argv[i], "--textures=", 11) == 0) texture_dir = argv[i] + 11;
+        if (strncmp(argv[i], "--textures=", 11) == 0) {
+            if (texture_dir_count >= RG_MAX_TEXTURE_DIRS) {
+                tool_fatalf("plus de %d répertoires de textures", RG_MAX_TEXTURE_DIRS);
+            }
+            texture_dirs[texture_dir_count++] = argv[i] + 11;
+        }
         else if (strncmp(argv[i], "--expect-textures=", 18) == 0) {
             expect_textures = atoi(argv[i] + 18);
         }
@@ -1856,13 +1893,52 @@ int main(int argc, char **argv)
     tool_vec_init(&b.meshes, sizeof(gltf_mesh));
     tool_vec_init(&b.prim_blocks, sizeof(geo_primitives));
     b.bounds = ns_aabb_empty();
-    b.texture_dir = texture_dir;
+    for (size_t d = 0; d < texture_dir_count; ++d) b.texture_dirs[d] = texture_dirs[d];
+    b.texture_dir_count = texture_dir_count;
     b.expect_textures = expect_textures;
 
     const tool_json_value *room = tool_json_get(&doc, root, "room");
     if (!room) tool_fatalf("%s : pas de bloc \"room\"", in_path);
     const float height = tool_json_get_float(&doc, room, "height", 3.10f);
     const float thickness = tool_json_get_float(&doc, room, "wallThickness", 0.20f);
+
+    /*
+     * Les images volontairement inemployées. Chacune porte son motif, et le motif
+     * est lu par un humain, pas par l'outil : ce qui compte est qu'il soit écrit.
+     * L'outil vérifie seulement que le fichier EXISTE — retirer une image qui
+     * n'est plus là ne prouve rien.
+     */
+    {
+        const tool_json_value *retired = tool_json_get(&doc, root, "retiredTextures");
+        const int n = tool_json_array_count(&doc, retired);
+        for (int i = 0; i < n; ++i) {
+            const tool_json_value *e = tool_json_at(&doc, retired, i);
+            char file[128];
+            tool_json_get_string(&doc, e, "file", file, sizeof file);
+            if (!file[0]) tool_fatalf("`retiredTextures[%d]` n'a pas de clé « file »", i);
+
+            char why[8];
+            tool_json_get_string(&doc, e, "why", why, sizeof why);
+            if (!why[0]) {
+                tool_fatalf("« %s » est déclarée retirée sans motif. Le motif est le seul "
+                            "intérêt de cette liste : sans lui, elle ne fait que masquer "
+                            "le contrôle qu'elle est censée rendre plus fin.", file);
+            }
+
+            bool exists = false;
+            for (size_t d = 0; d < b.texture_dir_count && !exists; ++d) {
+                char path[512];
+                snprintf(path, sizeof path, "%s/%s", b.texture_dirs[d], file);
+                FILE *f = fopen(path, "rb");
+                if (f) { fclose(f); exists = true; }
+            }
+            if (!exists) {
+                tool_fatalf("« %s » est déclarée retirée, mais aucun dossier d'art ne la "
+                            "contient : la ligne ne retire rien et fausse le compte", file);
+            }
+            b.retired_count++;
+        }
+    }
 
     parse_materials(&b, &doc, root);
     /* Les lumières d'abord : le plafond s'en sert pour savoir où poser ses
@@ -1892,11 +1968,31 @@ int main(int argc, char **argv)
      * se remarque pas sur une capture, puisqu'il n'y a rien à voir là où il n'y a
      * plus rien.
      */
-    if (b.expect_textures >= 0 && (int)b.texture_count != b.expect_textures) {
-        tool_fatalf("la salle référence %zu textures, il en existe %d dans le "
-                    "dossier d'origine : soit une image a cessé d'être employée, "
-                    "soit une a été ajoutée sans être placée",
-                    b.texture_count, b.expect_textures);
+    /*
+     * Couverture des textures : chaque image doit être soit EMPLOYÉE, soit
+     * RETIRÉE explicitement, avec sa raison.
+     *
+     * Le contrôle ne comptait auparavant que les employées, et exigeait le total.
+     * C'était juste tant que les 58 images de 2020 formaient tout le budget d'art
+     * — une image qui cessait de servir était forcément une régression. Ça ne
+     * l'est plus : huit de ces images sont des aplats de couleur de 24 x 24 px
+     * (`bordeau_uni.jpg` fait 1 x 1), et les retirer est une correction, pas une
+     * perte. Un simple ajustement du nombre attendu aurait fait disparaître ce
+     * fait du dépôt ; la liste `retiredTextures` le grave, avec le motif.
+     */
+    if (b.expect_textures >= 0) {
+        const int accounted = (int)(b.texture_count + b.retired_count);
+        if (accounted != b.expect_textures) {
+            tool_fatalf("%zu texture(s) employée(s) + %zu retirée(s) = %d, pour %d "
+                        "présente(s) dans les dossiers d'art.\n"
+                        "  Une image a donc cessé d'être employée sans être déclarée dans "
+                        "`retiredTextures`, ou une a été ajoutée sans être placée.\n"
+                        "  Retirer une image est légitime — la retirer en silence ne l'est "
+                        "pas : c'est ainsi qu'un décor se vide sans que personne ne le voie.",
+                        b.texture_count, b.retired_count, accounted, b.expect_textures);
+        }
+        printf("  textures : %zu employée(s), %zu retirée(s) et déclarée(s)\n",
+               b.texture_count, b.retired_count);
     }
 
     gltf_scene scene;

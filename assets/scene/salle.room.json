@@ -73,10 +73,17 @@
     },
     {
       "name": "beton",
-      "texture": "gris_foncer.jpg",
-      "roughness": 0.9,
+      "texture": "brushed_concrete.jpg",
+      "roughness": 0.92,
       "metallic": 0.0,
-      "uvMetres": 1.5
+      "uvMetres": 2.2,
+      "baseColor": [
+        0.66,
+        0.62,
+        0.58,
+        1.0
+      ],
+      "_": "Béton brossé, teinté légèrement chaud : dans une salle au tungstène, même le béton est ocre."
     },
     {
       "name": "plafond",
@@ -95,18 +102,31 @@
     },
     {
       "name": "rail",
-      "texture": "gris_foncer.jpg",
-      "roughness": 0.72,
-      "metallic": 0.15,
-      "uvMetres": 0.6,
-      "_": "Pas noir.jpg : cette image est littéralement (0, 0, 0). Un rail d'albédo nul ne renvoie que du spéculaire, et la trame du plafond sortait en filaments blancs sur fond noir au lieu de profilés."
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.55,
+      "metallic": 0.3,
+      "uvMetres": 0.3,
+      "_": "Profilé en T du plafond. Toujours pas `noir.jpg`, qui est littéralement (0,0,0).",
+      "baseColor": [
+        0.52,
+        0.52,
+        0.54,
+        1.0
+      ]
     },
     {
       "name": "plenum",
-      "texture": "noir.jpg",
-      "roughness": 0.95,
-      "metallic": 0.0,
-      "uvMetres": 0.5
+      "texture": "metal_plate_02.jpg",
+      "roughness": 0.78,
+      "metallic": 0.35,
+      "uvMetres": 1.4,
+      "baseColor": [
+        0.3,
+        0.27,
+        0.24,
+        1.0
+      ],
+      "_": "Ce qu'on aperçoit par la dalle manquante : de la tôle, des gaines, du noir. Sombre mais pas nul — il faut deviner un volume derrière l'ouverture, pas un trou découpé au cutter."
     },
     {
       "name": "panneau_lumineux",
@@ -162,23 +182,158 @@
       "uvMetres": 1.0
     },
     {
-      "name": "borne_caisson",
+      "name": "laque_sombre",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.5,
+      "roughness": 0.42,
+      "metallic": 0.12,
       "baseColor": [
-        0.042,
-        0.048,
+        0.17,
+        0.17,
+        0.2,
+        1.0
+      ],
+      "_": "Tôle laquée anthracite, pour le mobilier qui n'est pas une borne. Les bornes ont désormais leur propre laque par jeu ; ce matériau-ci est ce qui reste de `borne_caisson`, à qui il ne manquait qu'un nom honnête et un albédo qui ne soit pas de 4 %."
+    },
+    {
+      "name": "caisson_flappy",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.1,
+        0.46,
+        0.2,
+        1.0
+      ],
+      "_": "Laque vert tuyau. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_tetris",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.1,
+        0.2,
+        0.52,
+        1.0
+      ],
+      "_": "Laque bleu grille. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_snake",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.16,
+        0.44,
+        0.14,
+        1.0
+      ],
+      "_": "Laque vert phosphore. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_asteroid",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.16,
+        0.19,
+        0.3,
+        1.0
+      ],
+      "_": "Laque gris spatial. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_shooter",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.56,
+        0.18,
+        0.07,
+        1.0
+      ],
+      "_": "Laque orange explosion. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_demineur",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.52,
+        0.38,
+        0.08,
+        1.0
+      ],
+      "_": "Laque jaune ocre. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_pacman",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.54,
+        0.42,
         0.06,
         1.0
       ],
-      "roughness": 0.38,
-      "metallic": 0.04,
-      "_": "Sans texture, et c'est la correction d'une première tentative qui multipliait noir.jpg par 1,6 : cette image est littéralement (0, 0, 0), et aucun facteur ne remonte un zéro. Les caissons sortaient noirs. Un flanc de borne est une laque sombre unie ; le moteur retombe sur son blanc de substitut, que baseColor teinte."
+      "_": "Laque jaune Pac-Man. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_piano",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.34,
+        0.12,
+        0.46,
+        1.0
+      ],
+      "_": "Laque violet. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
+    },
+    {
+      "name": "caisson_leaderboard",
+      "texture": "painted_metal_shutter.jpg",
+      "uvMetres": 0.46,
+      "roughness": 0.4,
+      "metallic": 0.1,
+      "baseColor": [
+        0.44,
+        0.1,
+        0.13,
+        1.0
+      ],
+      "_": "Laque rouge classement. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
     },
     {
       "name": "borne_cadre",
-      "texture": "gris_foncer.jpg",
-      "roughness": 0.38,
-      "metallic": 0.25,
-      "uvMetres": 0.5
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.44,
+      "metallic": 0.1,
+      "uvMetres": 0.42,
+      "baseColor": [
+        0.42,
+        0.4,
+        0.44,
+        1.0
+      ],
+      "_": "Le caisson d'une borne. Il portait `gris_foncer.jpg`, un aplat de 24 x 24 px à peu près noir, sur VINGT-TROIS objets dont les dix-neuf bornes : aucune quantité de lumière ne rend un matériau noir visible, et c'est là, plus que dans l'éclairage, que se jouait le « trop sombre »."
     },
     {
       "name": "borne_commande",
@@ -551,39 +706,114 @@
     },
     {
       "name": "jaune",
-      "texture": "jaune.jpg",
-      "roughness": 0.5,
-      "uvMetres": 0.8
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.38,
+      "uvMetres": 0.55,
+      "metallic": 0.15,
+      "baseColor": [
+        1.0,
+        0.72,
+        0.14,
+        1.0
+      ],
+      "_": "Jaune de distributeur. C'était `jaune.jpg`, 24 x 24 px d'aplat."
     },
     {
       "name": "bleu",
-      "texture": "bleu.jpg",
-      "roughness": 0.5,
-      "uvMetres": 0.8
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.38,
+      "uvMetres": 0.55,
+      "metallic": 0.15,
+      "baseColor": [
+        0.16,
+        0.38,
+        0.86,
+        1.0
+      ]
     },
     {
       "name": "rouge",
-      "texture": "rouge.jpg",
-      "roughness": 0.5,
-      "uvMetres": 0.8
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.34,
+      "uvMetres": 0.55,
+      "metallic": 0.18,
+      "baseColor": [
+        0.86,
+        0.14,
+        0.16,
+        1.0
+      ]
     },
     {
       "name": "bordeau_uni",
-      "texture": "bordeau_uni.jpg",
-      "roughness": 0.55,
-      "uvMetres": 0.8
+      "texture": "painted_metal_shutter.jpg",
+      "roughness": 0.42,
+      "uvMetres": 0.6,
+      "metallic": 0.12,
+      "baseColor": [
+        0.4,
+        0.07,
+        0.12,
+        1.0
+      ]
     },
     {
       "name": "marron",
-      "texture": "marron_foncer.jpg",
-      "roughness": 0.6,
-      "uvMetres": 0.9
+      "texture": "black_oak_veneer.jpg",
+      "roughness": 0.52,
+      "uvMetres": 0.65,
+      "metallic": 0.0,
+      "baseColor": [
+        1.15,
+        1.02,
+        0.86,
+        1.0
+      ],
+      "_": "Placage de chêne, éclairci : `marron_foncer.jpg` était un aplat de 24 x 24."
     },
     {
       "name": "gris",
-      "texture": "gris_foncer.jpg",
+      "texture": "painted_metal_shutter.jpg",
       "roughness": 0.7,
-      "uvMetres": 0.9
+      "uvMetres": 0.7,
+      "metallic": 0.05,
+      "baseColor": [
+        0.46,
+        0.45,
+        0.46,
+        1.0
+      ]
+    }
+  ],
+  "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
+  "retiredTextures": [
+    {
+      "file": "gris_foncer.jpg",
+      "why": "aplat 24x24 quasi noir ; remplacé par painted_metal_shutter teinté"
+    },
+    {
+      "file": "noir.jpg",
+      "why": "aplat 24x24 littéralement (0,0,0) ; un albédo nul ne renvoie que du spéculaire"
+    },
+    {
+      "file": "jaune.jpg",
+      "why": "aplat 24x24 ; la tôle laquée d'un distributeur se fait par baseColor sur une vraie texture"
+    },
+    {
+      "file": "bleu.jpg",
+      "why": "aplat 24x24, même raison"
+    },
+    {
+      "file": "rouge.jpg",
+      "why": "aplat 24x24, même raison"
+    },
+    {
+      "file": "bordeau_uni.jpg",
+      "why": "aplat de 1x1 pixel : une couleur, pas une image"
+    },
+    {
+      "file": "marron_foncer.jpg",
+      "why": "aplat 24x24 ; la radio est en bois, elle prend un placage de chêne"
     }
   ],
   "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources. Ici quatre plafonniers faibles balisent la circulation, des néons colorés rasent les murs, et l'essentiel de la lumière vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines qui éclairent.",
@@ -598,12 +828,12 @@
         -3.4
       ],
       "color": [
-        0.86,
-        0.9,
-        1.0
+        1.0,
+        0.78,
+        0.52
       ],
-      "intensity": 62.0,
-      "range": 4.6,
+      "intensity": 96.0,
+      "range": 5.4,
       "radius": 0.42,
       "ceilingPanel": true,
       "panelSize": [
@@ -618,7 +848,69 @@
           6.8
         ]
       },
-      "_": "Deux dalles au-dessus de l'allée ouest, juste assez pour ne pas marcher à l'aveugle."
+      "_": "Tungstène. C'était (0,86 ; 0,90 ; 1,00) — un néon de bureau — et à 62 pour 4,6 m l'allée restait un couloir bleu. C'est le luminaire qui décide de l'ambiance : il porte la chaleur ET la lisibilité."
+    },
+    {
+      "name": "rampe_ilot_nord",
+      "at": [
+        -2.4,
+        2.74,
+        1.7
+      ],
+      "color": [
+        1.0,
+        0.79,
+        0.54
+      ],
+      "intensity": 74.0,
+      "range": 4.6,
+      "radius": 0.32,
+      "flicker": false,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.6,
+        0.6
+      ],
+      "repeat": {
+        "count": 3,
+        "step": [
+          2.4,
+          0.0,
+          0.0
+        ]
+      },
+      "_": "Trois plafonniers au-dessus de l'allée nord de l'îlot, là où le joueur se tient pour jouer sur la rangée qui regarde +Z."
+    },
+    {
+      "name": "rampe_ilot_sud",
+      "at": [
+        -2.4,
+        2.74,
+        -1.7
+      ],
+      "color": [
+        1.0,
+        0.79,
+        0.54
+      ],
+      "intensity": 74.0,
+      "range": 4.6,
+      "radius": 0.32,
+      "flicker": false,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.6,
+        0.6
+      ],
+      "repeat": {
+        "count": 3,
+        "step": [
+          2.4,
+          0.0,
+          0.0
+        ]
+      },
+      "_": "Idem pour la rangée sud. Les deux rampes corrigent un défaut de disposition, pas de réglage : l'îlot de douze bornes — la pièce maîtresse de la salle — n'avait AUCUN luminaire au-dessus de lui. Les deux plafonniers « allée » sont à x −5,2, c'est-à-dire à l'ouest de tout. Les caissons ne recevaient donc que la lumière de leurs propres écrans, par la tranche."
     },
     {
       "name": "plafonnier_bar",
@@ -629,11 +921,11 @@
       ],
       "color": [
         1.0,
-        0.86,
-        0.66
+        0.83,
+        0.63
       ],
-      "intensity": 78.0,
-      "range": 5.0,
+      "intensity": 88.0,
+      "range": 5.2,
       "radius": 0.42,
       "ceilingPanel": true,
       "panelSize": [
@@ -648,7 +940,7 @@
           0.0
         ]
       },
-      "_": "Le comptoir est le seul endroit où l'on a besoin d'y voir vraiment. Chaud, à l'inverse du reste. Il était à 13,4 m d'ici, au-dessus du canapé — le nom disait le bar, la position disait le sud, et roomgen le refuse maintenant."
+      "_": "Le comptoir est le seul endroit où l'on a besoin d'y voir vraiment. Un peu plus net que l'allée, sans virer au blanc."
     },
     {
       "name": "plafonnier_sud",
@@ -658,11 +950,11 @@
         -5.6
       ],
       "color": [
-        0.86,
-        0.88,
-        0.98
+        1.0,
+        0.76,
+        0.5
       ],
-      "intensity": 44.0,
+      "intensity": 62.0,
       "range": 5.0,
       "radius": 0.34,
       "flicker": false,
@@ -671,7 +963,7 @@
         1.2,
         0.6
       ],
-      "_": "Le fond de salle, côté canapé. Un seul, et froid : c'est le coin où l'on ne fait que passer."
+      "_": "Le fond de salle, côté canapé. Chaud et bas : on y passe, on n'y joue pas."
     },
     {
       "name": "plafonnier_sas",
@@ -681,12 +973,12 @@
         5.2
       ],
       "color": [
-        0.78,
-        0.92,
-        0.84
+        1.0,
+        0.8,
+        0.56
       ],
-      "intensity": 34.0,
-      "range": 3.4,
+      "intensity": 52.0,
+      "range": 3.8,
       "radius": 0.3,
       "flicker": false,
       "ceilingPanel": true,
@@ -694,7 +986,7 @@
         0.9,
         0.45
       ],
-      "_": "Le plafonnier du sas d'entrée. Il s'appelait « plafonnier_toilettes » et grésillait : le nom venait des toilettes, la position du sas, et le grésillement n'appartenait ni à l'un ni à l'autre."
+      "_": "Le sas. Chaud lui aussi : c'est la première lumière du jeu, elle doit donner envie d'entrer plutôt que de reculer."
     },
     {
       "name": "plafonnier_toilettes",
@@ -704,11 +996,11 @@
         -5.4
       ],
       "color": [
-        0.78,
-        0.92,
-        0.84
+        0.86,
+        0.94,
+        0.86
       ],
-      "intensity": 46.0,
+      "intensity": 52.0,
       "range": 4.4,
       "radius": 0.3,
       "flicker": true,
@@ -717,7 +1009,7 @@
         0.9,
         0.45
       ],
-      "_": "Le néon qui grésille au-dessus des cabines — cette fois au-dessus des cabines. Vert-blanc et faible : c'est la seule pièce de la salle qu'on n'a pas envie de regarder longtemps."
+      "_": "Le SEUL luminaire froid de la salle, et c'est voulu : un tube fluo vert-blanc qui grésille. Il ne fonctionne comme repoussoir que parce que tout le reste est chaud."
     },
     {
       "name": "neon_mur_ouest",
@@ -727,12 +1019,12 @@
         -4.0
       ],
       "color": [
-        0.24,
-        0.62,
+        0.26,
+        0.6,
         1.0
       ],
-      "intensity": 26.0,
-      "range": 3.8,
+      "intensity": 40.0,
+      "range": 4.2,
       "radius": 0.55,
       "repeat": {
         "count": 3,
@@ -742,7 +1034,7 @@
           4.0
         ]
       },
-      "_": "Tube bleu rasant le mur ouest. Faible portée, franchement coloré : il TEINTE, il n'éclaire pas."
+      "_": "Accent froid sur base chaude — donc visible. Sur base froide il disparaissait."
     },
     {
       "name": "neon_mur_est",
@@ -753,11 +1045,11 @@
       ],
       "color": [
         1.0,
-        0.22,
-        0.52
+        0.2,
+        0.58
       ],
-      "intensity": 26.0,
-      "range": 3.8,
+      "intensity": 40.0,
+      "range": 4.2,
       "radius": 0.55,
       "repeat": {
         "count": 3,
@@ -767,7 +1059,7 @@
           4.0
         ]
       },
-      "_": "Magenta en face du bleu : c'est le contraste des deux qui fait la salle, pas leur somme."
+      "_": "Le magenta, l'autre accent. Les deux tubes portent le « néon » que tu demandais ; ce n'est pas à eux d'éclairer la salle."
     },
     {
       "name": "applique_entree",
@@ -778,11 +1070,11 @@
       ],
       "color": [
         1.0,
-        0.74,
-        0.48
+        0.72,
+        0.44
       ],
-      "intensity": 30.0,
-      "range": 3.0,
+      "intensity": 44.0,
+      "range": 3.4,
       "radius": 0.11,
       "repeat": {
         "count": 2,
@@ -792,7 +1084,7 @@
           2.4
         ]
       },
-      "_": "Deux appliques près de l'entrée, à hauteur d'homme : elles donnent un point de repère en entrant."
+      "_": "Applique murale, ambre franc."
     }
   ],
   "_sols": "Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement.",
@@ -1072,7 +1364,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_facile",
@@ -1090,7 +1382,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1107,7 +1399,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_shooter",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
@@ -1124,7 +1416,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_snake",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_snake",
@@ -1141,7 +1433,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_asteroid",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_asteroid",
@@ -1158,7 +1450,7 @@
         -0.44
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_demineur",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
@@ -1175,7 +1467,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_pacman",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
@@ -1192,7 +1484,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_piano",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
@@ -1209,7 +1501,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_asteroid",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_asteroid_dur",
@@ -1226,7 +1518,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_dur",
@@ -1243,7 +1535,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1260,7 +1552,7 @@
         0.44
       ],
       "yaw": 0.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_snake",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_snake",
@@ -1277,7 +1569,7 @@
         1.2
       ],
       "yaw": 90.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_shooter",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
@@ -1294,7 +1586,7 @@
         2.0
       ],
       "yaw": 90.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_demineur",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
@@ -1311,7 +1603,7 @@
         2.8
       ],
       "yaw": 90.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_piano",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
@@ -1328,7 +1620,7 @@
         -1.2
       ],
       "yaw": 270.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1345,7 +1637,7 @@
         -2.0
       ],
       "yaw": 270.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_facile",
@@ -1362,7 +1654,7 @@
         -2.8
       ],
       "yaw": 270.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_pacman",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
@@ -1379,7 +1671,7 @@
         -3.1
       ],
       "yaw": 180.0,
-      "materialBody": "borne_caisson",
+      "materialBody": "caisson_leaderboard",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_classement",
@@ -2106,7 +2398,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "borne_caisson",
+          "material": "laque_sombre",
           "at": [
             0.0,
             0.0,

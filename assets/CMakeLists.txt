@@ -28,7 +28,11 @@ file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 # qui fait qu'une image qui cesserait d'être employée casse le build au lieu de
 # disparaître du décor en silence.
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
-list(LENGTH _room_textures ROOM_TEXTURE_COUNT)
+file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
+list(LENGTH _room_textures _n_room)
+list(LENGTH _cc0_textures  _n_cc0)
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0}")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -36,6 +40,7 @@ add_custom_command(
     COMMAND roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
                     "${GEN}/scene/salle.gltf"
                     "--textures=${SRC_ROOM}/textures"
+                    "--textures=${CMAKE_CURRENT_SOURCE_DIR}/cc0"
                     "--expect-textures=${ROOM_TEXTURE_COUNT}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
@@ -108,7 +113,21 @@ add_custom_command(
 # ---------------------------------------------------------------------------
 # 3. Les textures : diffus d'origine -> normal map + ORM
 # ---------------------------------------------------------------------------
-file(GLOB ROOM_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+#
+# Deux sources, un seul traitement.
+#
+# `legacy/room/textures/` porte les 58 images de 2020 : c'est ce qui garde la
+# même salle, et on n'y touche pas. `assets/cc0/` porte les albédos CC0
+# rapportés — uniquement là où le modèle d'origine n'avait qu'un aplat de
+# couleur de 24 x 24 pixels, ce qui n'est pas une texture. Les deux passent par
+# `texgen` sans distinction : une source d'art est une source d'art, et un
+# chemin séparé serait un chemin qui dérive.
+#
+# Voir `assets/cc0/LICENSES.md` pour l'origine et la licence de chaque fichier.
+file(GLOB LEGACY_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+file(GLOB CC0_TEXTURES    "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
+                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
+set(ROOM_TEXTURES ${LEGACY_TEXTURES} ${CC0_TEXTURES})
 
 set(GENERATED_MAPS "")
 foreach(tex IN LISTS ROOM_TEXTURES)
@@ -149,7 +168,8 @@ endforeach()
 add_custom_command(
     OUTPUT "${GEN}/scene/textures/.stamp"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ROOM_TEXTURES} "${GEN}/scene/textures/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LEGACY_TEXTURES} "${GEN}/scene/textures/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CC0_TEXTURES} "${GEN}/scene/textures/"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/scene/textures/.stamp"
     DEPENDS ${ROOM_TEXTURES}
     COMMENT "Copie des textures diffuses d'origine"

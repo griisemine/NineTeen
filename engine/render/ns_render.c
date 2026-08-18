@@ -233,10 +233,16 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
     s->saturation = 1.12f;
     s->chromatic_aberration = 0.0f;
 
-    /* Brouillard très léger, teinté du bleu froid des néons : donne de la
-     * profondeur au fond de la salle sans laiter l'image. */
+    /* Brouillard très léger, teinté de l'ambre des plafonniers : donne de la
+     * profondeur au fond de la salle sans laiter l'image.
+     *
+     * Il était bleu, comme les néons — et c'était l'erreur de raisonnement : le
+     * brouillard prend la couleur de ce qui l'éclaire, et ce qui éclaire l'air
+     * d'une salle d'arcade, ce sont ses plafonniers, pas les deux tubes accrochés
+     * aux murs. Un brouillard froid dans une salle chaude annule le peu de
+     * chaleur qu'il reste, et il le fait sur toute la profondeur du cadre. */
     s->fog_density = 0.006f;
-    s->fog_color[0] = 0.055f; s->fog_color[1] = 0.062f; s->fog_color[2] = 0.085f;
+    s->fog_color[0] = 0.098f; s->fog_color[1] = 0.070f; s->fog_color[2] = 0.048f;
 
     /* Diffusion vers l'avant marquée : c'est ce qui distingue un halo d'un voile.
      * La distance de marche couvre la salle (22 m de long) sans la dépasser —
@@ -293,7 +299,20 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * Teintée du bleu froid des tubes : une ambiance neutre grise à ce niveau se
      * lit comme un voile sale.
      */
-    s->ambient[0] = 0.030f; s->ambient[1] = 0.036f; s->ambient[2] = 0.052f;
+    /*
+     * L'indirect d'une salle éclairée au tungstène est CHAUD, et c'est une
+     * conséquence, pas un goût : la lumière rebondit sur des murs et une moquette
+     * eux-mêmes éclairés en orangé, donc ce qu'elle rapporte est orangé. La valeur
+     * précédente — (0,030 ; 0,036 ; 0,052), bleu nuit — simulait un ciel
+     * d'extérieur dans une salle sans la moindre fenêtre. C'est ce qui rendait
+     * l'image froide partout où aucun luminaire ne portait, c'est-à-dire dans la
+     * plus grande partie de la salle.
+     *
+     * Le niveau monte aussi, de 0,04 à 0,10 de luminance : c'est le plancher
+     * au-dessous duquel on cesse de distinguer un caisson d'un mur. Le tamisé se
+     * fabrique avec du contraste de couleur, pas en descendant le plancher.
+     */
+    s->ambient[0] = 0.112f; s->ambient[1] = 0.086f; s->ambient[2] = 0.062f;
     s->ambient_intensity = 1.0f;
 
     s->ssao_radius = 0.45f;
