@@ -346,3 +346,8 @@ ns_camera room_camera_resolve(const room_camera *c, float alpha)
     cam.zfar  = 160.0f;
     return cam;
 }
+
+room_view_bob room_camera_bob(const room_camera *c, float alpha)
+{
+    return bob_lerp(&c->prev_bob, &c->bob, alpha);
+}

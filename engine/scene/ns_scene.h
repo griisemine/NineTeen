@@ -150,6 +150,19 @@ typedef struct ns_cabinet {
     ns_v3   screen_normal;       /* vers où la borne regarde */
     float   screen_width, screen_height;  /* dalle utile, en mètres */
     ns_v3   player_anchor;       /* où se place le joueur pour jouer */
+    /*
+     * Les deux points que la main vise pendant la séquence d'interaction. Ils
+     * sont **déclarés par la salle**, pas dérivés de la boîte englobante : ils
+     * vivent dans `build_cabinet()`, à trois lignes des boîtes qu'ils désignent.
+     * Les redériver ici en ferait une seconde copie, et une seconde copie d'un
+     * chiffre est une copie qui dérive — c'est exactement ce qui plaçait le
+     * centre d'écran 31 cm trop bas.
+     *
+     * Pour la salle de 2020, qui ne les déclare pas, `load_cabinet_assignment`
+     * pose un repli à partir des cotes du meuble et le dit dans son commentaire.
+     */
+    ns_v3   panel_centre;        /* dessus de la grappe de boutons */
+    ns_v3   coin_slot;           /* fente à jetons, sur la face avant */
     bool    attract;
 } ns_cabinet;
 

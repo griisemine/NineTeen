@@ -21,6 +21,7 @@
 #include "ns_scene.h"
 
 #include "room_camera.h"
+#include "room_viewmodel.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -47,6 +48,7 @@ typedef struct options {
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
     bool        bench;      /* mesure le temps GPU réel, image par image */
+    const char *pose;       /* pose de bras figée, pour les captures */
 } options;
 
 static void print_usage(const char *exe)
@@ -76,6 +78,8 @@ static void print_usage(const char *exe)
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
         "  --bench              mesure le temps GPU réel de chaque image\n"
+        "  --pose=NOM           fige les bras : idle, walk, reach, insert, press\n"
+        "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
         "  --help               affiche ce message\n",
         NINETEEN_VERSION, exe);
@@ -204,6 +208,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->vsync = false;
         } else if (SDL_strcmp(a, "--bench") == 0) {
             o->bench = true;
+        } else if (SDL_strncmp(a, "--pose=", 7) == 0) {
+            o->pose = a + 7;
         } else if (SDL_strcmp(a, "--debug-gpu") == 0) {
             o->debug_gpu = true;
         } else if (SDL_strncmp(a, "--debug=", 8) == 0) {
@@ -279,6 +285,21 @@ int main(int argc, char **argv)
 {
     options opt;
     if (!parse_options(argc, argv, &opt)) return 0;
+
+    /*
+     * `--pose` est validé ici, avant que quoi que ce soit soit alloué : c'est une
+     * option de capture, et une capture prise avec une pose silencieusement
+     * ignorée finit dans la documentation en montrant autre chose que son titre.
+     */
+    if (opt.pose) {
+        room_viewmodel probe;
+        room_viewmodel_init(&probe);
+        if (!room_viewmodel_set_forced_pose(&probe, opt.pose)) {
+            fprintf(stderr, "--pose=%s inconnu (idle, walk, reach, insert, press)\n",
+                    opt.pose);
+            return 2;
+        }
+    }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
         fprintf(stderr, "SDL_Init a échoué : %s\n", SDL_GetError());
@@ -508,6 +529,50 @@ int main(int argc, char **argv)
     ns_viewmodel_pose viewmodel;
     ns_viewmodel_pose_clear(&viewmodel);
 
+    room_viewmodel vmstate;
+    room_viewmodel_init(&vmstate);
+    (void)room_viewmodel_set_forced_pose(&vmstate, opt.pose);   /* déjà validé */
+
+    /*
+     * `--pose` impose le mode joueur, quel que soit ce que `--view` a demandé.
+     *
+     * Les points de vue nommés basculent en caméra libre (`:515`) — c'est ce
+     * qu'on veut pour cadrer un mur —, et les bras ne sont dessinés qu'en mode
+     * joueur. La combinaison `--view=allee --pose=reach` produisait donc une
+     * capture sans bras, sans le moindre message : exactement le silence contre
+     * lequel `--pose` refuse déjà un nom mal orthographié.
+     */
+    if (opt.pose && cam.mode != ROOM_CAM_PLAYER) {
+        cam.mode = ROOM_CAM_PLAYER;
+        cam.velocity = ns_v3_zero();
+        cam.grounded = false;
+        NS_INFO("--pose : caméra en mode joueur (les bras n'existent pas en caméra libre)");
+    }
+
+    /*
+     * Un geste a besoin d'une cible. `--pose=reach` fige bien l'état, mais sans
+     * borne à portée la machine à états n'a rien à viser et la main reste au
+     * repos — une capture qui montre le contraire de son nom.
+     *
+     * On déclenche donc la séquence une fois, ici : `--view=borne` place le
+     * joueur sur l'ancre déclarée de `borne_arcade_1`, et la borne est trouvée
+     * par la même fonction que la touche `E`. Sans borne à portée on le dit, au
+     * lieu de livrer une image muette.
+     */
+    if (opt.pose) {
+        const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
+        if (near) {
+            room_viewmodel_interact(&vmstate, near);
+            NS_INFO("--pose : geste dirigé vers « %s » (%s)", near->name, near->game);
+        } else if (SDL_strcasecmp(opt.pose, "idle") != 0
+                && SDL_strcasecmp(opt.pose, "repos") != 0
+                && SDL_strcasecmp(opt.pose, "walk") != 0
+                && SDL_strcasecmp(opt.pose, "marche") != 0) {
+            NS_WARN("--pose=%s : aucune borne à portée, les bras resteront au repos "
+                    "(essayer --view=borne)", opt.pose);
+        }
+    }
+
     ns_clock clock;
     ns_clock_init(&clock, NS_DEFAULT_TICK_HZ);
 
@@ -566,6 +631,24 @@ int main(int argc, char **argv)
                     cam.mode = ROOM_CAM_ORBIT;
                     NS_INFO("caméra : orbite");
                     break;
+                case SDLK_E: {
+                    /*
+                     * `ns_scene_nearest_cabinet` est écrite depuis M4 et n'avait
+                     * jamais eu un seul appelant — comme `screen_center`,
+                     * `player_anchor` et `ns_poi`. Elle en a un.
+                     *
+                     * L'invite affichée à l'écran (« E pour jouer ») demande la
+                     * couche 2D, qui n'existe pas encore : c'est A9. En attendant
+                     * le geste part quand on est à portée, et le journal le dit —
+                     * ce qui suffit à le vérifier sans texte à l'écran.
+                     */
+                    if (ev.key.repeat) break;
+                    const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
+                    if (near && room_viewmodel_interact(&vmstate, near)) {
+                        NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
+                    }
+                    break;
+                }
                 default:
                     break;
                 }
@@ -622,6 +705,7 @@ int main(int argc, char **argv)
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
+            room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
         }
         ns_clock_end_frame(&clock);
 
@@ -659,6 +743,7 @@ int main(int argc, char **argv)
             const double frame_start = opt.bench ? ns_time_seconds() : 0.0;
             const ns_camera render_cam = room_camera_resolve(&cam, (float)clock.alpha);
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
+            room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
             ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now);
             ns_rhi_end_frame(rhi);

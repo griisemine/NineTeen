@@ -1335,23 +1335,46 @@ static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
     const ns_m4 proj = ns_m4_perspective(fov * NS_DEG2RAD, aspect, 0.02f, 6.0f, true);
     const ns_m4 view_proj = ns_m4_mul(proj, *view);
 
-    viewmodel_fs_ubo fu;
-    SDL_zero(fu);
-    /* Un gant sombre et mat, une manche à peine plus claire : le viewmodel ne
-     * doit pas attirer l'œil, seulement exister. */
-    fu.base_color[0] = 0.20f; fu.base_color[1] = 0.19f; fu.base_color[2] = 0.21f;
-    fu.base_color[3] = 0.72f;                  /* rugosité */
-    fu.camera[0] = cam->position.x;
-    fu.camera[1] = cam->position.y;
-    fu.camera[2] = cam->position.z;
-    fu.camera[3] = 0.0f;                       /* métallicité */
-    SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
-    fu.ambient[3] = rd->settings.ambient_intensity;
-    fu.counts[0] = (int32_t)light_count;
-    SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
+    /*
+     * Une matière par segment, et non une seule pour les sept.
+     *
+     * Ce n'est pas de la décoration : avec une couleur unique, la manche,
+     * l'avant-bras, la main et le jeton forment un seul tube indistinct — c'est
+     * ce que montrait la première capture, où l'on ne pouvait pas dire où
+     * finissait le bras et où commençait la main. Trois valeurs qui se
+     * détachent l'une de l'autre suffisent à donner une silhouette, et une
+     * silhouette est ce qui fait lire un bras.
+     *
+     * L'ordre suit `ns_viewmodel_segment` : manche, avant-bras, main, à gauche
+     * puis à droite, puis le jeton.
+     */
+    static const struct { float rgb[3], roughness, metallic; } vm_material[NS_VM_SEGMENT_COUNT] = {
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },   /* manche : toile sombre */
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
+        { { 0.315f, 0.215f, 0.170f }, 0.62f, 0.0f },   /* main : peau, mate */
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
+        { { 0.315f, 0.215f, 0.170f }, 0.62f, 0.0f },
+        { { 0.72f,  0.56f,  0.24f  }, 0.28f, 0.9f },   /* jeton : laiton */
+    };
 
     for (int i = 0; i < NS_VM_SEGMENT_COUNT; ++i) {
         if (!pose->draw[i] || rd->vm_index_count[i] == 0) continue;
+
+        viewmodel_fs_ubo fu;
+        SDL_zero(fu);
+        fu.base_color[0] = vm_material[i].rgb[0];
+        fu.base_color[1] = vm_material[i].rgb[1];
+        fu.base_color[2] = vm_material[i].rgb[2];
+        fu.base_color[3] = vm_material[i].roughness;
+        fu.camera[0] = cam->position.x;
+        fu.camera[1] = cam->position.y;
+        fu.camera[2] = cam->position.z;
+        fu.camera[3] = vm_material[i].metallic;
+        SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
+        fu.ambient[3] = rd->settings.ambient_intensity;
+        fu.counts[0] = (int32_t)light_count;
+        SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
 
         viewmodel_vs_ubo vu;
         SDL_zero(vu);

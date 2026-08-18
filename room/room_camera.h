@@ -110,4 +110,13 @@ void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt);
  * fraction de pas écoulée depuis le dernier tick. */
 ns_camera room_camera_resolve(const room_camera *c, float alpha);
 
+/*
+ * L'état d'oscillation interpolé, pour qui a besoin de s'y accrocher — les bras
+ * en premier lieu, dont le contre-balancement doit tomber sur les mêmes pas que
+ * la vue. Exposé plutôt que recopié : deux interpolations du même état finiraient
+ * par se désynchroniser, et un bras qui balance à contretemps se voit tout de
+ * suite sans qu'on sache pourquoi.
+ */
+room_view_bob room_camera_bob(const room_camera *c, float alpha);
+
 #endif /* NS_ROOM_CAMERA_H */

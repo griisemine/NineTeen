@@ -29,6 +29,23 @@ nineteen_set_warnings(ns_test_bvh)
 nineteen_apply_sanitizers(ns_test_bvh)
 add_test(NAME bvh COMMAND ns_test_bvh)
 
+# Le solveur à deux os et la machine à états qui pose les bras. Les deux se
+# compilent depuis `room/`, comme `ns_test_bvh` le fait déjà pour la caméra : ce
+# sont des fichiers de jeu, pas de moteur, et les descendre dans `engine/` pour
+# les tester reviendrait à déplacer du code pour arranger un build.
+#
+# Ce que ces tests attrapent vraiment, c'est un NaN. Une matrice de pose qui en
+# contient un ne produit ni erreur ni message : le bras disparaît, et on cherche
+# une heure du côté du rendu.
+add_executable(ns_test_ik test_ik.c
+    "${CMAKE_SOURCE_DIR}/room/room_camera.c"
+    "${CMAKE_SOURCE_DIR}/room/room_viewmodel.c")
+target_include_directories(ns_test_ik PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_ik PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_ik)
+nineteen_apply_sanitizers(ns_test_ik)
+add_test(NAME ik COMMAND ns_test_ik)
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

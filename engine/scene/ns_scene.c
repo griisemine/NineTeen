@@ -216,6 +216,39 @@ static void load_lights(ns_scene *s, const char *lights_logical)
 }
 
 /*
+ * Repli pour les deux points que la main vise, quand la salle ne les déclare pas
+ * — c'est le cas de celle de 2020, dont aucun objet ne s'appelle autrement que
+ * `Cube.0XX`.
+ *
+ * Ce n'est **pas** une heuristique de plus déguisée : c'est un repli assumé, qui
+ * ne sert qu'au chemin `legacy`, et dont on sait qu'il se trompe de quelques
+ * centimètres. Le chemin normal lit les chiffres écrits par `roomgen` à trois
+ * lignes des boîtes qu'ils désignent. La différence tient dans le nom de la
+ * fonction, et elle compte : un repli qu'on n'appelle pas « repli » finit par
+ * être pris pour la vérité.
+ */
+static void derive_hand_anchors(ns_cabinet *cab)
+{
+    const ns_v3 extent = ns_aabb_extent(cab->bounds);
+    const ns_v3 centre = ns_aabb_center(cab->bounds);
+    const ns_v3 half   = ns_v3_scale(extent, 0.5f);
+    const ns_v3 fwd    = cab->screen_normal;
+
+    /* Panneau de commande : la saillie devant le caisson, à mi-hauteur d'homme.
+     * 0,93 m et 1,06 de demi-profondeur sont les cotes de `build_cabinet`, donc
+     * exprimées en fraction pour survivre à une borne d'une autre taille. */
+    cab->panel_centre = ns_v3_make(
+        centre.x + fwd.x * (fabsf(fwd.x) > 0.5f ? half.x * 1.06f : 0.0f),
+        cab->bounds.min.y + extent.y * 0.50f,
+        centre.z + fwd.z * (fabsf(fwd.z) > 0.5f ? half.z * 1.06f : 0.0f));
+
+    cab->coin_slot = ns_v3_make(
+        centre.x + fwd.x * (fabsf(fwd.x) > 0.5f ? half.x * 1.02f : 0.0f),
+        cab->bounds.min.y + extent.y * 0.28f,
+        centre.z + fwd.z * (fabsf(fwd.z) > 0.5f ? half.z * 1.02f : 0.0f));
+}
+
+/*
  * Fichier annexe de scène : `<nom>.scene.json`.
  *
  * C'est le fichier que `roomgen` écrira, et il porte ce que la salle *déclare*
@@ -340,12 +373,22 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
             c->screen_normal = ns_v3_norm(ns_v3_make(v[0], v[1], v[2]));
             ns_json_get_vec3(&doc, e, "playerAnchor", v, 0.0f);
             c->player_anchor = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "panelCentre", v, NAN);
+            c->panel_centre = ns_v3_make(v[0], v[1], v[2]);
+            ns_json_get_vec3(&doc, e, "coinSlot", v, NAN);
+            c->coin_slot = ns_v3_make(v[0], v[1], v[2]);
 
             /* Deux scalaires plutôt qu'un couple : le lecteur du moteur n'a que
              * `vec3`, et lui faire lire un tableau de deux éléments demanderait
              * une API de plus pour économiser une ligne. */
             c->screen_width  = ns_json_get_float(&doc, e, "screenWidth", 0.0f);
             c->screen_height = ns_json_get_float(&doc, e, "screenHeight", 0.0f);
+
+            /* Une salle écrite avant que ces deux clés existent reste chargeable :
+             * la valeur par défaut du lecteur est NaN, précisément pour qu'une
+             * absence se distingue d'un zéro légitime — l'origine du monde est une
+             * coordonnée valide, et une borne pourrait s'y trouver. */
+            if (isnan(c->panel_centre.x) || isnan(c->coin_slot.x)) derive_hand_anchors(c);
 
             s->cabinet_count++;
         }
@@ -480,6 +523,7 @@ static void load_cabinet_assignment(ns_scene *s, const char *logical)
 
         cab->player_anchor = ns_v3_add(cab->screen_center, ns_v3_scale(cab->screen_normal, 1.0f));
         cab->player_anchor.y = cab->bounds.min.y;
+        derive_hand_anchors(cab);
     }
 
     NS_INFO("%u bornes affectées à un jeu", assigned);
@@ -1095,8 +1139,18 @@ static void add_cabinet_screen_lights(ns_scene *s)
          * plafonniers de 500 les écrasaient ; il n'en reste que quatre, faibles.
          * C'est ce qui donne l'ambiance d'une vraie salle d'arcade, où ce sont
          * les machines qui éclairent. */
-        l->intensity = 150.0f;
-        l->range = 4.2f;
+        /*
+         * 150 pour 4,2 m de portée : c'était deux fois et demie le plafonnier de
+         * l'allée (62), multiplié par dix-neuf bornes. Les caissons ressortaient
+         * blancs à un mètre, la salle entière était éclairée par ses écrans, et
+         * l'ambiance tamisée demandée n'avait aucune chance d'exister.
+         *
+         * Une dalle d'arcade est une source faible. À 38 pour 2,6 m elle fait une
+         * flaque de couleur sur la moquette et sur les mains du joueur, et rien
+         * au-delà de l'allée — ce qui est exactement le rôle qu'on lui veut.
+         */
+        l->intensity = 38.0f;
+        l->range = 2.6f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
         /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,
