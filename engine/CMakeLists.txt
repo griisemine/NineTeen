@@ -30,6 +30,9 @@ add_library(nineteen_engine STATIC
     sprite/ns_sprite.c
 
     fx/ns_particles.c
+
+    net/ns_scores.c
+    net/ns_runlog.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -43,6 +46,7 @@ target_include_directories(nineteen_engine
         "${CMAKE_CURRENT_SOURCE_DIR}/render"
         "${CMAKE_CURRENT_SOURCE_DIR}/anim"
         "${CMAKE_CURRENT_SOURCE_DIR}/audio"
+        "${CMAKE_CURRENT_SOURCE_DIR}/net"
         "${CMAKE_CURRENT_SOURCE_DIR}/sprite"
         "${CMAKE_CURRENT_SOURCE_DIR}/fx"
 )

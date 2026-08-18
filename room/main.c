@@ -22,6 +22,8 @@
 #include "ns_sprite.h"
 
 #include "flappy/flappy.h"
+#include "ns_runlog.h"
+#include "ns_scores.h"
 
 #include "room_camera.h"
 #include "room_sound.h"
@@ -50,6 +52,8 @@ typedef struct options {
     bool        has_view;
     float       exposure;
     float       particles;  /* densité de poussière, < 0 = celle du palier */
+    bool        offline;    /* verrou : interdit toute sortie réseau */
+    const char *player;     /* nom porté au classement local */
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
     bool        bench;      /* mesure le temps GPU réel, image par image */
@@ -85,6 +89,8 @@ static void print_usage(const char *exe)
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
+        "  --offline            verrou : aucune partie n'est mise en file d'envoi\n"
+        "  --nom=NOM            nom porté au classement local\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
         "  --bench              mesure le temps GPU réel de chaque image\n"
@@ -256,6 +262,10 @@ static bool parse_options(int argc, char **argv, options *o)
             o->exposure = (float)SDL_atof(a + 11);
         } else if (SDL_strncmp(a, "--particles=", 12) == 0) {
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
+        } else if (SDL_strcmp(a, "--offline") == 0) {
+            o->offline = true;
+        } else if (SDL_strncmp(a, "--nom=", 6) == 0) {
+            o->player = a + 6;
         } else if (SDL_strncmp(a, "--quality=", 10) == 0) {
             const char *q = a + 10;
             if (SDL_strcmp(q, "low") == 0)         o->quality = NS_QUALITY_LOW;
@@ -305,6 +315,40 @@ static void mount_asset_directories(void)
 #ifdef NINETEEN_BUILD_ASSET_DIR
     ns_paths_mount(NINETEEN_BUILD_ASSET_DIR);
 #endif
+}
+
+/*
+ * Fin de partie : le classement local d'abord, la file d'envoi ensuite.
+ *
+ * Extraite parce qu'elle a DEUX appelants — la boucle de jeu et l'avance rapide
+ * de `--warmup=`, qui peut tuer l'oiseau avant que la boucle ne démarre. La
+ * première version ne l'appelait que depuis la boucle : une partie qui se
+ * terminait pendant l'avance rapide n'était ni classée ni mise en file, et la
+ * capture montrait un écran de fin dont le score n'existait nulle part.
+ *
+ * L'ordre compte et il est le même que celui de la V1 inversé : le score local
+ * est acquis AVANT qu'on se demande s'il y a un réseau. C'était l'erreur de
+ * fond de 2020 — sans serveur, la partie n'existait pas.
+ */
+static void finish_run(ns_runlog *log, int64_t run_ms, const flappy *game,
+                       const char *player, bool offline)
+{
+    const char *difficulty = game->hard ? "hard" : "normal";
+
+    ns_runlog_event(log, run_ms, "death", 0);
+    ns_runlog_end(log, run_ms, (int64_t)game->score);
+
+    const uint32_t rank = ns_scores_record("flappy", difficulty, game->score,
+                                           (uint32_t)run_ms, player);
+    ns_scores_save();
+    NS_INFO("Flappy : perdu à %u en %.1f s — %s, meilleur local %u",
+            game->score, (double)run_ms / 1000.0,
+            rank ? "classé" : "hors classement",
+            ns_scores_best("flappy", difficulty));
+
+    /* Au mieux, jamais bloquant. Sans secret de partie — c'est-à-dire hors
+     * ligne — la mise en file refuse d'elle-même : voir `ns_runlog_enqueue`. */
+    if (!offline) (void)ns_runlog_enqueue(log);
 }
 
 int main(int argc, char **argv)
@@ -587,6 +631,27 @@ int main(int argc, char **argv)
     flappy_art flappy_assets;
     flappy game;
     bool in_game = false;
+    /*
+     * Le journal de la partie en cours, et son horloge de simulation.
+     *
+     * Il est tenu même hors ligne : sans secret de serveur il ne sera pas mis en
+     * file, mais l'écrire quand même coûte quelques kilo-octets et garantit que
+     * le chemin est exercé à chaque partie plutôt qu'au premier branchement du
+     * réseau. Un code qui ne tourne jamais est un code qui ne marche pas.
+     */
+    ns_runlog *runlog = ns_runlog_create(16384);
+    int64_t    run_ms = 0;
+    ns_scores_load();
+    if (opt.offline) {
+        NS_INFO("--offline : le verrou est posé, aucune partie ne sera mise en file");
+    }
+    {
+        const uint32_t pending = ns_runlog_pending();
+        if (pending) {
+            NS_INFO("%u partie(s) en attente d'envoi dans « %s »",
+                    pending, ns_runlog_queue_dir());
+        }
+    }
     if (sprites) flappy_art_load(rhi, &flappy_assets);
     else         SDL_zero(flappy_assets);
 
@@ -628,7 +693,11 @@ int main(int argc, char **argv)
 
     if (opt.game && sprites) {
         if (SDL_strcasecmp(opt.game, "flappy") == 0) {
-            flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), false);
+            const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+            flappy_reset(&game, seed, false);
+            ns_runlog_begin(runlog, "flappy", "normal",
+                            (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+            run_ms = 0;
             in_game = true;
             fullscreen_game = true;      /* `--game=` est le mode plein écran */
             NS_INFO("Flappy Bird : partie démarrée");
@@ -687,6 +756,8 @@ int main(int argc, char **argv)
 
             const bool hard = (SDL_strcasecmp(pick->difficulty, "hard") == 0);
             flappy_reset(&game, 20240418, hard);
+            ns_runlog_begin(runlog, "flappy", hard ? "hard" : "normal", 20240418, NULL, 0);
+            run_ms = 0;
             in_game = true;
             fullscreen_game = false;
             playing_material = pick->screen_material;
@@ -715,6 +786,19 @@ int main(int argc, char **argv)
         for (int k = 0; k < steps; ++k) {
             if (opt.autoplay) flappy_autopilot(&game);
             flappy_tick(&game, step);
+            /*
+             * L'avance rapide tient le journal comme la boucle normale.
+             *
+             * Sans ça, une partie capturée après `--warmup=6` était soumise
+             * amputée de ses six premières secondes : le serveur recalculait un
+             * score plus bas que celui affiché et refusait la partie, sans que
+             * rien du côté client ne le laisse prévoir. « Avancer plus vite »
+             * doit rester la seule différence entre les deux boucles.
+             */
+            run_ms += (int64_t)(step * 1000.0f + 0.5f);
+            if (game.flapped)    ns_runlog_event(runlog, run_ms, "flap", 0);
+            if (game.scored_now) ns_runlog_event(runlog, run_ms, "score", 1);
+            if (game.died_now)   finish_run(runlog, run_ms, &game, opt.player, opt.offline);
         }
         NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
                 (double)opt.warmup, steps, game.score);
@@ -843,9 +927,17 @@ int main(int argc, char **argv)
                         if (!ev.key.repeat) {
                             if (game.phase == FLAPPY_DEAD && game.dead_time > 0.8f) {
                                 const uint32_t best = game.best;
-                                flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(),
-                                             game.hard);
+                                const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                                flappy_reset(&game, seed, game.hard);
                                 game.best = best;
+                                /* Une nouvelle partie, donc un nouveau journal :
+                                 * poursuivre l'ancien enverrait au serveur deux
+                                 * parties collées bout à bout. */
+                                ns_runlog_begin(runlog, "flappy",
+                                                game.hard ? "hard" : "normal",
+                                                (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull),
+                                                NULL, 0);
+                                run_ms = 0;
                             } else {
                                 flappy_flap(&game);
                             }
@@ -893,7 +985,11 @@ int main(int argc, char **argv)
                          */
                         if (sprites && SDL_strcasecmp(near->game, "flappy") == 0) {
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
-                            flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), hard);
+                            const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                            flappy_reset(&game, seed, hard);
+                            ns_runlog_begin(runlog, "flappy", hard ? "hard" : "normal",
+                                            (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+                            run_ms = 0;
                             in_game = true;
                             /*
                              * On reste EN 3D : le jeu tourne dans la dalle de la
@@ -994,17 +1090,31 @@ int main(int argc, char **argv)
             if (in_game) {
                 if (opt.autoplay) flappy_autopilot(&game);
                 flappy_tick(&game, (float)clock.tick_seconds);
+                /*
+                 * L'horloge de la partie est celle de la SIMULATION, pas celle
+                 * du mur : elle avance d'un pas fixe. C'est ce qui rend le
+                 * journal rejouable — le serveur revit la partie avec la même
+                 * graine et les mêmes instants, et retrouve le même score.
+                 */
+                run_ms += (int64_t)(clock.tick_seconds * 1000.0 + 0.5);
+
                 if (game.flapped) {
                     ns_audio_play(sfx_flap, NS_BUS_SFX, 0.55f, 1.0f);
                     /* Le jeu ne connaît pas les bras, et c'est voulu : il ne
                      * publie qu'un événement, et c'est ici qu'on le relaie à
                      * l'index droit. Le même événement sert déjà au son. */
                     room_viewmodel_tap(&vmstate);
+                    ns_runlog_event(runlog, run_ms, "flap", 0);
                 }
-                if (game.scored_now) { ns_audio_play(sfx_score, NS_BUS_SFX, 0.7f, 1.0f);
-                                       NS_INFO("Flappy : %u", game.score); }
-                if (game.died_now)   { ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);
-                                       NS_INFO("Flappy : perdu à %u", game.score); }
+                if (game.scored_now) {
+                    ns_audio_play(sfx_score, NS_BUS_SFX, 0.7f, 1.0f);
+                    NS_INFO("Flappy : %u", game.score);
+                    ns_runlog_event(runlog, run_ms, "score", 1);
+                }
+                if (game.died_now) {
+                    ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);
+                    finish_run(runlog, run_ms, &game, opt.player, opt.offline);
+                }
             }
         }
         ns_clock_end_frame(&clock);
@@ -1149,6 +1259,8 @@ int main(int argc, char **argv)
 
     ns_texture_destroy(rhi, &screen_rt);
     flappy_art_free(rhi, &flappy_assets);
+    ns_scores_save();
+    ns_runlog_destroy(runlog);
     if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);
     ns_audio_shutdown();

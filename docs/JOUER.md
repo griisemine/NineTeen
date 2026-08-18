@@ -186,3 +186,62 @@ vérification de 54 fichiers en chemins relatifs qui n'aboutissait que depuis `b
 chargement du classement dont la boucle de réessai — `while (updateMeilleureScoreStruct(...) ==
 EXIT_FAILURE);` (`legacy/room/room.c:1302`) — tournait **indéfiniment** en cas de panne serveur, sans
 message.
+
+## Les scores, et le réseau
+
+### Ce qui marche aujourd'hui, sans rien installer
+
+Le classement est **local**, et il l'est par conception. À la fin d'une partie le
+score est écrit dans `scores.txt`, dans le répertoire utilisateur du jeu
+(`~/.local/share/nineteen/` sous Linux, `~/Library/Application Support/nineteen/`
+sous macOS, `%APPDATA%\nineteen\` sous Windows). L'écriture est **atomique** — un
+temporaire puis un renommage —, donc une coupure de courant laisse l'ancien
+fichier intact plutôt qu'un fichier tronqué.
+
+```sh
+./build/linux-x64/bin/nineteen --nom=Nine     # le nom porté au classement
+```
+
+Le nom est facultatif. **Le jeu ne demande jamais de compte pour jouer**, et ne
+le demandera jamais : c'était l'erreur de fond de la version de 2020, dont tout
+le `main()` était enfermé dans un contrôle de version en ligne. Sans réponse du
+serveur, la V1 affichait « une nouvelle version est disponible » et se fermait —
+elle ne pouvait pas atteindre sa propre fenêtre.
+
+### Ce qui est préparé, et pas branché
+
+Chaque partie produit un **journal d'événements horodatés au pas fixe**, scellé
+par HMAC-SHA256 au format exact que le serveur Go attend
+(`server/internal/runs/runs.go`). Le serveur ne croit pas le score annoncé : il
+ouvre la partie, tire la graine et un secret, puis **recalcule** le score depuis
+le journal.
+
+La moitié client de ce contrat est écrite et vérifiée : `tests/test_scores.c`
+confronte la charge canonique et le sceau aux vecteurs produits par le code Go
+lui-même. Une divergence d'un octet invaliderait toutes les parties, avec pour
+seul symptôme un « sceau invalide » côté serveur ; c'est exactement ce que ce
+test empêche.
+
+**Ce qui n'existe pas encore, délibérément : le transport.** Le binaire
+n'importe aucun symbole réseau, et c'est vérifiable :
+
+```sh
+nm -D --undefined-only build/linux-x64/bin/nineteen \
+  | grep -icE 'socket|connect|getaddrinfo|ssl|curl|tls'   # -> 0
+```
+
+Le temps réel — présence, duels — se conçoit avant de s'écrire, et cette
+conception reste à faire. En attendant, une partie jouée sans serveur est
+classée localement et **rien n'échoue**.
+
+### `--offline`
+
+```sh
+./build/linux-x64/bin/nineteen --offline
+```
+
+C'est un **verrou**, pas un repli : il interdit toute mise en file d'envoi, même
+quand le transport existera. Aujourd'hui il ne change rien au comportement
+observable — une partie sans secret de serveur n'est de toute façon pas mise en
+file — et il est là pour que la garantie soit exprimable dès maintenant plutôt
+que rajoutée après coup.

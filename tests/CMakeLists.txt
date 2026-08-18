@@ -29,6 +29,19 @@ nineteen_set_warnings(ns_test_bvh)
 nineteen_apply_sanitizers(ns_test_bvh)
 add_test(NAME bvh COMMAND ns_test_bvh)
 
+# Le classement local et le journal de partie scellé.
+#
+# Le contrôle qui justifie ce test à lui seul : le format canonique et le sceau
+# HMAC sont écrits DEUX FOIS — en Go dans `server/internal/runs/runs.go` et en C
+# dans `engine/net/ns_runlog.c`. Une divergence d'un octet invaliderait toutes
+# les parties, avec pour seul symptôme un « sceau invalide » côté serveur. Les
+# vecteurs employés ici sont produits par le code Go lui-même.
+add_executable(ns_test_scores test_scores.c)
+target_link_libraries(ns_test_scores PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_scores)
+nineteen_apply_sanitizers(ns_test_scores)
+add_test(NAME scores COMMAND ns_test_scores)
+
 # La poussière. Le système se construit ici SANS GPU — `ns_particles_create` accepte
 # un `ns_rhi *` nul et ne monte alors que sa simulation — donc ce test tourne aussi
 # sur les machines d'intégration continue de macOS et de Windows, qui n'en ont pas.
