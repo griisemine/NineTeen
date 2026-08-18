@@ -1,6 +1,8 @@
 /* room_hud.c — voir room_hud.h pour le raisonnement. */
 #include "room_hud.h"
 
+#include "ns_online.h"
+
 #include "ns_core.h"
 #include "ns_scores.h"
 
@@ -250,5 +252,29 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
         }
     }
 
-    centred(s, w * 0.5f, 258.0f * u, 1.6f * u, dim, "SCORES LOCAUX");
+    /*
+     * Le classement MONDIAL, sous les scores locaux — quand il y en a un.
+     *
+     * C'est tout l'intérêt du réseau : voir qu'on est vingtième plutôt que
+     * premier chez soi. Sans serveur configuré, rien ne s'affiche et la ligne
+     * du bas dit simplement « scores locaux » — le jeu n'a pas à s'excuser de
+     * tourner seul.
+     */
+    ns_online_board world;
+    if (ns_online_board_get("flappy", "normal", &world) && world.count > 0) {
+        /*
+         * UNE ligne, pas un second tableau : sous le trait il reste 42 points de
+         * haut, et un bloc de quatre lignes en débordait — les scores mondiaux
+         * tombaient hors de la dalle. Le meneur mondial suffit à dire ce qu'on a
+         * besoin de savoir : jusqu'où il faut monter.
+         */
+        static const float gold[4] = { 1.00f, 0.84f, 0.38f, 1.0f };
+        char line[64];
+        SDL_snprintf(line, sizeof line, "MONDIAL FLAPPY  %-3.3s %u",
+                     world.row[0].name, world.row[0].score);
+        centred(s, w * 0.5f, 256.0f * u, 1.7f * u, gold, line);
+        centred(s, w * 0.5f, 274.0f * u, 1.3f * u, dim, "SCORES LOCAUX CI-DESSUS");
+    } else {
+        centred(s, w * 0.5f, 258.0f * u, 1.6f * u, dim, "SCORES LOCAUX");
+    }
 }

@@ -47,6 +47,20 @@ void ns_config_set_bool(const char *key, bool value);
 #define NS_CFG_VOL_MUSIC       "audio.music"
 #define NS_CFG_VOL_SFX         "audio.sfx"
 #define NS_CFG_VOL_AMBIENCE    "audio.ambience"
+
+/*
+ * L'URL du serveur de classement. Vide — le défaut — signifie HORS LIGNE au
+ * sens strict : aucune socket n'est ouverte, et le fil réseau ne démarre même
+ * pas.
+ *
+ * La clé avait été RETIRÉE en M9 parce qu'elle ne servait à rien : elle était
+ * réservée depuis M1 et personne ne la lisait. Elle revient maintenant qu'elle
+ * a un lecteur, ce qui est la seule raison valable d'avoir une clé.
+ */
+#define NS_CFG_SERVER_URL   "network.serverUrl"
+/* Le jeton de session, si l'on en a un. Sans lui, le classement est en LECTURE
+ * seule — ce qui suffit à voir les scores du monde, et n'exige aucun compte. */
+#define NS_CFG_SERVER_TOKEN "network.token"
 #define NS_CFG_MOUSE_SENS      "input.mouseSensitivity"
 #define NS_CFG_ROOM_SOURCE     "room.source"            /* generated | legacy */
 

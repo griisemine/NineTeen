@@ -33,6 +33,8 @@ add_library(nineteen_engine STATIC
 
     net/ns_scores.c
     net/ns_runlog.c
+    net/ns_http.c
+    net/ns_online.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)

@@ -244,13 +244,47 @@ lui-même. Une divergence d'un octet invaliderait toutes les parties, avec pour
 seul symptôme un « sceau invalide » côté serveur ; c'est exactement ce que ce
 test empêche.
 
-**Ce qui n'existe pas encore, délibérément : le transport.** Le binaire
-n'importe aucun symbole réseau, et c'est vérifiable :
+### Le classement en ligne, activable
+
+**Par défaut, le jeu ne se connecte à rien.** Sans URL de serveur configurée,
+aucune socket n'est ouverte et le fil réseau ne démarre même pas.
+
+```sh
+./build/linux-x64/bin/nineteen --server=http://mon-serveur:8080
+```
+
+ou, une fois pour toutes, `network.serverUrl` dans `settings.cfg`. Le jeu
+affiche alors le **meneur mondial** sur la borne de classement, à côté des
+scores locaux. **Aucun compte n'est demandé** : sans jeton, le classement est en
+lecture seule, ce qui suffit à voir où l'on en est. C'était l'erreur de fond de
+la V1, qui exigeait trois allers-retours HTTP et un compte avant de montrer quoi
+que ce soit.
+
+**Ce que le binaire importe désormais.** Jusqu'à B14 cette page affirmait qu'il
+n'importait *aucun* symbole réseau, et c'était vrai. Ça ne l'est plus :
 
 ```sh
 nm -D --undefined-only build/linux-x64/bin/nineteen \
-  | grep -icE 'socket|connect|getaddrinfo|ssl|curl|tls'   # -> 0
+  | grep -icE 'socket|connect|getaddrinfo|recv|send'   # -> 5
 ```
+
+Ce qui reste vrai, et qui est ce qui compte : **rien ne part sans qu'on l'ait
+demandé**. Sans URL, aucune de ces cinq fonctions n'est appelée ; `--offline`
+verrouille par-dessus, et `tests/test_online.c` le vérifie en demandant un
+classement puis en constatant qu'il n'arrive jamais.
+
+**Pas de TLS**, dit franchement : le chiffrement demanderait OpenSSL ou mbedTLS,
+c'est-à-dire une dépendance lourde dans un projet reconstructible en une
+commande. Le classement vise un serveur qu'on héberge soi-même ; mettre un
+proxy TLS devant est la bonne réponse, et une URL `https://` est **refusée**
+plutôt que tentée en clair.
+
+**Une partie jouée hors ligne n'est pas soumettable**, et c'est une conséquence
+de l'anti-triche, pas une lacune. Le serveur tire la graine ET le secret d'une
+partie AVANT qu'elle soit jouée ; le score n'est pas une valeur que le client
+annonce mais une conséquence que le serveur recalcule. Une partie sans graine ni
+secret du serveur ne peut pas être vérifiée, et l'accepter reviendrait
+exactement à la V1, où le client annonçait son score et le serveur le croyait.
 
 Le temps réel — présence, duels — se conçoit avant de s'écrire, et cette
 conception reste à faire. En attendant, une partie jouée sans serveur est

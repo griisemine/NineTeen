@@ -77,6 +77,23 @@ que le chantier est terminé.
   volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
   explication ; la capture a donné la seconde.
 
+### Le réseau
+- **Le classement en ligne, activable.** `engine/net/ns_http.c` — HTTP/1.1, `GET`/`POST`, délais
+  bornés, ~300 lignes sur des sockets POSIX/Winsock — et `ns_online.c`, un fil de travail qui ne
+  bloque jamais la boucle de jeu. `NS_CFG_SERVER_URL` était une clé réservée depuis M1 que
+  personne n'avait jamais lue ; elle a enfin un lecteur.
+- **Aucun compte n'est demandé.** Sans jeton, le classement est en lecture seule — ce qui suffit à
+  voir le meneur mondial sur la borne de classement. C'était l'erreur de fond de la V1.
+- **Sans URL, aucune socket n'est ouverte** : le fil ne démarre même pas. `--offline` verrouille
+  par-dessus, et `tests/test_online.c` le vérifie en demandant un classement puis en constatant
+  qu'il n'arrive jamais. Le test ouvre de VRAIES sockets vers un serveur Go local : un client
+  réseau qu'on ne fait jamais parler à personne est un client dont on ne sait rien.
+- **Pas de TLS**, et une URL `https://` est REFUSÉE plutôt que tentée en clair — envoyer un jeton
+  de session sur un port qui ne le comprend pas serait pire que d'échouer.
+- **Une partie jouée hors ligne n'est pas soumettable**, par conception : le serveur tire la graine
+  et le secret AVANT la partie, et un score sans eux n'est pas vérifiable. L'accepter reviendrait
+  à la V1, où le client annonçait son score et le serveur le croyait.
+
 ### Les bornes
 - **Le caisson est une EXTRUSION DE PROFIL**, plus une boîte. Ce qui fait qu'on reconnaît une
   borne d'arcade au premier coup d'œil n'est ni sa couleur ni son marquee : c'est son profil
@@ -200,7 +217,8 @@ que le chantier est terminé.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
   du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
   socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
-  n'importe **aucun** symbole réseau, et c'est vérifiable en une commande.
+  importe cinq symboles réseau depuis B15 — plus zéro, et la phrase a été corrigée partout plutôt
+  que laissée à traîner. Ce qui reste vrai : sans URL configurée, aucun n'est appelé.
 - **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
   pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
   au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse

@@ -22,6 +22,7 @@
 #include "ns_sprite.h"
 
 #include "games.h"
+#include "ns_online.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -57,6 +58,7 @@ typedef struct options {
     bool        offline;    /* verrou : interdit toute sortie réseau */
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
+    const char *server;      /* URL du classement en ligne, sinon la config */
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -95,7 +97,8 @@ static void print_usage(const char *exe)
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
-        "  --offline            verrou : aucune partie n'est mise en file d'envoi\n"
+        "  --server=URL         classement en ligne (http://hôte:port) ; sinon la config\n"
+        "  --offline            verrou : aucune connexion, aucune mise en file\n"
         "  --menu[=N]           ouvre le menu de réglages (ligne N) : pour les captures\n"
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
@@ -284,6 +287,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->exposure = (float)SDL_atof(a + 11);
         } else if (SDL_strncmp(a, "--particles=", 12) == 0) {
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
+        } else if (SDL_strncmp(a, "--server=", 9) == 0) {
+            o->server = a + 9;
         } else if (SDL_strcmp(a, "--offline") == 0) {
             o->offline = true;
         } else if (SDL_strcmp(a, "--no-hud") == 0) {
@@ -777,6 +782,29 @@ int main(int argc, char **argv)
     ns_runlog *runlog = ns_runlog_create(16384);
     int64_t    run_ms = 0;
     ns_scores_load();
+
+    /*
+     * Le classement en ligne, ACTIVABLE et jamais bloquant.
+     *
+     * Sans URL — le défaut — aucune socket n'est ouverte et le fil ne démarre
+     * pas ; le jeu se comporte exactement comme avant. C'est la règle posée en
+     * A2b : on joue d'abord, on se demande ensuite s'il y a un serveur.
+     */
+    {
+        ns_online_config oc;
+        SDL_zero(oc);
+        const char *url = opt.server ? opt.server
+                                     : ns_config_get_str(NS_CFG_SERVER_URL, "");
+        oc.server_url = url;
+        oc.token = ns_config_get_str(NS_CFG_SERVER_TOKEN, "");
+        oc.locked = opt.offline;
+        if (ns_online_init(&oc)) {
+            /* On demande le classement de Flappy dès le départ : c'est celui que
+             * la borne de classement affiche en premier. */
+            ns_online_request_board("flappy", "normal");
+        }
+    }
+
     if (opt.offline) {
         NS_INFO("--offline : le verrou est posé, aucune partie ne sera mise en file");
     }
@@ -1724,6 +1752,7 @@ play_at_done: ;
     ns_config_save();
 
     ns_scores_save();
+    ns_online_shutdown();
     ns_runlog_destroy(runlog);
     if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);
