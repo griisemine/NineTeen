@@ -668,9 +668,9 @@ int main(int argc, char **argv)
              * on regarde dans le sens opposé. Le lacet suit
              * `forward = (cos, ., sin)`. */
             cam.yaw = cam.prev_yaw = atan2f(-pick->screen_normal.z, -pick->screen_normal.x);
-            /* La dalle est à 1,22 m, l'œil à 1,70 m, à 1,05 m de distance : il faut
-             * plonger de 22° pour l'avoir au centre du cadre. */
-            cam.pitch = cam.prev_pitch = -22.0f * NS_DEG2RAD;
+            /* La dalle est à 1,26 m, l'œil à 1,70 m, à 1,05 m de distance : il faut
+             * plonger de 23° pour l'avoir au centre du cadre. */
+            cam.pitch = cam.prev_pitch = -23.0f * NS_DEG2RAD;
             cam.velocity = ns_v3_zero();
 
             const bool hard = (SDL_strcasecmp(pick->difficulty, "hard") == 0);

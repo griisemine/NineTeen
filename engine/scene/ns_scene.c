@@ -1172,9 +1172,29 @@ static void add_cabinet_screen_lights(ns_scene *s)
         SDL_zerop(l);
         SDL_zerop(a);
 
-        /* Décollée de l'écran vers le joueur : dans la géométrie, elle
-         * n'éclairerait que l'intérieur de la borne. */
-        const ns_v3 p = ns_v3_add(c->screen_center, ns_v3_scale(c->screen_normal, 0.45f));
+        /*
+         * **Dans le plan de la dalle, pas 45 cm devant.**
+         *
+         * Elle était à 45 cm devant l'écran, et c'est ce qui brûlait la face de
+         * la borne elle-même : le bandeau de caisson juste au-dessus de la dalle
+         * se retrouvait à 51 cm d'une source de 38 vue sous un angle de 28°,
+         * soit 129 d'éclairement — mesuré sur l'image à (168, 223, 178) pour un
+         * albédo de 0,46, à 30 cm d'une moquette à (19, 11, 9). Un facteur neuf
+         * à l'intérieur d'un même objet : la borne se lisait comme un caisson
+         * lumineux en plastique, pas comme une machine peinte dans une salle
+         * tamisée.
+         *
+         * Ramenée DANS le plan de la dalle, la géométrie fait le travail toute
+         * seule : la face du caisson est coplanaire avec l'écran, donc le
+         * cosinus d'incidence y vaut zéro et elle ne reçoit rien de son propre
+         * écran — ce qui est aussi ce que fait une vraie dalle, qui émet vers
+         * l'avant et pas sur son propre cadre. Le joueur, lui, est à un mètre
+         * DEVANT : il reçoit toujours sa flaque de couleur.
+         *
+         * Les 2 cm restants ne servent qu'à ce que la source soit du bon côté de
+         * la surface, sans quoi un flottant près de zéro déciderait du signe.
+         */
+        const ns_v3 p = ns_v3_add(c->screen_center, ns_v3_scale(c->screen_normal, 0.02f));
         l->position[0] = p.x; l->position[1] = p.y; l->position[2] = p.z;
         /*
          * Désaturation vers le blanc.
@@ -1215,14 +1235,33 @@ static void add_cabinet_screen_lights(ns_scene *s)
          * flaque de couleur sur la moquette et sur les mains du joueur, et rien
          * au-delà de l'allée — ce qui est exactement le rôle qu'on lui veut.
          */
-        l->intensity = 38.0f;
-        l->range = 2.6f;
+        /*
+         * 30 pour 0,40 m de demi-rayon, et le couple est calculé, pas cherché.
+         *
+         * L'objectif est de ne RIEN changer à ce que le joueur reçoit, et de ne
+         * retirer que l'auto-éclairage du caisson. Le point de contrôle est le
+         * panneau de commande, à 29 cm de la dalle : avec l'ancienne source
+         * (38, 45 cm devant, demi-rayon 0,20) il recevait 38 x 4,5 x 0,90 = 154.
+         * Avec la nouvelle (dans le plan, demi-rayon 0,40) la décroissance y est
+         * bornée à 1/0,16, donc 30 x 6,25 x 0,82 = 154. Le même chiffre.
+         *
+         * Le demi-rayon n'est pas non plus un réglage libre : la dalle fait
+         * 0,62 x 0,35, soit 0,36 m de demi-diagonale. Une source de cette taille
+         * cesse de décroître en 1/d² dès qu'on l'approche à moins que sa propre
+         * dimension — c'est ce que 0,40 exprime, et c'est ce qui empêche un
+         * panneau de commande à 29 cm de partir en blanc.
+         *
+         * Ce qui change, et c'est tout ce qui devait changer : le bandeau de
+         * caisson au-dessus de la dalle passe de 129 à zéro.
+         */
+        l->intensity = 30.0f;
+        l->range = 2.8f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
         /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,
          * pas une ampoule, et son demi-rayon borne la décroissance de sorte que
          * le joueur qui s'en approche soit éclairé sans être brûlé. */
-        l->source_radius = 0.20f;
+        l->source_radius = 0.40f;
 
         a->base_intensity = l->intensity;
         /* Pulsation lente et désynchronisée : un écran de jeu n'a pas une

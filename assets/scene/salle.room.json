@@ -189,7 +189,7 @@
     },
     {
       "name": "laque_sombre",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.5,
       "roughness": 0.42,
       "metallic": 0.12,
@@ -203,7 +203,7 @@
     },
     {
       "name": "caisson_flappy",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -217,7 +217,7 @@
     },
     {
       "name": "caisson_tetris",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -231,7 +231,7 @@
     },
     {
       "name": "caisson_snake",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -245,7 +245,7 @@
     },
     {
       "name": "caisson_asteroid",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -259,7 +259,7 @@
     },
     {
       "name": "caisson_shooter",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -273,7 +273,7 @@
     },
     {
       "name": "caisson_demineur",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -287,7 +287,7 @@
     },
     {
       "name": "caisson_pacman",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -301,7 +301,7 @@
     },
     {
       "name": "caisson_piano",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -315,7 +315,7 @@
     },
     {
       "name": "caisson_leaderboard",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
       "metallic": 0.1,
@@ -329,7 +329,7 @@
     },
     {
       "name": "borne_cadre",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "roughness": 0.44,
       "metallic": 0.1,
       "uvMetres": 0.42,
@@ -713,7 +713,7 @@
     },
     {
       "name": "jaune",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "roughness": 0.38,
       "uvMetres": 0.55,
       "metallic": 0.15,
@@ -727,7 +727,7 @@
     },
     {
       "name": "bleu",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "roughness": 0.38,
       "uvMetres": 0.55,
       "metallic": 0.15,
@@ -740,7 +740,7 @@
     },
     {
       "name": "rouge",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "lacquered_wood.jpg",
       "roughness": 0.34,
       "uvMetres": 0.55,
       "metallic": 0.18,
@@ -753,7 +753,7 @@
     },
     {
       "name": "bordeau_uni",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "lacquered_wood.jpg",
       "roughness": 0.42,
       "uvMetres": 0.6,
       "metallic": 0.12,
@@ -780,7 +780,7 @@
     },
     {
       "name": "gris",
-      "texture": "painted_metal_shutter.jpg",
+      "texture": "painted_panel.jpg",
       "roughness": 0.7,
       "uvMetres": 0.7,
       "metallic": 0.05,
@@ -796,7 +796,7 @@
   "retiredTextures": [
     {
       "file": "gris_foncer.jpg",
-      "why": "aplat 24x24 quasi noir ; remplacé par painted_metal_shutter teinté"
+      "why": "aplat 24x24 quasi noir ; remplacé par painted_panel teinté"
     },
     {
       "file": "noir.jpg",

@@ -1019,15 +1019,21 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     /* --- marquee ---------------------------------------------------------- */
     /* Légèrement en saillie et incliné : un marquee est une boîte lumineuse
      * rapportée, pas une décalcomanie. */
-    geo_panel(out, ns_v3_make(0.0f, 1.66f, hd + 0.013f),
+    /*
+     * Remonté de 1,66 à 1,65 et raccourci de 0,30 à 0,26 pour laisser la place à
+     * l'écran 16:9 ci-dessous. Sur une vraie borne le marquee est un bandeau —
+     * c'est l'écran qui domine la face. Ici c'était l'inverse : le marquee
+     * occupait à l'image deux fois la hauteur de la partie en cours.
+     */
+    geo_panel(out, ns_v3_make(0.0f, 1.65f, hd + 0.013f),
               ns_v3_make(0.0f, 0.10f, 1.0f), ns_v3_make(1, 0, 0),
-              RG_CAB_W - 0.06f, 0.30f, 0.0f, 0.0f, 1.0f, 1.0f, marq);
+              RG_CAB_W - 0.06f, 0.26f, 0.0f, 0.0f, 1.0f, 1.0f, marq);
 
     geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(RG_CAB_W - 0.04f, 0.34f, 0.055f), 0.006f,
+    geo_box(&part, ns_v3_make(RG_CAB_W - 0.04f, 0.30f, 0.055f), 0.006f,
             GEO_FACE_ALL & ~GEO_FACE_PZ, &uv_trim, trim);
     x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 1.49f, hd - 0.012f);
+    x.origin = ns_v3_make(0.0f, 1.65f, hd - 0.012f);
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);
 
@@ -1039,10 +1045,24 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * l'écran 31 cm trop bas et large de 1,1 unité.
      *
      * Inclinée de 10° vers l'arrière, comme une vraie dalle d'arcade, et à
-     * 1,22 m : la hauteur d'yeux d'un joueur debout de 1,70 m qui regarde
+     * 1,26 m : la hauteur d'yeux d'un joueur debout de 1,70 m qui regarde
      * légèrement vers le bas.
+     *
+     * **16:9, et ce n'est pas un choix esthétique : c'est ce que les images
+     * disent.** Les onze écrans peints de 2020 — `flappy_easy_font.jpg`,
+     * `snake_font.jpg`, `tetris_font.jpg`… — font tous 1920 x 1080, et le jeu
+     * de 2020 tourne lui-même en 1920 x 1080 (`WINDOW_L` / `WINDOW_H`,
+     * `legacy/games/3_flappy_bird/flappy_bird.c:22`). La dalle était en 4:3
+     * (0,56 x 0,42) : chaque image d'écran de la salle y était donc rognée ou
+     * déformée, et la partie en cours s'y affichait en boîte aux lettres, moitié
+     * moins haute que le marquee juste au-dessus.
+     *
+     * La largeur est ce qui contraint : 0,72 m de caisson moins deux plats de
+     * 35 mm et deux jeux de 10 mm laissent 0,62 m, d'où 0,349 m de haut. La
+     * cible de rendu de la partie fait 512 x 288 — le même rapport, donc l'image
+     * remplit la dalle exactement, sans bande ni étirement.
      */
-    const float sw = 0.56f, sh = 0.42f;
+    const float sw = 0.62f, sh = 0.349f;
     /*
      * La dalle est légèrement EN SAILLIE du caisson, pas enfoncée dedans.
      *
@@ -1057,7 +1077,7 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * de 8 mm, encadrée par ses plats eux-mêmes proéminents, donne exactement la
      * même lecture : une vitre sertie dans un cadre.
      */
-    const float sy = 1.22f, sz = hd + 0.008f;
+    const float sy = 1.26f, sz = hd + 0.008f;
     const float tilt = 10.0f * NS_DEG2RAD;
     const ns_v3 snormal = ns_v3_make(0.0f, sinf(tilt), cosf(tilt));
 
