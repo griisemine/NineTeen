@@ -65,6 +65,10 @@ typedef struct room_sound {
      * coûteraient cinquante-sept traversées de BVH pour une grandeur qui bouge à
      * la vitesse où l'on marche. */
     uint32_t occlusion_cursor;
+
+    /* L'espace entendu, amorti. Deux flottants plutôt qu'un pointeur de zone :
+     * on interpole entre deux pièces, on ne saute pas de l'une à l'autre. */
+    float space_wet, space_decay;
 } room_sound;
 
 /* Charge les sons et lance les boucles. Sans effet si le mixeur n'a pas démarré :

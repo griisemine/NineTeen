@@ -58,6 +58,33 @@ static struct {
     bool           offline;
     ma_engine      engine;
     ma_sound_group groups[NS_BUS_COUNT];
+
+    /*
+     * L'écho de la pièce, monté en DÉPART/RETOUR — un séparateur qui double le
+     * signal, une branche directe vers la sortie, une branche retardée.
+     *
+     *      SFX ─┐                  ┌─ bus 0 ─────────────────────┐
+     *           ├─> reverb_split ──┤                             ├─> endpoint
+     *  AMBIENCE ┘                  └─ bus 1 ─> reverb (retard) ──┘
+     *
+     * Ce montage n'est pas une élégance : c'est ce qu'impose la sémantique
+     * réelle de `ma_delay`, que j'avais lue de travers. Son `dry` n'est PAS un
+     * passage direct vers la sortie, c'est le gain d'entrée DANS la ligne à
+     * retard ; sa sortie vaut exactement `ligne * wet`. Un bus branché en série
+     * dessus perd donc son signal direct — et à `wet = 0` il devient muet.
+     * Mis en série, le nœud ne réverbérait pas la salle : il la remplaçait par
+     * son écho. (`third_party/miniaudio/miniaudio.h:50446-50466`.)
+     *
+     * La LONGUEUR du retard est fixée une fois pour toutes — `ma_delay_node` la
+     * prend à l'initialisation et ne la reprend pas — et ce sont le mouillé et
+     * la décroissance qui changent d'une pièce à l'autre. 95 ms, c'est la queue
+     * d'une petite pièce carrelée : au-delà on entend deux sons distincts au
+     * lieu d'un son qui traîne.
+     */
+    ma_splitter_node reverb_split;
+    ma_delay_node    reverb;
+    bool             reverb_ready;
+    float            reverb_wet, reverb_decay;
     float          bus_volume[NS_BUS_COUNT];
 
     ns_clip  clips[NS_AUDIO_MAX_CLIPS];
@@ -127,6 +154,49 @@ bool ns_audio_init(const ns_audio_config *cfg)
         }
     }
 
+    /*
+     * Le nœud d'écho, et le re-routage des deux bus qui le traversent.
+     *
+     * MUSIC ne passe PAS par lui : une musique dans une queue devient de la
+     * bouillie. MASTER non plus — les sons joués sans bus sont les alertes et
+     * les captures, qui doivent rester nets.
+     *
+     * S'il échoue, on continue sans : le jeu doit sonner, pas parfaitement.
+     */
+    {
+        ma_node *endpoint = ma_engine_get_endpoint(&g.engine);
+        ma_node_graph *graph = ma_engine_get_node_graph(&g.engine);
+
+        const ma_uint32 delay_frames = (ma_uint32)((float)rate * 0.095f);
+        ma_delay_node_config dc = ma_delay_node_config_init(2, rate, delay_frames, 0.0f);
+        /* `dry` = ce qui ENTRE dans la ligne, `wet` = ce qui en SORT. Le signal
+         * direct ne passe pas par ici : il prend la branche 0 du séparateur. */
+        dc.delay.dry = 1.0f;
+        dc.delay.wet = 0.0f;
+
+        ma_splitter_node_config sc = ma_splitter_node_config_init(2);
+
+        if (ma_splitter_node_init(graph, &sc, NULL, &g.reverb_split) == MA_SUCCESS) {
+            if (ma_delay_node_init(graph, &dc, NULL, &g.reverb) == MA_SUCCESS) {
+                ma_node_attach_output_bus(&g.reverb_split, 0, endpoint, 0);      /* direct */
+                ma_node_attach_output_bus(&g.reverb_split, 1, &g.reverb, 0);     /* départ */
+                ma_node_attach_output_bus(&g.reverb, 0, endpoint, 0);            /* retour */
+
+                /* MUSIC ne passe PAS par le départ : une musique dans une queue
+                 * devient de la bouillie. MASTER non plus — les sons joués sans
+                 * bus sont les alertes et les captures, qui doivent rester nets. */
+                ma_node_attach_output_bus(&g.groups[NS_BUS_SFX], 0, &g.reverb_split, 0);
+                ma_node_attach_output_bus(&g.groups[NS_BUS_AMBIENCE], 0, &g.reverb_split, 0);
+                g.reverb_ready = true;
+            } else {
+                ma_splitter_node_uninit(&g.reverb_split, NULL);
+            }
+        }
+        if (!g.reverb_ready) {
+            NS_WARN("audio : écho de pièce indisponible, le mixage restera sec");
+        }
+    }
+
     for (int i = 0; i < NS_BUS_COUNT; ++i) g.bus_volume[i] = 1.0f;
     g.ready = true;
 
@@ -144,6 +214,11 @@ void ns_audio_shutdown(void)
             ma_sound_uninit(&g.voices[i].sound);
             g.voices[i].active = false;
         }
+    }
+    if (g.reverb_ready) {
+        ma_delay_node_uninit(&g.reverb, NULL);
+        ma_splitter_node_uninit(&g.reverb_split, NULL);
+        g.reverb_ready = false;
     }
     for (int i = 1; i < NS_BUS_COUNT; ++i) ma_sound_group_uninit(&g.groups[i]);
     ma_engine_uninit(&g.engine);
@@ -365,6 +440,32 @@ void ns_audio_voice_occlusion(int handle, float visibility)
     ns_voice *v = voice_from_handle(handle);
     if (!v) return;
     v->occlusion_target = ns_clampf(visibility, 0.0f, 1.0f);
+}
+
+void ns_audio_set_space(float wet, float decay)
+{
+    if (!g.ready || !g.reverb_ready) return;
+
+    const float w = ns_clampf(wet, 0.0f, 0.9f);
+    const float d = ns_clampf(decay, 0.0f, 0.85f);
+    /* Rien à faire si rien ne change : `ma_delay_node_set_*` traverse le
+     * verrouillage du graphe, et l'appeler soixante fois par seconde pour la
+     * même valeur ne sert qu'à contendre. */
+    if (w == g.reverb_wet && d == g.reverb_decay) return;
+
+    g.reverb_wet = w;
+    g.reverb_decay = d;
+
+    /* Le RETOUR : niveau du premier écho, puis décroissance à chaque tour de
+     * ligne. L'entrée dans la ligne reste à 1 — la doser deux fois ne ferait que
+     * rendre le réglage illisible. */
+    ma_delay_node_set_wet(&g.reverb, w);
+    ma_delay_node_set_decay(&g.reverb, d);
+
+    /* Le DIRECT diminue quand le mouillé monte, sinon une pièce réverbérante est
+     * simplement plus forte qu'une pièce sèche — et l'oreille entend un
+     * changement de volume, pas un changement d'espace. */
+    ma_node_set_output_bus_volume(&g.reverb_split, 0, 1.0f - w * 0.45f);
 }
 
 void ns_audio_update(float dt)

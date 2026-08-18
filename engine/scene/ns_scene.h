@@ -160,6 +160,27 @@ typedef struct ns_dust_zone {
 #define NS_MAX_DUST_ZONES 8
 
 /*
+ * Une zone de RÉVERBÉRATION, déclarée par la salle.
+ *
+ * Ce qu'elle porte est ce qu'on entend quand on est DEDANS : un bloc sanitaire
+ * carrelé rend, une salle en moquette avale. C'est une propriété du volume où se
+ * trouve l'oreille, pas de celui où se trouve la source — une radio derrière une
+ * cloison sonne comme la pièce où l'on est. Ce qui change avec le mur, c'est
+ * l'occlusion, traitée par ailleurs et par voix.
+ *
+ * Hors de toute zone, le mixage est sec. Une salle qui n'en déclare aucune sonne
+ * donc exactement comme avant.
+ */
+typedef struct ns_sound_zone {
+    char    name[48];
+    ns_aabb bounds;
+    float   wet;      /* part de queue, 0 à 0,9 */
+    float   decay;    /* contre-réaction, 0 à 0,85 */
+} ns_sound_zone;
+
+#define NS_MAX_SOUND_ZONES 8
+
+/*
  * Classe de pas d'un matériau, DÉCLARÉE par la salle.
  *
  * `ns_bvh_move_capsule` renvoie depuis M5 l'index du matériau sous les pieds,
@@ -314,6 +335,9 @@ typedef struct ns_scene {
 
     ns_dust_zone     dust[NS_MAX_DUST_ZONES];
     uint32_t         dust_count;
+
+    ns_sound_zone    sound_zone[NS_MAX_SOUND_ZONES];
+    uint32_t         sound_zone_count;
 
     ns_light_gpu   lights[NS_MAX_LIGHTS];
     ns_light_anim  light_anim[NS_MAX_LIGHTS];

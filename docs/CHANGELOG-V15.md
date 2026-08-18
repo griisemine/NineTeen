@@ -57,6 +57,14 @@ que le chantier est terminé.
 - **Adaptation d'exposition** : luminance logarithmique moyenne mesurée en compute dans un
   tampon de stockage persistant, lissage asymétrique (l'œil s'habitue plus lentement au sombre).
   C'est ce qui a supprimé le plafond brûlé.
+- **Réverbération par zone.** La salle déclare ses zones dans `salle.room.json` — les toilettes
+  carrelées, le sas d'entrée, le coin billard — avec leur niveau d'écho et leur décroissance.
+  `roomgen` les valide et les exporte, le mixeur les applique en **départ/retour** sur les bus
+  SFX et AMBIENCE, et l'on passe de l'une à l'autre par amortissement plutôt que par saut : le
+  temps de franchir une porte. La musique reste sèche.
+  `docs/audio-pas-sec.wav` et `docs/audio-pas-toilettes.wav` sont le même pas rendu hors ligne
+  dans les deux espaces — le sec retombe au silence en 0,5 s, les toilettes tiennent jusqu'à
+  1,1 s.
 - L'émissif de complaisance du plafond est **retiré**. Ce qui le rend lisible n'est pas le
   rebond du sol — l'illumination indirecte ne tourne qu'au palier « ultra » — mais la diffusion
   volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
@@ -139,8 +147,6 @@ que le chantier est terminé.
   n'importe **aucun** symbole réseau, et c'est vérifiable en une commande.
 - **Un menu dessiné.** Les réglages se changent par `F7`/`F8` et se gardent ; ils ne s'affichent
   pas encore.
-- **La réverbération par zone.** Les quatre bus, les sources positionnelles, l'occlusion amortie
-  et les pas par matériau fonctionnent ; la réverbe déclarée par zone reste à faire.
 - **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
   pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
   au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
@@ -154,7 +160,17 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Quatorze défauts trouvés en chemin, tous instructifs.
+Quinze défauts trouvés en chemin, tous instructifs.
+
+**Un test qui ne mesure que ce qu'on ajoute ne voit pas ce qu'on a cassé.** Le nœud d'écho de
+miniaudio a d'abord été monté **en série** entre les bus et la sortie, sur une lecture erronée de
+son API : son `dry` ressemble à un passage direct, et c'est en réalité le gain d'entrée dans la
+ligne à retard — sa sortie vaut exactement `ligne × wet`. Un bus branché dessus perdait donc son
+signal direct, et devenait entièrement muet à `wet = 0`, c'est-à-dire partout dans la salle. Le
+test écrit en même temps ne mesurait que la **queue** après la fin du son : il passait, sur un
+mixage devenu silencieux. Ce sont les deux tests d'atténuation par distance et d'occlusion, plus
+anciens, qui sont tombés — et qui ont désigné le coupable. Le montage est maintenant un
+départ/retour par séparateur, et le test vérifie **aussi que le son direct survit**.
 
 **Le garde-fou d'une arène a rapporté plus qu'un débogueur.** Le chargeur de scène dupliquait le
 tampon de sommets une fois par primitive, parce que le glTF partage un seul jeu d'accesseurs

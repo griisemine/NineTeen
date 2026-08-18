@@ -2107,6 +2107,50 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
         if (n) printf("  %d zone(s) de poussière\n", n);
     }
 
+    /*
+     * Les zones de réverbération. Même forme que la poussière, et pour la même
+     * raison : une boîte nommée, déclarée par la salle, que le moteur applique
+     * sans rien deviner. Ce qu'elles portent est ce qu'on ENTEND quand on est
+     * dedans — un carrelage rend, une moquette avale.
+     */
+    {
+        const tool_json_value *zones = tool_json_get(doc, root, "soundZones");
+        const int n = tool_json_array_count(doc, zones);
+        fprintf(f, "  \"soundZones\": [\n");
+        for (int i = 0; i < n; ++i) {
+            const tool_json_value *e = tool_json_at(doc, zones, i);
+            char name[64];
+            tool_json_get_string(doc, e, "name", name, sizeof name);
+
+            float mn[3], mx[3];
+            tool_json_get_vec3(doc, e, "min", mn, 0.0f);
+            tool_json_get_vec3(doc, e, "max", mx, 0.0f);
+            for (int k = 0; k < 3; ++k) {
+                if (mx[k] <= mn[k]) {
+                    tool_fatalf("zone sonore « %s » : la boîte est vide ou inversée sur "
+                                "l'axe %d (%.3f à %.3f). On n'y entrerait jamais, en "
+                                "silence.", name[0] ? name : "?", k,
+                                (double)mn[k], (double)mx[k]);
+                }
+            }
+            const float wet = tool_json_get_float(doc, e, "wet", 0.0f);
+            const float decay = tool_json_get_float(doc, e, "decay", 0.0f);
+            if (wet < 0.0f || wet > 0.9f || decay < 0.0f || decay > 0.85f) {
+                tool_fatalf("zone sonore « %s » : wet %.2f et decay %.2f doivent tenir "
+                            "dans [0 ; 0,9] et [0 ; 0,85] — au-delà, la contre-réaction "
+                            "s'emballe et la queue ne s'éteint plus",
+                            name[0] ? name : "?", (double)wet, (double)decay);
+            }
+            fprintf(f, "    { \"name\": \"%s\", \"min\": [%.3f, %.3f, %.3f], "
+                       "\"max\": [%.3f, %.3f, %.3f], \"wet\": %.3f, \"decay\": %.3f }%s\n",
+                    name, (double)mn[0], (double)mn[1], (double)mn[2],
+                    (double)mx[0], (double)mx[1], (double)mx[2],
+                    (double)wet, (double)decay, (i + 1 < n) ? "," : "");
+        }
+        fprintf(f, "  ],\n");
+        if (n) printf("  %d zone(s) sonore(s)\n", n);
+    }
+
     fprintf(f, "  \"materialFootsteps\": [\n");
     for (size_t i = 0; i < b->material_count; ++i) {
         fprintf(f, "    \"%s\"%s\n",

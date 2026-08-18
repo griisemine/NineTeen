@@ -133,6 +133,29 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     const ns_camera view = room_camera_resolve(cam, 1.0f);
     ns_audio_set_listener(view.position, view.forward, ns_v3_make(0.0f, 1.0f, 0.0f));
 
+    /*
+     * L'espace où l'on se tient. La première zone qui contient l'auditeur gagne
+     * — pas la plus petite, pas une moyenne : deux zones sonores qui se
+     * chevauchent sont une faute de description, et la moyenner reviendrait à
+     * la cacher.
+     *
+     * Le passage d'une pièce à l'autre est AMORTI. Sans ça, franchir la porte
+     * des toilettes fait apparaître la queue d'un coup, et l'oreille entend un
+     * effet qui s'allume au lieu d'une pièce qui change. Une seconde de
+     * constante : c'est le temps qu'on met à passer une porte.
+     */
+    float want_wet = 0.0f, want_decay = 0.0f;
+    for (uint32_t i = 0; i < scene->sound_zone_count; ++i) {
+        const ns_sound_zone *z = &scene->sound_zone[i];
+        if (!ns_aabb_contains(z->bounds, view.position)) continue;
+        want_wet = z->wet;
+        want_decay = z->decay;
+        break;
+    }
+    s->space_wet = ns_damp(s->space_wet, want_wet, 3.0f, dt);
+    s->space_decay = ns_damp(s->space_decay, want_decay, 3.0f, dt);
+    ns_audio_set_space(s->space_wet, s->space_decay);
+
     /* --- les pas ------------------------------------------------------- */
     const room_view_bob bob = room_camera_bob(cam, 1.0f);
     if (cam->mode == ROOM_CAM_PLAYER && cam->grounded && bob.amount > 0.12f) {

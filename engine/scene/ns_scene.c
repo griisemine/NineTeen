@@ -472,6 +472,22 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
     }
     if (s->dust_count) NS_INFO("%u zone(s) de poussière", s->dust_count);
 
+    const ns_json_value *zones = ns_json_get(&doc, root, "soundZones");
+    const int zone_count = ns_json_array_count(&doc, zones);
+    s->sound_zone_count = 0;
+    for (int i = 0; i < zone_count && s->sound_zone_count < NS_MAX_SOUND_ZONES; ++i) {
+        const ns_json_value *e = ns_json_at(&doc, zones, i);
+        ns_sound_zone *z = &s->sound_zone[s->sound_zone_count++];
+        SDL_zerop(z);
+        ns_json_get_string(&doc, e, "name", z->name, sizeof z->name);
+        float v[3];
+        ns_json_get_vec3(&doc, e, "min", v, 0.0f); z->bounds.min = ns_v3_make(v[0], v[1], v[2]);
+        ns_json_get_vec3(&doc, e, "max", v, 0.0f); z->bounds.max = ns_v3_make(v[0], v[1], v[2]);
+        z->wet = ns_json_get_float(&doc, e, "wet", 0.0f);
+        z->decay = ns_json_get_float(&doc, e, "decay", 0.0f);
+    }
+    if (s->sound_zone_count) NS_INFO("%u zone(s) sonore(s)", s->sound_zone_count);
+
     const ns_json_value *steps = ns_json_get(&doc, root, "materialFootsteps");
     const int step_count = ns_json_array_count(&doc, steps);
     if (step_count > 0) {

@@ -101,6 +101,54 @@ static double wav_energy(const char *path)
     return (n > 0) ? sqrt(sum / (double)n) : 0.0;
 }
 
+/* Énergie moyenne d'un WAV 16 bits À PARTIR de `skip` secondes.
+ *
+ * C'est la mesure qui distingue une queue d'un simple gain : après la fin du
+ * son direct, un mixage sec est silencieux et un mixage réverbérant ne l'est
+ * pas. Mesurer l'énergie totale ne prouverait rien — monter le mouillé monte
+ * aussi le niveau. */
+static double wav_energy_after(const char *path, int rate, int channels, double skip)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1.0;
+    unsigned char h[44];
+    if (fread(h, 1, sizeof h, f) != sizeof h) { fclose(f); return -1.0; }
+
+    const long skip_samples = (long)(skip * (double)rate) * channels;
+    double sum = 0.0;
+    long n = 0, i = 0;
+    short s;
+    while (fread(&s, sizeof s, 1, f) == 1) {
+        if (i++ < skip_samples) continue;
+        const double v = (double)s / 32768.0;
+        sum += v * v;
+        n++;
+    }
+    fclose(f);
+    return (n > 0) ? sqrt(sum / (double)n) : 0.0;
+}
+
+/* Énergie moyenne d'un WAV 16 bits sur ses `keep` premières secondes. */
+static double wav_energy_before(const char *path, int rate, int channels, double keep)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1.0;
+    unsigned char h[44];
+    if (fread(h, 1, sizeof h, f) != sizeof h) { fclose(f); return -1.0; }
+
+    const long keep_samples = (long)(keep * (double)rate) * channels;
+    double sum = 0.0;
+    long n = 0;
+    short s;
+    while (n < keep_samples && fread(&s, sizeof s, 1, f) == 1) {
+        const double v = (double)s / 32768.0;
+        sum += v * v;
+        n++;
+    }
+    fclose(f);
+    return (n > 0) ? sqrt(sum / (double)n) : 0.0;
+}
+
 /* --------------------------------------------------------------------------
  * Un BVH d'une seule cloison, construit à la main
  * --------------------------------------------------------------------------
@@ -309,6 +357,129 @@ static void test_buses_and_clips(void)
     ns_audio_shutdown();
 }
 
+/* --------------------------------------------------------------------------
+ * La réverbération par zone
+ * --------------------------------------------------------------------------
+ * Ce qu'on cherche à prouver tient en une phrase : dans une pièce déclarée
+ * réverbérante, un son court CONTINUE d'être entendu après sa fin ; dans une
+ * pièce sèche, non.
+ *
+ * D'où le protocole : une source de 60 ms, un rendu de 0,7 s, et l'énergie
+ * mesurée seulement APRÈS 0,2 s — soit bien après la fin du son direct, et
+ * après le premier retard de 95 ms. Deux rendus, un seul paramètre changé.
+ *
+ * La comparaison porte sur la queue et pas sur le total, parce que le total
+ * confondrait « ça résonne » avec « c'est plus fort ».
+ * -------------------------------------------------------------------------- */
+static void test_zone_reverb(void)
+{
+    char src[512], dry[512], wet[512], music[512];
+    path_in(src, sizeof src, "audio-clic.wav");
+    path_in(dry, sizeof dry, "audio-sec.wav");
+    path_in(wet, sizeof wet, "audio-mouille.wav");
+    path_in(music, sizeof music, "audio-musique.wav");
+
+    if (!write_sine(src, 48000, 0.06f, 440.0f)) {
+        CHECK(false, "la source courte s'écrit");
+        return;
+    }
+
+    double tail[2] = { 0.0, 0.0 }, direct[2] = { 0.0, 0.0 };
+    for (int i = 0; i < 2; ++i) {
+        ns_audio_config cfg; memset(&cfg, 0, sizeof cfg);
+        cfg.offline = true; cfg.sample_rate = 48000;
+        if (!ns_audio_init(&cfg)) { CHECK(false, "le mixeur hors ligne démarre"); return; }
+
+        const int clip = ns_audio_load("audio-clic.wav");
+        CHECK(clip >= 0, "la source courte se charge");
+        if (clip < 0) { ns_audio_shutdown(); return; }
+
+        /* i == 0 : sec (l'état par défaut, aucune zone déclarée).
+         * i == 1 : les toilettes de `salle.room.json`, aux mêmes valeurs. */
+        if (i) ns_audio_set_space(0.42f, 0.52f);
+
+        ns_audio_play(clip, NS_BUS_SFX, 1.0f, 1.0f);
+
+        const char *out = i ? wet : dry;
+        CHECK(ns_audio_render(out, 0.7f), "le rendu hors ligne écrit un WAV");
+        ns_audio_shutdown();
+
+        tail[i]   = wav_energy_after(out, 48000, 2, 0.2);
+        direct[i] = wav_energy_before(out, 48000, 2, 0.06);
+        CHECK(tail[i] >= 0.0 && direct[i] >= 0.0, "le WAV rendu se relit");
+    }
+
+    /*
+     * D'ABORD le son direct, et ce n'est pas de la politesse : la première
+     * version de cet effet montait le nœud de retard EN SÉRIE, ce qui remplaçait
+     * le signal par son écho au lieu de l'y ajouter. Le test ne mesurait alors
+     * que la queue — donc il passait, sur un mixage devenu muet.
+     *
+     * Un test qui ne regarde que ce qu'on ajoute ne voit jamais ce qu'on a
+     * perdu. Celui-ci vérifie les deux.
+     */
+    printf("  direct sur les 60 premières ms : sec -> %.6f, mouillé -> %.6f\n",
+           direct[0], direct[1]);
+    CHECK(direct[0] > 1e-3, "le son direct s'entend, sans zone (%.6f)", direct[0]);
+    CHECK(direct[1] > direct[0] * 0.5,
+          "le son direct SURVIT à la zone réverbérante (%.6f contre %.6f)",
+          direct[1], direct[0]);
+    CHECK(direct[1] < direct[0],
+          "…tout en reculant un peu, sinon la pièce est juste plus forte "
+          "(%.6f contre %.6f)", direct[1], direct[0]);
+
+    printf("  queue après 0,2 s : sec -> %.6f, mouillé -> %.6f\n", tail[0], tail[1]);
+    CHECK(tail[0] < 1e-4,
+          "sans zone, il ne reste rien après la fin du son (%.6f)", tail[0]);
+    CHECK(tail[1] > 1e-3,
+          "dans une zone réverbérante, la queue s'entend (%.6f)", tail[1]);
+    CHECK(tail[1] > tail[0] * 10.0,
+          "et elle est franchement au-dessus du sec (%.6f contre %.6f)",
+          tail[1], tail[0]);
+
+    /*
+     * Le bus MUSIC reste sec. Ce n'est pas un détail de mixage : une musique
+     * repassée dans une queue devient de la bouillie, et c'est le genre de
+     * câblage qu'on croit avoir fait jusqu'au jour où on l'entend.
+     */
+    {
+        ns_audio_config cfg; memset(&cfg, 0, sizeof cfg);
+        cfg.offline = true; cfg.sample_rate = 48000;
+        if (!ns_audio_init(&cfg)) { CHECK(false, "le mixeur hors ligne démarre"); return; }
+        const int clip = ns_audio_load("audio-clic.wav");
+        if (clip >= 0) {
+            ns_audio_set_space(0.9f, 0.85f);   /* le maximum permis */
+            ns_audio_play(clip, NS_BUS_MUSIC, 1.0f, 1.0f);
+            CHECK(ns_audio_render(music, 0.7f), "le rendu hors ligne écrit un WAV");
+        }
+        ns_audio_shutdown();
+
+        const double m = wav_energy_after(music, 48000, 2, 0.2);
+        const double md = wav_energy_before(music, 48000, 2, 0.06);
+        printf("  MUSIQUE au mouillé maximal : direct %.6f, queue %.6f\n", md, m);
+        CHECK(md > 1e-3, "le bus MUSIC s'entend (%.6f)", md);
+        CHECK(m >= 0.0 && m < 1e-4,
+              "…et ne passe pas par la queue (%.6f)", m);
+    }
+
+    /*
+     * Les bornes sont des valeurs, pas des vœux : `salle.room.json` est écrit à
+     * la main, et un mouillé à 1,0 avec un retour à 1,0 serait un écho qui ne
+     * décroît jamais. `roomgen` refuse déjà ces valeurs à la génération ; le
+     * mixeur les borne aussi, parce que les deux chemins ne se protègent pas
+     * l'un l'autre.
+     */
+    {
+        ns_audio_config cfg; memset(&cfg, 0, sizeof cfg);
+        cfg.offline = true; cfg.sample_rate = 48000;
+        if (!ns_audio_init(&cfg)) { CHECK(false, "le mixeur hors ligne démarre"); return; }
+        ns_audio_set_space(9.0f, 9.0f);
+        ns_audio_set_space(-1.0f, -1.0f);
+        CHECK(true, "des valeurs d'espace absurdes sont bornées sans casser");
+        ns_audio_shutdown();
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1) g_dir = argv[1];
@@ -338,6 +509,7 @@ int main(int argc, char **argv)
     test_buses_and_clips();
     test_distance_attenuation();
     test_occlusion_attenuates_without_cutting();
+    test_zone_reverb();
 
     ns_paths_shutdown();
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

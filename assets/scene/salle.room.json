@@ -3388,5 +3388,56 @@
       "radius": 6.5,
       "height": 2.35
     }
+  ],
+  "_zones": "Les zones de réverbération. Ce qu'elles portent est ce qu'on ENTEND quand on y est : un bloc sanitaire carrelé rend, un sas étroit claque, la salle en moquette avale. Hors de toute zone, le mixage est sec — c'est le cas de l'essentiel du hall, et c'est voulu : une salle d'arcade est pleine de gens et de meubles, elle ne résonne pas.",
+  "soundZones": [
+    {
+      "name": "toilettes",
+      "_": "Carrelage du sol au plafond, deux mètres de large : c'est la pièce la plus réverbérante du décor, et de loin. Un pas y claque, et c'est ce qui fait qu'on entend qu'on a changé de pièce avant de la voir.",
+      "min": [
+        -9.55,
+        0.0,
+        -7.1
+      ],
+      "max": [
+        -6.2,
+        2.9,
+        -3.3
+      ],
+      "wet": 0.42,
+      "decay": 0.52
+    },
+    {
+      "name": "sas_entree",
+      "_": "Le couloir d'entrée : étroit, dur, court. Une queue nette et brève — juste assez pour que le passage du dehors au dedans s'entende.",
+      "min": [
+        5.0,
+        0.0,
+        3.2
+      ],
+      "max": [
+        9.55,
+        2.9,
+        7.1
+      ],
+      "wet": 0.24,
+      "decay": 0.3
+    },
+    {
+      "name": "coin_billard",
+      "_": "Le coin ouest, dégagé et haut de plafond, contre deux murs nus. Moins que les toilettes, plus que l'allée.",
+      "min": [
+        -9.55,
+        0.0,
+        -3.2
+      ],
+      "max": [
+        -5.4,
+        2.9,
+        0.6
+      ],
+      "wet": 0.16,
+      "decay": 0.22
+    }
   ]
 }

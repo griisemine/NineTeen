@@ -114,6 +114,30 @@ void ns_audio_voice_position(int voice, ns_v3 position);
 void ns_audio_voice_occlusion(int voice, float visibility);
 
 /* À appeler une fois par image. Fait l'amortissement et le recyclage des voix. */
+/*
+ * L'espace où l'on se tient, entendu.
+ *
+ * Un seul écho global, paramétré par la pièce où est L'AUDITEUR — et non par
+ * celle où est la source. C'est le bon modèle et ce n'est pas une simplification
+ * : la réverbération est une propriété du volume dans lequel l'oreille se
+ * trouve. Une radio derrière une cloison sonne comme la pièce où l'on est, pas
+ * comme celle où elle est. (Ce qui change avec la distance et le mur, c'est
+ * l'occlusion, et elle est déjà traitée par voix.)
+ *
+ * C'est un ÉCHO À CONTRE-RÉACTION, pas une vraie réverbération à réseau de
+ * retards. Dit franchement parce que la différence s'entend : on obtient la
+ * queue d'un carrelage ou d'un couloir, pas celle d'une cathédrale. Pour un bloc
+ * sanitaire et un sas d'entrée, c'est exactement ce qu'il faut, et ça coûte un
+ * nœud au lieu d'un banc de filtres.
+ *
+ * `wet` à 0 rend le mixage strictement sec — donc l'effet est neutre par défaut,
+ * et une salle qui ne déclare aucune zone sonne comme avant.
+ *
+ * Les bus MUSIC restent secs : une musique passée dans une queue devient de la
+ * bouillie, et l'ambiance porte déjà son propre espace.
+ */
+void ns_audio_set_space(float wet, float decay);
+
 void ns_audio_update(float dt);
 
 /*

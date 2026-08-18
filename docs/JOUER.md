@@ -97,6 +97,12 @@ s'appelle ZQSD en AZERTY et WASD en QWERTY — il n'y a pas deux liaisons, il y 
 En caméra libre (`F5`), `Espace` et `Ctrl` montent et descendent au lieu de sauter et de
 s'accroupir : ce mode n'a ni gravité ni collision, c'est un outil de cadrage.
 
+Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
+sas d'entrée et le coin billard** ont chacun leur écho — déclaré dans `assets/scene/salle.room.json`,
+pas deviné. On l'entend en passant la porte des toilettes ; la transition prend le temps de la
+franchir. `docs/audio-pas-sec.wav` et `docs/audio-pas-toilettes.wav` sont le même pas rendu dans
+les deux espaces, si vous voulez comparer sans lancer le jeu.
+
 Le premier build convertit aussi les assets — la salle passe en glTF, les textures reçoivent leurs
 cartes PBR, le BVH est construit. Compter une douzaine de secondes.
 
@@ -172,8 +178,6 @@ Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **un menu dessiné.** `F7` et `F8` règlent la qualité et l'échelle de rendu, et le choix est
   gardé — mais rien ne s'affiche à l'écran pour le dire ;
-- **la réverbération par zone.** Les quatre bus, les sources positionnelles, l'occlusion amortie
-  et les pas variés selon le sol fonctionnent ; la réverbe déclarée par pièce, non ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux
   vérifier, pas du moteur.
