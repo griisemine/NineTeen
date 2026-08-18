@@ -144,6 +144,65 @@ file(GLOB CC0_TEXTURES    "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                           "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 set(ROOM_TEXTURES ${LEGACY_TEXTURES} ${CC0_TEXTURES})
 
+#
+# La réflectance visée, texture par texture — la DÉ-CUISSON.
+#
+# Mesuré sur les sources de 2020, en réflectance linéaire : la moquette est à
+# 0,029, le plafond et l'estrade à 0,002, les poutres à 0,008. Du bitume frais
+# en fait 0,04, du charbon 0,04. Ces surfaces ne sont pas sombres, elles sont
+# impossibles — et ce sont les plus grandes de la salle.
+#
+# Ce n'est pas une faute de l'auteur : son moteur n'éclairait rien, donc l'ombre
+# devait être PEINTE dans la texture pour qu'une salle d'arcade tamisée
+# ressemble à une salle d'arcade tamisée. Un moteur PBR l'éclaire par-dessus :
+# la pénombre est appliquée deux fois, et aucune quantité de lumière ne rattrape
+# une réflectance de deux pour mille. C'est l'explication, en une ligne, des deux
+# reproches faits à l'image — « les pièces sont trop sombres » ET « les textures
+# mal choisies ». C'est le même défaut.
+#
+# La preuve par l'exception : les toilettes étaient la SEULE pièce lisible de la
+# salle (médiane 105 sur 255, contre 8 pour la borne de classement). Leur faïence
+# murale est à 0,872, parce que l'auteur ne l'a pas assombrie.
+#
+# Trois règles pour cette table :
+#
+# 1. **Seules les textures de 2020 y figurent.** Les cartes CC0 de Poly Haven
+#    sont des couleurs de base authentiques : un canapé sombre est vraiment à
+#    0,055, et le « corriger » l'abîmerait.
+# 2. **Les images ne sont pas des matériaux.** Écrans de jeu, marquees,
+#    affiches, enseignes et `chargement.png` sont des images qu'on regarde, pas
+#    des surfaces qu'on éclaire. Elles n'ont rien de cuit, elles restent
+#    intactes — et c'est pour ça que la table est explicite plutôt qu'une règle
+#    par défaut.
+# 3. **Les cibles sont physiques**, pas esthétiques : 0,10 pour une moquette
+#    commerciale sombre, 0,42 pour une dalle de plafond à motif foncé, 0,32 pour
+#    de la porcelaine de lavabo. Ce qui est trop clair pour la salle se règle
+#    ensuite avec la LUMIÈRE, qui est faite pour ça.
+#
+# Les textures déjà correctes n'y sont pas : `mur_gris` (0,339), `mur_brique`
+# (0,248), `desk` (0,264), `cuir_rouge` (0,705), `marbre_toilettes` (0,813) sont
+# laissées telles quelles.
+#
+set(ALBEDO_plafond            0.42)   # 0,002 — la plus grande surface de la salle
+set(ALBEDO_moquette           0.10)   # 0,029
+set(ALBEDO_moquette_noire     0.055)  # 0,002 — le plus sombre qu'une moquette puisse être
+set(ALBEDO_floor              0.11)   # 0,039
+set(ALBEDO_poutre             0.16)   # 0,008 — acier peint
+set(ALBEDO_gris_foncer        0.09)   # 0,015 — le cadre des dix-neuf bornes
+set(ALBEDO_bois_noir          0.075)  # 0,016
+set(ALBEDO_bois_moins_noir    0.12)   # 0,011
+set(ALBEDO_bois               0.17)   # 0,070
+set(ALBEDO_marron_foncer      0.10)   # 0,004
+set(ALBEDO_porte_exterieur    0.13)   # 0,018
+set(ALBEDO_carllage_toilette  0.20)   # 0,019 — un carrelage de sol
+set(ALBEDO_lavabo             0.32)   # 0,019 — de la porcelaine à deux pour cent
+set(ALBEDO_bordeaux           0.10)   # 0,026
+set(ALBEDO_bordeau_uni        0.10)   # 0,016
+set(ALBEDO_bleu               0.14)   # 0,065
+set(ALBEDO_billard_table      0.14)   # 0,082 — drap de billard
+set(ALBEDO_pilonne_rouge      0.16)   # 0,105
+set(ALBEDO_Radio              0.16)   # 0,117
+
 set(GENERATED_MAPS "")
 foreach(tex IN LISTS ROOM_TEXTURES)
     get_filename_component(tex_name "${tex}" NAME_WE)
@@ -160,14 +219,25 @@ foreach(tex IN LISTS ROOM_TEXTURES)
         set(upscale "--upscale=1")
     endif()
 
+    # La dé-cuisson, quand cette texture en a une de déclarée. `texgen` produit
+    # alors `<nom>_c.png`, que le moteur préfère à l'image du glTF — voir
+    # `engine/scene/ns_scene.c`, résolution des triplets.
+    set(texgen_outputs "${GEN}/materials/${tex_name}_n.png"
+                       "${GEN}/materials/${tex_name}_orm.png")
+    set(albedo "")
+    if(DEFINED ALBEDO_${tex_name})
+        set(albedo "--albedo=${ALBEDO_${tex_name}}")
+        list(APPEND texgen_outputs "${GEN}/materials/${tex_name}_c.png")
+    endif()
+
     add_custom_command(
-        OUTPUT  "${GEN}/materials/${tex_name}_n.png" "${GEN}/materials/${tex_name}_orm.png"
-        COMMAND texgen ${upscale} "${tex}" "${GEN}/materials"
+        OUTPUT  ${texgen_outputs}
+        COMMAND texgen ${upscale} ${albedo} "${tex}" "${GEN}/materials"
         DEPENDS texgen "${tex}"
         COMMENT "Matériau PBR : ${tex_name}"
         VERBATIM
     )
-    list(APPEND GENERATED_MAPS "${GEN}/materials/${tex_name}_n.png" "${GEN}/materials/${tex_name}_orm.png")
+    list(APPEND GENERATED_MAPS ${texgen_outputs})
 
     # Le diffus d'origine est copié tel quel à côté de ses cartes dérivées :
     # le glTF y fait référence sous textures/<nom>.

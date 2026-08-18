@@ -250,7 +250,63 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Vingt-huit défauts trouvés en chemin, tous instructifs.
+Trente et un défauts trouvés en chemin, tous instructifs.
+
+**« Les pièces sont trop sombres » et « les textures mal choisies » étaient le
+MÊME défaut, et il n'était pas dans l'éclairage.** Cinq passes successives
+avaient réglé la lumière à l'œil sur des captures, chacune baissant une source
+pour corriger une brûlure locale ; personne n'avait mesuré le cumul. La mesure,
+une fois faite, était sans appel : sur huit points de vue, la médiane de
+luminance allait de **4** à 105 sur 255, et six vues sur huit avaient plus de
+**40 % de pixels quasi noirs**.
+
+La cause n'était pas le nombre de lampes. C'était la **réflectance des
+matériaux**, mesurée sur les sources de 2020 : la moquette à **0,029**, le
+plafond et l'estrade à **0,002**, les poutres à 0,008. Du bitume frais réfléchit
+0,04. Le plafond de cette salle était plus noir que n'importe quel matériau de
+construction existant — et c'est la plus grande surface du décor.
+
+Ce n'est pas une faute de l'auteur d'origine : **son moteur n'éclairait rien**.
+`SDL_RenderCopy` affichait la texture telle quelle, donc l'ombre devait être
+PEINTE dedans pour qu'une salle tamisée ressemble à une salle tamisée. Un moteur
+PBR reprend cette texture et l'éclaire : la pénombre est appliquée deux fois, et
+aucune quantité de lumière ne rattrape une réflectance de deux pour mille.
+
+La preuve par l'exception était sous les yeux depuis le début : **les toilettes
+étaient la seule pièce lisible de la salle** (médiane 105 contre 8 pour la borne
+de classement). Leur faïence est à 0,872, parce que l'auteur ne l'avait pas
+assombrie.
+
+`texgen` sait maintenant **dé-cuire** une texture : passage en linéaire, recentrage
+sur une réflectance visée, compression du contraste vers cette moyenne, et une
+seconde passe qui corrige l'écart introduit par la compression — sans elle,
+`--albedo=0.55` en rendait 0,39, l'inégalité de Jensen et non une imprécision
+numérique. Dix-neuf textures de 2020 sont déclarées avec leur cible physique dans
+`assets/CMakeLists.txt` ; les cartes CC0 de Poly Haven, qui sont d'authentiques
+couleurs de base, n'y touchent pas, et les écrans, marquees et affiches non plus —
+ce sont des images qu'on regarde, pas des surfaces qu'on éclaire.
+
+Résultat mesuré, médiane de luminance par point de vue, avant → après :
+allée 39 → **74**, bar 28 → **49**, billard 10 → **26**, entrée 21 → **28**,
+classement 8 → **23**, borne 12 → **17**, orbite 4 → **18**. La proportion de
+pixels quasi noirs tombe d'un tiers à moitié partout.
+
+**Monter la qualité rendait la salle plus SOMBRE.** Mesuré au même cadrage :
+bas 53, moyen 63, **haut 40**, ultra 73. `high` allume les ombres lancées mais
+pas l'illumination globale : on retire le direct sans rendre l'indirect, ce qui
+est plus faux que de n'avoir aucune ombre. L'ambiante constante — qui EST ce
+stand-in — monte donc là où les ombres apparaissent. `high` passe de 40 à 55 sans
+changer d'un dixième de point la proportion de pixels brûlés.
+
+**Huit pour cent du sol du hall ne recevait rien.** La couverture, calculée
+luminaire par luminaire en 1/d² borné par la portée, montrait trois taches nettes :
+la bande centrale-est, le coin sud-est et le passage vers les toilettes. Trois
+plafonniers de plus les ferment ; il reste 0,2 %.
+
+**Et la mesure est maintenant dans le binaire.** Chaque capture journalise sa
+moyenne, sa médiane et ses proportions d'extrêmes. « La salle est trop sombre »
+est un jugement ; « la médiane vaut 8 sur 255 » est un fait, et c'est le seul des
+deux qu'une régression ne peut pas contourner.
 
 **Un jeu qui compte par PLAGES ne rentre pas dans une interface qui compte par UNITÉS.** Le
 Démineur ouvre une cascade : un seul appui dévoile jusqu'à trois cents cases. Or

@@ -37,6 +37,8 @@ typedef struct options {
     float ao_strength;
     int   upscale;           /* facteur d'agrandissement, 1 = aucun */
     int   blur_radius;       /* rayon du flou servant de référence basse fréquence */
+    float albedo;            /* réflectance linéaire visée ; 0 = pas de dé-cuisson */
+    float albedo_contrast;   /* compression du contraste vers la moyenne */
 } options;
 
 /* Luminance perceptuelle (Rec. 709) : c'est ce que l'œil lit comme « clair ou
@@ -95,6 +97,8 @@ int main(int argc, char **argv)
         .ao_strength = 1.0f,
         .upscale = 1,
         .blur_radius = 4,
+        .albedo = 0.0f,
+        .albedo_contrast = 0.70f,
     };
 
     const char *in_path = NULL, *out_dir = NULL;
@@ -105,6 +109,9 @@ int main(int argc, char **argv)
         else if (strncmp(argv[i], "--rough-max=", 12) == 0) opt.rough_max = (float)atof(argv[i] + 12);
         else if (strncmp(argv[i], "--ao=", 5) == 0)        opt.ao_strength = (float)atof(argv[i] + 5);
         else if (strncmp(argv[i], "--blur=", 7) == 0)      opt.blur_radius = atoi(argv[i] + 7);
+        else if (strncmp(argv[i], "--albedo=", 9) == 0)    opt.albedo = (float)atof(argv[i] + 9);
+        else if (strncmp(argv[i], "--albedo-contrast=", 18) == 0)
+            opt.albedo_contrast = (float)atof(argv[i] + 18);
         else if (!in_path)  in_path = argv[i];
         else if (!out_dir)  out_dir = argv[i];
     }
@@ -118,7 +125,10 @@ int main(int argc, char **argv)
             "  --rough-min=F  rugosité des zones lisses (défaut 0.28)\n"
             "  --rough-max=F  rugosité des zones texturées (défaut 0.92)\n"
             "  --ao=F         intensité de l'occlusion de cavité (défaut 1.0)\n"
-            "  --blur=N       rayon de la référence basse fréquence (défaut 4)\n", argv[0]);
+            "  --blur=N       rayon de la référence basse fréquence (défaut 4)\n"
+            "  --albedo=F     réflectance linéaire visée : produit <nom>_c.png\n"
+            "                 (0, le défaut, ne produit rien — voir la dé-cuisson)\n"
+            "  --albedo-contrast=F  compression du contraste (défaut 0.70)\n", argv[0]);
         return 2;
     }
     if (opt.upscale < 1 || opt.upscale > 4) tool_fatalf("--upscale doit être entre 1 et 4");
@@ -241,6 +251,120 @@ int main(int argc, char **argv)
 
     if (!stbi_write_png(out_n, w, h, 3, normal, w * 3))   tool_fatalf("écriture impossible : %s", out_n);
     if (!stbi_write_png(out_orm, w, h, 3, orm, w * 3))    tool_fatalf("écriture impossible : %s", out_orm);
+
+    /* ======================================================================
+     * La dé-cuisson : rendre une couleur de base à une texture qui n'en a pas
+     * ======================================================================
+     *
+     * Le vrai défaut, et il n'était pas dans l'éclairage. Mesuré sur les
+     * sources de 2020 : la moquette a une réflectance linéaire de **0,029**,
+     * le plafond de **0,002**, les poutres de 0,008. Du bitume frais réfléchit
+     * 4 %. Le plafond de cette salle d'arcade était donc, littéralement, plus
+     * noir que n'importe quel matériau de construction existant.
+     *
+     * Ce n'est pas une faute de l'auteur de 2020 : son moteur n'éclairait
+     * rien. `SDL_RenderCopy` affichait la texture telle quelle, donc la
+     * texture DEVAIT déjà ressembler à une salle tamisée — l'ombre était
+     * peinte dedans. Un moteur PBR reprend cette texture et l'éclaire : la
+     * pénombre est appliquée DEUX FOIS, et aucune quantité de lumière ne
+     * rattrape une réflectance de 0,2 %.
+     *
+     * C'est ce qui explique en une ligne les deux reproches faits à l'image —
+     * « les pièces sont trop sombres » et « les textures mal choisies » : c'est
+     * le même défaut. Et c'est ce qui explique que les toilettes soient la
+     * seule pièce lisible de la salle, leur faïence étant à 0,872.
+     *
+     * La conversion, en trois temps, et aucun n'est décoratif :
+     *
+     * 1. **Passage en linéaire.** Une moyenne calculée sur des octets sRGB ne
+     *    veut rien dire : sRGB est perceptuel, et doubler la valeur d'un octet
+     *    ne double pas la lumière renvoyée.
+     * 2. **Recentrage sur la réflectance visée.** La moyenne linéaire de
+     *    l'image est amenée à `--albedo`, qui est une propriété PHYSIQUE du
+     *    matériau — 0,10 pour une moquette sombre, 0,55 pour une dalle de
+     *    plafond, 0,30 pour un béton.
+     * 3. **Compression du contraste vers cette moyenne.** L'écart entre les
+     *    pixels d'une photo de moquette contient l'ombre peinte autant que le
+     *    motif ; à `--albedo-contrast=0.70` on garde la trame et on rend au
+     *    moteur le soin de creuser les creux. Sans cette étape, un simple
+     *    facteur d'échelle ferait saturer en blanc le décile supérieur — la
+     *    texture deviendrait un aplat troué de taches.
+     *
+     * Un genou doux borne le résultat sous 1 : une réflectance supérieure à 1
+     * n'existe pas, et écrêter à la place produirait des plages plates.
+     */
+    if (opt.albedo > 0.0f) {
+        double mean_lin = 0.0;
+        for (int i = 0; i < w * h; ++i) {
+            const double r = powf(src[i * 4 + 0] / 255.0f, 2.2f);
+            const double g = powf(src[i * 4 + 1] / 255.0f, 2.2f);
+            const double b = powf(src[i * 4 + 2] / 255.0f, 2.2f);
+            mean_lin += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        mean_lin /= (double)(w * h);
+        if (mean_lin < 1e-6) mean_lin = 1e-6;
+
+        unsigned char *colour = (unsigned char *)malloc((size_t)w * h * 3);
+        if (!colour) tool_fatalf("mémoire épuisée pour la couleur de base");
+
+        const float c = (opt.albedo_contrast > 0.05f) ? opt.albedo_contrast : 0.05f;
+
+        /*
+         * DEUX passes, et la seconde n'est pas un raffinement : sans elle
+         * `--albedo` ne veut pas dire ce qu'il annonce.
+         *
+         * La compression de contraste est une puissance, et la moyenne d'une
+         * puissance n'est pas la puissance de la moyenne — l'inégalité de
+         * Jensen, pas une approximation numérique. Sur le plafond, dont le
+         * facteur d'échelle vaut 240, l'écart mesuré était de 0,55 demandé
+         * pour 0,39 obtenu : 30 % de moins, sur la plus grande surface de la
+         * salle. On mesure donc ce que la première passe a produit et on
+         * corrige d'un facteur unique, ce qui ne change ni le motif ni le
+         * contraste.
+         */
+        float gain = 1.0f;
+        for (int pass = 0; pass < 2; ++pass) {
+            double got = 0.0;
+            for (int i = 0; i < w * h; ++i) {
+                float lrgb[3];
+                for (int k = 0; k < 3; ++k) {
+                    const float lin = powf(src[i * 4 + k] / 255.0f, 2.2f);
+                    const float ratio = powf((float)(lin / mean_lin) + 1e-6f, c);
+                    float out = opt.albedo * ratio * gain;
+                    /* Genou doux : linéaire jusqu'à 0,8, puis on tend vers 1.
+                     * Une réflectance supérieure à 1 n'existe pas, et écrêter à
+                     * la place produirait des plages plates. */
+                    if (out > 0.8f) out = 0.8f + 0.2f * (1.0f - expf(-(out - 0.8f) / 0.2f));
+                    if (out < 0.0f) out = 0.0f;
+                    if (out > 1.0f) out = 1.0f;
+                    lrgb[k] = out;
+                    if (pass == 1) {
+                        colour[i * 3 + k] =
+                            (unsigned char)(powf(out, 1.0f / 2.2f) * 255.0f + 0.5f);
+                    }
+                }
+                got += 0.2126 * lrgb[0] + 0.7152 * lrgb[1] + 0.0722 * lrgb[2];
+            }
+            got /= (double)(w * h);
+            if (pass == 0) {
+                if (got < 1e-6) got = 1e-6;
+                gain = (float)(opt.albedo / got);
+                /* Borné : au-delà, c'est que la texture ne PEUT pas porter cette
+                 * réflectance sans devenir un aplat, et il vaut mieux le dire. */
+                if (gain > 4.0f) {
+                    gain = 4.0f;
+                    tool_infof("%s : réflectance visée hors de portée, gain borné à 4", base);
+                }
+            }
+        }
+
+        char out_c[768];
+        snprintf(out_c, sizeof out_c, "%s/%s_c.png", out_dir, base);
+        if (!stbi_write_png(out_c, w, h, 3, colour, w * 3)) tool_fatalf("écriture impossible : %s", out_c);
+        tool_infof("%s", out_c);
+        printf("texgen %s : réflectance %.4f -> %.4f visée\n", base, mean_lin, (double)opt.albedo);
+        free(colour);
+    }
 
     printf("texgen %s : %dx%d, contraste moyen %.4f\n", base, w, h, (double)variance_mean);
     tool_infof("%s", out_n);

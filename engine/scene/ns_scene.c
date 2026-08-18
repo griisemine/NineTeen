@@ -928,11 +928,34 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
             if (!data->images[i].uri) continue;
 
             char logical[512], name[128], maps[512];
-            logical_sibling(gltf_logical, data->images[i].uri, logical, sizeof logical);
-            triplets[i].albedo = load_one(r, out, &tex_cursor, logical, true);
+            basename_noext(data->images[i].uri, name, sizeof name);
+
+            /*
+             * La couleur de base vient de la carte DÉ-CUITE quand `texgen` en a
+             * produit une, et de l'image du glTF sinon.
+             *
+             * Ce n'est pas une préférence esthétique. Les textures de 2020 ont
+             * l'ombre PEINTE DEDANS — leur moteur n'éclairait rien, donc la
+             * pénombre devait être dans l'image. Mesuré : la moquette a une
+             * réflectance linéaire de 0,029 et le plafond de 0,002, quand du
+             * bitume frais en fait 0,04. Les éclairer revient à appliquer la
+             * pénombre deux fois, et aucune quantité de lumière ne rattrape une
+             * réflectance de deux pour mille.
+             *
+             * `tools/texgen.c` explique la conversion. Ici, la seule règle : la
+             * carte dé-cuite gagne quand elle existe, exactement comme `_n` et
+             * `_orm`. Une texture sans carte dé-cuite — les écrans, les
+             * affiches, les marquees, qui n'ont rien de cuit — continue de
+             * passer par l'image du glTF sans qu'on ait à la déclarer.
+             */
+            SDL_snprintf(maps, sizeof maps, "materials/%s_c.png", name);
+            triplets[i].albedo = load_one(r, out, &tex_cursor, maps, true);
+            if (triplets[i].albedo < 0) {
+                logical_sibling(gltf_logical, data->images[i].uri, logical, sizeof logical);
+                triplets[i].albedo = load_one(r, out, &tex_cursor, logical, true);
+            }
 
             /* Les cartes générées vivent dans materials/, pas à côté du glTF. */
-            basename_noext(data->images[i].uri, name, sizeof name);
             SDL_snprintf(maps, sizeof maps, "materials/%s_n.png", name);
             triplets[i].normal = load_one(r, out, &tex_cursor, maps, false);
             SDL_snprintf(maps, sizeof maps, "materials/%s_orm.png", name);

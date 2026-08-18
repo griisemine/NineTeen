@@ -777,6 +777,47 @@ bool ns_rhi_capture_texture_png(ns_rhi *r, SDL_GPUTexture *src,
     SDL_UnmapGPUTransferBuffer(r->device, dl);
     SDL_ReleaseGPUTransferBuffer(r->device, dl);
 
+    /*
+     * La luminance de l'image, JOURNALISÉE avec chaque capture.
+     *
+     * « La salle est trop sombre » est un jugement ; « la médiane vaut 8 sur
+     * 255 et 64 % des pixels sont sous 16 » est un fait, et c'est ce fait qui
+     * dit s'il reste du travail. Sans ce chiffre, chaque passe d'éclairage se
+     * jugeait à l'œil sur une capture, et cinq passes successives ont chacune
+     * baissé une source pour corriger une brûlure locale sans que personne ne
+     * voie le cumul.
+     *
+     * Ça ne coûte qu'un balayage d'une image déjà en mémoire, et c'est écrit à
+     * côté du nom du fichier : une régression d'éclairage ne peut plus passer
+     * inaperçue dans un journal qu'on relit.
+     */
+    {
+        uint32_t hist[256];
+        SDL_memset(hist, 0, sizeof hist);
+        const uint32_t n = width * height;
+        uint64_t sum = 0;
+        for (uint32_t i = 0; i < n; ++i) {
+            /* Luminance Rec. 709 en entiers : la même formule que l'œil, sans
+             * flottant ni gamma — on compare des captures entre elles, pas des
+             * candelas. */
+            const uint32_t l = ((uint32_t)rgba[i * 4 + 0] * 54u
+                              + (uint32_t)rgba[i * 4 + 1] * 183u
+                              + (uint32_t)rgba[i * 4 + 2] * 19u) >> 8;
+            hist[l < 256u ? l : 255u]++;
+            sum += l;
+        }
+        uint32_t acc = 0, median = 0, dark = 0, blown = 0;
+        for (uint32_t v = 0; v < 256u; ++v) {
+            acc += hist[v];
+            if (median == 0 && acc * 2u >= n) median = v;
+            if (v < 16u) dark += hist[v];
+            if (v >= 200u) blown += hist[v];
+        }
+        NS_INFO("luminance : moyenne %.1f, médiane %u, %.1f%% sous 16, %.1f%% au-dessus de 200",
+                (double)sum / (double)n, median,
+                100.0 * (double)dark / (double)n, 100.0 * (double)blown / (double)n);
+    }
+
     const int ok = stbi_write_png(out_path, (int)width, (int)height, 4, rgba, (int)width * 4);
     ns_free(rgba);
 

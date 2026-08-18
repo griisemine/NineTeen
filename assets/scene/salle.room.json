@@ -1218,6 +1218,80 @@
       ],
       "intensity": 82.0,
       "range": 4.4
+    },
+    {
+      "_": "Les trois trous de la carte de couverture. Elle est calculée sur le SOL, luminaire par luminaire, en 1/d² borné par la portée : 8 % du hall n'y recevait rien du tout, en trois taches nettes — la bande centrale-est (x de 1 à 6, tout le nord), le coin sud-est, et la bande sud entre l'estrade et le mur. Ce ne sont pas des recoins à laisser dans l'ombre : ce sont les surfaces qu'on traverse. Chaleur et portée alignées sur les plafonniers voisins pour que les flaques se recouvrent au lieu de laisser des anneaux noirs entre elles.",
+      "name": "plafonnier_centre_est",
+      "at": [
+        3.4,
+        2.74,
+        1.0
+      ],
+      "colour": [
+        1.0,
+        0.8,
+        0.56
+      ],
+      "intensity": 88.0,
+      "range": 5.2,
+      "radius": 0.42,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.1,
+        0.55
+      ],
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          4.2
+        ]
+      }
+    },
+    {
+      "_": "Le coin sud-est, seul bout de la salle où l'on ne voyait littéralement pas le sol.",
+      "name": "plafonnier_sud_est",
+      "at": [
+        7.2,
+        2.74,
+        -5.0
+      ],
+      "colour": [
+        1.0,
+        0.77,
+        0.52
+      ],
+      "intensity": 74.0,
+      "range": 4.8,
+      "radius": 0.42,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.1,
+        0.55
+      ]
+    },
+    {
+      "_": "La bande sud, entre l'estrade et le mur : le passage qui mène aux toilettes.",
+      "name": "plafonnier_sud_ouest",
+      "at": [
+        -1.8,
+        2.74,
+        -6.2
+      ],
+      "colour": [
+        1.0,
+        0.79,
+        0.54
+      ],
+      "intensity": 72.0,
+      "range": 4.6,
+      "radius": 0.42,
+      "ceilingPanel": true,
+      "panelSize": [
+        1.1,
+        0.55
+      ]
     }
   ],
   "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",

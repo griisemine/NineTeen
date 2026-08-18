@@ -426,6 +426,48 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
         s->volumetric_steps = 28;
         break;
     }
+
+    /*
+     * L'ambiante compense ce que les ombres lancées RETIRENT — sinon monter la
+     * qualité assombrit la salle.
+     *
+     * Mesuré au point de vue `allee`, médiane de luminance sur 255 :
+     * bas 53, moyen 63, **haut 40**, ultra 73. Le palier du milieu, celui que
+     * choisit la moitié des joueurs, était le plus sombre des quatre — et
+     * l'ordre n'a rien d'un hasard.
+     *
+     * `high` allume les ombres lancées : la lumière directe cesse de traverser
+     * les caissons et les cloisons, ce qui est juste. Mais il n'allume PAS
+     * l'illumination globale, qui est ce qui remplit une ombre dans la
+     * réalité — un point à l'ombre d'une borne reçoit encore la lumière
+     * rebondie par le mur d'en face. On retire donc le direct sans rendre
+     * l'indirect, et le résultat est plus faux que de n'avoir aucune ombre.
+     *
+     * L'ambiante constante EST ce stand-in. Elle doit donc monter exactement là
+     * où les ombres apparaissent, et redescendre à `ultra` où l'indirect tracé
+     * la remplace pour de bon (`lighting.frag` : `u_counts.y >= 3`).
+     *
+     * Le facteur 2,6 est mesuré, pas choisi : il porte `high` de 40 à 55 sans
+     * changer d'un dixième de point la proportion de pixels brûlés (7,8 %
+     * avant, 8,1 % après). Ce qu'il remplit, ce sont les ombres — c'est-à-dire
+     * exactement ce qu'il devait remplir.
+     *
+     * `high` reste un peu sous `medium` (55 contre 63), et c'est normal plutôt
+     * qu'un reliquat : `medium` n'a AUCUNE ombre lancée, donc chaque lumière y
+     * traverse les caissons et les cloisons. Il est plus clair parce qu'il est
+     * plus faux.
+     */
+    switch (s->raytracing) {
+    case NS_RT_SHADOWS:
+    case NS_RT_REFLECTIONS:
+        s->ambient_intensity = 2.6f;
+        break;
+    default:
+        /* Sans ombre lancée, rien n'est retiré ; avec l'indirect tracé, la
+         * constante n'est même pas lue. Dans les deux cas, 1. */
+        s->ambient_intensity = 1.0f;
+        break;
+    }
 }
 
 /* ========================================================================== */
