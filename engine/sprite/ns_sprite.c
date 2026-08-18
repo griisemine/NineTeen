@@ -258,6 +258,10 @@ void ns_sprite_destroy(ns_rhi *r, ns_sprite *s)
     ns_buffer_destroy(r, &s->vertices);
     ns_buffer_destroy(r, &s->indices);
     if (s->font_ready) ns_texture_destroy(r, &s->font);
+    /* `ns_texture_white` fabrique une texture NEUVE à chaque appel — ce n'est
+     * pas un singleton du RHI, malgré le nom. Elle appartient donc au lot, et
+     * elle n'était pas libérée. */
+    ns_texture_destroy(r, &s->white);
     SDL_free(s->cpu_verts);
     SDL_free(s->cpu_indices);
     SDL_free(s);

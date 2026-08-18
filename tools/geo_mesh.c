@@ -204,9 +204,23 @@ static void weld_impl(geo_mesh *m, float epsilon, bool compare_normals)
         for (int dz = -1; dz <= 1 && found < 0; ++dz) {
             for (int dy = -1; dy <= 1 && found < 0; ++dy) {
                 for (int dx = -1; dx <= 1 && found < 0; ++dx) {
-                    const uint32_t h = (uint32_t)((gx + dx) * 73856093)
-                                     ^ (uint32_t)((gy + dy) * 19349663)
-                                     ^ (uint32_t)((gz + dz) * 83492791);
+                    /*
+                     * Multiplication en NON SIGNÉ, et la conversion se fait
+                     * AVANT le produit, pas après.
+                     *
+                     * L'écriture précédente calculait `(gx + dx) * 73856093` en
+                     * `int` : à 5 000 cellules de grille, soit un demi-mètre à
+                     * l'époque de soudure, le produit déborde — et le
+                     * dépassement d'un entier signé est un comportement
+                     * indéfini, que le compilateur a le droit d'exploiter. En
+                     * pratique il bouclait, et le hachage marchait ; c'est
+                     * exactement le genre de chose qui tient jusqu'au jour où
+                     * une optimisation la casse. UBSan l'a signalé dès que le
+                     * preset instrumenté a enfin été construit en entier.
+                     */
+                    const uint32_t h = (uint32_t)(gx + dx) * 73856093u
+                                     ^ (uint32_t)(gy + dy) * 19349663u
+                                     ^ (uint32_t)(gz + dz) * 83492791u;
                     for (int32_t c = heads[h & (buckets - 1)]; c >= 0; c = next[c]) {
                         const gltf_vertex *o = &TOOL_VEC_AT(&kept, gltf_vertex, (size_t)remap[c]);
                         if (fabsf(o->position[0] - v->position[0]) > epsilon) continue;
@@ -241,8 +255,11 @@ static void weld_impl(geo_mesh *m, float epsilon, bool compare_normals)
             remap[i] = (uint32_t)(kept.count - 1);
         }
 
-        const uint32_t h = (uint32_t)(gx * 73856093) ^ (uint32_t)(gy * 19349663)
-                         ^ (uint32_t)(gz * 83492791);
+        /* Même hachage que ci-dessus, et le même piège : non signé AVANT le
+         * produit. Les deux doivent rester identiques — un sommet rangé dans un
+         * seau et cherché dans un autre ne serait jamais soudé. */
+        const uint32_t h = (uint32_t)gx * 73856093u ^ (uint32_t)gy * 19349663u
+                         ^ (uint32_t)gz * 83492791u;
         next[i] = heads[h & (buckets - 1)];
         heads[h & (buckets - 1)] = (int32_t)i;
     }

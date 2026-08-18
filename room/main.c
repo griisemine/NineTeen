@@ -27,6 +27,7 @@
 
 #include "room_camera.h"
 #include "room_hud.h"
+#include "room_menu.h"
 #include "room_sound.h"
 #include "room_viewmodel.h"
 
@@ -56,6 +57,8 @@ typedef struct options {
     bool        offline;    /* verrou : interdit toute sortie réseau */
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
+    bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
+    int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
@@ -93,10 +96,11 @@ static void print_usage(const char *exe)
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
         "  --offline            verrou : aucune partie n'est mise en file d'envoi\n"
+        "  --menu[=N]           ouvre le menu de réglages (ligne N) : pour les captures\n"
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
-        "  En jeu : F5 caméra libre, F6 orbite, F7 palier de qualité,\n"
-        "           F8 échelle de rendu, F2 capture. Les réglages sont gardés.\n"
+        "  En jeu : Échap réglages, F5 caméra libre, F6 orbite,\n"
+        "           F7 palier de qualité, F8 échelle de rendu, F2 capture.\n"
         "  --nom=NOM            nom porté au classement local\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
@@ -284,6 +288,11 @@ static bool parse_options(int argc, char **argv, options *o)
             o->offline = true;
         } else if (SDL_strcmp(a, "--no-hud") == 0) {
             o->no_hud = true;
+        } else if (SDL_strcmp(a, "--menu") == 0) {
+            o->menu = true;
+        } else if (SDL_strncmp(a, "--menu=", 7) == 0) {
+            o->menu = true;
+            o->menu_row = SDL_atoi(a + 7);
         } else if (SDL_strncmp(a, "--nom=", 6) == 0) {
             o->player = a + 6;
         } else if (SDL_strncmp(a, "--quality=", 10) == 0) {
@@ -564,8 +573,9 @@ int main(int argc, char **argv)
      * étaient pas. Le multiplicateur porte sur la valeur par défaut plutôt que
      * de la remplacer : un joueur règle « deux fois plus sensible », il ne
      * choisit pas un nombre de radians par pixel. */
-    cam.mouse_sensitivity *= ns_clampf(ns_config_get_float(NS_CFG_MOUSE_SENS, 1.0f),
-                                       0.1f, 8.0f);
+    const float mouse_sens_base = cam.mouse_sensitivity;
+    float mouse_sens_mult = ns_clampf(ns_config_get_float(NS_CFG_MOUSE_SENS, 1.0f), 0.1f, 8.0f);
+    cam.mouse_sensitivity = mouse_sens_base * mouse_sens_mult;
     /*
      * Le corps du joueur, en mètres, converti à l'échelle du décor chargé.
      *
@@ -779,6 +789,22 @@ int main(int argc, char **argv)
     /* Le bandeau de réglages : quelques secondes après F7 ou F8. Un réglage
      * qu'on change sans retour visuel est un réglage dont on doute. */
     float   settings_banner = 0.0f;
+
+    /*
+     * Le menu. `Échap` l'ouvre — c'est la convention, et c'est mieux que ce qu'il
+     * faisait : un premier Échap relâchait la souris, un second QUITTAIT le jeu.
+     * Perdre sa partie parce qu'on a appuyé deux fois sur Échap est un défaut,
+     * pas un raccourci.
+     */
+    room_menu menu; SDL_zero(menu);
+    room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult };
+    if (opt.menu) {
+        room_menu_open(&menu);
+        /* Une ligne hors bornes ne surligne rien et ne se répare jamais :
+         * le menu la normalise, la ligne de commande ne doit pas l'y forcer. */
+        if (opt.menu_row > 0) for (int i = 0; i < opt.menu_row; ++i)
+            room_menu_input(&menu, &menu_ctx, ROOM_MENU_DOWN);
+    }
     /* Le rang de la dernière partie, pour l'écran de fin. */
     uint32_t last_rank = 0;
 
@@ -989,6 +1015,31 @@ int main(int argc, char **argv)
                 break;
 
             case SDL_EVENT_KEY_DOWN:
+                /*
+                 * Le menu prend TOUT le clavier tant qu'il est ouvert.
+                 *
+                 * Laisser passer le reste donnerait un joueur qui bat des ailes
+                 * en réglant le volume — et c'est le genre de chose qu'on ne
+                 * découvre qu'en jouant, une fois livré.
+                 */
+                if (menu.open) {
+                    switch (ev.key.key) {
+                    case SDLK_UP:     case SDLK_W:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_UP); break;
+                    case SDLK_DOWN:   case SDLK_S:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_DOWN); break;
+                    case SDLK_LEFT:   case SDLK_A:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_LEFT); break;
+                    case SDLK_RIGHT:  case SDLK_D:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_RIGHT); break;
+                    case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_ACCEPT); break;
+                    case SDLK_ESCAPE:
+                        room_menu_input(&menu, &menu_ctx, ROOM_MENU_CANCEL); break;
+                    default: break;
+                    }
+                    break;
+                }
                 switch (ev.key.key) {
                 case SDLK_ESCAPE:
                     if (in_game) {
@@ -1000,11 +1051,10 @@ int main(int argc, char **argv)
                         NS_INFO("Flappy Bird : score %u, meilleur %u", game.score, game.best);
                         break;
                     }
+                    room_menu_open(&menu);
                     if (mouse_captured) {
                         SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), false);
                         mouse_captured = false;
-                    } else {
-                        running = false;
                     }
                     break;
                 case SDLK_F2: {
@@ -1062,13 +1112,10 @@ int main(int argc, char **argv)
                  * Les deux réglages qui décident vraiment de la fluidité, à
                  * portée de touche et sans quitter la partie.
                  *
-                 * Pourquoi des touches et pas un menu : un menu demande une
-                 * navigation, une saisie et un état d'interface, et surtout il
-                 * demande d'avoir déjà décidé de quoi il a l'air. Ces deux
-                 * touches donnent tout de suite ce qui manquait — pouvoir
-                 * essayer un palier sur SA machine — et le choix est gardé d'une
-                 * session à l'autre. Le menu dessiné reste à faire, et c'est dit
-                 * plutôt que sous-entendu.
+                 * Elles restent des RACCOURCIS. Le menu (`Échap`) fait la
+                 * même chose en le montrant ; ces deux touches font gagner
+                 * l'ouverture quand on compare deux paliers d'affilée, ce qui
+                 * est exactement ce qu'on fait en cherchant le bon réglage.
                  *
                  * Mesuré sur lavapipe en 1280 x 720 depuis `allee` :
                  * potato 114 ms, low 281, medium 675, high 1056, ultra 2647. Et
@@ -1187,12 +1234,51 @@ int main(int argc, char **argv)
          * l'un de l'autre, ce qui n'a pas de sens : c'est la même touche. Il n'y
          * a rien à ajouter, seulement à cesser de le décrire de travers.
          */
+        /*
+         * Ce que le menu a demandé pendant les événements. Appliqué ICI, une
+         * fois par image, et pas dans le gestionnaire de touche : régler la
+         * qualité recrée les cibles de rendu, et on ne veut pas le faire cinq
+         * fois parce qu'une flèche a été maintenue.
+         */
+        if (menu.render_dirty) {
+            menu.render_dirty = false;
+            if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
+            if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
+            ns_renderer_set_settings(rhi, renderer, &rs);
+            NS_INFO("réglages : %s, échelle %.2f", quality_name(rs.quality),
+                    (double)rs.render_scale);
+        }
+        cam.mouse_sensitivity = mouse_sens_base * mouse_sens_mult;
+        if (menu.quit_request) {
+            room_menu_persist(&menu_ctx);
+            running = false;
+        }
+        if (menu.close_request) {
+            room_menu_close(&menu);
+            room_menu_persist(&menu_ctx);
+            /* Reprendre la souris tout de suite : autrement il faut un clic pour
+             * revenir au jeu, ce qui se lit comme un bogue. */
+            if (!opt.headless && !mouse_captured) {
+                SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), true);
+                mouse_captured = true;
+                cam.mouse_dx = cam.mouse_dy = 0.0f;
+            }
+        }
+
         const bool *keys = SDL_GetKeyboardState(NULL);
         cam.input_forward = (keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_UP] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN] ? 1.0f : 0.0f);
         cam.input_strafe  = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
         cam.running = keys[SDL_SCANCODE_LSHIFT];
+        if (menu.open) {
+            /* Le monde continue de vivre derrière le voile — la poussière, les
+             * écrans, le brouillard : c'est ce qui permet de JUGER un réglage
+             * pendant qu'on le change. Seul le joueur est figé. */
+            cam.input_forward = cam.input_strafe = 0.0f;
+            cam.running = false;
+            cam.mouse_dx = cam.mouse_dy = 0.0f;
+        }
 
         /* Espace et Ctrl ne veulent pas dire la même chose selon le mode : en vol
          * libre ils montent et descendent, en mode joueur ils sautent et
@@ -1234,7 +1320,8 @@ int main(int argc, char **argv)
              * — et c'est précisément ce que la version de 2020 ne pouvait pas
              * faire : elle intégrait en nombre d'images, à 60 Hz supposés.
              */
-            if (in_game) {
+            room_menu_update(&menu, (float)clock.tick_seconds);
+            if (in_game && !menu.open) {
                 if (opt.autoplay) flappy_autopilot(&game);
                 flappy_tick(&game, (float)clock.tick_seconds);
                 /*
@@ -1405,6 +1492,7 @@ int main(int argc, char **argv)
 
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);
+                room_menu_draw(sprites, &menu, &menu_ctx);
                 ns_sprite_end(rhi, sprites, target, w, h, NULL);
             }
 
@@ -1471,12 +1559,18 @@ int main(int argc, char **argv)
     }
 
     ns_texture_destroy(rhi, &screen_rt);
+    /* `board_rt` n'était pas détruite. Une seule texture, libérée par le pilote
+     * à la sortie du processus — mais c'est exactement la fuite qui s'installe :
+     * elle est arrivée avec la borne de classement et personne ne l'a vue, parce
+     * qu'on ne regarde le rapport d'ASan que quand on le cherche. */
+    ns_texture_destroy(rhi, &board_rt);
     flappy_art_free(rhi, &flappy_assets);
-    /* Les réglages suivent le joueur d'une session à l'autre. `ns_config_save`
-     * n'écrit que si quelque chose a changé, donc ceci ne touche pas au disque
-     * pour un lancement où l'on n'a rien réglé. */
-    ns_config_set_str(NS_CFG_QUALITY, quality_name(rs.quality));
-    ns_config_set_float(NS_CFG_RENDER_SCALE, rs.render_scale);
+
+    /* Les réglages suivent le joueur d'une session à l'autre. Le MÊME chemin que
+     * la fermeture du menu : deux écritures parallèles finiraient par diverger,
+     * et celle-ci ne gardait ni les volumes ni la sensibilité de la souris.
+     * `ns_config_save` n'écrit que si quelque chose a changé. */
+    room_menu_persist(&menu_ctx);
     ns_config_save();
 
     ns_scores_save();

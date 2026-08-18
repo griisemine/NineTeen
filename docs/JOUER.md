@@ -85,7 +85,7 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `Maj` gauche | courir |
 | `Espace` | sauter |
 | `Ctrl` gauche ou `C` | s'accroupir |
-| `Échap` | libérer la souris, puis quitter |
+| `Échap` | le menu de réglages — qualité, échelle de rendu, poussière, luminosité, les quatre volumes, la souris |
 | `F2` | capture d'écran dans le répertoire utilisateur |
 | `F5` | basculer caméra joueur / caméra libre |
 | `F6` | caméra orbite |
@@ -176,8 +176,6 @@ Le jeu se parcourt, se joue, et se règle. Ce qui manque :
   code de 2020 dans `legacy/` — environ 9 800 lignes, mécaniques à porter maintenant que la
   couche 2D existe ;
 - **le transport réseau**, délibérément : voir la section précédente ;
-- **un menu dessiné.** `F7` et `F8` règlent la qualité et l'échelle de rendu, et le choix est
-  gardé — mais rien ne s'affiche à l'écran pour le dire ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux
   vérifier, pas du moteur.
@@ -292,12 +290,23 @@ En dessous de 0,5, le texte des écrans de bornes cesse d'être lisible.
 
 ### En jeu
 
+`Échap` ouvre le **menu de réglages** : palier de qualité (avec son coût relatif
+mesuré, de `x0.17` à `x3.92`), échelle de rendu (avec le pourcentage de pixels
+économisé), densité de poussière, luminosité, les quatre volumes et la
+sensibilité de la souris. Les flèches choisissent et règlent, `Entrée` valide,
+`Échap` referme.
+
+La salle **continue de vivre derrière le voile** — c'est ce qui permet de juger
+un réglage pendant qu'on le change plutôt qu'après l'avoir fermé. Seul le joueur
+est figé, et une partie en cours est mise en pause.
+
 | Touche | Effet |
 |---|---|
+| `Échap` | le menu de réglages |
 | `F5` | caméra libre / joueur |
 | `F6` | caméra orbite |
-| `F7` | palier de qualité suivant |
-| `F8` | échelle de rendu, par pas de 0,1 entre 0,5 et 1,0 |
+| `F7` | palier de qualité suivant (raccourci) |
+| `F8` | échelle de rendu, par pas de 0,1 entre 0,5 et 1,0 (raccourci) |
 | `F2` | capture d'écran |
 
 **Les réglages sont gardés** d'une session à l'autre, dans `settings.cfg` du
@@ -306,6 +315,6 @@ répertoire utilisateur. Ce n'est pas un détail : `render.quality` et
 réglage qu'on ne peut pas garder n'est pas un réglage, c'est une option de ligne
 de commande.
 
-Ce qui n'existe pas : un **menu dessiné**. Ces deux touches donnent ce qui
-manquait — pouvoir essayer un palier sur sa propre machine — et le menu reste à
-faire.
+`F7` et `F8` restent comme raccourcis : quand on compare deux paliers d'affilée,
+on gagne l'ouverture du menu — et c'est exactement ce qu'on fait en cherchant le
+bon réglage.

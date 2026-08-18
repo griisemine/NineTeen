@@ -1,0 +1,17 @@
+# Fuites que l'on NE peut PAS corriger : elles n'ont pas une seule trame dans ce
+# dépôt.
+#
+# Le test de rendu tourne sur lavapipe, le rasteriseur Vulkan logiciel de Mesa.
+# Ses fils de travail laissent 112 octets à la sortie du processus. La pile
+# complète va de `asan_thread_start` à `start_thread` en passant par des trames
+# `<unknown module>` — du code que llvmpipe compile à la volée, donc sans nom de
+# module sur lequel filtrer. C'est pour ça que la règle porte sur le point
+# d'entrée du fil et non sur la bibliothèque : c'est le seul symbole résolu.
+#
+# Ce que ça écarte, exactement : les fuites allouées sur un fil que NOUS n'avons
+# pas créé. Le moteur est monofilaire — la seule chose qui tourne à côté est le
+# pilote, et le mixeur audio quand il y a une carte son, absent de ce test.
+#
+# Une suppression nommée et commentée vaut mieux que `detect_leaks=0`, qui
+# éteindrait aussi celles du fil principal, c'est-à-dire les nôtres.
+leak:asan_thread_start

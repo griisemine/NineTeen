@@ -110,14 +110,19 @@ jobs:
             libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev mesa-vulkan-drivers
       - run: cmake --preset linux-x64-asan
       - run: cmake --build --preset linux-x64-asan
-      # Tous les tests sans GPU. `render` est exclu : lavapipe déclenche des
-      # faux positifs d'ASan dans le pilote, pas dans le code du jeu.
+      # TOUS les tests, `render` compris.
+      #
+      # Il était exclu au motif de « faux positifs d'ASan dans le pilote ». Le
+      # motif était juste — 112 octets laissés par les fils de lavapipe — mais
+      # exclure la seule cible qui touche au GPU revenait à ne pas instrumenter
+      # le rendu du tout. Les fuites du pilote sont maintenant écartées par
+      # `tests/lsan-suppressions.txt`, nommément, et le reste est vérifié.
       - name: Tests sous sanitizers
         env:
           SDL_VIDEO_DRIVER: offscreen
           ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-        run: ctest --test-dir build/linux-x64-asan -E render --output-on-failure
+        run: ctest --test-dir build/linux-x64-asan --output-on-failure
 
   # ---------------------------------------------------------------------------
   # Serveur Go

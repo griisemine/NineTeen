@@ -162,6 +162,11 @@ endforeach()
 add_executable(ns_test_render test_render.c)
 target_link_libraries(ns_test_render PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_render)
+# Le SEUL test qui ne l'appelait pas — donc le preset `linux-x64-asan` ne
+# LIAIT pas : le moteur y est instrumenté et cette cible ne l'était pas. Le
+# tableau ASan n'a donc jamais été complet, et ça ne se voyait pas parce que
+# personne ne construisait ce preset en entier.
+nineteen_apply_sanitizers(ns_test_render)
 add_test(NAME render COMMAND ns_test_render "${CMAKE_BINARY_DIR}/test-render.png")
 
 # En intégration continue il n'y a ni écran ni GPU : SDL passe par son pilote
@@ -183,8 +188,26 @@ else()
     set(_render_env "SDL_VIDEO_DRIVER=offscreen;LIBGL_ALWAYS_SOFTWARE=1")
 endif()
 
+# Sous le preset instrumenté, les fils de lavapipe laissent 112 octets derrière
+# eux. La suppression est nommée et commentée dans le fichier ; ce qui compte est
+# qu'on n'éteint PAS la détection de fuites, on écarte celles d'un pilote.
+if(NINETEEN_SANITIZE)
+    list(APPEND _render_env
+         "LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan-suppressions.txt")
+endif()
+
 set_tests_properties(render PROPERTIES
     ENVIRONMENT "${_render_env}"
     SKIP_RETURN_CODE 77
     TIMEOUT 120
 )
+
+# Le menu de réglages. Aucune fenêtre, aucun GPU : ce qu'on vérifie est le
+# comportement — les bornes, le bouclage, et surtout qu'un changement de palier
+# n'écrase pas les trois réglages qui ont leur propre ligne.
+add_executable(ns_test_menu test_menu.c "${CMAKE_SOURCE_DIR}/room/room_menu.c")
+target_include_directories(ns_test_menu PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_menu PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_menu)
+nineteen_apply_sanitizers(ns_test_menu)
+add_test(NAME menu COMMAND ns_test_menu "$<TARGET_FILE_DIR:ns_test_menu>")

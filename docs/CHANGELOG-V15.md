@@ -70,6 +70,22 @@ que le chantier est terminé.
   volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
   explication ; la capture a donné la seconde.
 
+### Réglages
+- **Un menu dessiné**, ouvert par `Échap` : palier de qualité, échelle de rendu, densité de
+  poussière, luminosité, les quatre volumes, sensibilité de la souris. Tout est écrit dans
+  `settings.cfg` à la fermeture.
+- Chaque ligne porte **le chiffre qui aide à choisir** : le coût relatif du palier (`x0.17` à
+  `x3.92`, mesuré) et le pourcentage de pixels que l'échelle économise. Ils existaient déjà dans
+  le journal et la documentation ; les laisser hors de l'écran revenait à demander d'essayer les
+  cinq paliers à l'aveugle.
+- **La salle continue de vivre derrière le voile** — c'est ce qui permet de juger un réglage
+  pendant qu'on le change. Seul le joueur est figé, et une partie en cours est en pause.
+- `Échap` ne quitte plus le jeu. Il fallait deux appuis, le premier relâchait la souris et le
+  second fermait la fenêtre : perdre sa partie ainsi est un défaut, pas un raccourci.
+- Changer de palier reprend les défauts du palier **sauf** les trois réglages qui ont leur propre
+  ligne. `tests/test_menu.c` (27 vérifications) le tient : sans ça, régler la poussière puis
+  changer de palier l'effacerait sans le dire.
+
 ### Joueur
 - Position des pieds et position de l'œil distinguées ; `eye_height` est enfin lue.
 - Collision en capsule balayée contre la géométrie réelle, avec gravité, glissement le long des
@@ -145,8 +161,6 @@ que le chantier est terminé.
   du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
   socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
   n'importe **aucun** symbole réseau, et c'est vérifiable en une commande.
-- **Un menu dessiné.** Les réglages se changent par `F7`/`F8` et se gardent ; ils ne s'affichent
-  pas encore.
 - **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
   pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
   au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
@@ -160,7 +174,23 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Quinze défauts trouvés en chemin, tous instructifs.
+Seize défauts trouvés en chemin, tous instructifs.
+
+**Un preset qui ne construit pas ne dit rien, et personne ne s'en aperçoit.** Le preset
+`linux-x64-asan` ne LIAIT pas : `ns_test_render` était la seule cible de test à ne pas appeler
+`nineteen_apply_sanitizers`, alors qu'elle lie un moteur instrumenté. Une ligne. Elle a suffi à
+ce que le tableau ASan reste incomplet sans que rien ne l'annonce — on construisait des cibles à
+l'unité, jamais l'ensemble. Une fois la ligne ajoutée, UBSan a signalé du premier coup un
+**dépassement d'entier signé dans le hachage de soudure des sommets** (`tools/geo_mesh.c`), écrit
+deux fois : `(gx + dx) * 73856093` en `int` déborde dès 5 000 cellules de grille, soit un demi-
+mètre. En pratique il bouclait et la soudure marchait — la salle générée est d'ailleurs restée
+**identique octet pour octet** après correction. Mais le dépassement signé est un comportement
+indéfini, que le compilateur a le droit d'exploiter : ça tient jusqu'au jour où une optimisation
+le casse, et ce jour-là le symptôme serait une salle trouée sans message. Deux fuites de notre
+côté sont tombées dans la même passe : la cible de rendu de la borne de classement, jamais
+détruite depuis B10, et la texture blanche 1x1 du lot de sprites — `ns_texture_white` fabrique une
+texture neuve à chaque appel malgré son nom. 3 919 octets à la sortie sont devenus 271, tous dans
+l'énumération ALSA de SDL sur un conteneur sans carte son.
 
 **Un test qui ne mesure que ce qu'on ajoute ne voit pas ce qu'on a cassé.** Le nœud d'écho de
 miniaudio a d'abord été monté **en série** entre les bus et la sortie, sur une lecture erronée de
