@@ -158,6 +158,23 @@ que le chantier est terminé.
     10,4 s de survie contre 8,6. Il ne gagne jamais — une grille minée au quart ne se gagne pas
     par déduction locale — et c'est dit plutôt que caché : il sert à prouver qu'on peut
     enchaîner des milliers de pas sans NaN ni fuite, pas à jouer à notre place.
+- **Tetris** — la grille de 10 x 20, la courbe de vitesse à quatre
+  temporisations et son amortissement géométrique, et surtout le barème, qui
+  n'est **pas** celui d'un Tetris standard : cent points la ligne, **doublés à
+  chaque ligne simultanée** (un quadruple vaut donc 1 500, pas 400) et
+  **multipliés par dix** quand la ligne est d'une seule couleur. Viser la
+  couleur rapporte plus que viser le quadruple, et c'est ce qui rend le Tetris
+  de 2020 reconnaissable.
+  - La table des pièces — **onze mille deux cents entiers** écrits à la main,
+    deux difficultés, deux tailles, sept pièces, quatre rotations — est
+    **recopiée par un script**, pas à la main : une rotation fausse sur une
+    pièce sur cinquante-six ne se voit pas sur une capture, elle se découvre en
+    jouant. Le condensé du fichier de 2020 est vérifié par le test ; s'il
+    change, le test le dit.
+  - Deux constats mesurés qui interdisaient tout raccourci : les deux
+    difficultés n'ont **aucune** forme en commun, et si la forme géante **est**
+    la forme normale doublée, son **pivot ne l'est pas** dans 42 cas sur 56 —
+    un générateur aurait donné la bonne forme et la mauvaise rotation.
 - Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
   secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
   pareil à 120 Hz et à 40 Hz.
@@ -249,11 +266,11 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Cinq des huit mini-jeux.** Flappy Bird, Snake et Démineur sont portés et jouables, sur leur
-  borne comme en plein écran. Tetris, Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 7 200 lignes. Ajouter un jeu est désormais une ligne
-  dans `games/games.c` : c'est ce que Snake a vérifié, et Démineur l'a confirmé sans que
-  `room/main.c` ait à connaître son nom.
+- **Quatre des huit mini-jeux.** Flappy Bird, Snake, Démineur et Tetris sont portés et jouables,
+  sur leur borne comme en plein écran. Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 4 900 lignes. Ajouter un jeu est désormais une ligne
+  dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
+  sans que `room/main.c` ait à connaître leur nom.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
   du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
   socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
@@ -272,7 +289,31 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Trente et un défauts trouvés en chemin, tous instructifs.
+Trente-quatre défauts trouvés en chemin, tous instructifs.
+
+**Une pièce entièrement au-dessus du plateau tenait toujours, donc la partie de
+Tetris ne pouvait pas finir.** Une case au-dessus de la ligne 0 est acceptée par
+construction — c'est ainsi qu'une pièce arrive. Le premier jet faisait apparaître
+la pièce au-dessus et la descendait « jusqu'à ce qu'elle tienne » : sur un
+plateau plein elle restait suspendue dans le vide, indéfiniment. Le joueur
+automatique a survécu quinze minutes d'affilée sans que rien ne le signale, et
+c'est le test « toute partie finie annonce sa fin » qui l'a dit. La pièce entre
+maintenant à une position DÉFINIE — sa première ligne pleine sur la ligne 0,
+centrée sur ses colonnes occupées — ce qui rend la question décidable : ou elle y
+tient, ou la partie est finie.
+
+**Et le test qui l'a trouvé m'a aussi pris en flagrant délit d'affirmation
+fausse.** J'avais écrit, dans trois fichiers, qu'« une pièce géante n'est pas la
+pièce normale doublée ». La mesure dit l'inverse : les 56 le sont. Ce qui ne
+l'est pas, c'est le PIVOT — dans 42 cas sur 56. La conclusion tenait, la raison
+était fausse, et c'est la raison qui compte : dériver les géantes donnerait la
+bonne forme et la mauvaise rotation.
+
+**Une capture headless n'était pas reproductible.** `--game=` tirait sa graine de
+l'horloge, donc la même commande rendait 16 600 points d'un build et 244 100 du
+suivant — ce qui a d'abord ressemblé à un défaut de calcul. Sans écran, la graine
+est maintenant fixe, la même que celle de `--play-at`. Une image qu'on ne peut
+pas refaire ne prouve rien.
 
 **« Les pièces sont trop sombres » et « les textures mal choisies » étaient le
 MÊME défaut, et il n'était pas dans l'éclairage.** Cinq passes successives

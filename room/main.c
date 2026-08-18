@@ -922,7 +922,17 @@ int main(int argc, char **argv)
 
     if (opt.game && sprites) {
         if (LOAD_GAME(opt.game)) {
-            const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+            /*
+             * Sans écran, la graine est FIXE — la même que celle de `--play-at`.
+             *
+             * Une capture doit se reproduire à l'identique, et elle ne le
+             * faisait pas : `--game=tetris --autoplay --warmup=40` rendait 16 600
+             * points d'un build à l'autre et 244 100 du suivant, ce qui a
+             * d'abord ressemblé à un défaut de calcul avant d'être simplement
+             * l'horloge. Une image qu'on ne peut pas refaire ne prouve rien.
+             */
+            const uint64_t seed = opt.headless ? 20240418u
+                                               : (uint64_t)SDL_GetPerformanceCounter();
             game_hard = false;
             start_run(game_api, game, seed, game_hard);
             ns_runlog_begin(runlog, game_api->id, "normal",

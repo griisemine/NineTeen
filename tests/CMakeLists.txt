@@ -112,6 +112,17 @@ nineteen_set_warnings(ns_test_snake)
 nineteen_apply_sanitizers(ns_test_snake)
 add_test(NAME snake COMMAND ns_test_snake)
 
+add_executable(ns_test_tetris test_tetris.c)
+target_link_libraries(ns_test_tetris PRIVATE nineteen::games nineteen::engine)
+target_include_directories(ns_test_tetris PRIVATE "${CMAKE_SOURCE_DIR}/games/tetris")
+# Le test relit le fichier de 2020 pour vérifier que la table en est bien la
+# copie : il lui faut donc son chemin, et pas une copie de plus.
+target_compile_definitions(ns_test_tetris PRIVATE
+    TETRIS_LEGACY_PIECES="${CMAKE_SOURCE_DIR}/legacy/games/5_tetris/pieces.h")
+nineteen_set_warnings(ns_test_tetris)
+nineteen_apply_sanitizers(ns_test_tetris)
+add_test(NAME tetris COMMAND ns_test_tetris)
+
 add_executable(ns_test_demineur test_demineur.c)
 target_link_libraries(ns_test_demineur PRIVATE nineteen::games)
 target_include_directories(ns_test_demineur PRIVATE "${CMAKE_SOURCE_DIR}/games/demineur")

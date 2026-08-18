@@ -331,13 +331,25 @@ var rulesTable = map[string]gameRules{
 		valueMax:         100_000,
 	},
 	"tetris": {
-		silent: map[string]bool{"death": true},
-		// Barème classique : quatre lignes d'un coup valent bien plus que
-		// quatre lignes séparées.
-		scaled:           map[string]int64{"lines": 100},
-		points:           map[string]int64{"tetris": 400, "drop": 1},
-		maxRatePerSecond: map[string]float64{"lines": 4, "tetris": 1, "drop": 20},
+		// « lines » porte les POINTS de la fournée, pas leur nombre, et c'est
+		// imposé par le barème de 2020 : la première ligne vaut cent, chaque
+		// ligne simultanée vaut le DOUBLE de la précédente, une ligne d'une
+		// seule couleur vaut dix fois ce total, un bonus multi le double encore
+		// et un bonus plat ajoute cinq cents. Aucun barème fixe côté serveur ne
+		// reconstitue ça — et viser la couleur unique plutôt que le quadruple
+		// est précisément ce qui rend le Tetris de 2020 reconnaissable.
+		//
+		// La borne haute suit : 1 500 pour un quadruple, dix fois plus en
+		// couleur unique, deux fois plus encore avec un multi.
+		scaled: map[string]int64{"lines": 1},
+		// « drop » et « rotate » sont des GESTES : ils ne rapportent rien et
+		// c'est sur eux que porte la limite de fréquence, ce qui est la seule
+		// chose qu'un journal puisse dire d'une partie réellement jouée.
+		silent:           map[string]bool{"death": true, "drop": true, "rotate": true},
+		maxRatePerSecond: map[string]float64{"lines": 4, "drop": 6, "rotate": 30},
 		minDurationMs:    2000,
+		valueMin:         0,
+		valueMax:         500_000,
 	},
 	"asteroid": {
 		silent:           map[string]bool{"death": true},

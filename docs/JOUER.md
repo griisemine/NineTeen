@@ -111,8 +111,14 @@ déplace case par case et **maintenir une direction le fait défiler**. La grill
 2020 — 16 x 25, cent bombes, soit le quart des cases — et le premier coup est **toujours sûr** :
 les bombes ne sont posées qu'ensuite, en épargnant la case jouée et ses voisines.
 
-Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake` ou `--game=demineur`
-démarre directement en plein écran.
+Le **Tetris** de 2020 ne compte pas comme les autres, et c'est voulu : chaque ligne
+simultanée vaut le **double** de la précédente — un quadruple fait donc 1 500 et non 400 — et une
+ligne d'**une seule couleur** vaut **dix fois** son total. Viser la couleur rapporte plus que viser
+le quadruple.
+
+Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur` ou
+`--game=tetris` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
+la même commande rend exactement la même image.
 
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
 sas d'entrée et le coin billard** ont chacun leur écho — déclaré dans `assets/scene/salle.room.json`,
@@ -188,9 +194,9 @@ un réglage a changé.
 
 Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **cinq des huit mini-jeux.** Flappy Bird, Snake et Démineur sont portés et jouables, sur leur
-  borne comme en plein écran. Tetris, Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 7 200 lignes ;
+- **quatre des huit mini-jeux.** Flappy Bird, Snake, Démineur et Tetris sont portés et jouables,
+  sur leur borne comme en plein écran. Asteroid, Shooter, Pac-Man et Piano tournent encore sur le
+  code de 2020 dans `legacy/` — environ 4 900 lignes ;
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux

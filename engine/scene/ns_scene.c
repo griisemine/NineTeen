@@ -949,7 +949,19 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
              * passer par l'image du glTF sans qu'on ait à la déclarer.
              */
             SDL_snprintf(maps, sizeof maps, "materials/%s_c.png", name);
-            triplets[i].albedo = load_one(r, out, &tex_cursor, maps, true);
+            /*
+             * `ns_path_resolve` d'abord, et pas un chargement qui échoue.
+             *
+             * Une carte dé-cuite est FACULTATIVE — la moitié des textures n'en
+             * ont pas et n'en veulent pas. Tenter le chargement pour voir
+             * imprimait une ligne ERROR par texture sans carte, soit une
+             * cinquantaine à chaque démarrage : un journal où l'on ne peut plus
+             * repérer la vraie erreur ne sert plus à rien.
+             */
+            char probe[1024];
+            triplets[i].albedo = ns_path_resolve(maps, probe, sizeof probe)
+                                     ? load_one(r, out, &tex_cursor, maps, true)
+                                     : -1;
             if (triplets[i].albedo < 0) {
                 logical_sibling(gltf_logical, data->images[i].uri, logical, sizeof logical);
                 triplets[i].albedo = load_one(r, out, &tex_cursor, logical, true);

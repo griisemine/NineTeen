@@ -381,7 +381,7 @@ static const struct {
 } g_server_vocab[] = {
     { "flappy",   { "pipe", "flap", "death", NULL } },
     { "snake",    { "fruit", "bonus", "turn", "death", NULL } },
-    { "tetris",   { "lines", "tetris", "drop", "death", NULL } },
+    { "tetris",   { "lines", "drop", "rotate", "death", NULL } },
     { "asteroid", { "rock", "bonus", "wave", "death", NULL } },
     { "shooter",  { "enemy", "boss", "wave", "death", NULL } },
     { "demineur", { "cell", "flag", "win", "move", "death", NULL } },

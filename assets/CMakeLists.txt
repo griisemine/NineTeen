@@ -398,6 +398,24 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${GEN}/games/tetris/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/tetris"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/5_tetris/Textures/bricks.png"
+            "${SRC_LEGACY}/games/5_tetris/Sound/line.wav"
+            "${SRC_LEGACY}/games/5_tetris/Sound/rotate.wav"
+            "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav"
+            "${GEN}/games/tetris/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/tetris/.stamp"
+    DEPENDS "${SRC_LEGACY}/games/5_tetris/Textures/bricks.png"
+            "${SRC_LEGACY}/games/5_tetris/Sound/line.wav"
+            "${SRC_LEGACY}/games/5_tetris/Sound/rotate.wav"
+            "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav"
+    COMMENT "Copie des planches et sons de Tetris"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -419,6 +437,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/games/flappy/.stamp"
         "${GEN}/games/snake/.stamp"
         "${GEN}/games/demineur/.stamp"
+        "${GEN}/games/tetris/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

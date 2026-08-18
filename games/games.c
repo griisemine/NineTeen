@@ -2,6 +2,7 @@
 
 #include "flappy/flappy.h"
 #include "demineur/demineur.h"
+#include "tetris/tetris.h"
 #include "snake/snake.h"
 
 #include <SDL3/SDL.h>
@@ -20,7 +21,7 @@
 static const ns_game_api *const g_games[] = {
     &g_flappy_api,
     &g_snake_api,
-    &g_demineur_api,
+    &g_demineur_api, &g_tetris_api,
 };
 
 int ns_game_count(void) { return (int)(sizeof g_games / sizeof g_games[0]); }

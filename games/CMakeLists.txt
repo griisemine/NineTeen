@@ -13,6 +13,7 @@ add_library(nineteen_games STATIC
     flappy/flappy.c
     snake/snake.c
     demineur/demineur.c
+    tetris/tetris.c
 )
 add_library(nineteen::games ALIAS nineteen_games)
 

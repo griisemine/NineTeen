@@ -28,13 +28,15 @@ func TestPartieHonnete(t *testing.T) {
 	sub := Submission{
 		DurationMs: 30_000,
 		Events: []Event{
+			// « drop » est un geste : il ne rapporte rien, il est compté pour
+			// la fréquence. « lines » porte les POINTS de la fournée, parce que
+			// le barème de 2020 ne se déduit pas de leur nombre — voir la table.
 			{At: 2000, Kind: "drop", Value: 0},
-			{At: 4000, Kind: "lines", Value: 1},
-			{At: 9000, Kind: "lines", Value: 2},
-			{At: 15000, Kind: "tetris", Value: 0},
+			{At: 4000, Kind: "lines", Value: 100},
+			{At: 9000, Kind: "lines", Value: 300},
+			{At: 15000, Kind: "lines", Value: 1500},
 		},
-		// 1 (drop) + 100 (1 ligne) + 200 (2 lignes) + 400 (tetris) = 701
-		ClaimedScore: 701,
+		ClaimedScore: 1900,
 	}
 	sign(ctx, &sub)
 
@@ -42,8 +44,8 @@ func TestPartieHonnete(t *testing.T) {
 	if !v.Accepted {
 		t.Fatalf("partie honnête rejetée : %s", v.Reason)
 	}
-	if v.Score != 701 {
-		t.Fatalf("score recalculé %d, attendu 701", v.Score)
+	if v.Score != 1900 {
+		t.Fatalf("score recalculé %d, attendu 1900", v.Score)
 	}
 }
 
@@ -231,8 +233,8 @@ func TestPlafondDePlausibilite(t *testing.T) {
 	sub := Submission{
 		DurationMs: 60_000,
 		Events: []Event{
-			{At: 1000, Kind: "tetris"},
-			{At: 2000, Kind: "tetris"},
+			{At: 1000, Kind: "lines", Value: 400},
+			{At: 2000, Kind: "lines", Value: 400},
 		},
 		ClaimedScore: 800,
 	}
