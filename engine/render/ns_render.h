@@ -142,6 +142,17 @@ typedef struct ns_camera {
 ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings);
 void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
 
+
+/*
+ * Combien de dalles peuvent être vivantes en même temps.
+ *
+ * Quatre, et le chiffre vient d'un usage : pendant qu'on joue sur une borne, la
+ * borne de classement doit continuer d'afficher les scores — c'est même le seul
+ * moment où on a envie de la regarder. Une seule dalle vivante ne le permettait
+ * pas.
+ */
+#define NS_MAX_LIVE_SCREENS 4
+
 /*
  * Fait afficher `texture` par le matériau `material`, en écrasant son albédo.
  *

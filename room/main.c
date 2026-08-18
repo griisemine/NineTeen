@@ -26,6 +26,7 @@
 #include "ns_scores.h"
 
 #include "room_camera.h"
+#include "room_hud.h"
 #include "room_sound.h"
 #include "room_viewmodel.h"
 
@@ -54,6 +55,7 @@ typedef struct options {
     float       particles;  /* densité de poussière, < 0 = celle du palier */
     bool        offline;    /* verrou : interdit toute sortie réseau */
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
+    bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *player;     /* nom porté au classement local */
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
@@ -91,6 +93,7 @@ static void print_usage(const char *exe)
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
         "  --offline            verrou : aucune partie n'est mise en file d'envoi\n"
+        "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
         "  En jeu : F5 caméra libre, F6 orbite, F7 palier de qualité,\n"
         "           F8 échelle de rendu, F2 capture. Les réglages sont gardés.\n"
@@ -279,6 +282,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
         } else if (SDL_strcmp(a, "--offline") == 0) {
             o->offline = true;
+        } else if (SDL_strcmp(a, "--no-hud") == 0) {
+            o->no_hud = true;
         } else if (SDL_strncmp(a, "--nom=", 6) == 0) {
             o->player = a + 6;
         } else if (SDL_strncmp(a, "--quality=", 10) == 0) {
@@ -361,8 +366,8 @@ static const char *quality_name(ns_quality q)
  * est acquis AVANT qu'on se demande s'il y a un réseau. C'était l'erreur de
  * fond de 2020 — sans serveur, la partie n'existait pas.
  */
-static void finish_run(ns_runlog *log, int64_t run_ms, const flappy *game,
-                       const char *player, bool offline)
+static uint32_t finish_run(ns_runlog *log, int64_t run_ms, const flappy *game,
+                           const char *player, bool offline)
 {
     const char *difficulty = game->hard ? "hard" : "normal";
 
@@ -380,6 +385,7 @@ static void finish_run(ns_runlog *log, int64_t run_ms, const flappy *game,
     /* Au mieux, jamais bloquant. Sans secret de partie — c'est-à-dire hors
      * ligne — la mise en file refuse d'elle-même : voir `ns_runlog_enqueue`. */
     if (!offline) (void)ns_runlog_enqueue(log);
+    return rank;
 }
 
 int main(int argc, char **argv)
@@ -726,6 +732,12 @@ int main(int argc, char **argv)
      */
     ns_texture screen_rt;
     SDL_zero(screen_rt);
+    /* La dalle de la borne de classement, rendue elle aussi à chaque image.
+     * Séparée de `screen_rt` : les deux doivent pouvoir vivre en même temps —
+     * on regarde le classement PENDANT qu'une partie tourne à côté. */
+    ns_texture board_rt;
+    SDL_zero(board_rt);
+    int32_t board_material = -1;
     if (sprites) {
         ns_texture_desc sd;
         SDL_zero(sd);
@@ -737,6 +749,25 @@ int main(int argc, char **argv)
         if (!ns_texture_create(rhi, &screen_rt, &sd)) {
             NS_WARN("écran de borne : cible indisponible, le jeu ne sera qu'en plein écran");
         }
+        sd.name = "écran de classement";
+        if (!ns_texture_create(rhi, &board_rt, &sd)) {
+            NS_WARN("classement : cible indisponible, la borne gardera son image de 2020");
+        }
+    }
+
+    /*
+     * Le matériau de la dalle de la borne de classement, cherché une fois.
+     *
+     * Par le JEU déclaré et non par le nom : `salle.room.json` peut renommer la
+     * borne, il ne peut pas lui retirer son jeu sans que ce soit intentionnel.
+     */
+    for (uint32_t i = 0; i < scene.cabinet_count; ++i) {
+        if (SDL_strcasecmp(scene.cabinets[i].game, "leaderboard") == 0) {
+            board_material = scene.cabinets[i].screen_material;
+            NS_INFO("classement : « %s », matériau de dalle %d",
+                    scene.cabinets[i].name, board_material);
+            break;
+        }
     }
     /* La borne devant laquelle on joue, et son matériau de dalle. */
     int32_t playing_material = -1;
@@ -745,6 +776,11 @@ int main(int argc, char **argv)
      * pointeur suffit là où la machine à états, elle, recopie ses cibles. */
     const ns_cabinet *playing_cab = NULL;
     bool    fullscreen_game = false;
+    /* Le bandeau de réglages : quelques secondes après F7 ou F8. Un réglage
+     * qu'on change sans retour visuel est un réglage dont on doute. */
+    float   settings_banner = 0.0f;
+    /* Le rang de la dernière partie, pour l'écran de fin. */
+    uint32_t last_rank = 0;
 
     /* Les trois sons du jeu, ceux de 2020. Le jeu ne connaît pas le mixeur : il
      * lève des drapeaux d'événement, et c'est ici qu'on les entend. */
@@ -859,7 +895,7 @@ int main(int argc, char **argv)
             run_ms += (int64_t)(step * 1000.0f + 0.5f);
             if (game.flapped)    ns_runlog_event(runlog, run_ms, "flap", 0);
             if (game.scored_now) ns_runlog_event(runlog, run_ms, "score", 1);
-            if (game.died_now)   finish_run(runlog, run_ms, &game, opt.player, opt.offline);
+            if (game.died_now)   last_rank = finish_run(runlog, run_ms, &game, opt.player, opt.offline);
         }
         NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
                 (double)opt.warmup, steps, game.score);
@@ -1052,6 +1088,7 @@ int main(int argc, char **argv)
                     if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
                     if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
                     ns_renderer_set_settings(rhi, renderer, &rs);
+                    settings_banner = 2.6f;
                     NS_INFO("qualité : %s", quality_name(rs.quality));
                     break;
                 }
@@ -1065,6 +1102,7 @@ int main(int argc, char **argv)
                     if (sc > 1.005f) sc = 0.5f;
                     rs.render_scale = sc;
                     ns_renderer_set_settings(rhi, renderer, &rs);
+                    settings_banner = 2.6f;
                     NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
                     break;
                 }
@@ -1186,6 +1224,7 @@ int main(int argc, char **argv)
                 && vmstate.state == ROOM_VM_IDLE) {
                 room_viewmodel_start_playing(&vmstate, playing_cab);
             }
+            settings_banner = ns_maxf(0.0f, settings_banner - (float)clock.tick_seconds);
             room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
             ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
@@ -1221,7 +1260,7 @@ int main(int argc, char **argv)
                 }
                 if (game.died_now) {
                     ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);
-                    finish_run(runlog, run_ms, &game, opt.player, opt.offline);
+                    last_rank = finish_run(runlog, run_ms, &game, opt.player, opt.offline);
                 }
             }
         }
@@ -1269,6 +1308,32 @@ int main(int argc, char **argv)
              * doit être finie. Deux passes de rendu dans la même image, la
              * première écrivant ce que la seconde échantillonne.
              */
+            ns_renderer_set_screen(renderer, -1, NULL);   /* on repart à zéro */
+
+            /*
+             * La borne de CLASSEMENT, toujours vivante.
+             *
+             * Elle affichait `leaderboard_font.jpg`, une image de 2020 avec des
+             * scores peints dessus. Un score qu'on ne peut pas comparer ne donne
+             * envie de rien ; les vrais, sur une borne qu'on croise en entrant,
+             * donnent envie de reprendre la main. C'est toute la raison d'être
+             * du classement local.
+             */
+            if (sprites && board_rt.handle && board_material >= 0) {
+                ns_sprite_begin(sprites, 512.0f, 288.0f);
+                room_hud_draw_leaderboard(sprites, 512.0f, 288.0f, now);
+                static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+                ns_sprite_end(rhi, sprites, board_rt.handle, 512, 288, off);
+                ns_renderer_set_screen(renderer, board_material, board_rt.handle);
+                /* Le même échappatoire que pour la dalle de jeu : regarder ce
+                 * qui est REELLEMENT dessiné, sans la courbure ni le cadre. */
+                if (SDL_getenv("NINETEEN_DUMP_BOARD")) {
+                    ns_rhi_capture_texture_png(rhi, board_rt.handle, 512, 288,
+                                               ns_rhi_swapchain_format(rhi),
+                                               SDL_getenv("NINETEEN_DUMP_BOARD"));
+                }
+            }
+
             if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
                 flappy_draw(sprites, &game, &flappy_assets, 512.0f, 288.0f);
@@ -1280,8 +1345,6 @@ int main(int argc, char **argv)
                                                ns_rhi_swapchain_format(rhi),
                                                SDL_getenv("NINETEEN_DUMP_SCREEN"));
                 }
-            } else {
-                ns_renderer_set_screen(renderer, -1, NULL);
             }
 
             if (in_game && fullscreen_game && sprites) {
@@ -1315,6 +1378,36 @@ int main(int argc, char **argv)
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
             ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now);
+
+            /*
+             * L'affichage, PAR-DESSUS la scène et après elle.
+             *
+             * Il n'entre ni dans la profondeur, ni dans le halo, ni dans le tone
+             * mapping : un texte qui fleurit devient illisible, et c'est la
+             * première chose qui doit rester lisible. C'est aussi pour ça qu'il
+             * est dessiné ici et pas dans la cible HDR.
+             */
+            if (sprites && !opt.no_hud) {
+                room_hud_state hud;
+                SDL_zero(hud);
+                hud.near = (cam.mode == ROOM_CAM_PLAYER)
+                         ? room_viewmodel_target(&scene, &cam) : NULL;
+                hud.can_interact = !room_viewmodel_is_playing(&vmstate)
+                                && vmstate.state == ROOM_VM_IDLE;
+                hud.playing = in_game;
+                hud.score = game.score;
+                hud.best = game.best;
+                hud.dead = (game.phase == FLAPPY_DEAD);
+                hud.settings_timer = settings_banner;
+                hud.quality_name = quality_name(rs.quality);
+                hud.render_scale = rs.render_scale;
+                hud.last_rank = last_rank;
+
+                ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
+                room_hud_draw(sprites, &hud);
+                ns_sprite_end(rhi, sprites, target, w, h, NULL);
+            }
+
             ns_rhi_end_frame(rhi);
             frames_rendered++;
 

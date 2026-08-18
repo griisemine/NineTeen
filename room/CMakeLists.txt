@@ -4,6 +4,7 @@ add_executable(nineteen
     main.c
     room_camera.c
     room_viewmodel.c
+    room_hud.c
     room_sound.c
 )
 

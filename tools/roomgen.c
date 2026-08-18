@@ -1087,7 +1087,22 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * de 8 mm, encadrée par ses plats eux-mêmes proéminents, donne exactement la
      * même lecture : une vitre sertie dans un cadre.
      */
-    const float sy = 1.26f, sz = hd + 0.008f;
+    /*
+     * 4 cm de saillie, et non 8 mm — parce que la dalle est INCLINÉE.
+     *
+     * Elle bascule de 10° vers l'arrière autour de son centre : son bord
+     * supérieur recule donc de `sin(10°) x sh/2` = 3,0 cm. À 8 mm de saillie, ce
+     * bord se retrouvait 2,2 cm DANS le caisson, et la moitié haute de l'image
+     * était mangée par le meuble — le titre du classement et sa première ligne
+     * n'étaient pas visibles. Même défaut qu'en A4, où la dalle entière était
+     * enfoncée de 5,5 cm ; cette fois c'est l'inclinaison qui l'y remettait, et
+     * il a fallu un tableau de scores pour s'en apercevoir : sur un jeu qui
+     * remplit l'écran, perdre le haut de l'image ne se remarque pas.
+     *
+     * 4 cm laissent 1 cm de dégagement au bord haut. Les plats du cadre suivent
+     * la même inclinaison et restent solidaires.
+     */
+    const float sy = 1.26f, sz = hd + 0.040f;
     const float tilt = 10.0f * NS_DEG2RAD;
     const ns_v3 snormal = ns_v3_make(0.0f, sinf(tilt), cosf(tilt));
 

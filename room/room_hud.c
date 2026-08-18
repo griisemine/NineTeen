@@ -1,0 +1,247 @@
+/* room_hud.c — voir room_hud.h pour le raisonnement. */
+#include "room_hud.h"
+
+#include "ns_core.h"
+#include "ns_scores.h"
+
+#include <SDL3/SDL.h>
+
+#include <math.h>
+#include <stdio.h>
+
+/* Les couleurs de l'affichage. Ambrées comme la salle : un HUD blanc pur sur une
+ * ambiance tungstène se lit comme une capture d'écran collée par-dessus. */
+static const float C_TEXT[4]   = { 1.00f, 0.94f, 0.82f, 1.00f };
+static const float C_DIM[4]    = { 0.78f, 0.68f, 0.55f, 1.00f };
+static const float C_KEY[4]    = { 1.00f, 0.78f, 0.28f, 1.00f };
+static const float C_PANEL[4]  = { 0.05f, 0.04f, 0.03f, 0.72f };
+static const float C_GOLD[4]   = { 1.00f, 0.82f, 0.35f, 1.00f };
+
+/* Un cadre : le fond translucide plus un liseré. Sans le liseré, un panneau
+ * sombre sur une salle sombre n'a pas de bord, et le texte a l'air de flotter. */
+static void panel(ns_sprite *s, float x, float y, float w, float h)
+{
+    static const float edge[4] = { 1.00f, 0.72f, 0.34f, 0.34f };
+    ns_sprite_rect(s, x, y, w, h, C_PANEL);
+    ns_sprite_rect(s, x, y, w, 2.0f, edge);
+    ns_sprite_rect(s, x, y + h - 2.0f, w, 2.0f, edge);
+}
+
+static void centred(ns_sprite *s, float cx, float y, float scale,
+                    const float rgba[4], const char *text)
+{
+    ns_sprite_text(s, cx - ns_sprite_text_width(text, scale) * 0.5f, y, scale, rgba, text);
+}
+
+/* -------------------------------------------------------------------------- */
+
+static void draw_prompt(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->near || !st->can_interact || st->playing) return;
+
+    char line[96];
+    /*
+     * Le NOM DU JEU, pas celui de la borne. « E — JOUER À FLAPPY (HARD) » dit ce
+     * qu'on va faire ; « borne_arcade_10 » dit comment le fichier de salle
+     * l'appelle, ce qui n'intéresse que moi.
+     */
+    const bool hard = (SDL_strcasecmp(st->near->difficulty, "hard") == 0);
+    char game[32];
+    SDL_strlcpy(game, st->near->game[0] ? st->near->game : "?", sizeof game);
+    for (char *p = game; *p; ++p) *p = (char)SDL_toupper((unsigned char)*p);
+    SDL_snprintf(line, sizeof line, "JOUER A %s%s", game, hard ? " (HARD)" : "");
+
+    const float scale = 3.0f;
+    const float key_w = ns_sprite_text_width("E", scale);
+    const float txt_w = ns_sprite_text_width(line, scale);
+    const float gap   = 14.0f;
+    const float total = key_w + gap * 2.0f + txt_w;
+
+    const float h = ns_sprite_text_height(scale) + 22.0f;
+    const float y = ROOM_HUD_H * 0.70f;
+    const float x = (ROOM_HUD_W - total) * 0.5f;
+
+    panel(s, x - 22.0f, y - 11.0f, total + 44.0f, h);
+
+    /* La touche dans un carré : c'est ce qui la distingue du mot qui suit, et
+     * c'est la convention que tout le monde lit sans l'avoir apprise. */
+    const float ky = y;
+    ns_sprite_rect(s, x - 7.0f, ky - 5.0f, key_w + 14.0f,
+                   ns_sprite_text_height(scale) + 10.0f, C_KEY);
+    static const float dark[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
+    ns_sprite_text(s, x, ky, scale, dark, "E");
+    ns_sprite_text(s, x + key_w + gap * 2.0f, ky, scale, C_TEXT, line);
+
+    /* Le meilleur score local de CETTE borne, sous l'invite. C'est l'information
+     * qui transforme « je peux jouer » en « je peux faire mieux ». */
+    const uint32_t best = ns_scores_best(st->near->game, st->near->difficulty);
+    if (best > 0) {
+        char sub[64];
+        SDL_snprintf(sub, sizeof sub, "MEILLEUR : %u", best);
+        centred(s, ROOM_HUD_W * 0.5f, y + h + 6.0f, 2.0f, C_DIM, sub);
+    }
+}
+
+static void draw_game_overlay(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->playing) return;
+
+    char line[64];
+    SDL_snprintf(line, sizeof line, "%u", st->score);
+    centred(s, ROOM_HUD_W * 0.5f, 34.0f, 5.0f, C_TEXT, line);
+
+    if (st->best > 0) {
+        SDL_snprintf(line, sizeof line, "MEILLEUR %u", st->best);
+        centred(s, ROOM_HUD_W * 0.5f, 34.0f + ns_sprite_text_height(5.0f) + 8.0f,
+                2.0f, C_DIM, line);
+    }
+
+    if (!st->dead) return;
+
+    /* L'écran de fin. Le RANG d'abord : c'est lui qui décide si l'on relance. */
+    const float w = 520.0f, h = 190.0f;
+    const float x = (ROOM_HUD_W - w) * 0.5f, y = ROOM_HUD_H * 0.34f;
+    panel(s, x, y, w, h);
+
+    centred(s, ROOM_HUD_W * 0.5f, y + 24.0f, 4.0f, C_TEXT, "PERDU");
+    if (st->last_rank > 0) {
+        SDL_snprintf(line, sizeof line, "%u E MEILLEUR SCORE LOCAL", st->last_rank);
+        centred(s, ROOM_HUD_W * 0.5f, y + 78.0f, 2.5f, C_GOLD, line);
+    } else {
+        centred(s, ROOM_HUD_W * 0.5f, y + 78.0f, 2.5f, C_DIM, "HORS CLASSEMENT");
+    }
+    centred(s, ROOM_HUD_W * 0.5f, y + 128.0f, 2.0f, C_DIM, "ESPACE : REJOUER    ECHAP : SORTIR");
+}
+
+static void draw_settings(ns_sprite *s, const room_hud_state *st)
+{
+    if (st->settings_timer <= 0.0f) return;
+
+    /* Fondu sur la dernière demi-seconde : un bandeau qui disparaît d'un coup se
+     * lit comme un défaut d'affichage. */
+    const float a = (st->settings_timer < 0.5f) ? (st->settings_timer / 0.5f) : 1.0f;
+
+    char line[96];
+    SDL_snprintf(line, sizeof line, "QUALITE %s    ECHELLE %.2f",
+                 st->quality_name ? st->quality_name : "?", (double)st->render_scale);
+
+    const float scale = 2.2f;
+    const float w = ns_sprite_text_width(line, scale) + 44.0f;
+    const float h = ns_sprite_text_height(scale) + 22.0f;
+    const float x = (ROOM_HUD_W - w) * 0.5f, y = ROOM_HUD_H - h - 28.0f;
+
+    const float bg[4]  = { C_PANEL[0], C_PANEL[1], C_PANEL[2], C_PANEL[3] * a };
+    const float fg[4]  = { C_TEXT[0], C_TEXT[1], C_TEXT[2], a };
+    ns_sprite_rect(s, x, y, w, h, bg);
+    centred(s, ROOM_HUD_W * 0.5f, y + 11.0f, scale, fg, line);
+
+    const float hint[4] = { C_DIM[0], C_DIM[1], C_DIM[2], a * 0.9f };
+    centred(s, ROOM_HUD_W * 0.5f, y - 24.0f, 1.6f, hint, "F7 QUALITE   F8 ECHELLE");
+}
+
+void room_hud_draw(ns_sprite *s, const room_hud_state *st)
+{
+    if (!s || !st) return;
+    draw_prompt(s, st);
+    draw_game_overlay(s, st);
+    draw_settings(s, st);
+}
+
+/* ========================================================================== */
+/* L'écran de la borne de classement                                          */
+/* ========================================================================== */
+
+void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds)
+{
+    if (!s) return;
+
+    /*
+     * Les cotes sont données pour une dalle de 512 x 288 et mises à l'échelle
+     * depuis là.
+     *
+     * Elles ont été réglées DEUX FOIS, et la seconde est la bonne leçon. La
+     * première version était lisible en regardant la texture — et illisible dans
+     * le jeu : la dalle fait 62 cm de large, on la lit à deux mètres et demi, et
+     * elle n'occupe alors que trois cents pixels de l'écran. Un caractère de six
+     * pixels de large sur la texture en fait quatre à l'arrivée.
+     *
+     * On dessine donc GROS et PEU : quatre lignes par colonne au lieu de cinq,
+     * des caractères deux fois plus hauts. Un tableau de scores se lit en
+     * passant, pas en s'accroupissant devant.
+     *
+     * La marge n'est pas décorative non plus : la dalle est déformée en barillet
+     * et son cadre déborde, donc les bords ne se voient pas.
+     */
+    const float u = w / 512.0f;          /* l'unité : un pixel de la dalle de référence */
+
+    static const float bg[4] = { 0.02f, 0.05f, 0.11f, 1.0f };
+    ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
+
+    static const float rule[4] = { 0.18f, 0.46f, 0.68f, 1.0f };
+    ns_sprite_rect(s, w * 0.08f, 46.0f * u, w * 0.84f, 2.0f * u, rule);
+    ns_sprite_rect(s, w * 0.08f, 246.0f * u, w * 0.84f, 2.0f * u, rule);
+
+    static const float title[4] = { 0.66f, 0.95f, 1.00f, 1.0f };
+    centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
+
+    /*
+     * Deux colonnes : Flappy normal et Flappy hard. Les autres jeux
+     * apparaîtront quand ils seront portés — une colonne vide par jeu non porté
+     * donnerait un tableau surtout vide, ce qui décourage au lieu de donner
+     * envie.
+     */
+    static const struct { const char *game, *diff, *label; } col[2] = {
+        { "flappy", "normal", "FLAPPY" },
+        { "flappy", "hard",   "HARD" },
+    };
+
+    static const float head[4] = { 1.00f, 0.82f, 0.35f, 1.0f };
+    static const float row[4]  = { 0.88f, 0.94f, 1.00f, 1.0f };
+    static const float dim[4]  = { 0.44f, 0.56f, 0.70f, 1.0f };
+
+    for (int c = 0; c < 2; ++c) {
+        const float cx = w * (c == 0 ? 0.28f : 0.72f);
+        float y = 58.0f * u;
+
+        centred(s, cx, y, 2.0f * u, head, col[c].label);
+        y = 92.0f * u;
+
+        const ns_score_board *b = ns_scores_board(col[c].game, col[c].diff);
+        const uint32_t count = b ? b->count : 0u;
+        if (count == 0) {
+            centred(s, cx, y, 1.8f * u, dim, "AUCUN SCORE");
+            centred(s, cx, y + 34.0f * u, 1.8f * u, dim, "A TOI DE JOUER");
+            continue;
+        }
+
+        for (uint32_t i = 0; i < count && i < 4; ++i) {
+            char line[48];
+            const ns_score_entry *e = &b->entry[i];
+            /*
+             * Largeurs FIXES pour que les scores s'alignent : un tableau dont
+             * les chiffres ne sont pas en colonne ne se lit pas d'un coup d'œil,
+             * et un coup d'œil est tout ce qu'on lui accorde en passant.
+             *
+             * Le nom est tronqué à quatre caractères. Ce n'est pas beaucoup, et
+             * c'est délibéré : sur une dalle lue à deux mètres, quatre grands
+             * caractères valent mieux que huit petits. Les initiales sont
+             * d'ailleurs la tradition du genre.
+             *
+             * Un nom vide reste vide plutôt que de devenir « ANONYME » : le jeu
+             * n'a jamais demandé de nom, il n'a pas à en inventer un.
+             */
+            SDL_snprintf(line, sizeof line, "%u %-4.4s %4u",
+                         i + 1u, e->name[0] ? e->name : "", e->score);
+
+            /* La première ligne respire lentement : c'est le record à battre. */
+            const float pulse = (i == 0)
+                ? (0.74f + 0.26f * (float)(0.5 + 0.5 * sin(time_seconds * 2.2)))
+                : 1.0f;
+            const float rgba[4] = { row[0] * pulse, row[1] * pulse, row[2] * pulse, 1.0f };
+            centred(s, cx, y, 2.2f * u, rgba, line);
+            y += 36.0f * u;
+        }
+    }
+
+    centred(s, w * 0.5f, 258.0f * u, 1.6f * u, dim, "SCORES LOCAUX");
+}

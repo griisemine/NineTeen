@@ -184,8 +184,18 @@ struct ns_renderer {
     ns_particles *particles;
 
     /* L'écran vivant : quel matériau, et quelle texture à sa place. */
-    int32_t         screen_material;
-    SDL_GPUTexture *screen_texture;
+    /*
+     * Les dalles VIVANTES : jusqu'à quatre matériaux dont la texture est
+     * remplacée à l'image par une cible de rendu.
+     *
+     * Une seule ne suffisait pas, et le manque s'est vu tout de suite : pendant
+     * qu'on joue sur une borne, la borne de CLASSEMENT doit continuer d'afficher
+     * les scores — c'est même le seul moment où on a envie de la regarder. Quatre
+     * est un compte, pas une limite de principe : chaque entrée coûte une
+     * comparaison par lot dessiné.
+     */
+    struct { int32_t material; SDL_GPUTexture *texture; } screens[NS_MAX_LIVE_SCREENS];
+    uint32_t        screen_count;
 
     /* Les bras : géométrie construite une fois au démarrage, jamais réécrite.
      * Seules les matrices changent, et elles passent par un uniforme. */
@@ -797,7 +807,7 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
 
     /* Aucun écran vivant tant qu'on n'en déclare pas un. `ns_calloc` mettrait 0,
      * qui est un index de matériau valide — d'où le −1 explicite. */
-    rd->screen_material = -1;
+    rd->screen_count = 0;
 
     const SDL_GPUTextureFormat hdr_fmt = FMT_HDR;
     const SDL_GPUTextureFormat vis_fmt = FMT_VIS;
@@ -935,8 +945,22 @@ void ns_renderer_tick_particles(ns_renderer *rd, float dt)
 
 void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture)
 {
-    rd->screen_material = (texture != NULL) ? material : -1;
-    rd->screen_texture  = texture;
+    if (!rd) return;
+    /* Sans texture, on efface TOUT : c'est l'appel « plus rien de vivant », et
+     * l'appelant qui le fait ne veut pas avoir à énumérer ce qu'il avait posé. */
+    if (!texture || material < 0) { rd->screen_count = 0; return; }
+
+    for (uint32_t i = 0; i < rd->screen_count; ++i) {
+        if (rd->screens[i].material == material) { rd->screens[i].texture = texture; return; }
+    }
+    if (rd->screen_count >= NS_MAX_LIVE_SCREENS) {
+        NS_WARN("dalles vivantes : %d au maximum, le matériau %d est ignoré",
+                NS_MAX_LIVE_SCREENS, material);
+        return;
+    }
+    rd->screens[rd->screen_count].material = material;
+    rd->screens[rd->screen_count].texture = texture;
+    rd->screen_count++;
 }
 
 void ns_renderer_set_settings(ns_rhi *r, ns_renderer *rd, const ns_render_settings *s)
@@ -1080,10 +1104,11 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
              * linéaire devient une bouillie, et c'est justement la netteté qui
              * fait « écran de borne » plutôt que « affiche rétroéclairée ». */
             bool live_screen = false;
-            if (rd->screen_material >= 0 && b->material == rd->screen_material
-             && rd->screen_texture) {
-                tex[0].texture = rd->screen_texture;
+            for (uint32_t k = 0; k < rd->screen_count; ++k) {
+                if (rd->screens[k].material != b->material) continue;
+                tex[0].texture = rd->screens[k].texture;
                 live_screen = true;
+                break;
             }
             tex[1].texture = m ? texture_or(scene, m->normal_texture, scene->fallback_normal) : scene->fallback_normal.handle;
             tex[2].texture = m ? texture_or(scene, m->orm_texture, scene->fallback_orm) : scene->fallback_orm.handle;
