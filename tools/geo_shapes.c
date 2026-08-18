@@ -335,6 +335,107 @@ void geo_panel(geo_mesh *m, ns_v3 centre, ns_v3 normal, ns_v3 right,
  * étirement de 3,86 pour un retour à 150°. */
 #define GEO_MITRE_MAX_STRETCH 4.0f
 
+/* ==========================================================================
+ * Triangulation d'un profil, par découpe d'oreilles
+ * ==========================================================================
+ * Les bouchons d'une extrusion étaient un ÉVENTAIL depuis le centroïde. C'est
+ * juste pour un profil convexe, et faux pour tout le reste : sur un profil
+ * concave le centroïde peut tomber HORS du polygone, et les triangles se
+ * recouvrent alors en restant coplanaires.
+ *
+ * Ça ne se voit pas franchement à l'image — les triangles sont dans le même
+ * plan, donc la silhouette reste juste — mais chaque pixel du flanc est peint
+ * plusieurs fois. Avec la silhouette en gradins d'une borne d'arcade, répétée
+ * dix-neuf fois, la surcharge de remplissage a suffi à faire renoncer le
+ * rasteriseur logiciel : la moitié de l'image sortait NOIRE, et d'autant plus
+ * que la résolution montait.
+ *
+ * La découpe d'oreilles est le remède standard pour un polygone simple : on
+ * détache un sommet dont le triangle ne contient aucun autre sommet, et on
+ * recommence. O(n²), ce qui est sans conséquence pour des profils de quelques
+ * dizaines de points, et ça rend une triangulation SANS recouvrement.
+ * ========================================================================== */
+
+static float geo_tri_cross(ns_v2 a, ns_v2 b, ns_v2 c)
+{
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+static bool geo_point_in_tri(ns_v2 p, ns_v2 a, ns_v2 b, ns_v2 c)
+{
+    const float d1 = geo_tri_cross(p, a, b);
+    const float d2 = geo_tri_cross(p, b, c);
+    const float d3 = geo_tri_cross(p, c, a);
+    const bool neg = (d1 < 0.0f) || (d2 < 0.0f) || (d3 < 0.0f);
+    const bool pos = (d1 > 0.0f) || (d2 > 0.0f) || (d3 > 0.0f);
+    return !(neg && pos);
+}
+
+/*
+ * Écrit au plus `count - 2` triangles dans `out` (trois indices chacun) et rend
+ * leur nombre. Rend 0 si le polygone est dégénéré — l'appelant retombe alors sur
+ * l'éventail, qui reste correct pour un profil convexe.
+ */
+static size_t geo_triangulate(const ns_v2 *p, size_t count, size_t *out)
+{
+    if (count < 3) return 0;
+
+    size_t *idx = (size_t *)malloc(count * sizeof *idx);
+    if (!idx) return 0;
+
+    /* Aire signée : elle donne le sens de parcours, dont dépend la convexité. */
+    float area2 = 0.0f;
+    for (size_t i = 0; i < count; ++i) {
+        const ns_v2 a = p[i], b = p[(i + 1) % count];
+        area2 += a.x * b.y - b.x * a.y;
+    }
+    const float sign = (area2 >= 0.0f) ? 1.0f : -1.0f;
+
+    for (size_t i = 0; i < count; ++i) idx[i] = i;
+    size_t n = count, written = 0, guard = 0;
+
+    while (n > 3 && guard++ < count * count + 8) {
+        bool clipped = false;
+        for (size_t k = 0; k < n; ++k) {
+            const size_t i0 = idx[(k + n - 1) % n], i1 = idx[k], i2 = idx[(k + 1) % n];
+            /* Convexe dans le sens du polygone ? */
+            if (sign * geo_tri_cross(p[i0], p[i1], p[i2]) <= 0.0f) continue;
+
+            /* Aucun autre sommet à l'intérieur ? */
+            bool empty = true;
+            for (size_t m = 0; m < n && empty; ++m) {
+                const size_t j = idx[m];
+                if (j == i0 || j == i1 || j == i2) continue;
+                if (geo_point_in_tri(p[j], p[i0], p[i1], p[i2])) empty = false;
+            }
+            if (!empty) continue;
+
+            out[written * 3 + 0] = i0;
+            out[written * 3 + 1] = i1;
+            out[written * 3 + 2] = i2;
+            written++;
+
+            for (size_t m = k; m + 1 < n; ++m) idx[m] = idx[m + 1];
+            n--;
+            clipped = true;
+            break;
+        }
+        if (!clipped) break;   /* polygone non simple : on rend ce qu'on a */
+    }
+
+    if (n == 3) {
+        out[written * 3 + 0] = idx[0];
+        out[written * 3 + 1] = idx[1];
+        out[written * 3 + 2] = idx[2];
+        written++;
+    }
+
+    free(idx);
+    /* Une triangulation complète a exactement count − 2 triangles. En dessous,
+     * on préfère renoncer plutôt que de livrer un bouchon troué. */
+    return (written == count - 2) ? written : 0;
+}
+
 void geo_profile_extrude(geo_mesh *m,
                          const ns_v2 *profile, size_t profile_count, bool profile_closed,
                          const ns_v3 *path, size_t path_count, bool path_closed,
@@ -444,21 +545,43 @@ void geo_profile_extrude(geo_mesh *m,
         for (size_t j = 0; j < profile_count; ++j) centroid = ns_v2_add(centroid, profile[j]);
         centroid = ns_v2_scale(centroid, 1.0f / (float)profile_count);
 
+        size_t *tris = (size_t *)malloc((profile_count > 2 ? profile_count - 2 : 1)
+                                        * 3 * sizeof *tris);
+        const size_t tri_count = tris ? geo_triangulate(profile, profile_count, tris) : 0;
+
         for (int end = 0; end < 2; ++end) {
             const size_t i = end ? np - 1 : 0;
             const ns_v3 want = end ? frame_t[i] : ns_v3_neg(frame_t[i]);
             const ns_v3 hub = ns_v3_add(path[i],
                                         ns_v3_add(ns_v3_scale(frame_r[i], centroid.x * stretch[i]),
                                                   ns_v3_scale(world_up, centroid.y)));
-            for (size_t j = 0; j < profile_count; ++j) {
-                const size_t j1 = (j + 1) % profile_count;
-                tri_facing(m, hub, GEO_SWEEP_POINT(i, j), GEO_SWEEP_POINT(i, j1),
-                           ns_v2_make(centroid.x / mpt, centroid.y / mpt),
-                           ns_v2_make(profile[j].x / mpt, profile[j].y / mpt),
-                           ns_v2_make(profile[j1].x / mpt, profile[j1].y / mpt),
-                           want, material);
+            if (tri_count) {
+                /* Découpe d'oreilles : aucun recouvrement, quel que soit le
+                 * creux du profil. */
+                for (size_t t = 0; t < tri_count; ++t) {
+                    const size_t a = tris[t * 3 + 0];
+                    const size_t b = tris[t * 3 + 1];
+                    const size_t c = tris[t * 3 + 2];
+                    tri_facing(m, GEO_SWEEP_POINT(i, a), GEO_SWEEP_POINT(i, b),
+                               GEO_SWEEP_POINT(i, c),
+                               ns_v2_make(profile[a].x / mpt, profile[a].y / mpt),
+                               ns_v2_make(profile[b].x / mpt, profile[b].y / mpt),
+                               ns_v2_make(profile[c].x / mpt, profile[c].y / mpt),
+                               want, material);
+                }
+            } else {
+                /* Repli : l'éventail, correct tant que le profil est convexe. */
+                for (size_t j = 0; j < profile_count; ++j) {
+                    const size_t j1 = (j + 1) % profile_count;
+                    tri_facing(m, hub, GEO_SWEEP_POINT(i, j), GEO_SWEEP_POINT(i, j1),
+                               ns_v2_make(centroid.x / mpt, centroid.y / mpt),
+                               ns_v2_make(profile[j].x / mpt, profile[j].y / mpt),
+                               ns_v2_make(profile[j1].x / mpt, profile[j1].y / mpt),
+                               want, material);
+                }
             }
         }
+        free(tris);
     }
 
     #undef GEO_SWEEP_POINT

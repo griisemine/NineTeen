@@ -200,7 +200,13 @@ const ns_render_settings *ns_renderer_settings(const ns_renderer *rd);
  * la pose, il ne la calcule pas — cette séparation est ce qui lui évite de
  * connaître la machine à états de l'interaction.
  */
-void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
+/*
+ * Renvoie false quand RIEN n'a pu être dessiné — cibles de rendu indisponibles,
+ * typiquement pendant un redimensionnement. L'appelant ne doit alors PAS
+ * présenter l'image : la cible n'a pas été écrite, et la présenter donne une
+ * image noire. `ns_rhi_cancel_frame` est là pour ça.
+ */
+bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                       const ns_camera *camera, const ns_viewmodel_pose *viewmodel,
                       SDL_GPUTexture *target,
                       uint32_t target_width, uint32_t target_height,

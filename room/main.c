@@ -937,9 +937,23 @@ int main(int argc, char **argv)
              * on regarde dans le sens opposé. Le lacet suit
              * `forward = (cos, ., sin)`. */
             cam.yaw = cam.prev_yaw = atan2f(-pick->screen_normal.z, -pick->screen_normal.x);
-            /* La dalle est à 1,26 m, l'œil à 1,70 m, à 1,05 m de distance : il faut
-             * plonger de 23° pour l'avoir au centre du cadre. */
-            cam.pitch = cam.prev_pitch = -23.0f * NS_DEG2RAD;
+            /*
+             * Le tangage est CALCULÉ, plus codé en dur.
+             *
+             * Il valait −23°, mesuré pour une dalle à 1,05 m de l'œil. Le
+             * caisson est devenu un profil en gradins : l'écran a reculé de
+             * 32 cm et l'angle juste est passé à −33°. Une constante mesurée sur
+             * une géométrie donnée redevient fausse dès que la géométrie bouge,
+             * et personne ne pense à la rouvrir — alors que la borne déclare
+             * déjà où est son écran.
+             */
+            {
+                const float ex = pick->screen_center.x - cam.position.x;
+                const float ey = pick->screen_center.y - cam.position.y;
+                const float ez = pick->screen_center.z - cam.position.z;
+                const float flat = sqrtf(ex * ex + ez * ez);
+                cam.pitch = cam.prev_pitch = atan2f(ey, ns_maxf(0.05f, flat));
+            }
             cam.velocity = ns_v3_zero();
 
             const bool hard = (SDL_strcasecmp(pick->difficulty, "hard") == 0);
@@ -1587,7 +1601,16 @@ play_at_done: ;
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
-            ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now);
+            if (!ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now)) {
+                /*
+                 * Le rendu n'a rien écrit — cibles indisponibles, typiquement au
+                 * milieu d'un redimensionnement. On ABANDONNE l'image plutôt que
+                 * de présenter une swapchain vide, qui s'affiche noire. C'est la
+                 * moitié visible des « flashs noirs ».
+                 */
+                ns_rhi_cancel_frame(rhi);
+                continue;
+            }
 
             /*
              * L'affichage, PAR-DESSUS la scène et après elle.

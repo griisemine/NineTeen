@@ -561,6 +561,18 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
     rd->rt_current = 0;
     rd->accum_frames = 0;
     rd->rt_denoised = NULL;
+    /*
+     * L'adaptation d'exposition repart de zéro elle aussi.
+     *
+     * `accum_frames` était remis à zéro ici, `exposure_primed` non — donc après
+     * une recréation de cibles (redimensionnement de fenêtre, changement de
+     * palier ou d'échelle depuis le menu) l'adaptation continuait depuis une
+     * luminance moyenne mesurée sur des cibles qui n'existent plus, et pouvait
+     * plonger jusqu'à `exposure_min` pendant quelques images. C'est un des deux
+     * « flashs noirs ». Remise à faux, la première image se cale d'un coup —
+     * exactement ce que fait déjà le démarrage.
+     */
+    rd->exposure_primed = false;
 
     /* Chaîne de halo : chaque niveau à la moitié du précédent. Le flou large
      * s'obtient ainsi en quelques passes au lieu d'un noyau énorme. */
@@ -1552,7 +1564,7 @@ static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
     SDL_EndGPURenderPass(pass);
 }
 
-void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
+bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                       const ns_camera *camera, const ns_viewmodel_pose *viewmodel,
                       SDL_GPUTexture *target,
                       uint32_t target_width, uint32_t target_height,
@@ -1560,7 +1572,16 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
 {
     NS_ASSERT(rd && scene && camera && target);
 
-    if (!ns_renderer_resize(r, rd, target_width, target_height)) return;
+    /*
+     * Rien n'a pu être dessiné : on le DIT, au lieu de sortir en silence.
+     *
+     * L'appelant enchaînait sur `ns_rhi_end_frame`, qui présente une swapchain
+     * jamais remplie — c'est-à-dire une image noire. C'est l'autre « flash
+     * noir », et il se déclenche pendant un redimensionnement de fenêtre ou à
+     * un changement de qualité. Une image sautée ne se voit pas ; une image
+     * noire, si.
+     */
+    if (!ns_renderer_resize(r, rd, target_width, target_height)) return false;
 
     /* --- matrices --- */
     const float aspect = (float)rd->width / (float)ns_maxf(1.0f, (float)rd->height);
@@ -1805,7 +1826,7 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
             fullscreen_pass(r, rd->pipe_debug, target, SDL_GPU_LOADOP_CLEAR,
                             &src, &nearest, 1, &du, sizeof du, NULL);
             SDL_memcpy(rd->prev_view_proj, view_proj.m, sizeof rd->prev_view_proj);
-            return;
+            return true;   /* la vue de débogage EST l'image : elle compte */
         }
     }
 
@@ -1832,4 +1853,5 @@ void ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     }
 
     SDL_memcpy(rd->prev_view_proj, view_proj.m, sizeof rd->prev_view_proj);
+    return true;
 }

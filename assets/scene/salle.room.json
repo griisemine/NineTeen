@@ -342,6 +342,20 @@
       "_": "Le caisson d'une borne. Il portait `gris_foncer.jpg`, un aplat de 24 x 24 px à peu près noir, sur VINGT-TROIS objets dont les dix-neuf bornes : aucune quantité de lumière ne rend un matériau noir visible, et c'est là, plus que dans l'éclairage, que se jouait le « trop sombre »."
     },
     {
+      "name": "borne_noir",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.34,
+      "metallic": 0.15,
+      "uvMetres": 0.3,
+      "baseColor": [
+        0.055,
+        0.052,
+        0.058,
+        1.0
+      ],
+      "_": "Le plastique NOIR d'une borne : bandeau de marquee, panneau haut-parleurs, cadre d'écran, porte à monnayeur. B1 avait éclairci « borne_cadre » parce qu'aucune lumière ne rend visible un caisson noir — la leçon valait pour le CAISSON, pas pour ces pièces-là. Un cadre sombre autour d'une dalle lumineuse est précisément ce qui fait lire l'écran comme un écran ; le contraste vient de la dalle, pas du cadre. 5,5 % d'albédo avec un peu de spéculaire : ça se lit noir sous la lumière chaude et ça accroche quand même un reflet, là où un noir pur resterait un trou."
+    },
+    {
       "name": "borne_commande",
       "texture": "bordeaux.jpg",
       "roughness": 0.46,

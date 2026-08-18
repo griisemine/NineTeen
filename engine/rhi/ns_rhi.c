@@ -320,6 +320,31 @@ void ns_rhi_wait_idle(ns_rhi *r)
     if (r && r->device) SDL_WaitForGPUIdle(r->device);
 }
 
+void ns_rhi_cancel_frame(ns_rhi *r)
+{
+    NS_ASSERT(r->frame_active);
+
+    /*
+     * L'image est ABANDONNÉE : la swapchain acquise n'est pas présentée, et le
+     * compositeur réaffiche donc la précédente.
+     *
+     * C'est le remède au flash noir. Sans lui, une image que le rendu n'a pas
+     * pu produire — cibles indisponibles pendant un redimensionnement, un
+     * changement de palier — était quand même soumise, swapchain vide, donc
+     * noire à l'écran. Sauter une image ne se voit pas ; en présenter une noire,
+     * si.
+     *
+     * On vide quand même les téléversements en attente : ils appartiennent aux
+     * ressources, pas à l'image, et les perdre laisserait des tampons à moitié
+     * écrits.
+     */
+    ns_rhi_flush_staging(r);
+    SDL_CancelGPUCommandBuffer(r->cmd);
+    r->cmd = NULL;
+    r->swapchain = NULL;
+    r->frame_active = false;
+}
+
 void ns_rhi_end_frame(ns_rhi *r)
 {
     NS_ASSERT(r->frame_active);

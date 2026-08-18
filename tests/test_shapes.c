@@ -344,6 +344,49 @@ static geo_wall_desc straight_wall(const ns_v2 *pts, const geo_opening *ops, siz
     return d;
 }
 
+/*
+ * Un profil CONCAVE extrudé : ses bouchons ne doivent pas se recouvrir.
+ *
+ * Les bouchons étaient un éventail depuis le centroïde — juste pour un profil
+ * convexe, faux pour tout le reste : sur un profil creux le centroïde peut
+ * tomber HORS du polygone, et les triangles se chevauchent en restant
+ * coplanaires. Ça ne se voit pas franchement sur une image, mais chaque pixel
+ * du flanc est peint plusieurs fois.
+ *
+ * C'est ce qui est arrivé avec la silhouette en gradins d'une borne d'arcade,
+ * répétée dix-neuf fois. Le contrôle qui l'attrape est le VOLUME SIGNÉ : un
+ * solide fermé et correctement triangulé a le volume de son profil multiplié
+ * par sa longueur, et des bouchons qui se recouvrent le faussent.
+ */
+static void test_profil_concave(void)
+{
+    /* Un « L » : le cas le plus simple où le centroïde sort du polygone. */
+    const ns_v2 prof[6] = {
+        { 0.0f, 0.0f }, { 3.0f, 0.0f }, { 3.0f, 1.0f },
+        { 1.0f, 1.0f }, { 1.0f, 3.0f }, { 0.0f, 3.0f },
+    };
+    /* Aire du L : 3x1 + 1x2 = 5. */
+    const float area = 5.0f;
+    const float length = 2.0f;
+
+    const ns_v3 path[2] = { { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, length } };
+
+    geo_mesh m; geo_mesh_init(&m);
+    const geo_uv uv = geo_uv_tile(1.0f);
+    geo_profile_extrude(&m, prof, 6, true, path, 2, false, &uv, 0);
+
+    CHECK(m.tris.count > 0, "l'extrusion produit des triangles (%zu)", m.tris.count);
+
+    const float v = geo_signed_volume(&m);
+    CHECK_NEAR(fabsf(v), area * length, 0.05f);
+
+    /* Et aucun triangle dégénéré : une découpe d'oreilles ratée en laisse. */
+    CHECK(geo_check_degenerate(&m, 1e-9f) == 0,
+          "aucun triangle dégénéré dans les bouchons");
+
+    geo_mesh_free(&m);
+}
+
 static void test_wall_plain(void)
 {
     printf("pan plein\n");
@@ -631,6 +674,7 @@ int main(int argc, char **argv)
     test_plane();
     test_panel();
     test_extrude();
+    test_profil_concave();
     test_wall_plain();
     test_wall_opening();
     test_wall_mitre();

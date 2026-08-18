@@ -57,6 +57,13 @@ que le chantier est terminé.
 - **Adaptation d'exposition** : luminance logarithmique moyenne mesurée en compute dans un
   tampon de stockage persistant, lissage asymétrique (l'œil s'habitue plus lentement au sombre).
   C'est ce qui a supprimé le plafond brûlé.
+- **Les flashs noirs.** Deux causes, toutes deux dans le chemin de présentation. `ns_renderer_draw`
+  sortait SANS RIEN ÉCRIRE quand les cibles de rendu n'étaient pas disponibles — au milieu d'un
+  redimensionnement, à un changement de palier — et l'appelant présentait quand même la swapchain,
+  c'est-à-dire une image noire. Elle renvoie maintenant un `bool` et l'image est ABANDONNÉE
+  (`ns_rhi_cancel_frame`) : sauter une image ne se voit pas, en présenter une noire, si. Et
+  l'adaptation d'exposition repartait d'une luminance mesurée sur des cibles détruites, ce qui
+  pouvait la faire plonger jusqu'à son plancher pendant quelques images.
 - **Réverbération par zone.** La salle déclare ses zones dans `salle.room.json` — les toilettes
   carrelées, le sas d'entrée, le coin billard — avec leur niveau d'écho et leur décroissance.
   `roomgen` les valide et les exporte, le mixeur les applique en **départ/retour** sur les bus
@@ -69,6 +76,22 @@ que le chantier est terminé.
   rebond du sol — l'illumination indirecte ne tourne qu'au palier « ultra » — mais la diffusion
   volumétrique devant lui et l'exposition qui cesse de le brûler. Le plan annonçait la première
   explication ; la capture a donné la seconde.
+
+### Les bornes
+- **Le caisson est une EXTRUSION DE PROFIL**, plus une boîte. Ce qui fait qu'on reconnaît une
+  borne d'arcade au premier coup d'œil n'est ni sa couleur ni son marquee : c'est son profil
+  latéral en gradins — socle en retrait, face verticale, panneau de commande qui jaillit, retrait
+  sous l'écran, écran incliné, panneau haut-parleurs, marquee en surplomb, dessus qui redescend.
+  Neuf gradins, dont aucun n'existait.
+- **Le marquee est un caisson lumineux en surplomb**, pas une décalcomanie ; le **panneau
+  haut-parleurs** et ses deux grilles apparaissent ; la **porte à monnayeur** aussi — c'est le
+  détail qui dit « borne » plus fort que tout le reste.
+- Un matériau **`borne_noir`** pour les bandeaux. B1 avait éclairci `borne_cadre` au motif
+  qu'aucune lumière ne rend visible un matériau noir : la leçon valait pour le CAISSON, pas pour
+  le cadre d'écran. Un cadre sombre autour d'une dalle lumineuse est précisément ce qui fait lire
+  l'écran comme un écran.
+- Coût mesuré : **+2 014 sommets** sur toute la salle (144 941 → 146 955) et **611 ms/image** au
+  palier medium, contre 675 ms avant. Aucune régression.
 
 ### Les jeux
 - **Une interface commune** (`games/games.h`) : un jeu déclare la taille de son état, ses
@@ -191,7 +214,7 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Vingt défauts trouvés en chemin, tous instructifs.
+Vingt-quatre défauts trouvés en chemin, tous instructifs.
 
 **Sept bornes sur dix-neuf affichaient la partie d'une autre.** `roomgen` nomme les matériaux
 par jeu — `ecran_snake` — et deux bornes du même jeu partageaient donc le même. Or le moteur
@@ -200,6 +223,25 @@ apparaître la partie sur la borne Snake hard, à l'autre bout de la salle. Le d
 et ne pouvait pas se voir tant qu'un seul jeu était porté — il fallait deux bornes du même jeu
 dans le même cadre pour le rencontrer. La dalle d'une borne a maintenant son propre matériau,
 cloné de celui qu'elle déclare : même image d'attente, surface distincte.
+
+**Un éventail depuis le centroïde ne triangule pas un polygone creux.** Les bouchons de
+`geo_profile_extrude` étaient un éventail depuis le centroïde — juste pour un profil convexe,
+faux pour tout le reste : sur un profil concave le centroïde peut tomber HORS du polygone, et les
+triangles se recouvrent en restant coplanaires. Ça ne se voit presque pas à l'image, la silhouette
+restant juste ; mais chaque pixel du flanc est peint plusieurs fois. Avec la silhouette en gradins
+d'une borne, répétée dix-neuf fois, c'était de la surcharge de remplissage pure. Remplacé par une
+découpe d'oreilles, avec repli sur l'éventail quand le polygone n'est pas simple. Le contrôle qui
+l'attrape est le volume signé, et il tient maintenant dans `tests/test_shapes.c` sur un « L » —
+dont le centroïde est démontrablement hors du solide.
+
+**Et la moitié de l'image qui devenait noire n'était pas le rendu : c'était la caméra.**
+`--play-at` plante le joueur sur `player_anchor`, dérivée de l'ÉCRAN. Le profil en gradins fait
+reculer l'écran de 32 cm quand le panneau n'en recule que 12 : le joueur se retrouvait le nez
+dans la tôle, et un flanc de borne non éclairé remplissait la moitié du cadre. J'ai d'abord
+soupçonné le rasteriseur logiciel, puis le nombre de sommets, puis les matériaux — trois fausses
+pistes, toutes écartées par une mesure (la même vue à trois qualités, puis à géométrie
+précédente). L'ancre dérive maintenant du PANNEAU, qui est ce qu'on doit atteindre, et le tangage
+de la capture est calculé depuis l'écran déclaré au lieu d'être une constante mesurée une fois.
 
 **Trois bogues dans un chemin qu'on croyait fini, tous trouvés en le généralisant.** En
 extrayant l'interface commune des mini-jeux (`games/games.h`), il a fallu nommer les événements

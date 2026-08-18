@@ -72,6 +72,14 @@ bool ns_rhi_begin_frame(ns_rhi *r);
 void ns_rhi_end_frame(ns_rhi *r);
 
 /*
+ * Abandonne l'image au lieu de la présenter. À employer quand le rendu n'a rien
+ * écrit dans la cible : présenter une swapchain vide donne une image NOIRE, et
+ * c'est ce qu'on voyait par intermittence pendant un redimensionnement ou un
+ * changement de palier de qualité.
+ */
+void ns_rhi_cancel_frame(ns_rhi *r);
+
+/*
  * Attend que le GPU ait tout terminé.
  *
  * À n'employer QUE pour mesurer : en fonctionnement normal, laisser le CPU
