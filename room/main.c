@@ -19,6 +19,9 @@
 #include "ns_render.h"
 #include "ns_rhi.h"
 #include "ns_scene.h"
+#include "ns_sprite.h"
+
+#include "flappy/flappy.h"
 
 #include "room_camera.h"
 #include "room_sound.h"
@@ -50,6 +53,9 @@ typedef struct options {
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
     bool        bench;      /* mesure le temps GPU réel, image par image */
     const char *pose;       /* pose de bras figée, pour les captures */
+    const char *game;       /* démarrer directement dans un mini-jeu */
+    bool        autoplay;   /* le jeu se joue tout seul : captures et CI */
+    float       warmup;     /* secondes de simulation avancées avant la 1re image */
 } options;
 
 static void print_usage(const char *exe)
@@ -79,6 +85,9 @@ static void print_usage(const char *exe)
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
         "  --bench              mesure le temps GPU réel de chaque image\n"
+        "  --game=NOM           démarre directement dans un mini-jeu (flappy)\n"
+        "  --autoplay           le mini-jeu se joue tout seul (captures, CI)\n"
+        "  --warmup=S           avance le mini-jeu de S secondes avant de rendre\n"
         "  --pose=NOM           fige les bras : idle, walk, reach, insert, press\n"
         "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
@@ -209,6 +218,12 @@ static bool parse_options(int argc, char **argv, options *o)
             o->vsync = false;
         } else if (SDL_strcmp(a, "--bench") == 0) {
             o->bench = true;
+        } else if (SDL_strncmp(a, "--warmup=", 9) == 0) {
+            o->warmup = (float)SDL_atof(a + 9);
+        } else if (SDL_strcmp(a, "--autoplay") == 0) {
+            o->autoplay = true;
+        } else if (SDL_strncmp(a, "--game=", 7) == 0) {
+            o->game = a + 7;
         } else if (SDL_strncmp(a, "--pose=", 7) == 0) {
             o->pose = a + 7;
         } else if (SDL_strcmp(a, "--debug-gpu") == 0) {
@@ -548,6 +563,60 @@ int main(int argc, char **argv)
     room_sound sound;
     room_sound_init(&sound, &scene);
 
+    /*
+     * La couche 2D et le mini-jeu.
+     *
+     * Le pipeline de sprites est lié au FORMAT de sa cible : celui de la
+     * swapchain ici. En créer un par format qu'on rencontrera serait
+     * l'architecture correcte le jour où les écrans de bornes rendront dans une
+     * cible d'un autre format ; aujourd'hui il n'y en a qu'un, et l'annoncer
+     * ainsi vaut mieux qu'un `if` qui prétendrait le contraire.
+     */
+    ns_sprite *sprites = ns_sprite_create(rhi, ns_rhi_swapchain_format(rhi));
+    flappy_art flappy_assets;
+    flappy game;
+    bool in_game = false;
+    if (sprites) flappy_art_load(rhi, &flappy_assets);
+    else         SDL_zero(flappy_assets);
+
+    /* Les trois sons du jeu, ceux de 2020. Le jeu ne connaît pas le mixeur : il
+     * lève des drapeaux d'événement, et c'est ici qu'on les entend. */
+    const int sfx_flap  = ns_audio_load("games/flappy/flap.wav");
+    const int sfx_hurt  = ns_audio_load("games/flappy/hurt.wav");
+    const int sfx_score = ns_audio_load("games/flappy/score.wav");
+
+    if (opt.game && sprites) {
+        if (SDL_strcasecmp(opt.game, "flappy") == 0) {
+            flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), false);
+            in_game = true;
+            NS_INFO("Flappy Bird : partie démarrée");
+
+            /*
+             * Avance de simulation, pour les captures.
+             *
+             * Le premier tuyau est à 1 056 px de l'oiseau et le décor défile à
+             * 240 px/s : il faut 4,4 s de JEU avant qu'une image montre autre
+             * chose qu'un ciel vide. En headless le temps de jeu suit le temps
+             * réel, donc l'attendre demanderait plusieurs centaines d'images
+             * rendues pour rien. On avance la simulation seule — c'est gratuit,
+             * c'est exact au pas près, et ça n'existe que parce que la partie est
+             * une structure qu'on fait avancer sans rien dessiner.
+             */
+            if (opt.warmup > 0.0f) {
+                const float step = (float)(1.0 / NS_DEFAULT_TICK_HZ);
+                const int steps = (int)(opt.warmup / step);
+                for (int k = 0; k < steps; ++k) {
+                    if (opt.autoplay) flappy_autopilot(&game);
+                    flappy_tick(&game, step);
+                }
+                NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
+                        (double)opt.warmup, steps, game.score);
+            }
+        } else {
+            NS_WARN("--game=%s inconnu (flappy)", opt.game);
+        }
+    }
+
     room_viewmodel vmstate;
     room_viewmodel_init(&vmstate);
     (void)room_viewmodel_set_forced_pose(&vmstate, opt.pose);   /* déjà validé */
@@ -618,6 +687,12 @@ int main(int argc, char **argv)
             case SDL_EVENT_KEY_DOWN:
                 switch (ev.key.key) {
                 case SDLK_ESCAPE:
+                    if (in_game) {
+                        /* Quitter la partie rend la salle, pas le bureau. */
+                        in_game = false;
+                        NS_INFO("Flappy Bird : score %u, meilleur %u", game.score, game.best);
+                        break;
+                    }
                     if (mouse_captured) {
                         SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), false);
                         mouse_captured = false;
@@ -634,6 +709,23 @@ int main(int argc, char **argv)
                     break;
                 }
                 case SDLK_SPACE:
+                    if (in_game) {
+                        /* En partie, l'espace bat des ailes. Après la mort il
+                         * relance — mais seulement une fois la chute finie,
+                         * sinon un appui maintenu au moment du choc redémarre
+                         * avant qu'on ait vu ce qui s'est passé. */
+                        if (!ev.key.repeat) {
+                            if (game.phase == FLAPPY_DEAD && game.dead_time > 0.8f) {
+                                const uint32_t best = game.best;
+                                flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(),
+                                             game.hard);
+                                game.best = best;
+                            } else {
+                                flappy_flap(&game);
+                            }
+                        }
+                        break;
+                    }
                     /* Le saut est une transition, pas un état : lu en événement
                      * pour qu'un appui bref ne se perde pas entre deux pas. */
                     if (!ev.key.repeat) cam.jump_requested = true;
@@ -666,6 +758,18 @@ int main(int argc, char **argv)
                     if (near && room_viewmodel_interact(&vmstate, near)) {
                         room_sound_coin(&sound, near->coin_slot);
                         NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
+
+                        /*
+                         * La borne décide du jeu, et de sa difficulté. C'est ce
+                         * que `salle.room.json` déclare depuis A4 et que rien ne
+                         * lisait : dix-neuf bornes affectées à un jeu, et aucune
+                         * qui en lançait un.
+                         */
+                        if (sprites && SDL_strcasecmp(near->game, "flappy") == 0) {
+                            const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
+                            flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), hard);
+                            in_game = true;
+                        }
                     }
                     break;
                 }
@@ -727,6 +831,22 @@ int main(int argc, char **argv)
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
             room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
+
+            /*
+             * Le jeu avance au MÊME pas fixe que la salle. C'est ce qui le rend
+             * reproductible à la graine près — donc scriptable pour les captures
+             * — et c'est précisément ce que la version de 2020 ne pouvait pas
+             * faire : elle intégrait en nombre d'images, à 60 Hz supposés.
+             */
+            if (in_game) {
+                if (opt.autoplay) flappy_autopilot(&game);
+                flappy_tick(&game, (float)clock.tick_seconds);
+                if (game.flapped)    ns_audio_play(sfx_flap, NS_BUS_SFX, 0.55f, 1.0f);
+                if (game.scored_now) { ns_audio_play(sfx_score, NS_BUS_SFX, 0.7f, 1.0f);
+                                       NS_INFO("Flappy : %u", game.score); }
+                if (game.died_now)   { ns_audio_play(sfx_hurt, NS_BUS_SFX, 0.8f, 1.0f);
+                                       NS_INFO("Flappy : perdu à %u", game.score); }
+            }
         }
         ns_clock_end_frame(&clock);
 
@@ -762,6 +882,33 @@ int main(int argc, char **argv)
             }
 
             const double frame_start = opt.bench ? ns_time_seconds() : 0.0;
+
+            if (in_game && sprites) {
+                /*
+                 * En partie, le jeu occupe l'écran. Le repère logique est fixé à
+                 * la hauteur du terrain (1080) et la largeur suit l'aspect de la
+                 * fenêtre : le jeu garde donc ses proportions sur un 16/9 comme
+                 * sur un 4/3, et c'est lui qui se centre.
+                 */
+                const float aspect = (float)w / (float)ns_maxf(1.0f, (float)h);
+                ns_sprite_begin(sprites, FLAPPY_H * aspect, FLAPPY_H);
+                flappy_draw(sprites, &game, &flappy_assets, FLAPPY_H * aspect, FLAPPY_H);
+                static const float night[4] = { 0.02f, 0.02f, 0.03f, 1.0f };
+                ns_sprite_end(rhi, sprites, target, w, h, night);
+                ns_rhi_end_frame(rhi);
+                frames_rendered++;
+                if (opt.screenshot && frames_rendered >= opt.frames) {
+                    ns_rhi_capture_texture_png(rhi, target, w, h,
+                                               ns_rhi_swapchain_format(rhi), opt.screenshot);
+                    NS_INFO("capture : Flappy Bird, score %u, %u quads en %u lot(s)",
+                            game.score, ns_sprite_quad_count(sprites),
+                            ns_sprite_batch_count(sprites));
+                    ns_texture_destroy(rhi, &offscreen);
+                    running = false;
+                }
+                continue;
+            }
+
             const ns_camera render_cam = room_camera_resolve(&cam, (float)clock.alpha);
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
@@ -817,6 +964,8 @@ int main(int argc, char **argv)
                 frames_rendered, clock.fps_smoothed);
     }
 
+    flappy_art_free(rhi, &flappy_assets);
+    if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);
     ns_audio_shutdown();
     ns_scene_unload(rhi, &scene);

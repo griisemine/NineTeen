@@ -58,6 +58,18 @@ nineteen_set_warnings(ns_test_audio)
 nineteen_apply_sanitizers(ns_test_audio)
 add_test(NAME audio COMMAND ns_test_audio "${CMAKE_BINARY_DIR}")
 
+# Flappy Bird : ses RÈGLES, sans écran.
+#
+# Ce qu'il attrape est une partie devenue injouable — un écart trop étroit pour
+# la hauteur de saut, un recyclage qui empile les tuyaux, un barème qui compte
+# deux fois. Aucun de ces défauts ne se voit sur une capture fixe, et tous
+# rendent le jeu sans intérêt.
+add_executable(ns_test_flappy test_flappy.c)
+target_link_libraries(ns_test_flappy PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_flappy)
+nineteen_apply_sanitizers(ns_test_flappy)
+add_test(NAME flappy COMMAND ns_test_flappy)
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

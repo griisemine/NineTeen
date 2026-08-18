@@ -7,7 +7,7 @@ add_executable(nineteen
     room_sound.c
 )
 
-target_link_libraries(nineteen PRIVATE nineteen::engine)
+target_link_libraries(nineteen PRIVATE nineteen::engine nineteen::games)
 target_include_directories(nineteen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 nineteen_set_warnings(nineteen)
 nineteen_apply_sanitizers(nineteen)

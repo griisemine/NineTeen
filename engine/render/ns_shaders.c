@@ -15,6 +15,7 @@ const ns_shader_info ns_shader_table[] = {
     { "gbuffer.vert",    NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     /* Une matrice de modèle PAR SEGMENT : c'est ce que le G-buffer ne sait pas
      * faire, et la raison d'être du pipeline du viewmodel. */
+    { "sprite.vert",           NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "viewmodel.vert",  NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
 
     /* ------------------------------------------------------------ fragments */
@@ -37,6 +38,10 @@ const ns_shader_info ns_shader_table[] = {
     { "volumetric_composite.frag", NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
     /* Aucune texture, mais le tampon des lumières — le même que l'éclairage. */
     { "viewmodel.frag",        NS_SHADER_STAGE_FRAGMENT, 0, 0, 1, 0, 0, 1,  0, 0, 0 },
+    /* La couche 2D : un atlas, aucun tampon, aucun uniforme de fragment. La
+     * couleur voyage dans le sommet, ce qui permet de teinter chaque quad sans
+     * couper le lot. */
+    { "sprite.frag",           NS_SHADER_STAGE_FRAGMENT, 1, 0, 0, 0, 0, 0,  0, 0, 0 },
 
     /* ------------------------------------------------------------- compute */
     /* set 0 : 3 textures (profondeur, normale, historique) puis 4 tampons

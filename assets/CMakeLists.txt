@@ -197,6 +197,29 @@ add_custom_command(
 )
 
 # ---------------------------------------------------------------------------
+# 3c. Les mini-jeux : planches de sprites et sons
+# ---------------------------------------------------------------------------
+#
+# Elles sont reprises TELLES QUELLES de 2020 — `birds.png`, `pipes.png`,
+# `sol.png`, `chiffre.png`… C'est ce qui fait qu'on rejoue au même jeu et pas à
+# une imitation : les cotes de la planche (oiseau 17 x 12, tuyau 26 x 160,
+# chiffre 12 x 18) sont exactement celles que le code de 2020 découpait, et le
+# portage les reprend au pixel près.
+file(GLOB FLAPPY_ART   "${SRC_LEGACY}/games/3_flappy_bird/Textures/*.png")
+file(GLOB FLAPPY_SOUND "${SRC_LEGACY}/games/3_flappy_bird/Sounds/*.wav")
+
+add_custom_command(
+    OUTPUT "${GEN}/games/flappy/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/flappy"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLAPPY_ART} "${GEN}/games/flappy/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLAPPY_SOUND} "${GEN}/games/flappy/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/flappy/.stamp"
+    DEPENDS ${FLAPPY_ART} ${FLAPPY_SOUND}
+    COMMENT "Copie des planches et sons de Flappy Bird"
+    VERBATIM
+)
+
+# ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
 add_custom_command(
@@ -214,6 +237,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.lights.json"
         "${GEN}/scene/salle.scene.json"
         "${GEN}/sounds/.stamp"
+        "${GEN}/games/flappy/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

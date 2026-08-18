@@ -26,6 +26,8 @@ add_library(nineteen_engine STATIC
     anim/ns_ik.c
 
     audio/ns_audio.c
+
+    sprite/ns_sprite.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -39,6 +41,7 @@ target_include_directories(nineteen_engine
         "${CMAKE_CURRENT_SOURCE_DIR}/render"
         "${CMAKE_CURRENT_SOURCE_DIR}/anim"
         "${CMAKE_CURRENT_SOURCE_DIR}/audio"
+        "${CMAKE_CURRENT_SOURCE_DIR}/sprite"
 )
 
 target_link_libraries(nineteen_engine
