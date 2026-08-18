@@ -187,6 +187,26 @@ void geo_profile_extrude(geo_mesh *m,
                          const ns_v3 *path, size_t path_count, bool path_closed,
                          const geo_uv *uv, int32_t material);
 
+/*
+ * La même, avec un matériau PROPRE aux bouchons — et un cadrage d'UV pour eux.
+ *
+ * Elle existe pour une raison précise : sur une borne d'arcade, les deux
+ * bouchons de l'extrusion SONT les deux flancs, et un flanc de borne porte une
+ * sérigraphie qui n'a rien à voir avec la peinture du caisson. Les traiter
+ * comme le reste obligeait à choisir entre un caisson qui porte la trame
+ * partout et un flanc nu.
+ *
+ * `cap_uv_fit` cadre les UV des bouchons sur la boîte englobante du profil,
+ * de (0,0) à (1,1) : une planche dessinée pour un flanc s'y pose entière, quelle
+ * que soit la taille de la borne. Sans lui, les UV restent en mètres par
+ * répétition comme partout ailleurs — ce qu'il faut pour une moulure.
+ */
+void geo_profile_extrude_capped(geo_mesh *m,
+                                const ns_v2 *profile, size_t profile_count, bool profile_closed,
+                                const ns_v3 *path, size_t path_count, bool path_closed,
+                                const geo_uv *uv, int32_t material,
+                                int32_t cap_material, bool cap_uv_fit);
+
 /* ========================================================================== */
 /* Pan de mur                                                                 */
 /* ========================================================================== */

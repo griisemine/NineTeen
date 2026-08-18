@@ -1040,8 +1040,9 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     float *const screen_local = anchors->screen;
     float *const screen_size  = anchors->screen_size;
 
-    char m_body[64], m_screen[64], m_marquee[64], m_panel[64], m_trim[64];
+    char m_body[64], m_screen[64], m_marquee[64], m_panel[64], m_trim[64], m_side[64];
     tool_json_get_string(doc, e, "materialBody", m_body, sizeof m_body);
+    tool_json_get_string(doc, e, "materialSide", m_side, sizeof m_side);
     tool_json_get_string(doc, e, "screen", m_screen, sizeof m_screen);
     tool_json_get_string(doc, e, "marquee", m_marquee, sizeof m_marquee);
     tool_json_get_string(doc, e, "materialPanel", m_panel, sizeof m_panel);
@@ -1053,6 +1054,16 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     const int marq   = material_index(b, m_marquee[0] ? m_marquee : m_body, owner);
     const int panel  = material_index(b, m_panel[0] ? m_panel : m_body, owner);
     const int trim   = material_index(b, m_trim[0] ? m_trim : m_body, owner);
+    /*
+     * Le flanc. Les deux bouchons de l'extrusion SONT les deux flancs de la
+     * borne, et un flanc de borne d'arcade porte une sérigraphie — le dégradé et
+     * la trame en losanges des vues de référence — que le caisson n'a pas.
+     *
+     * Facultatif : sans `materialSide`, le flanc reprend la peinture du caisson
+     * et la borne est exactement celle d'avant. C'est ce qui permet de l'ajouter
+     * borne par borne sans casser une salle qui ne le déclare pas.
+     */
+    const int flank  = material_index(b, m_side[0] ? m_side : m_body, owner);
     /*
      * Le noir des bandeaux. Facultatif : une salle qui ne le déclare pas retombe
      * sur le cadre clair et reste correcte — c'était l'état d'avant.
@@ -1116,7 +1127,11 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     const ns_v3 sweep[2] = { ns_v3_make(-hw, 0.0f, 0.0f), ns_v3_make(hw, 0.0f, 0.0f) };
 
     geo_mesh part; geo_mesh_init(&part);
-    geo_profile_extrude(&part, profile, sil_count, true, sweep, 2, false, &uv_body, body);
+    /* `cap_uv_fit` : la planche du flanc se pose ENTIÈRE sur la silhouette, de
+     * (0,0) à (1,1). Sans lui les UV du bouchon seraient en mètres par
+     * répétition comme pour une moulure, et la sérigraphie arriverait coupée. */
+    geo_profile_extrude_capped(&part, profile, sil_count, true, sweep, 2, false,
+                               &uv_body, body, flank, true);
     geo_xform x = GEO_XFORM_IDENTITY;
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);

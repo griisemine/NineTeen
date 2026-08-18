@@ -35,12 +35,66 @@ file(GLOB CC0_MODELS CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.gltf"
      "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.bin")
 
+#
+# L'art latéral d'une borne, DESSINÉ plutôt que téléchargé.
+#
+# Les vues de référence montrent, sur le flanc, un dégradé qui s'éclaircit vers
+# le marquee et une trame de losanges en diagonale. C'est ce qui distingue une
+# borne d'arcade d'un caisson peint, et c'est ce qui manquait encore à la
+# silhouette refaite en B14.
+#
+# Le modèle free3d demande un compte : le versionner casserait la promesse de
+# reconstructibilité hors ligne et la clarté d'`assets/cc0/LICENSES.md`. Une
+# planche produite par vingt lignes d'arithmétique n'a ni licence à démêler ni
+# fichier à rapporter, et se régénère à l'identique partout.
+#
+# Elle est en niveaux de gris : c'est le MATÉRIAU de chaque borne qui la teinte.
+# Les dix-neuf bornes gardent donc leur couleur de jeu — on trouve « sa » borne
+# de loin, ce qui est un vrai service rendu au joueur — tout en portant chacune
+# le flanc de la référence.
+#
+# Elle sort dans un répertoire À ELLE, et pas directement dans `scene/textures`.
+# `roomgen` vérifie que CHAQUE image de ses répertoires de recherche est
+# référencée par un matériau — c'est ce qui fait qu'une texture abandonnée casse
+# le build au lieu de disparaître du décor en silence. Lui donner
+# `scene/textures`, qui est sa propre SORTIE, ferait compter deux fois les
+# soixante-neuf autres. Un répertoire d'une seule image, plus une copie vers
+# l'emplacement d'exécution, garde la vérification exacte.
+set(SIDEART "${GEN}/sideart/flanc_borne.png")
+set(SIDEART_RUNTIME "${GEN}/scene/textures/flanc_borne.png")
+add_custom_command(
+    OUTPUT  "${SIDEART}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND sideart "${SIDEART}"
+    DEPENDS sideart
+    COMMENT "Art latéral de borne : flanc_borne.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${SIDEART_RUNTIME}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SIDEART}" "${SIDEART_RUNTIME}"
+    DEPENDS "${SIDEART}"
+    VERBATIM
+)
+# Elle passe par `texgen` comme toutes les autres : une planche sans normale ni
+# ORM serait la seule surface plate de la salle.
+add_custom_command(
+    OUTPUT  "${GEN}/materials/flanc_borne_n.png" "${GEN}/materials/flanc_borne_orm.png"
+    COMMAND texgen --strength=0.8 "${SIDEART}" "${GEN}/materials"
+    DEPENDS texgen "${SIDEART}"
+    COMMENT "Matériau PBR : flanc_borne"
+    VERBATIM
+)
+
+
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0}")
+# +1 : l'art latéral, dessiné par `sideart` juste au-dessus.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 1")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -49,11 +103,12 @@ add_custom_command(
                     "${GEN}/scene/salle.gltf"
                     "--textures=${SRC_ROOM}/textures"
                     "--textures=${CMAKE_CURRENT_SOURCE_DIR}/cc0"
+                    "--textures=${GEN}/sideart"
                     "--expect-textures=${ROOM_TEXTURE_COUNT}"
                     # Racine des modèles CC0 instanciés dans la salle.
                     "--assets=${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
-            ${CC0_MODELS}
+            ${CC0_MODELS} "${SIDEART}"
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
@@ -203,7 +258,9 @@ set(ALBEDO_billard_table      0.14)   # 0,082 — drap de billard
 set(ALBEDO_pilonne_rouge      0.16)   # 0,105
 set(ALBEDO_Radio              0.16)   # 0,117
 
-set(GENERATED_MAPS "")
+set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"
+                   "${GEN}/materials/flanc_borne_n.png"
+                   "${GEN}/materials/flanc_borne_orm.png")
 foreach(tex IN LISTS ROOM_TEXTURES)
     get_filename_component(tex_name "${tex}" NAME_WE)
 

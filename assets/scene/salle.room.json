@@ -202,6 +202,132 @@
       "_": "Tôle laquée anthracite, pour le mobilier qui n'est pas une borne. Les bornes ont désormais leur propre laque par jeu ; ce matériau-ci est ce qui reste de `borne_caisson`, à qui il ne manquait qu'un nom honnête et un albédo qui ne soit pas de 4 %."
     },
     {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_flappy",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.426,
+        0.736,
+        0.512,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_tetris",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.426,
+        0.512,
+        0.787,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_snake",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.478,
+        0.718,
+        0.46,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_asteroid",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.478,
+        0.503,
+        0.598,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_shooter",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.822,
+        0.495,
+        0.4,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_demineur",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.787,
+        0.667,
+        0.409,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_pacman",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.804,
+        0.701,
+        0.392,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_piano",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.632,
+        0.443,
+        0.736,
+        1.0
+      ]
+    },
+    {
+      "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "name": "flanc_leaderboard",
+      "texture": "flanc_borne.png",
+      "uvMetres": 1.0,
+      "roughness": 0.46,
+      "metallic": 0.05,
+      "baseColor": [
+        0.718,
+        0.426,
+        0.452,
+        1.0
+      ]
+    },
+    {
       "name": "caisson_flappy",
       "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
@@ -1656,6 +1782,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_flappy",
+      "materialSide": "flanc_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_facile",
@@ -1674,6 +1801,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_tetris",
+      "materialSide": "flanc_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1691,6 +1819,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_shooter",
+      "materialSide": "flanc_shooter",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
@@ -1708,6 +1837,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_snake",
+      "materialSide": "flanc_snake",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_snake",
@@ -1725,6 +1855,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_asteroid",
+      "materialSide": "flanc_asteroid",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_asteroid",
@@ -1742,6 +1873,7 @@
       ],
       "yaw": 180.0,
       "materialBody": "caisson_demineur",
+      "materialSide": "flanc_demineur",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
@@ -1759,6 +1891,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_pacman",
+      "materialSide": "flanc_pacman",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
@@ -1776,6 +1909,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_piano",
+      "materialSide": "flanc_piano",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
@@ -1793,6 +1927,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_asteroid",
+      "materialSide": "flanc_asteroid",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_asteroid_dur",
@@ -1810,6 +1945,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_flappy",
+      "materialSide": "flanc_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_dur",
@@ -1827,6 +1963,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_tetris",
+      "materialSide": "flanc_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1844,6 +1981,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_snake",
+      "materialSide": "flanc_snake",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_snake",
@@ -1861,6 +1999,7 @@
       ],
       "yaw": 90.0,
       "materialBody": "caisson_shooter",
+      "materialSide": "flanc_shooter",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
@@ -1878,6 +2017,7 @@
       ],
       "yaw": 90.0,
       "materialBody": "caisson_demineur",
+      "materialSide": "flanc_demineur",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
@@ -1895,6 +2035,7 @@
       ],
       "yaw": 90.0,
       "materialBody": "caisson_piano",
+      "materialSide": "flanc_piano",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
@@ -1912,6 +2053,7 @@
       ],
       "yaw": 270.0,
       "materialBody": "caisson_tetris",
+      "materialSide": "flanc_tetris",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
@@ -1929,6 +2071,7 @@
       ],
       "yaw": 270.0,
       "materialBody": "caisson_flappy",
+      "materialSide": "flanc_flappy",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_flappy_facile",
@@ -1946,6 +2089,7 @@
       ],
       "yaw": 270.0,
       "materialBody": "caisson_pacman",
+      "materialSide": "flanc_pacman",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
@@ -1963,6 +2107,7 @@
       ],
       "yaw": 0.0,
       "materialBody": "caisson_leaderboard",
+      "materialSide": "flanc_leaderboard",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_classement",

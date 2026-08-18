@@ -441,6 +441,16 @@ void geo_profile_extrude(geo_mesh *m,
                          const ns_v3 *path, size_t path_count, bool path_closed,
                          const geo_uv *uv, int32_t material)
 {
+    geo_profile_extrude_capped(m, profile, profile_count, profile_closed,
+                               path, path_count, path_closed, uv, material, material, false);
+}
+
+void geo_profile_extrude_capped(geo_mesh *m,
+                                const ns_v2 *profile, size_t profile_count, bool profile_closed,
+                                const ns_v3 *path, size_t path_count, bool path_closed,
+                                const geo_uv *uv, int32_t material,
+                                int32_t cap_material, bool cap_uv_fit)
+{
     const geo_uv fallback = geo_uv_tile(1.0f);
     if (!uv) uv = &fallback;
 
@@ -549,6 +559,20 @@ void geo_profile_extrude(geo_mesh *m,
                                         * 3 * sizeof *tris);
         const size_t tri_count = tris ? geo_triangulate(profile, profile_count, tris) : 0;
 
+        /* Cadrage des UV du bouchon sur la boîte englobante du profil. */
+        ns_v2 lo = profile[0], hi = profile[0];
+        for (size_t j = 1; j < profile_count; ++j) {
+            if (profile[j].x < lo.x) lo.x = profile[j].x;
+            if (profile[j].y < lo.y) lo.y = profile[j].y;
+            if (profile[j].x > hi.x) hi.x = profile[j].x;
+            if (profile[j].y > hi.y) hi.y = profile[j].y;
+        }
+        const float span_x = (hi.x - lo.x > 1e-6f) ? (hi.x - lo.x) : 1.0f;
+        const float span_y = (hi.y - lo.y > 1e-6f) ? (hi.y - lo.y) : 1.0f;
+        #define GEO_CAP_UV(P) (cap_uv_fit                                        \
+            ? ns_v2_make(((P).x - lo.x) / span_x, 1.0f - ((P).y - lo.y) / span_y) \
+            : ns_v2_make((P).x / mpt, (P).y / mpt))
+
         for (int end = 0; end < 2; ++end) {
             const size_t i = end ? np - 1 : 0;
             const ns_v3 want = end ? frame_t[i] : ns_v3_neg(frame_t[i]);
@@ -564,24 +588,23 @@ void geo_profile_extrude(geo_mesh *m,
                     const size_t c = tris[t * 3 + 2];
                     tri_facing(m, GEO_SWEEP_POINT(i, a), GEO_SWEEP_POINT(i, b),
                                GEO_SWEEP_POINT(i, c),
-                               ns_v2_make(profile[a].x / mpt, profile[a].y / mpt),
-                               ns_v2_make(profile[b].x / mpt, profile[b].y / mpt),
-                               ns_v2_make(profile[c].x / mpt, profile[c].y / mpt),
-                               want, material);
+                               GEO_CAP_UV(profile[a]), GEO_CAP_UV(profile[b]),
+                               GEO_CAP_UV(profile[c]),
+                               want, cap_material);
                 }
             } else {
                 /* Repli : l'éventail, correct tant que le profil est convexe. */
                 for (size_t j = 0; j < profile_count; ++j) {
                     const size_t j1 = (j + 1) % profile_count;
                     tri_facing(m, hub, GEO_SWEEP_POINT(i, j), GEO_SWEEP_POINT(i, j1),
-                               ns_v2_make(centroid.x / mpt, centroid.y / mpt),
-                               ns_v2_make(profile[j].x / mpt, profile[j].y / mpt),
-                               ns_v2_make(profile[j1].x / mpt, profile[j1].y / mpt),
-                               want, material);
+                               GEO_CAP_UV(centroid), GEO_CAP_UV(profile[j]),
+                               GEO_CAP_UV(profile[j1]),
+                               want, cap_material);
                 }
             }
         }
         free(tris);
+        #undef GEO_CAP_UV
     }
 
     #undef GEO_SWEEP_POINT

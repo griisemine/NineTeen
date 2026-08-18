@@ -18,6 +18,7 @@ endfunction()
 
 nineteen_add_tool(obj2gltf obj2gltf.c gltf_write.c)
 nineteen_add_tool(texgen   texgen.c)
+nineteen_add_tool(sideart  sideart.c)
 nineteen_add_tool(bvhbake  bvhbake.c)
 
 # La salle reconstruite. `obj2gltf` reste, mais ne sert plus qu'à produire la

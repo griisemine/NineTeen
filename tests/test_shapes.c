@@ -659,6 +659,87 @@ static void run_refusal(const char *which)
 
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Les bouchons portent leur PROPRE matériau, et leurs UV se cadrent sur le
+ * profil. C'est ce qui permet à une borne d'arcade d'avoir un flanc sérigraphié
+ * sans que la trame déborde sur le caisson, et une planche dessinée pour un
+ * flanc doit s'y poser entière — donc de (0,0) à (1,1), quelle que soit la
+ * taille de la borne.
+ */
+static void test_bouchons_a_part(void)
+{
+    printf("bouchons : matériau propre et UV cadrés\n");
+
+    const float a = 0.025f;
+    const ns_v2 profile[4] = {
+        { -a, 0.0f }, { a, 0.0f }, { a, 2.0f * a }, { -a, 2.0f * a }
+    };
+    const ns_v3 path[2] = { { 0, 0, 0 }, { 2.0f, 0, 0 } };
+
+    geo_mesh m; geo_mesh_init(&m);
+    const geo_uv uv = geo_uv_tile(0.5f);
+    geo_profile_extrude_capped(&m, profile, 4, true, path, 2, false, &uv, 7, 3, true);
+
+    /* La géométrie ne bouge pas d'un flottant : seuls le matériau et les UV des
+     * bouchons changent. C'est l'invariant qui autorise à l'employer partout. */
+    CHECK_NEAR(geo_signed_volume(&m), (2.0f * a) * (2.0f * a) * 2.0f, 1e-6f);
+    CHECK(all_finite(&m), "aucune coordonnée non finie");
+
+    const geo_tri *tris = (const geo_tri *)m.tris.data;
+    const gltf_vertex *vx = (const gltf_vertex *)m.verts.data;
+
+    size_t body = 0, caps = 0, other = 0;
+    float u_min = 1e9f, u_max = -1e9f, v_min = 1e9f, v_max = -1e9f;
+    for (size_t t = 0; t < m.tris.count; ++t) {
+        if (tris[t].material == 7) { body++; continue; }
+        if (tris[t].material != 3) { other++; continue; }
+        caps++;
+        for (int k = 0; k < 3; ++k) {
+            const gltf_vertex *v = &vx[tris[t].i[k]];
+            if (v->uv[0] < u_min) u_min = v->uv[0];
+            if (v->uv[0] > u_max) u_max = v->uv[0];
+            if (v->uv[1] < v_min) v_min = v->uv[1];
+            if (v->uv[1] > v_max) v_max = v->uv[1];
+        }
+    }
+    CHECK(other == 0, "aucun triangle hors des deux matériaux (%zu)", other);
+    CHECK(body > 0 && caps > 0,
+          "le corps et les bouchons existent tous les deux (%zu / %zu)", body, caps);
+    CHECK_NEAR(u_min, 0.0f, 1e-5f);
+    CHECK_NEAR(u_max, 1.0f, 1e-5f);
+    CHECK_NEAR(v_min, 0.0f, 1e-5f);
+    CHECK_NEAR(v_max, 1.0f, 1e-5f);
+
+    /* Sans le cadrage, les UV restent en mètres par répétition — ce qu'il faut
+     * pour une moulure, et ce qui couperait une sérigraphie. */
+    geo_mesh n; geo_mesh_init(&n);
+    geo_profile_extrude_capped(&n, profile, 4, true, path, 2, false, &uv, 7, 3, false);
+    const geo_tri *ntris = (const geo_tri *)n.tris.data;
+    const gltf_vertex *nvx = (const gltf_vertex *)n.verts.data;
+    bool tiled = false;
+    for (size_t t = 0; t < n.tris.count; ++t) {
+        if (ntris[t].material != 3) continue;
+        for (int k = 0; k < 3; ++k) {
+            const float u = nvx[ntris[t].i[k]].uv[0];
+            if (fabsf(u) > 1e-5f && fabsf(u - 1.0f) > 1e-5f) tiled = true;
+        }
+    }
+    CHECK(tiled, "sans cadrage, les UV du bouchon restent en mètres par répétition");
+    geo_mesh_free(&n);
+
+    /* Et le comportement d'avant est INTACT : un seul matériau partout. */
+    geo_mesh o; geo_mesh_init(&o);
+    geo_profile_extrude(&o, profile, 4, true, path, 2, false, &uv, 5);
+    const geo_tri *otris = (const geo_tri *)o.tris.data;
+    size_t foreign = 0;
+    for (size_t t = 0; t < o.tris.count; ++t) if (otris[t].material != 5) foreign++;
+    CHECK(foreign == 0, "l'ancienne signature garde un matériau unique (%zu)", foreign);
+    CHECK_NEAR(geo_signed_volume(&o), geo_signed_volume(&m), 1e-6f);
+    geo_mesh_free(&o);
+
+    geo_mesh_free(&m);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1) {
@@ -675,6 +756,7 @@ int main(int argc, char **argv)
     test_panel();
     test_extrude();
     test_profil_concave();
+    test_bouchons_a_part();
     test_wall_plain();
     test_wall_opening();
     test_wall_mitre();

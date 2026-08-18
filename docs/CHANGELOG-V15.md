@@ -110,6 +110,28 @@ que le chantier est terminé.
 - Coût mesuré : **+2 014 sommets** sur toute la salle (144 941 → 146 955) et **611 ms/image** au
   palier medium, contre 675 ms avant. Aucune régression.
 
+### La borne
+- **Le flanc porte sa sérigraphie** : le dégradé qui s'éclaircit vers le marquee
+  et la trame de losanges en diagonale des vues de référence. C'est la dernière
+  chose qui manquait à la silhouette refaite en B14 — un caisson au bon profil
+  mais peint d'un aplat se lit encore comme un meuble.
+- Elle est **dessinée**, pas rapportée : `tools/sideart` la produit en vingt
+  lignes d'arithmétique. Le modèle free3d demande un compte, donc le versionner
+  casserait la reconstructibilité hors ligne et la clarté d'`assets/cc0/LICENSES.md` ;
+  une planche générée n'a ni licence à démêler ni fichier à retrouver, se
+  régénère à l'identique sur les trois plateformes, et se règle — pas de la
+  trame, épaisseur des lignes, dégradé — au lieu d'être subie.
+- Elle est en **niveaux de gris**, teintée par le matériau de chaque borne. Les
+  dix-neuf bornes gardent donc leur couleur de jeu — on trouve « sa » borne de
+  loin, ce qui est un vrai service rendu au joueur — tout en portant chacune le
+  flanc de la référence.
+- Techniquement, ce sont les **deux bouchons de l'extrusion** qui SONT les deux
+  flancs. `geo_profile_extrude_capped` leur donne un matériau propre et cadre
+  leurs UV sur la boîte englobante du profil, de (0,0) à (1,1) : une planche
+  dessinée pour un flanc s'y pose entière quelle que soit la taille de la borne.
+  Sans ce cadrage les UV resteraient en mètres par répétition — ce qu'il faut
+  pour une moulure, ce qui couperait une sérigraphie.
+
 ### Les jeux
 - **Une interface commune** (`games/games.h`) : un jeu déclare la taille de son état, ses
   planches, ses trois sons, son vocabulaire d'événements et sept fonctions. Ce n'est pas un
