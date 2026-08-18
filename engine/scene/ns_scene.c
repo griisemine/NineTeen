@@ -396,6 +396,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
             c->screen_normal = ns_v3_norm(ns_v3_make(v[0], v[1], v[2]));
             ns_json_get_vec3(&doc, e, "playerAnchor", v, 0.0f);
             c->player_anchor = ns_v3_make(v[0], v[1], v[2]);
+            c->screen_material = (int32_t)ns_json_get_float(&doc, e, "screenMaterial", -1.0f);
             ns_json_get_vec3(&doc, e, "panelCentre", v, NAN);
             c->panel_centre = ns_v3_make(v[0], v[1], v[2]);
             ns_json_get_vec3(&doc, e, "coinSlot", v, NAN);
@@ -568,6 +569,7 @@ static void load_cabinet_assignment(ns_scene *s, const char *logical)
 
         cab->player_anchor = ns_v3_add(cab->screen_center, ns_v3_scale(cab->screen_normal, 1.0f));
         cab->player_anchor.y = cab->bounds.min.y;
+        cab->screen_material = -1;   /* la salle de 2020 ne le déclare pas */
         derive_hand_anchors(cab);
     }
 

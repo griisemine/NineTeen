@@ -44,6 +44,10 @@ typedef struct material_ubo {
     float base_color[4];
     float emissive[4];
     float params[4];       /* métal, rugosité, a-t-on une normal map, temps */
+    /* Le verre bombé d'une borne : courbure, lignes de balayage, reflet, et un
+     * drapeau qui dit si le matériau est un écran. Les deux premières valeurs
+     * viennent de `cabinets.json`, où elles dorment depuis M4. */
+    float screen[4];
 } material_ubo;
 
 typedef struct frame_ubo {
@@ -174,6 +178,10 @@ struct ns_renderer {
      * l'autre — c'est lui qui porte l'adaptation. */
     ns_buffer exposure;
 
+    /* L'écran vivant : quel matériau, et quelle texture à sa place. */
+    int32_t         screen_material;
+    SDL_GPUTexture *screen_texture;
+
     /* Les bras : géométrie construite une fois au démarrage, jamais réécrite.
      * Seules les matrices changent, et elles passent par un uniforme. */
     ns_buffer vm_vertices, vm_indices;
@@ -279,6 +287,16 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * l'adaptation lisse encore le passage d'un couloir noir à un écran de borne,
      * mais elle ne peut plus transformer une salle tamisée en salle éclairée.
      */
+    /*
+     * Le verre bombé. `curvature` et `scanlineStrength` existent dans
+     * `cabinets.json` depuis M4 et n'ont jamais été lus ; ce sont leurs valeurs.
+     * Le reflet, lui, est neuf : c'est lui qui fait qu'on VOIT la vitre, et donc
+     * qu'on comprend qu'il y a un écran derrière plutôt qu'une affiche.
+     */
+    s->screen_curvature = 0.16f;
+    s->screen_scanlines = 0.35f;
+    s->screen_glass     = 0.85f;
+
     s->exposure_min = 0.55f;
     s->exposure_max = 1.60f;
 
@@ -735,6 +753,10 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     if (settings) rd->settings = *settings;
     else ns_render_settings_defaults(&rd->settings, NS_QUALITY_HIGH);
 
+    /* Aucun écran vivant tant qu'on n'en déclare pas un. `ns_calloc` mettrait 0,
+     * qui est un index de matériau valide — d'où le −1 explicite. */
+    rd->screen_material = -1;
+
     const SDL_GPUTextureFormat hdr_fmt = FMT_HDR;
     const SDL_GPUTextureFormat vis_fmt = FMT_VIS;
     rd->tonemap_format = ns_rhi_swapchain_format(r);
@@ -846,6 +868,12 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     ns_buffer_destroy(r, &rd->vm_indices);
     destroy_targets(r, rd);
     ns_free(rd);
+}
+
+void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture)
+{
+    rd->screen_material = (texture != NULL) ? material : -1;
+    rd->screen_texture  = texture;
 }
 
 void ns_renderer_set_settings(ns_rhi *r, ns_renderer *rd, const ns_render_settings *s)
@@ -984,9 +1012,20 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
             SDL_zeroa(tex);
             SDL_GPUSampler *aniso = ns_rhi_sampler(r, NS_SAMPLER_ANISO_REPEAT);
             tex[0].texture = m ? texture_or(scene, m->albedo_texture, scene->fallback_white) : scene->fallback_white.handle;
+            /* L'écran vivant : le jeu qui tourne remplace l'image fixe. Le
+             * `nearest` est indispensable — un jeu en gros pixels filtré en
+             * linéaire devient une bouillie, et c'est justement la netteté qui
+             * fait « écran de borne » plutôt que « affiche rétroéclairée ». */
+            bool live_screen = false;
+            if (rd->screen_material >= 0 && b->material == rd->screen_material
+             && rd->screen_texture) {
+                tex[0].texture = rd->screen_texture;
+                live_screen = true;
+            }
             tex[1].texture = m ? texture_or(scene, m->normal_texture, scene->fallback_normal) : scene->fallback_normal.handle;
             tex[2].texture = m ? texture_or(scene, m->orm_texture, scene->fallback_orm) : scene->fallback_orm.handle;
             for (int k = 0; k < 3; ++k) tex[k].sampler = aniso;
+            if (live_screen) tex[0].sampler = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
             SDL_BindGPUFragmentSamplers(pass, 0, tex, 3);
 
             material_ubo mu;
@@ -1005,6 +1044,22 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                 mu.params[1] = 0.8f;
             }
             mu.params[3] = (float)time;
+
+            /*
+             * Le traitement de tube n'est appliqué QUE sur l'écran vivant.
+             *
+             * On pourrait le mettre sur tous les matériaux d'écran, y compris les
+             * images fixes des dix-huit autres bornes. On ne le fait pas : la
+             * courbure déplace les UV, et une image fixe déjà cadrée pour la
+             * dalle se retrouverait rognée. L'écran qui tourne, lui, est rendu
+             * pour ça — c'est nous qui produisons son image.
+             */
+            if (live_screen) {
+                mu.screen[0] = rd->settings.screen_curvature;
+                mu.screen[1] = rd->settings.screen_scanlines;
+                mu.screen[2] = rd->settings.screen_glass;
+                mu.screen[3] = 1.0f;
+            }
             SDL_PushGPUFragmentUniformData(cmd, 0, &mu, sizeof mu);
 
             last_material = b->material;

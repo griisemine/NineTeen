@@ -15,6 +15,7 @@ const ns_shader_info ns_shader_table[] = {
     { "gbuffer.vert",    NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     /* Une matrice de modèle PAR SEGMENT : c'est ce que le G-buffer ne sait pas
      * faire, et la raison d'être du pipeline du viewmodel. */
+    { "particle.vert",         NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "sprite.vert",           NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "viewmodel.vert",  NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
 
@@ -41,6 +42,8 @@ const ns_shader_info ns_shader_table[] = {
     /* La couche 2D : un atlas, aucun tampon, aucun uniforme de fragment. La
      * couleur voyage dans le sommet, ce qui permet de teinter chaque quad sans
      * couper le lot. */
+    /* Ni texture ni uniforme : la couleur et le fondu viennent du sommet. */
+    { "particle.frag",         NS_SHADER_STAGE_FRAGMENT, 0, 0, 0, 0, 0, 0,  0, 0, 0 },
     { "sprite.frag",           NS_SHADER_STAGE_FRAGMENT, 1, 0, 0, 0, 0, 0,  0, 0, 0 },
 
     /* ------------------------------------------------------------- compute */

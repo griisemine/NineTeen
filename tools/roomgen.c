@@ -95,6 +95,7 @@ typedef struct rg_cabinet {
     float screen_normal[3];
     float screen_size[2];       /* largeur et hauteur utiles de la dalle */
     float player_anchor[3];
+    int   screen_material;      /* index du matériau de la dalle */
     float panel_centre[3];      /* là où la main appuie */
     float coin_slot[3];         /* là où le jeton entre */
     bool  attract;
@@ -112,6 +113,7 @@ typedef struct rg_cabinet {
  * du moteur, où le centre d'écran était deviné à 31 cm près.
  */
 typedef struct rg_cab_anchors {
+    int   screen_material;   /* index du matériau de la dalle */
     float screen[3];
     float screen_size[2];
     float panel[3];     /* centre de la grappe de boutons, sur la face du dessus */
@@ -987,6 +989,7 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
 
     const int body   = material_index(b, m_body, owner);
     const int screen = material_index(b, m_screen, owner);
+    anchors->screen_material = screen;
     const int marq   = material_index(b, m_marquee[0] ? m_marquee : m_body, owner);
     const int panel  = material_index(b, m_panel[0] ? m_panel : m_body, owner);
     const int trim   = material_index(b, m_trim[0] ? m_trim : m_body, owner);
@@ -1040,7 +1043,21 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * légèrement vers le bas.
      */
     const float sw = 0.56f, sh = 0.42f;
-    const float sy = 1.22f, sz = hd - 0.055f;
+    /*
+     * La dalle est légèrement EN SAILLIE du caisson, pas enfoncée dedans.
+     *
+     * Elle était à `hd − 0,055`, soit **5,5 cm à l'intérieur** d'une boîte
+     * pleine dont la face avant est à `hd` : le caisson, plus proche de l'œil,
+     * gagnait le test de profondeur et l'écran n'a jamais été visible depuis A4.
+     * Ce qu'on prenait pour l'écran sur les captures était le marquee.
+     *
+     * Le vrai remède serait une découpe dans la face avant — `geo_box` ne sait
+     * pas la faire, et écrire un générateur de caisson à quatre panneaux pour
+     * cette seule ouverture coûterait plus que ça ne vaut. Une dalle proéminente
+     * de 8 mm, encadrée par ses plats eux-mêmes proéminents, donne exactement la
+     * même lecture : une vitre sertie dans un cadre.
+     */
+    const float sy = 1.22f, sz = hd + 0.008f;
     const float tilt = 10.0f * NS_DEG2RAD;
     const ns_v3 snormal = ns_v3_make(0.0f, sinf(tilt), cosf(tilt));
 
@@ -1065,9 +1082,11 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
                 GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_trim, trim);
         x = GEO_XFORM_IDENTITY;
         /* Les plats suivent l'inclinaison de la dalle. */
+        /* Les plats débordent la dalle de 12 mm vers l'avant : c'est ce qui fait
+         * un cadre, et c'est ce qui donne l'ombre portée sur le verre. */
         x.origin = ns_v3_make(bezel[i].cx,
                               bezel[i].cy - bezel[i].h * 0.5f,
-                              sz - 0.025f + (bezel[i].cy - sy) * tanf(tilt));
+                              sz + 0.012f + (bezel[i].cy - sy) * tanf(tilt));
         x.pitch = -tilt;
         geo_mesh_append(out, &part, &x, -1);
         geo_mesh_free(&part);
@@ -1228,6 +1247,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         cab->screen_normal[0] = s;
         cab->screen_normal[1] = 0.0f;
         cab->screen_normal[2] = c;
+        cab->screen_material = anchors.screen_material;
         cab->screen_size[0] = anchors.screen_size[0];
         cab->screen_size[1] = anchors.screen_size[1];
 
@@ -1801,6 +1821,10 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
         /* Les deux points que la main vise. Ils sortent d'ici pour la même raison
          * que le centre d'écran : ils sont écrits à trois lignes des boîtes
          * qu'ils désignent, et une seconde copie dériverait. */
+        /* L'index du matériau de la dalle. C'est ce qui permet d'y faire tourner
+         * un jeu : le moteur remplace la texture de CE matériau-là, sans avoir à
+         * deviner lequel des lots d'une borne est son écran. */
+        fprintf(f, "      \"screenMaterial\": %d,\n", c->screen_material);
         fprintf(f, "      \"panelCentre\": [%.4f, %.4f, %.4f], "
                    "\"coinSlot\": [%.4f, %.4f, %.4f] }%s\n",
                 (double)c->panel_centre[0], (double)c->panel_centre[1],

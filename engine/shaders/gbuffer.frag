@@ -33,6 +33,9 @@ layout(set = 3, binding = 0) uniform Material {
     vec4  u_baseColor;
     vec4  u_emissive;          /* rgb : couleur, a : intensité */
     vec4  u_params;            /* x : métallicité, y : rugosité, z : a-t-on une normal map, w : temps */
+    /* x : courbure, y : lignes de balayage, z : reflet de la vitre, w : est-ce
+     * un écran. Les deux premières dorment dans `cabinets.json` depuis M4. */
+    vec4  u_screen;
 };
 
 /* Encodage octaédrique : projette la sphère unité sur un carré [-1,1]². */
@@ -47,16 +50,57 @@ vec2 encodeOctahedral(vec3 n)
     return e;
 }
 
+/*
+ * Le verre bombé d'une borne.
+ *
+ * Trois choses distinctes, et il faut les trois : sans la courbure, l'écran est
+ * une affiche ; sans les lignes, c'est un écran plat moderne ; sans le reflet,
+ * la vitre n'existe pas. C'est le reflet qui fait qu'on VOIT la vitre, et donc
+ * qu'on comprend qu'il y a un écran derrière.
+ *
+ * `u_screen` porte, dans l'ordre : intensité de courbure, force des lignes de
+ * balayage, force du reflet, et un drapeau qui dit si le matériau est un écran.
+ * Ces deux premières valeurs vivent dans `cabinets.json` depuis M4 sous les noms
+ * `curvature` et `scanlineStrength`, et n'avaient **jamais été lues**.
+ */
+vec2 barrel(vec2 uv, float amount)
+{
+    /* Déformation en barillet autour du centre de la dalle. Le carré de la
+     * distance suffit — un tube cathodique n'est pas une lentille, et la racine
+     * ne changerait rien de visible. */
+    vec2 c = uv * 2.0 - 1.0;
+    c *= 1.0 + amount * dot(c, c) * 0.25;
+    return c * 0.5 + 0.5;
+}
+
 void main()
 {
-    vec4 albedo = texture(u_albedo, v_uv) * u_baseColor;
+    vec2 uv = v_uv;
+    const bool is_screen = u_screen.w > 0.5;
+
+    if (is_screen) {
+        uv = barrel(uv, u_screen.x);
+        /*
+         * Hors de la dalle après déformation, on est sur le cadre : du noir, pas
+         * un bord étiré. Un `clamp` donnerait une bande de pixels tirés le long
+         * des quatre côtés, ce qui se lit exactement comme le défaut que c'est.
+         */
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+            o_albedo_ao = vec4(0.02, 0.02, 0.025, 1.0);
+            o_normal_rm = vec4(encodeOctahedral(normalize(v_normal)), 0.22, 0.0);
+            o_emissive  = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+    }
+
+    vec4 albedo = texture(u_albedo, uv) * u_baseColor;
 
     /* Le découpage alpha sert aux grilles et aux affiches découpées. Le faire
      * ici plutôt que dans la passe d'éclairage évite d'écrire un G-buffer que
      * l'on rejettera ensuite. */
     if (albedo.a < 0.35) discard;
 
-    vec3 orm = texture(u_orm, v_uv).rgb;
+    vec3 orm = texture(u_orm, uv).rgb;
     float occlusion = orm.r;
 
     /*
@@ -75,7 +119,7 @@ void main()
     if (u_params.z > 0.5) {
         vec3 T = normalize(v_tangent.xyz - N * dot(N, v_tangent.xyz));
         vec3 B = cross(N, T) * v_tangent.w;
-        vec3 tn = texture(u_normalMap, v_uv).xyz * 2.0 - 1.0;
+        vec3 tn = texture(u_normalMap, uv).xyz * 2.0 - 1.0;
         N = normalize(mat3(T, B, N) * tn);
     }
     /* Une face vue de dos (mur regardé depuis l'extérieur, géométrie non
@@ -108,5 +152,69 @@ void main()
      * modèle, c'est l'albédo qui joue ce rôle — et c'est légitime, puisque c'est
      * précisément l'image que la surface est censée émettre.
      */
-    o_emissive = vec4(u_emissive.rgb * u_emissive.a * albedo.rgb, 1.0);
+    vec3 emissive = u_emissive.rgb * u_emissive.a * albedo.rgb;
+
+    if (is_screen) {
+        /*
+         * Lignes de balayage et masque de phosphore, EN COORDONNÉES DE TEXTURE
+         * et non d'écran.
+         *
+         * C'est le point qui décide si l'illusion tient : indexées sur le pixel
+         * de l'écran, les lignes glisseraient sur la dalle quand on bouge la
+         * tête, comme un moiré collé à la caméra. Indexées sur la surface, elles
+         * sont GRAVÉES dans le tube — on peut tourner autour, elles restent où
+         * elles sont. La dalle fait 480 lignes, comme un tube d'arcade.
+         */
+        const float lines = 480.0;
+        float scan = 1.0 - u_screen.y * 0.5 * (0.5 + 0.5 * cos(uv.y * lines * 6.28318530718));
+
+        /* Triade RVB : une colonne sur trois porte chaque primaire. À distance
+         * elle disparaît, de près elle donne le grain d'un vrai tube. */
+        const float triad = 640.0;
+        float ph = fract(uv.x * triad);
+        vec3 mask = vec3(ph < 0.3333 ? 1.0 : 0.72,
+                         (ph >= 0.3333 && ph < 0.6666) ? 1.0 : 0.72,
+                         ph >= 0.6666 ? 1.0 : 0.72);
+        mask = mix(vec3(1.0), mask, u_screen.y);
+
+        /* Assombrissement des bords : un tube est plus sombre dans les coins. */
+        vec2 e = uv * 2.0 - 1.0;
+        float edge = 1.0 - 0.28 * dot(e, e) * dot(e, e);
+
+        emissive *= scan * edge;
+        emissive *= mask;
+
+        /*
+         * Le verre d'un tube est SOMBRE. L'image ne vient pas de ce qu'il
+         * renvoie, elle vient de ce qu'il émet — c'est même à ça qu'on reconnaît
+         * un écran éteint : un rectangle presque noir.
+         *
+         * Laisser l'albédo de la dalle à sa valeur de texture la faisait éclairer
+         * DEUX fois : une fois par son émissif, une fois par les plafonniers et
+         * les néons de la salle qui la traitaient comme une affiche blanche. Le
+         * ciel de Flappy Bird, teinté (0,31 ; 0,75 ; 0,79), ressortait blanc
+         * cassé, et l'oiseau se perdait dedans.
+         *
+         * 6 % de l'image : assez pour qu'un écran éteint garde une teinte, pas
+         * assez pour concurrencer ce qu'il émet.
+         */
+        albedo.rgb *= 0.06 * scan * edge;
+
+        /*
+         * Le reflet de la vitre.
+         *
+         * Il ne se calcule pas ici — le G-buffer ne connaît ni les lumières ni
+         * l'environnement. On y prépare seulement le terrain : une dalle de verre
+         * est LISSE et légèrement métallique, donc la passe d'éclairage y fera
+         * naître les reflets spéculaires des néons et des plafonniers tout
+         * seule. C'est ça qui fait qu'on voit la vitre, plutôt qu'une image
+         * peinte sur une planche.
+         */
+        roughness = mix(roughness, 0.06, u_screen.z);
+        metallic  = mix(metallic, 0.35, u_screen.z);
+        o_normal_rm = vec4(encodeOctahedral(N), roughness, metallic);
+        o_albedo_ao = vec4(albedo.rgb, occlusion);
+    }
+
+    o_emissive = vec4(emissive, 1.0);
 }

@@ -351,133 +351,133 @@
     {
       "name": "ecran_flappy_facile",
       "texture": "flappy_easy_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_flappy_dur",
       "texture": "flappy_hard_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_snake",
       "texture": "snake_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_tetris",
       "texture": "tetris_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_asteroid",
       "texture": "asteroid_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_asteroid_dur",
       "texture": "asteroid_font_hard.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_shooter",
       "texture": "shooter_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_demineur",
       "texture": "demineur_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_classement",
       "texture": "leaderboard_font.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_bientot",
       "texture": "coming_soon.jpg",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
       "name": "ecran_chargement",
       "texture": "chargement.png",
-      "roughness": 0.2,
+      "roughness": 0.12,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.1,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {

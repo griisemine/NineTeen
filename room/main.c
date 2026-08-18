@@ -56,6 +56,7 @@ typedef struct options {
     const char *game;       /* démarrer directement dans un mini-jeu */
     bool        autoplay;   /* le jeu se joue tout seul : captures et CI */
     float       warmup;     /* secondes de simulation avancées avant la 1re image */
+    const char *play_at;    /* nom d'une borne : s'y placer et lancer sa partie */
 } options;
 
 static void print_usage(const char *exe)
@@ -88,6 +89,8 @@ static void print_usage(const char *exe)
         "  --game=NOM           démarre directement dans un mini-jeu (flappy)\n"
         "  --autoplay           le mini-jeu se joue tout seul (captures, CI)\n"
         "  --warmup=S           avance le mini-jeu de S secondes avant de rendre\n"
+        "  --play-at=BORNE      se place devant la borne nommée et lance sa partie,\n"
+        "                       en restant EN 3D : le jeu tourne dans sa dalle\n"
         "  --pose=NOM           fige les bras : idle, walk, reach, insert, press\n"
         "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
@@ -218,6 +221,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->vsync = false;
         } else if (SDL_strcmp(a, "--bench") == 0) {
             o->bench = true;
+        } else if (SDL_strncmp(a, "--play-at=", 10) == 0) {
+            o->play_at = a + 10;
         } else if (SDL_strncmp(a, "--warmup=", 9) == 0) {
             o->warmup = (float)SDL_atof(a + 9);
         } else if (SDL_strcmp(a, "--autoplay") == 0) {
@@ -579,6 +584,32 @@ int main(int argc, char **argv)
     if (sprites) flappy_art_load(rhi, &flappy_assets);
     else         SDL_zero(flappy_assets);
 
+    /*
+     * La dalle sur laquelle le jeu tourne : une cible de rendu 512 x 288, du même
+     * format que la swapchain puisqu'elle emprunte le pipeline de la couche 2D.
+     *
+     * 512 x 288 et pas plus : c'est un tube d'arcade vu à un mètre, et la
+     * courbure du verre en mange déjà les bords. Un écran plus défini ne se
+     * verrait pas et coûterait une passe de rendu plus chère à chaque image.
+     */
+    ns_texture screen_rt;
+    SDL_zero(screen_rt);
+    if (sprites) {
+        ns_texture_desc sd;
+        SDL_zero(sd);
+        sd.width = 512; sd.height = 288;
+        sd.format = ns_rhi_swapchain_format(rhi);
+        sd.render_target = true;
+        sd.sampled = true;
+        sd.name = "écran de borne";
+        if (!ns_texture_create(rhi, &screen_rt, &sd)) {
+            NS_WARN("écran de borne : cible indisponible, le jeu ne sera qu'en plein écran");
+        }
+    }
+    /* La borne devant laquelle on joue, et son matériau de dalle. */
+    int32_t playing_material = -1;
+    bool    fullscreen_game = false;
+
     /* Les trois sons du jeu, ceux de 2020. Le jeu ne connaît pas le mixeur : il
      * lève des drapeaux d'événement, et c'est ici qu'on les entend. */
     const int sfx_flap  = ns_audio_load("games/flappy/flap.wav");
@@ -589,32 +620,82 @@ int main(int argc, char **argv)
         if (SDL_strcasecmp(opt.game, "flappy") == 0) {
             flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), false);
             in_game = true;
+            fullscreen_game = true;      /* `--game=` est le mode plein écran */
             NS_INFO("Flappy Bird : partie démarrée");
 
-            /*
-             * Avance de simulation, pour les captures.
-             *
-             * Le premier tuyau est à 1 056 px de l'oiseau et le décor défile à
-             * 240 px/s : il faut 4,4 s de JEU avant qu'une image montre autre
-             * chose qu'un ciel vide. En headless le temps de jeu suit le temps
-             * réel, donc l'attendre demanderait plusieurs centaines d'images
-             * rendues pour rien. On avance la simulation seule — c'est gratuit,
-             * c'est exact au pas près, et ça n'existe que parce que la partie est
-             * une structure qu'on fait avancer sans rien dessiner.
-             */
-            if (opt.warmup > 0.0f) {
-                const float step = (float)(1.0 / NS_DEFAULT_TICK_HZ);
-                const int steps = (int)(opt.warmup / step);
-                for (int k = 0; k < steps; ++k) {
-                    if (opt.autoplay) flappy_autopilot(&game);
-                    flappy_tick(&game, step);
-                }
-                NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
-                        (double)opt.warmup, steps, game.score);
-            }
         } else {
             NS_WARN("--game=%s inconnu (flappy)", opt.game);
         }
+    }
+
+    /*
+     * `--play-at=` : se planter devant une borne nommée et lancer sa partie, en
+     * restant en 3D. C'est le seul moyen de photographier — ou de vérifier en
+     * intégration continue — un jeu qui tourne DANS son écran, puisqu'il n'y a
+     * pas de clavier en headless.
+     */
+    if (opt.play_at && sprites && screen_rt.handle) {
+        const ns_cabinet *pick = NULL;
+        for (uint32_t i = 0; i < scene.cabinet_count; ++i) {
+            if (SDL_strcasecmp(scene.cabinets[i].name, opt.play_at) == 0) { pick = &scene.cabinets[i]; break; }
+        }
+        if (!pick) {
+            fprintf(stderr, "borne inconnue : %s\n  disponibles :", opt.play_at);
+            for (uint32_t i = 0; i < scene.cabinet_count; ++i) {
+                fprintf(stderr, " %s", scene.cabinets[i].name);
+            }
+            fprintf(stderr, "\n");
+        } else {
+            cam.mode = ROOM_CAM_PLAYER;
+            /*
+             * On recule de 35 cm par rapport à l'ancre déclarée. L'ancre place le
+             * joueur à 70 cm de la dalle — la bonne distance pour ATTEINDRE les
+             * boutons, pas pour VOIR la borne : à 70 cm le caisson remplit tout
+             * le cadre et l'écran sort par le bas. Un joueur recule d'ailleurs
+             * naturellement dès qu'il ne tend plus le bras.
+             */
+            const ns_v3 back = ns_v3_scale(pick->screen_normal, 0.35f);
+            cam.position = cam.prev_position = ns_v3_make(pick->player_anchor.x + back.x,
+                                                          pick->player_anchor.y + cam.eye_height,
+                                                          pick->player_anchor.z + back.z);
+            /* Regarder la borne : la normale d'écran pointe vers le joueur, donc
+             * on regarde dans le sens opposé. Le lacet suit
+             * `forward = (cos, ., sin)`. */
+            cam.yaw = cam.prev_yaw = atan2f(-pick->screen_normal.z, -pick->screen_normal.x);
+            /* La dalle est à 1,22 m, l'œil à 1,70 m, à 1,05 m de distance : il faut
+             * plonger de 22° pour l'avoir au centre du cadre. */
+            cam.pitch = cam.prev_pitch = -22.0f * NS_DEG2RAD;
+            cam.velocity = ns_v3_zero();
+
+            const bool hard = (SDL_strcasecmp(pick->difficulty, "hard") == 0);
+            flappy_reset(&game, 20240418, hard);
+            in_game = true;
+            fullscreen_game = false;
+            playing_material = pick->screen_material;
+            NS_INFO("borne « %s » (%s, %s) : partie dans la dalle, matériau %d",
+                    pick->name, pick->game, hard ? "hard" : "normal", pick->screen_material);
+        }
+    }
+
+    /*
+     * Avance de simulation, pour les captures — et pour LES DEUX modes.
+     *
+     * Elle ne valait d'abord que pour `--game=`, donc une capture prise devant
+     * une borne montrait toujours un ciel vide : le premier tuyau est à 1 056 px
+     * de l'oiseau et le décor défile à 240 px/s, il faut 4,4 s de jeu avant que
+     * l'écran montre quoi que ce soit. On avance la simulation seule — c'est
+     * gratuit, et ça n'existe que parce que la partie est une structure qu'on
+     * fait avancer sans rien dessiner.
+     */
+    if (in_game && opt.warmup > 0.0f) {
+        const float step = (float)(1.0 / NS_DEFAULT_TICK_HZ);
+        const int steps = (int)(opt.warmup / step);
+        for (int k = 0; k < steps; ++k) {
+            if (opt.autoplay) flappy_autopilot(&game);
+            flappy_tick(&game, step);
+        }
+        NS_INFO("Flappy Bird : %.1f s avancées (%d pas), score %u",
+                (double)opt.warmup, steps, game.score);
     }
 
     room_viewmodel vmstate;
@@ -690,6 +771,7 @@ int main(int argc, char **argv)
                     if (in_game) {
                         /* Quitter la partie rend la salle, pas le bureau. */
                         in_game = false;
+                        playing_material = -1;
                         NS_INFO("Flappy Bird : score %u, meilleur %u", game.score, game.best);
                         break;
                     }
@@ -769,6 +851,16 @@ int main(int argc, char **argv)
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
                             flappy_reset(&game, (uint64_t)SDL_GetPerformanceCounter(), hard);
                             in_game = true;
+                            /*
+                             * On reste EN 3D : le jeu tourne dans la dalle de la
+                             * borne, et la tête reste libre. C'est toute la
+                             * différence entre « lancer un mini-jeu » et « jouer
+                             * sur une borne » — on voit l'écran à travers son
+                             * verre bombé, on peut se pencher, reculer, regarder
+                             * la borne d'à côté.
+                             */
+                            playing_material = near->screen_material;
+                            fullscreen_game = false;
                         }
                     }
                     break;
@@ -883,7 +975,31 @@ int main(int argc, char **argv)
 
             const double frame_start = opt.bench ? ns_time_seconds() : 0.0;
 
-            if (in_game && sprites) {
+            /*
+             * L'écran vivant : le jeu est rendu dans la dalle AVANT la scène,
+             * puis la scène le dessine comme n'importe quelle surface — avec son
+             * émissif, sa courbure et le reflet de la vitre.
+             *
+             * L'ordre compte : la passe géométrique lit cette texture, donc elle
+             * doit être finie. Deux passes de rendu dans la même image, la
+             * première écrivant ce que la seconde échantillonne.
+             */
+            if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
+                ns_sprite_begin(sprites, 512.0f, 288.0f);
+                flappy_draw(sprites, &game, &flappy_assets, 512.0f, 288.0f);
+                static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+                ns_sprite_end(rhi, sprites, screen_rt.handle, 512, 288, off);
+                ns_renderer_set_screen(renderer, playing_material, screen_rt.handle);
+                if (SDL_getenv("NINETEEN_DUMP_SCREEN")) {
+                    ns_rhi_capture_texture_png(rhi, screen_rt.handle, 512, 288,
+                                               ns_rhi_swapchain_format(rhi),
+                                               SDL_getenv("NINETEEN_DUMP_SCREEN"));
+                }
+            } else {
+                ns_renderer_set_screen(renderer, -1, NULL);
+            }
+
+            if (in_game && fullscreen_game && sprites) {
                 /*
                  * En partie, le jeu occupe l'écran. Le repère logique est fixé à
                  * la hauteur du terrain (1080) et la largeur suit l'aspect de la
@@ -964,6 +1080,7 @@ int main(int argc, char **argv)
                 frames_rendered, clock.fps_smoothed);
     }
 
+    ns_texture_destroy(rhi, &screen_rt);
     flappy_art_free(rhi, &flappy_assets);
     if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);

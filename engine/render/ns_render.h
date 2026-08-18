@@ -70,6 +70,21 @@ typedef struct ns_render_settings {
      */
     float              exposure_adapt;      /* vitesse, 0 = désactivée */
     float              exposure_min, exposure_max;
+
+    /*
+     * Le verre bombé d'une borne : courbure du tube, force des lignes de
+     * balayage, brillance de la vitre.
+     *
+     * Les deux premières existent dans `assets/scene/cabinets.json` depuis M4,
+     * sous les noms `curvature` et `scanlineStrength`, et n'avaient jamais été
+     * lues par personne. La troisième est neuve : c'est elle qui rend la vitre
+     * lisse et légèrement métallique, donc capable de refléter les néons — et
+     * c'est ce reflet qui fait comprendre qu'il y a un écran DERRIÈRE quelque
+     * chose, plutôt qu'une image peinte sur une planche.
+     */
+    float              screen_curvature;
+    float              screen_scanlines;
+    float              screen_glass;
     float              ambient[3];
     float              ambient_intensity;
     float              ssao_radius;
@@ -111,6 +126,22 @@ typedef struct ns_camera {
 
 ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings);
 void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
+
+/*
+ * Fait afficher `texture` par le matériau `material`, en écrasant son albédo.
+ *
+ * C'est ce qui met un jeu qui tourne DANS l'écran d'une borne : la couche 2D
+ * rend Flappy Bird dans une texture, et cet appel dit au G-buffer d'employer
+ * cette texture-là pour le matériau d'écran de la borne où l'on joue. Le reste
+ * du moteur n'a rien à savoir — l'écran reste une surface éclairée comme une
+ * autre, avec son émissif, sa courbure et son reflet.
+ *
+ * Une surcharge plutôt qu'une écriture dans la table des matériaux : la scène
+ * est chargée une fois et partagée, et une borne qui garderait l'image d'une
+ * partie finie serait un défaut qu'on ne verrait qu'en revenant sur ses pas.
+ * `material = -1` retire la surcharge.
+ */
+void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture);
 
 /* Redimensionne les cibles internes. Sans effet si la taille est inchangée. */
 bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t height);

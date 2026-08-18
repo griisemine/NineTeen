@@ -181,6 +181,12 @@ typedef struct ns_cabinet {
      * Pour la salle de 2020, qui ne les déclare pas, `load_cabinet_assignment`
      * pose un repli à partir des cotes du meuble et le dit dans son commentaire.
      */
+    /* Index du matériau de la dalle, DÉCLARÉ par la salle : c'est lui qu'on
+     * remplace pour faire tourner un jeu dans l'écran. Le deviner en cherchant
+     * quel lot d'une borne est son écran redonnerait exactement le genre
+     * d'heuristique qu'on a passé le projet à retirer. −1 pour la salle de 2020,
+     * qui ne le déclare pas. */
+    int32_t screen_material;
     ns_v3   panel_centre;        /* dessus de la grappe de boutons */
     ns_v3   coin_slot;           /* fente à jetons, sur la face avant */
     bool    attract;
