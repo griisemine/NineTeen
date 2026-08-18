@@ -154,6 +154,8 @@ typedef struct rg_builder {
     char          material_names[RG_MAX_MATERIALS][64];
     float         material_uv[RG_MAX_MATERIALS];
     bool          material_fit[RG_MAX_MATERIALS];
+    /* Classe de pas, déclarée par le matériau. Vide = on ne marche pas dessus. */
+    char          material_footstep[RG_MAX_MATERIALS][24];
     size_t        material_count;
 
     const char *textures[RG_MAX_TEXTURES];
@@ -542,6 +544,8 @@ static void parse_materials(rg_builder *b, const tool_json *doc, const tool_json
          * une couture visible tous les mètres. C'est exactement l'erreur que cette
          * reconstruction supprime. */
         b->material_fit[slot] = tool_json_get_bool(doc, e, "fit", false);
+        tool_json_get_string(doc, e, "footstep", b->material_footstep[slot],
+                             sizeof b->material_footstep[slot]);
     }
 }
 
@@ -1810,6 +1814,23 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
     /* Les lieux du décor, déclarés eux aussi. Le moteur les repérait en cherchant
      * des sous-chaînes dans les noms de nœuds du glTF — une seconde analyse du
      * fichier, dont le champ `bounds` n'était d'ailleurs jamais rempli. */
+    /*
+     * La classe de pas de chaque matériau, dans l'ORDRE DES MATÉRIAUX du glTF.
+     *
+     * C'est l'ordre qui fait tout le travail : `ns_bvh_move_capsule` renvoie
+     * l'index de matériau du triangle sous les pieds, et cet index désigne la
+     * même entrée ici. Écrire un nom de matériau à la place obligerait le moteur
+     * à faire une recherche par chaîne à chaque pas, pour retrouver un index
+     * qu'il avait déjà.
+     */
+    fprintf(f, "  \"materialFootsteps\": [\n");
+    for (size_t i = 0; i < b->material_count; ++i) {
+        fprintf(f, "    \"%s\"%s\n",
+                b->material_footstep[i][0] ? b->material_footstep[i] : "",
+                (i + 1 < b->material_count) ? "," : "");
+    }
+    fprintf(f, "  ],\n");
+
     fprintf(f, "  \"pois\": [\n");
     for (size_t i = 0; i < b->poi_count; ++i) {
         const rg_poi *p = &b->pois[i];

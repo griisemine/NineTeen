@@ -7,7 +7,8 @@
 # Conséquence pratique : régénérer les assets ne demande qu'un `cmake --build`,
 # et modifier une heuristique de texgen se répercute partout sans intervention.
 
-set(SRC_ROOM "${CMAKE_SOURCE_DIR}/legacy/room")
+set(SRC_LEGACY "${CMAKE_SOURCE_DIR}/legacy")
+set(SRC_ROOM "${SRC_LEGACY}/room")
 set(GEN      "${CMAKE_BINARY_DIR}/assets")
 
 file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
@@ -177,6 +178,25 @@ add_custom_command(
 )
 
 # ---------------------------------------------------------------------------
+# 3b. Les sons
+# ---------------------------------------------------------------------------
+#
+# Ils étaient là depuis le début — `legacy/room/sounds/` et
+# `legacy/assets/background.wav` — et il n'y avait **aucune étape pour les
+# copier**. Le mixeur pouvait bien exister, il n'aurait rien trouvé à jouer.
+file(GLOB ROOM_SOUNDS "${SRC_ROOM}/sounds/*.wav" "${SRC_LEGACY}/assets/*.wav")
+
+add_custom_command(
+    OUTPUT "${GEN}/sounds/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sounds"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ROOM_SOUNDS} "${GEN}/sounds/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/sounds/.stamp"
+    DEPENDS ${ROOM_SOUNDS}
+    COMMENT "Copie des sons"
+    VERBATIM
+)
+
+# ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
 add_custom_command(
@@ -193,6 +213,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.nsbvh"
         "${GEN}/scene/salle.lights.json"
         "${GEN}/scene/salle.scene.json"
+        "${GEN}/sounds/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

@@ -140,6 +140,26 @@ typedef struct ns_poi {
 
 #define NS_MAX_POI 32
 
+/*
+ * Classe de pas d'un matériau, DÉCLARÉE par la salle.
+ *
+ * `ns_bvh_move_capsule` renvoie depuis M5 l'index du matériau sous les pieds,
+ * dans `ground_material` — et ce champ n'avait jamais eu de lecteur. Il en a un :
+ * cette table, indexée par le même numéro, dit sur quoi on vient de poser le
+ * pied. Un index plutôt qu'un nom, parce que c'est lu à chaque foulée.
+ */
+typedef enum ns_footstep {
+    NS_STEP_NONE = 0,     /* on ne marche pas dessus (un mur, un plafond) */
+    NS_STEP_MOQUETTE,
+    NS_STEP_CARRELAGE,
+    NS_STEP_BOIS,
+    NS_STEP_BETON,
+    NS_STEP_ESTRADE,
+    NS_STEP_COUNT
+} ns_footstep;
+
+const char *ns_footstep_label(ns_footstep k);
+
 typedef struct ns_cabinet {
     char    name[64];
     char    game[32];
@@ -261,6 +281,10 @@ typedef struct ns_scene {
 
     ns_material_gpu *material_data;
     uint32_t         material_count;
+    /* Une entrée par matériau, dans le même ordre. Vide si la salle n'en déclare
+     * pas — la salle de 2020, notamment, où l'on marche sur de la moquette par
+     * défaut faute de mieux. */
+    ns_footstep     *material_footstep;
 
     ns_light_gpu   lights[NS_MAX_LIGHTS];
     ns_light_anim  light_anim[NS_MAX_LIGHTS];

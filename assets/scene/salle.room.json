@@ -26,6 +26,7 @@
     }
   },
   "_materiaux": "Les 58 textures d'origine sont conservées — c'est ce qui garde la même salle. Le mode de pavage (uvMetres) est DÉCLARÉ par matériau : une moquette boucle tous les 1,5 m, une dalle de plafond tous les 0,60. C'est la correction directe du plafond de 2020, dont les UV bouclaient une fois tous les 17,9 m et qui se lisait comme un aplat.",
+  "_pas": "`footstep` donne la banque de sons de pas d'un matériau. Elle est DÉCLARÉE et non déduite du nom de la texture : c'est précisément l'erreur qu'`obj2gltf` faisait pour les familles de matériaux, où `sol_moquette` employant `floor.jpg` ressortait ciré. Un matériau sans `footstep` est un matériau sur lequel on ne marche pas ; le moteur retombe alors sur `moquette`.",
   "materials": [
     {
       "name": "sol",
@@ -34,21 +35,24 @@
       "metallic": 0.0,
       "uvMetres": 1.5,
       "_albedo": "Mesuré : moquette.jpg a un albédo moyen de 47/255 (81, 32, 29 — le motif bordeaux d'arcade), contre 10/255 pour moquette_noire.jpg et 30 pour floor.jpg. Le sol est la plus grande surface de la salle : à 4 % d'albédo il avale toute la lumière, et aucun réglage d'exposition ne rattrape ça. C'est aussi la texture la plus proche d'un vrai sol d'arcade.",
-      "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires."
+      "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
+      "footstep": "moquette"
     },
     {
       "name": "sol_sombre",
       "texture": "moquette_noire.jpg",
       "roughness": 0.96,
       "metallic": 0.0,
-      "uvMetres": 1.5
+      "uvMetres": 1.5,
+      "footstep": "estrade"
     },
     {
       "name": "sol_toilettes",
       "texture": "carllage_toilette.jpg",
       "roughness": 0.32,
       "metallic": 0.0,
-      "uvMetres": 1.0
+      "uvMetres": 1.0,
+      "footstep": "carrelage"
     },
     {
       "name": "mur",
@@ -83,7 +87,8 @@
         0.58,
         1.0
       ],
-      "_": "Béton brossé, teinté légèrement chaud : dans une salle au tungstène, même le béton est ocre."
+      "_": "Béton brossé, teinté légèrement chaud : dans une salle au tungstène, même le béton est ocre.",
+      "footstep": "beton"
     },
     {
       "name": "plafond",
@@ -179,7 +184,8 @@
       "texture": "bois.jpg",
       "roughness": 0.64,
       "metallic": 0.0,
-      "uvMetres": 1.0
+      "uvMetres": 1.0,
+      "footstep": "bois"
     },
     {
       "name": "laque_sombre",
@@ -580,7 +586,8 @@
       "name": "marbre",
       "texture": "marbre_toilettes.jpg",
       "roughness": 0.22,
-      "uvMetres": 1.6
+      "uvMetres": 1.6,
+      "footstep": "carrelage"
     },
     {
       "name": "lavabo",

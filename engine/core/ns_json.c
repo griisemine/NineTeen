@@ -176,20 +176,23 @@ bool ns_json_get_bool(const ns_json *doc, const ns_json_value *obj, const char *
     return token_to_float(doc, v, fallback ? 1.0f : 0.0f) != 0.0f;
 }
 
-void ns_json_get_string(const ns_json *doc, const ns_json_value *obj, const char *key,
-                        char *out, size_t out_size)
+void ns_json_string(const ns_json *doc, const ns_json_value *v, char *out, size_t out_size)
 {
     NS_ASSERT(out && out_size > 0);
     out[0] = '\0';
-
-    const ns_json_value *v = ns_json_get(doc, obj, key);
-    if (!v || v->tok.type != JSMN_STRING) return;
+    if (!doc || !v || v->tok.type != JSMN_STRING) return;
 
     const int len = v->tok.end - v->tok.start;
     if (len <= 0) return;
     const size_t copy = ((size_t)len < out_size - 1) ? (size_t)len : out_size - 1;
     SDL_memcpy(out, doc->text + v->tok.start, copy);
     out[copy] = '\0';
+}
+
+void ns_json_get_string(const ns_json *doc, const ns_json_value *obj, const char *key,
+                        char *out, size_t out_size)
+{
+    ns_json_string(doc, ns_json_get(doc, obj, key), out, out_size);
 }
 
 void ns_json_get_vec3(const ns_json *doc, const ns_json_value *obj, const char *key,

@@ -104,14 +104,24 @@ que le chantier est terminé.
   Le travail est mécanique — aucun n'utilise OpenGL, tous passent par `SDL_Renderer` et
   partagent une signature d'entrée presque commune — mais il représente 12 000 lignes de
   gameplay. La couche `engine/sprite/` qui les recevra reste à écrire.
-- **Audio spatialisé.** miniaudio est vendoré et l'occlusion par lancer de rayon sur le BVH est
-  écrite côté CPU **et maintenant testée** (`tests/test_bvh.c`) ; le mixage positionnel, les bus
-  et la réverbe par zone ne sont pas encore branchés.
+- **Audio spatialisé : branché.** miniaudio était vendoré depuis M0 et **n'avait jamais été
+  lié** ; les quatre clés `audio.*` de `ns_config.h` étaient réservées et jamais relues ; et les
+  sons de 2020 (`walk.wav`, `borne1..3`, les portes, l'ambiance) n'avaient **aucune étape de
+  copie** dans `assets/CMakeLists.txt` — le mixeur aurait pu exister, il n'aurait rien trouvé à
+  jouer. Les quatre bus, les sources positionnelles, l'occlusion amortie et les pas par matériau
+  fonctionnent. La réverbération par zone reste à faire.
 
-  *Historique de cette ligne :* elle a d'abord annoncé la fonction comme « testée » alors qu'aucun
-  test de BVH n'existait, puis a été corrigée pour dire le contraire. Les tests existent depuis le
-  palier joueur : `ns_bvh_raycast`, `ns_bvh_occluded`, `ns_bvh_occlusion_factor` et
-  `ns_bvh_move_capsule` sont vérifiés sur un BVH construit à la main, sans fichier ni GPU.
+  Vérifié **sans carte son** : `tests/test_audio.c` fait tourner le mixeur sans périphérique et
+  rend dans un WAV, qu'il relit pour mesurer une énergie. Mesuré : une source passe de 0,216 à
+  1 m à 0,027 à 8 m, et derrière une cloison elle tombe à 0,018 contre 0,054 dégagée — atténuée
+  d'un facteur trois, **pas coupée**. Le plancher de 0,18 de `ns_bvh_occlusion_factor` est
+  intentionnel : on entend une radio à travers un mur, et c'est même à ça qu'on sait qu'il y a
+  une pièce derrière.
+
+  *Historique de cette ligne :* elle a d'abord annoncé l'occlusion comme « testée » alors
+  qu'aucun test de BVH n'existait, puis a été corrigée pour dire le contraire, puis les tests de
+  BVH ont été écrits au palier joueur. Elle est maintenant vraie dans les deux sens : la
+  fonction est testée, **et** ce qu'on en entend l'est aussi.
 - **Écrans de bornes en direct.** L'infrastructure est là (les jeux sauront dessiner dans une
   texture cible, les bornes ont déjà leur écran repéré et leur lumière colorée) mais les écrans
   affichent encore une texture fixe.

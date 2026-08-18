@@ -46,6 +46,18 @@ nineteen_set_warnings(ns_test_ik)
 nineteen_apply_sanitizers(ns_test_ik)
 add_test(NAME ik COMMAND ns_test_ik)
 
+# Le mixeur, rendu dans un WAV plutôt que vers un périphérique.
+#
+# C'est ce test qui rend vraie une phrase que `docs/CHANGELOG-V15.md` a affirmée
+# pendant deux mois : que l'occlusion audio sur le BVH était testée. Elle ne
+# l'était pas — il n'y avait ni mixeur, ni test, ni même de lien vers miniaudio.
+# Il tourne sans carte son, donc en intégration continue.
+add_executable(ns_test_audio test_audio.c)
+target_link_libraries(ns_test_audio PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_audio)
+nineteen_apply_sanitizers(ns_test_audio)
+add_test(NAME audio COMMAND ns_test_audio "${CMAKE_BINARY_DIR}")
+
 add_executable(ns_test_core test_core.c)
 target_link_libraries(ns_test_core PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_core)

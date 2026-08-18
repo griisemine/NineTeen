@@ -24,6 +24,8 @@ add_library(nineteen_engine STATIC
     render/ns_viewmodel.c
 
     anim/ns_ik.c
+
+    audio/ns_audio.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
@@ -36,6 +38,7 @@ target_include_directories(nineteen_engine
         "${CMAKE_CURRENT_SOURCE_DIR}/scene"
         "${CMAKE_CURRENT_SOURCE_DIR}/render"
         "${CMAKE_CURRENT_SOURCE_DIR}/anim"
+        "${CMAKE_CURRENT_SOURCE_DIR}/audio"
 )
 
 target_link_libraries(nineteen_engine
@@ -46,6 +49,9 @@ target_link_libraries(nineteen_engine
     PRIVATE
         nineteen::jsmn
         nineteen::cgltf
+        # Vendoré depuis M0, et jamais lié jusqu'ici : la cible existait,
+        # frameworks CoreAudio compris, et rien ne s'en servait.
+        nineteen::miniaudio
 )
 
 if(UNIX)

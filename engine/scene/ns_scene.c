@@ -227,6 +227,29 @@ static void load_lights(ns_scene *s, const char *lights_logical)
  * fonction, et elle compte : un repli qu'on n'appelle pas « repli » finit par
  * être pris pour la vérité.
  */
+static const char *const g_footstep_labels[NS_STEP_COUNT] = {
+    "", "moquette", "carrelage", "bois", "beton", "estrade"
+};
+
+const char *ns_footstep_label(ns_footstep k)
+{
+    if (k <= NS_STEP_NONE || k >= NS_STEP_COUNT) return "";
+    return g_footstep_labels[k];
+}
+
+static ns_footstep footstep_from_name(const char *name)
+{
+    if (!name || !name[0]) return NS_STEP_NONE;
+    for (int i = 1; i < NS_STEP_COUNT; ++i) {
+        if (SDL_strcasecmp(name, g_footstep_labels[i]) == 0) return (ns_footstep)i;
+    }
+    /* Une classe inconnue n'est pas une erreur fatale — on marche, simplement, sur
+     * du générique. Mais elle se dit : c'est presque toujours une faute de frappe
+     * dans la description de salle, et un pas muet ne l'aurait jamais révélée. */
+    NS_WARN("classe de pas « %s » inconnue — traitée comme de la moquette", name);
+    return NS_STEP_MOQUETTE;
+}
+
 static void derive_hand_anchors(ns_cabinet *cab)
 {
     const ns_v3 extent = ns_aabb_extent(cab->bounds);
@@ -393,6 +416,28 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
             s->cabinet_count++;
         }
         s->has_declared_cabinets = true;
+    }
+
+    /*
+     * Les classes de pas, dans l'ordre des matériaux du glTF — donc directement
+     * indexables par le `ground_material` que renvoie la collision. Le tableau
+     * est alloué dans l'arène de la scène : il vit et meurt avec elle.
+     */
+    const ns_json_value *steps = ns_json_get(&doc, root, "materialFootsteps");
+    const int step_count = ns_json_array_count(&doc, steps);
+    if (step_count > 0) {
+        s->material_footstep = (ns_footstep *)ns_arena_alloc(
+            &s->arena, sizeof(ns_footstep) * (size_t)step_count, _Alignof(ns_footstep));
+        if (s->material_footstep) {
+            int declared = 0;
+            for (int i = 0; i < step_count; ++i) {
+                char name[32] = { 0 };
+                ns_json_string(&doc, ns_json_at(&doc, steps, i), name, sizeof name);
+                s->material_footstep[i] = footstep_from_name(name);
+                if (s->material_footstep[i] != NS_STEP_NONE) declared++;
+            }
+            NS_INFO("%d matériau(x) portent une classe de pas", declared);
+        }
     }
 
     const ns_json_value *pois = ns_json_get(&doc, root, "pois");

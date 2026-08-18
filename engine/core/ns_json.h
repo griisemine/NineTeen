@@ -43,6 +43,13 @@ bool  ns_json_get_bool(const ns_json *doc, const ns_json_value *obj, const char 
 void  ns_json_get_string(const ns_json *doc, const ns_json_value *obj, const char *key,
                          char *out, size_t out_size);
 
+/* La même chose pour une valeur qu'on tient déjà — l'élément d'un tableau de
+ * chaînes, typiquement. `ns_json_get_string` n'est plus que ce raccourci précédé
+ * d'une recherche de clé ; il n'existait aucun moyen de lire une chaîne hors
+ * d'un objet, ce qui obligeait à envelopper toute liste de mots dans des objets
+ * à une clé. */
+void  ns_json_string(const ns_json *doc, const ns_json_value *v, char *out, size_t out_size);
+
 /* Lit un tableau de trois nombres ; les composantes manquantes prennent `fallback`. */
 void ns_json_get_vec3(const ns_json *doc, const ns_json_value *obj, const char *key,
                       float out[3], float fallback);

@@ -21,6 +21,7 @@
 #include "ns_scene.h"
 
 #include "room_camera.h"
+#include "room_sound.h"
 #include "room_viewmodel.h"
 
 #include <SDL3/SDL.h>
@@ -301,7 +302,10 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+    /* SDL_INIT_AUDIO manquait : miniaudio ouvre son propre périphérique, mais
+     * SDL doit connaître le sous-système pour que la sortie survive à un
+     * changement de périphérique en cours de partie. */
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init a échoué : %s\n", SDL_GetError());
         return 1;
     }
@@ -529,6 +533,21 @@ int main(int argc, char **argv)
     ns_viewmodel_pose viewmodel;
     ns_viewmodel_pose_clear(&viewmodel);
 
+    /*
+     * Le son. Un échec n'arrête rien : une machine sans carte son doit pouvoir
+     * jouer, et `ns_audio_*` devient alors une suite de no-ops.
+     */
+    ns_audio_config acfg;
+    SDL_zero(acfg);
+    if (ns_audio_init(&acfg)) {
+        ns_audio_set_bus_volume(NS_BUS_MASTER,   ns_config_get_float(NS_CFG_VOL_MASTER, 0.9f));
+        ns_audio_set_bus_volume(NS_BUS_MUSIC,    ns_config_get_float(NS_CFG_VOL_MUSIC, 0.7f));
+        ns_audio_set_bus_volume(NS_BUS_SFX,      ns_config_get_float(NS_CFG_VOL_SFX, 1.0f));
+        ns_audio_set_bus_volume(NS_BUS_AMBIENCE, ns_config_get_float(NS_CFG_VOL_AMBIENCE, 0.8f));
+    }
+    room_sound sound;
+    room_sound_init(&sound, &scene);
+
     room_viewmodel vmstate;
     room_viewmodel_init(&vmstate);
     (void)room_viewmodel_set_forced_pose(&vmstate, opt.pose);   /* déjà validé */
@@ -645,6 +664,7 @@ int main(int argc, char **argv)
                     if (ev.key.repeat) break;
                     const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
                     if (near && room_viewmodel_interact(&vmstate, near)) {
+                        room_sound_coin(&sound, near->coin_slot);
                         NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
                     }
                     break;
@@ -706,6 +726,7 @@ int main(int argc, char **argv)
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
+            room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
         }
         ns_clock_end_frame(&clock);
 
@@ -796,6 +817,8 @@ int main(int argc, char **argv)
                 frames_rendered, clock.fps_smoothed);
     }
 
+    room_sound_shutdown(&sound);
+    ns_audio_shutdown();
     ns_scene_unload(rhi, &scene);
     ns_renderer_destroy(rhi, renderer);
     ns_rhi_destroy(rhi);

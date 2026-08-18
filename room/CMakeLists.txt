@@ -4,6 +4,7 @@ add_executable(nineteen
     main.c
     room_camera.c
     room_viewmodel.c
+    room_sound.c
 )
 
 target_link_libraries(nineteen PRIVATE nineteen::engine)
