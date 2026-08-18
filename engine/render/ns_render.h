@@ -26,7 +26,17 @@ typedef struct ns_renderer ns_renderer;
 /* Niveaux de qualité : un seul réglage que le joueur comprend, dérivé en
  * réglages fins par le moteur. */
 typedef enum ns_quality {
-    NS_QUALITY_LOW = 0,
+    /*
+     * Sous `low`, pour les GPU intégrés anciens et les machines de bureau.
+     *
+     * Ce n'est pas « low avec un chiffre de plus » : il coupe les deux passes
+     * dont le coût ne dépend pas du contenu — le volumétrique et l'occlusion
+     * ambiante — et rend à 60 % de la résolution. Ce qui reste est l'éclairage
+     * direct, les écrans et le tone mapping, c'est-à-dire la salle, en moins
+     * beau mais entière.
+     */
+    NS_QUALITY_POTATO = 0,
+    NS_QUALITY_LOW,
     NS_QUALITY_MEDIUM,
     NS_QUALITY_HIGH,
     NS_QUALITY_ULTRA

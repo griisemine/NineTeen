@@ -53,6 +53,7 @@ typedef struct options {
     float       exposure;
     float       particles;  /* densité de poussière, < 0 = celle du palier */
     bool        offline;    /* verrou : interdit toute sortie réseau */
+    bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     const char *player;     /* nom porté au classement local */
     const char *room;       /* "generated" | "legacy" */
     const char *viewpoint;  /* point de vue nommé, déclaré par la scène */
@@ -76,7 +77,7 @@ static void print_usage(const char *exe)
         "  --scale=F            échelle de rendu interne, 0.4 à 2.0 (défaut 1.0)\n"
         "  --fullscreen         plein écran\n"
         "  --no-vsync           désactive la synchronisation verticale\n"
-        "  --quality=Q          low | medium | high | ultra (défaut medium)\n"
+        "  --quality=Q          potato | low | medium | high | ultra (défaut medium)\n"
         "                       high et ultra activent le lancer de rayons : superbe\n"
         "                       en capture, coûteux en temps réel\n"
         "  --room=R             generated | legacy (défaut generated si présente)\n"
@@ -90,6 +91,9 @@ static void print_usage(const char *exe)
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
         "  --offline            verrou : aucune partie n'est mise en file d'envoi\n"
+        "\n"
+        "  En jeu : F5 caméra libre, F6 orbite, F7 palier de qualité,\n"
+        "           F8 échelle de rendu, F2 capture. Les réglages sont gardés.\n"
         "  --nom=NOM            nom porté au classement local\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
@@ -177,11 +181,18 @@ static void load_env_defaults(options *o)
 
     const char *v;
     if ((v = SDL_getenv("NINETEEN_QUALITY")) != NULL) {
-        if (SDL_strcmp(v, "low") == 0)         o->quality = NS_QUALITY_LOW;
+        if (SDL_strcmp(v, "potato") == 0)      o->quality = NS_QUALITY_POTATO;
+        else if (SDL_strcmp(v, "low") == 0)    o->quality = NS_QUALITY_LOW;
         else if (SDL_strcmp(v, "medium") == 0) o->quality = NS_QUALITY_MEDIUM;
         else if (SDL_strcmp(v, "high") == 0)   o->quality = NS_QUALITY_HIGH;
         else if (SDL_strcmp(v, "ultra") == 0)  o->quality = NS_QUALITY_ULTRA;
         else NS_WARN("NINETEEN_QUALITY=%s inconnu — ignoré", v);
+        /* L'environnement compte comme un choix explicite : sans ça il serait
+         * écrasé par le palier gardé de la session précédente, et un `.env`
+         * cesserait de faire ce qu'il dit. */
+        if (SDL_strcmp(v, "potato") == 0 || SDL_strcmp(v, "low") == 0
+            || SDL_strcmp(v, "medium") == 0 || SDL_strcmp(v, "high") == 0
+            || SDL_strcmp(v, "ultra") == 0) o->quality_set = true;
     }
     if ((v = SDL_getenv("NINETEEN_WIDTH")) != NULL)     o->width = SDL_atoi(v);
     if ((v = SDL_getenv("NINETEEN_HEIGHT")) != NULL)    o->height = SDL_atoi(v);
@@ -190,6 +201,10 @@ static void load_env_defaults(options *o)
     if ((v = SDL_getenv("NINETEEN_VSYNC")) != NULL)     o->vsync = (SDL_atoi(v) != 0);
     if ((v = SDL_getenv("NINETEEN_FULLSCREEN")) != NULL) o->fullscreen = (SDL_atoi(v) != 0);
     if ((v = SDL_getenv("NINETEEN_ROOM")) != NULL)      o->room = v;
+    if ((v = SDL_getenv("NINETEEN_PARTICLES")) != NULL)
+        o->particles = ns_clampf((float)SDL_atof(v), 0.0f, 1.0f);
+    if ((v = SDL_getenv("NINETEEN_OFFLINE")) != NULL)   o->offline = (SDL_atoi(v) != 0);
+    if ((v = SDL_getenv("NINETEEN_NOM")) != NULL)       o->player = v;
 }
 
 static bool parse_options(int argc, char **argv, options *o)
@@ -201,7 +216,7 @@ static bool parse_options(int argc, char **argv, options *o)
     o->vsync = true;
     o->quality = NS_QUALITY_MEDIUM;
     o->camera_mode = ROOM_CAM_PLAYER;
-    o->render_scale = 1.0f;
+    o->render_scale = 0.0f;   /* 0 = non demandé : le palier ou la config décide */
     o->particles = -1.0f;       /* < 0 : on garde la densité du palier de qualité */
 
     /* Avant la ligne de commande : elle doit pouvoir tout écraser. */
@@ -268,11 +283,13 @@ static bool parse_options(int argc, char **argv, options *o)
             o->player = a + 6;
         } else if (SDL_strncmp(a, "--quality=", 10) == 0) {
             const char *q = a + 10;
-            if (SDL_strcmp(q, "low") == 0)         o->quality = NS_QUALITY_LOW;
+            if (SDL_strcmp(q, "potato") == 0)      o->quality = NS_QUALITY_POTATO;
+            else if (SDL_strcmp(q, "low") == 0)    o->quality = NS_QUALITY_LOW;
             else if (SDL_strcmp(q, "medium") == 0) o->quality = NS_QUALITY_MEDIUM;
             else if (SDL_strcmp(q, "high") == 0)   o->quality = NS_QUALITY_HIGH;
             else if (SDL_strcmp(q, "ultra") == 0)  o->quality = NS_QUALITY_ULTRA;
-            else { fprintf(stderr, "qualité inconnue : %s\n", q); return false; }
+            else { fprintf(stderr, "qualité inconnue : %s (potato, low, medium, high, ultra)\n", q); return false; }
+            o->quality_set = true;
         } else if (SDL_strncmp(a, "--camera=", 9) == 0) {
             const char *m = a + 9;
             if (SDL_strcmp(m, "player") == 0)     o->camera_mode = ROOM_CAM_PLAYER;
@@ -315,6 +332,20 @@ static void mount_asset_directories(void)
 #ifdef NINETEEN_BUILD_ASSET_DIR
     ns_paths_mount(NINETEEN_BUILD_ASSET_DIR);
 #endif
+}
+
+/* Le nom d'un palier, pour la configuration et pour le journal. Une seule table
+ * plutôt qu'un `switch` recopié à chaque endroit qui l'affiche. */
+static const char *quality_name(ns_quality q)
+{
+    switch (q) {
+        case NS_QUALITY_POTATO: return "potato";
+        case NS_QUALITY_LOW:    return "low";
+        case NS_QUALITY_MEDIUM: return "medium";
+        case NS_QUALITY_HIGH:   return "high";
+        case NS_QUALITY_ULTRA:  return "ultra";
+    }
+    return "medium";
 }
 
 /*
@@ -415,8 +446,30 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /*
+     * Le palier vient de la configuration quand la ligne de commande ne le dit
+     * pas. `render.quality` était une clé réservée jamais relue depuis M1 —
+     * l'audit la listait avec `render.shadowResolution` et
+     * `input.mouseSensitivity` parmi les réglages qui existaient sur le papier.
+     * Un réglage qu'on ne peut pas garder d'une session à l'autre n'est pas un
+     * réglage, c'est une option de ligne de commande.
+     */
+    if (!opt.quality_set) {
+        const char *q = ns_config_get_str(NS_CFG_QUALITY, "");
+        if      (SDL_strcasecmp(q, "potato") == 0) opt.quality = NS_QUALITY_POTATO;
+        else if (SDL_strcasecmp(q, "low") == 0)    opt.quality = NS_QUALITY_LOW;
+        else if (SDL_strcasecmp(q, "medium") == 0) opt.quality = NS_QUALITY_MEDIUM;
+        else if (SDL_strcasecmp(q, "high") == 0)   opt.quality = NS_QUALITY_HIGH;
+        else if (SDL_strcasecmp(q, "ultra") == 0)  opt.quality = NS_QUALITY_ULTRA;
+        else if (*q) NS_WARN("configuration : qualité « %s » inconnue, ignorée", q);
+    }
+
     ns_render_settings rs;
     ns_render_settings_defaults(&rs, opt.quality);
+    if (opt.render_scale <= 0.0f) {
+        const float cfg = ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f);
+        if (cfg > 0.0f) rs.render_scale = ns_clampf(cfg, 0.4f, 2.0f);
+    }
     if (opt.render_scale > 0.0f) rs.render_scale = ns_clampf(opt.render_scale, 0.4f, 2.0f);
     if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
     if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
@@ -499,6 +552,14 @@ int main(int argc, char **argv)
                        : ns_v3_make(centre.x, floor_y + eye_height,
                                     centre.z + extent.z * 0.28f),
                      scene.has_player_start ? scene.player_yaw : -90.0f * NS_DEG2RAD);
+
+    /* Sensibilité de la souris : `input.mouseSensitivity` existait depuis M1 et
+     * n'avait aucun lecteur — l'audit la listait parmi les réglages qui n'en
+     * étaient pas. Le multiplicateur porte sur la valeur par défaut plutôt que
+     * de la remplacer : un joueur règle « deux fois plus sensible », il ne
+     * choisit pas un nombre de radians par pixel. */
+    cam.mouse_sensitivity *= ns_clampf(ns_config_get_float(NS_CFG_MOUSE_SENS, 1.0f),
+                                       0.1f, 8.0f);
     /*
      * Le corps du joueur, en mètres, converti à l'échelle du décor chargé.
      *
@@ -960,6 +1021,53 @@ int main(int argc, char **argv)
                     cam.mode = ROOM_CAM_ORBIT;
                     NS_INFO("caméra : orbite");
                     break;
+
+                /*
+                 * Les deux réglages qui décident vraiment de la fluidité, à
+                 * portée de touche et sans quitter la partie.
+                 *
+                 * Pourquoi des touches et pas un menu : un menu demande une
+                 * navigation, une saisie et un état d'interface, et surtout il
+                 * demande d'avoir déjà décidé de quoi il a l'air. Ces deux
+                 * touches donnent tout de suite ce qui manquait — pouvoir
+                 * essayer un palier sur SA machine — et le choix est gardé d'une
+                 * session à l'autre. Le menu dessiné reste à faire, et c'est dit
+                 * plutôt que sous-entendu.
+                 *
+                 * Mesuré sur lavapipe en 1280 x 720 depuis `allee` :
+                 * potato 114 ms, low 281, medium 675, high 1056, ultra 2647. Et
+                 * l'échelle de rendu, à palier constant : 0,8 fait gagner 34 %,
+                 * 0,6 en fait gagner 62 %.
+                 */
+                case SDLK_F7: {
+                    if (ev.key.repeat) break;
+                    const ns_quality next =
+                        (rs.quality >= NS_QUALITY_ULTRA) ? NS_QUALITY_POTATO
+                                                         : (ns_quality)(rs.quality + 1);
+                    const float keep_scale = rs.render_scale;
+                    ns_render_settings_defaults(&rs, next);
+                    /* L'échelle de rendu est un réglage à part : elle a sa propre
+                     * touche, et changer de palier ne doit pas l'écraser. */
+                    rs.render_scale = keep_scale;
+                    if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
+                    if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
+                    ns_renderer_set_settings(rhi, renderer, &rs);
+                    NS_INFO("qualité : %s", quality_name(rs.quality));
+                    break;
+                }
+                case SDLK_F8: {
+                    if (ev.key.repeat) break;
+                    /* Par pas de 0,1 entre 0,5 et 1,0, puis retour en bas. En
+                     * dessous de 0,5 le texte des écrans cesse d'être lisible, et
+                     * au-dessus de 1,0 on paie du sur-échantillonnage que le halo
+                     * et le tone mapping rendent invisible. */
+                    float sc = rs.render_scale + 0.1f;
+                    if (sc > 1.005f) sc = 0.5f;
+                    rs.render_scale = sc;
+                    ns_renderer_set_settings(rhi, renderer, &rs);
+                    NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
+                    break;
+                }
                 case SDLK_E: {
                     /*
                      * `ns_scene_nearest_cabinet` est écrite depuis M4 et n'avait
@@ -1228,18 +1336,30 @@ int main(int argc, char **argv)
                 }
             }
 
-            /* `--bench` sans capture doit s'arrêter aussi : sans cette
-             * condition la boucle tournait indéfiniment, et la mesure ne
-             * revenait jamais. */
-            if (!opt.screenshot && opt.bench && frames_rendered >= opt.frames) {
-                running = false;
-            }
             if (opt.screenshot && frames_rendered >= opt.frames) {
                 ns_rhi_capture_texture_png(rhi, target, w, h, ns_rhi_swapchain_format(rhi),
                                            opt.screenshot);
                 const ns_render_stats st = ns_renderer_stats(renderer);
                 NS_INFO("capture : %u lots dessinés, %u éliminés, %u triangles, %u lumières",
                         st.batches_drawn, st.batches_culled, st.triangles, st.lights_active);
+            }
+
+            /*
+             * En headless, `--frames` est une LIMITE — pour tout le monde.
+             *
+             * Elle ne l'était que pour `--screenshot` et `--bench`. Sans l'un des
+             * deux, `--headless --frames=3` rendait indéfiniment, et finissait par
+             * tomber dans l'épuisement du pool de descripteurs de lavapipe :
+             * `VULKAN_INTERNAL_AllocateDescriptorSets` déréférence, et le jeu
+             * meurt sur SIGSEGV en ayant l'air d'avoir planté tout seul. Le
+             * commentaire précédent avait déjà fait le constat pour `--bench`
+             * sans voir qu'il valait pour le mode entier.
+             *
+             * C'est aussi ce qui empêchait de vérifier quoi que ce soit sur le
+             * chemin de SORTIE — les réglages gardés, le classement écrit, les
+             * fuites annoncées : le programme n'y arrivait jamais.
+             */
+            if (opt.headless && frames_rendered >= opt.frames) {
                 ns_texture_destroy(rhi, &offscreen);
                 running = false;
             }
@@ -1259,6 +1379,13 @@ int main(int argc, char **argv)
 
     ns_texture_destroy(rhi, &screen_rt);
     flappy_art_free(rhi, &flappy_assets);
+    /* Les réglages suivent le joueur d'une session à l'autre. `ns_config_save`
+     * n'écrit que si quelque chose a changé, donc ceci ne touche pas au disque
+     * pour un lancement où l'on n'a rien réglé. */
+    ns_config_set_str(NS_CFG_QUALITY, quality_name(rs.quality));
+    ns_config_set_float(NS_CFG_RENDER_SCALE, rs.render_scale);
+    ns_config_save();
+
     ns_scores_save();
     ns_runlog_destroy(runlog);
     if (sprites) ns_sprite_destroy(rhi, sprites);

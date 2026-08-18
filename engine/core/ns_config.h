@@ -31,15 +31,23 @@ void ns_config_set_bool(const char *key, bool value);
 #define NS_CFG_FULLSCREEN      "window.fullscreen"
 #define NS_CFG_VSYNC           "window.vsync"
 #define NS_CFG_RENDER_SCALE    "render.scale"
-#define NS_CFG_QUALITY         "render.quality"        /* low | medium | high | ultra */
+#define NS_CFG_QUALITY         "render.quality"   /* potato | low | medium | high | ultra */
 #define NS_CFG_RAYTRACING      "render.raytracing"     /* off | reflections | full */
-#define NS_CFG_SHADOW_RES      "render.shadowResolution"
+/*
+ * `render.shadowResolution` et `network.serverUrl` ont été RETIRÉS d'ici.
+ *
+ * Ils étaient réservés depuis M1 et n'ont jamais eu de lecteur — l'audit les
+ * listait avec `input.mouseSensitivity`, qui en a un depuis B9. La différence
+ * est qu'ils ne peuvent pas en avoir : il n'y a pas de carte d'ombre dans ce
+ * moteur (les ombres sont lancées), et pas une ligne de code réseau dans le
+ * client. Une clé qu'on ne peut pas lire ne documente rien, elle laisse croire
+ * qu'un réglage existe. Elles reviendront avec ce qui les consomme.
+ */
 #define NS_CFG_VOL_MASTER      "audio.master"
 #define NS_CFG_VOL_MUSIC       "audio.music"
 #define NS_CFG_VOL_SFX         "audio.sfx"
 #define NS_CFG_VOL_AMBIENCE    "audio.ambience"
 #define NS_CFG_MOUSE_SENS      "input.mouseSensitivity"
 #define NS_CFG_ROOM_SOURCE     "room.source"            /* generated | legacy */
-#define NS_CFG_SERVER_URL      "network.serverUrl"
 
 #endif /* NS_CONFIG_H */

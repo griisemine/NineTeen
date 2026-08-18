@@ -245,3 +245,54 @@ quand le transport existera. Aujourd'hui il ne change rien au comportement
 observable — une partie sans secret de serveur n'est de toute façon pas mise en
 file — et il est là pour que la garantie soit exprimable dès maintenant plutôt
 que rajoutée après coup.
+
+## Régler la fluidité
+
+### Les cinq paliers, chiffrés
+
+Mesurés avec `--bench`, qui **attend réellement le GPU** — sans cette attente on
+chronomètre l'enregistrement des commandes, pas leur exécution, et c'est ainsi
+qu'un rendu à une image par seconde avait pu être annoncé à 1 793. 1280 × 720,
+point de vue `allee`, sur lavapipe (le rasteriseur logiciel de ce conteneur) :
+
+| Palier | ms/image | rapport | ce qu'il coupe |
+|---|---:|---:|---|
+| `potato` | 114 | ×1,0 | volumétrique, occlusion ambiante, rendu à 60 % |
+| `low` | 281 | ×2,5 | volumétrique, rendu à 75 % |
+| `medium` | 675 | ×5,9 | lancer de rayons — **le défaut** |
+| `high` | 1056 | ×9,3 | rien ; ombres lancées |
+| `ultra` | 2647 | ×23,2 | rien ; + réflexions et illumination globale |
+
+**Les valeurs absolues ne disent rien d'un vrai GPU** — lavapipe calcule sur le
+processeur. Ce sont les rapports qui se transposent.
+
+L'échelle de rendu est le second levier, et le moins visible, parce que le tone
+mapping, le halo et la couche 2D travaillent après. Au palier `medium` :
+
+| Échelle | ms/image | gain |
+|---|---:|---:|
+| 1,0 | 649 | — |
+| 0,8 | 427 | −34 % |
+| 0,6 | 248 | −62 % |
+
+En dessous de 0,5, le texte des écrans de bornes cesse d'être lisible.
+
+### En jeu
+
+| Touche | Effet |
+|---|---|
+| `F5` | caméra libre / joueur |
+| `F6` | caméra orbite |
+| `F7` | palier de qualité suivant |
+| `F8` | échelle de rendu, par pas de 0,1 entre 0,5 et 1,0 |
+| `F2` | capture d'écran |
+
+**Les réglages sont gardés** d'une session à l'autre, dans `settings.cfg` du
+répertoire utilisateur. Ce n'est pas un détail : `render.quality` et
+`render.scale` étaient des clés réservées depuis M1 que personne ne lisait — un
+réglage qu'on ne peut pas garder n'est pas un réglage, c'est une option de ligne
+de commande.
+
+Ce qui n'existe pas : un **menu dessiné**. Ces deux touches donnent ce qui
+manquait — pouvoir essayer un palier sur sa propre machine — et le menu reste à
+faire.

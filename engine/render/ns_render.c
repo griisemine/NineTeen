@@ -304,6 +304,7 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * par le CPU à chaque image.
      */
     switch (quality) {
+        case NS_QUALITY_POTATO:
         case NS_QUALITY_LOW:    s->particle_density = 0.0f;  break;
         case NS_QUALITY_MEDIUM: s->particle_density = 0.55f; break;
         case NS_QUALITY_HIGH:   s->particle_density = 0.85f; break;
@@ -354,6 +355,27 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
     s->ssao_intensity = 0.85f;
 
     switch (quality) {
+    /*
+     * `potato` : tout ce dont le coût ne dépend pas de la scène est coupé.
+     *
+     * Mesuré sur lavapipe en 1280 x 720 depuis le point de vue `allee` : le
+     * volumétrique et l'occlusion ambiante sont les deux passes dont le prix se
+     * paie par pixel quoi qu'il y ait à l'écran. Les couper, plus 0,60 de
+     * résolution de rendu — 36 % des pixels — laisse l'éclairage direct, les
+     * écrans, le halo et le tone mapping : la salle est là, elle est juste moins
+     * belle.
+     */
+    case NS_QUALITY_POTATO:
+        s->raytracing = NS_RT_OFF;
+        s->render_scale = 0.60f;
+        s->ssao_samples = 0;
+        s->ssao_intensity = 0.0f;
+        s->rt_rays_per_pixel = 0;
+        s->chromatic_aberration = 0.0f;
+        s->volumetric_steps = 0;
+        s->exposure_adapt = 0.0f;
+        s->bloom_intensity *= 0.6f;
+        break;
     case NS_QUALITY_LOW:
         s->raytracing = NS_RT_OFF;
         s->render_scale = 0.75f;
