@@ -85,8 +85,28 @@ typedef struct rg_cabinet {
     float screen_normal[3];
     float screen_size[2];       /* largeur et hauteur utiles de la dalle */
     float player_anchor[3];
+    float panel_centre[3];      /* là où la main appuie */
+    float coin_slot[3];         /* là où le jeton entre */
     bool  attract;
 } rg_cabinet;
+
+/*
+ * Les points remarquables d'une borne, en repère **local** — c'est-à-dire dans
+ * le même repère que les boîtes de `build_cabinet`, avant placement.
+ *
+ * Pourquoi les faire sortir d'ici plutôt que de les redériver côté `room/` :
+ * ces cotes sont écrites une fois, dans le générateur, à trois lignes des
+ * boîtes qu'elles désignent. Les recalculer ailleurs à partir de la boîte
+ * englobante en ferait une seconde copie — et une seconde copie d'un chiffre
+ * est une copie qui dérive. C'est exactement l'erreur qu'on vient de retirer
+ * du moteur, où le centre d'écran était deviné à 31 cm près.
+ */
+typedef struct rg_cab_anchors {
+    float screen[3];
+    float screen_size[2];
+    float panel[3];     /* centre de la grappe de boutons, sur la face du dessus */
+    float coin[3];      /* fente à jetons, sur la face avant de la trappe */
+} rg_cab_anchors;
 
 typedef struct rg_poi {
     char    name[64];
@@ -95,10 +115,24 @@ typedef struct rg_poi {
     float   anchor[3];
 } rg_poi;
 
-/* Un obstacle : le nom sert au message d'erreur, pas au format de sortie. */
+/* Un obstacle : le nom sert au message d'erreur, pas au format de sortie.
+ *
+ * Le genre décide de la sévérité. Deux bornes qui se croisent sont une faute —
+ * on ne peut pas jouer sur une borne encastrée dans sa voisine. Deux props qui
+ * se croisent sont souvent voulus : un tabouret glissé sous un comptoir, une
+ * affiche plaquée contre un mur, une flaque posée sur le sol. En faire une
+ * erreur obligerait à déclarer des exceptions partout, et une exception qu'on
+ * écrit dix fois cesse d'être lue. */
+typedef enum rg_solid_kind {
+    RG_SOLID_BOX = 0,
+    RG_SOLID_CABINET,
+    RG_SOLID_PROP
+} rg_solid_kind;
+
 typedef struct rg_solid {
-    char    name[64];
-    ns_aabb bounds;
+    char          name[64];
+    ns_aabb       bounds;
+    rg_solid_kind kind;
 } rg_solid;
 
 typedef struct rg_builder {
@@ -156,13 +190,161 @@ typedef struct rg_builder {
 
 /* Enregistre le dernier objet émis comme obstacle. Appelé explicitement par les
  * sections qui produisent du volume plein, jamais par les autres. */
-static void record_solid(rg_builder *b, const char *name)
+static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind)
 {
     if (b->solid_count >= RG_MAX_SOLIDS) return;   /* le contrôle n'est pas critique */
     rg_solid *s = &b->solids[b->solid_count++];
     /* Tronqué sciemment : ce nom ne sert qu'aux messages, pas à un appariement. */
     snprintf(s->name, sizeof s->name, "%.63s", name);
     s->bounds = b->last_bounds;
+    s->kind = kind;
+}
+
+/*
+ * Deux meubles ne doivent pas occuper le même volume, et c'est à l'outil de le
+ * dire.
+ *
+ * Ce contrôle existe parce que le défaut s'est produit : en redimensionnant la
+ * salle j'ai multiplié les POSITIONS par un facteur sans toucher aux TAILLES —
+ * correct pour un meuble, faux pour tout ce qui dépend d'un écart. L'entraxe des
+ * bornes est passé de 0,80 m à 0,69 m pour un caisson de 0,72 m : les douze
+ * bornes de l'îlot se sont encastrées les unes dans les autres, et personne ne
+ * l'a vu avant que le joueur ne le signale.
+ *
+ * La tolérance vaut 5 mm : deux meubles bord à bord sont voulus, deux meubles à
+ * un centimètre l'un dans l'autre sont une faute de frappe.
+ */
+#define RG_OVERLAP_TOLERANCE 0.005f
+
+static float overlap_1d(float amin, float amax, float bmin, float bmax)
+{
+    const float lo = amin > bmin ? amin : bmin;
+    const float hi = amax < bmax ? amax : bmax;
+    return hi - lo;
+}
+
+/*
+ * Un luminaire doit se trouver dans le lieu dont il porte le nom.
+ *
+ * Ce contrôle vient d'une bévue réelle, et de deux occurrences plutôt qu'une :
+ * en réécrivant la disposition j'ai déplacé les lieux sans renommer les
+ * lumières. `plafonnier_toilettes` s'est retrouvé à **17 m** du bloc sanitaire,
+ * dans le sas d'entrée ; `plafonnier_bar` à **12,6 m** du comptoir. Les
+ * toilettes n'avaient donc plus aucun éclairage, et le seul néon qui grésille de
+ * la salle portait le nom d'une pièce où il n'était pas.
+ *
+ * Rien ne l'aurait signalé : une lumière mal placée éclaire quelque chose, donc
+ * l'image reste plausible. C'est le pire cas de figure — un défaut qui produit
+ * un résultat, et qu'on ne trouve qu'en mesurant.
+ *
+ * La règle est volontairement grossière : un nom se terminant par `_<lieu>` doit
+ * être à moins de `RG_FIXTURE_RADIUS` de l'ancre de ce lieu. Elle n'attrape pas
+ * un décalage d'un mètre, et ce n'est pas le but : elle attrape le nom qui ment.
+ */
+#define RG_FIXTURE_RADIUS 6.0f
+
+static void check_fixture_naming(const rg_builder *b)
+{
+    size_t checked = 0;
+    for (size_t i = 0; i < b->light_count; ++i) {
+        const rg_light *l = &b->lights[i];
+
+        /* Une déclaration répétée numérote ses exemplaires : `plafonnier_bar`
+         * devient `plafonnier_bar_1`, `_2`… Sans retirer ce suffixe le contrôle
+         * ne voyait qu'un luminaire sur quatorze — et laissait justement passer
+         * les deux qu'il devait attraper. */
+        char stem[64];
+        snprintf(stem, sizeof stem, "%s", l->name);
+        char *last = strrchr(stem, '_');
+        if (last) {
+            bool all_digits = last[1] != '\0';
+            for (const char *c = last + 1; *c; ++c) {
+                if (*c < '0' || *c > '9') { all_digits = false; break; }
+            }
+            if (all_digits) *last = '\0';
+        }
+
+        const char *tail = strrchr(stem, '_');
+        if (!tail) continue;
+        tail++;
+
+        for (size_t j = 0; j < b->poi_count; ++j) {
+            const rg_poi *poi = &b->pois[j];
+            if (strcmp(tail, poi->kind) != 0) continue;
+
+            const float dx = l->position[0] - poi->anchor[0];
+            const float dz = l->position[2] - poi->anchor[2];
+            const float d = sqrtf(dx * dx + dz * dz);
+            checked++;
+            if (d > RG_FIXTURE_RADIUS) {
+                tool_fatalf("« %s » est à %.1f m de « %s » (%s), qu'il prétend éclairer.\n"
+                            "  luminaire  (%.2f, %.2f, %.2f)\n"
+                            "  lieu       (%.2f, %.2f, %.2f)\n"
+                            "  Soit le luminaire est mal placé, soit il porte le nom d'un "
+                            "autre lieu. Les deux se corrigent ici ; aucun ne se voit sur "
+                            "une capture.",
+                            l->name, (double)d, poi->name, poi->kind,
+                            (double)l->position[0], (double)l->position[1],
+                            (double)l->position[2],
+                            (double)poi->anchor[0], (double)poi->anchor[1],
+                            (double)poi->anchor[2]);
+            }
+        }
+    }
+    if (checked) printf("  %zu luminaire(s) confronté(s) au lieu qu'ils nomment\n", checked);
+}
+
+static void check_solid_overlaps(const rg_builder *b)
+{
+    size_t warned = 0;
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        for (size_t j = i + 1; j < b->solid_count; ++j) {
+            const rg_solid *A = &b->solids[i], *B = &b->solids[j];
+
+            const float ox = overlap_1d(A->bounds.min.x, A->bounds.max.x,
+                                        B->bounds.min.x, B->bounds.max.x);
+            const float oy = overlap_1d(A->bounds.min.y, A->bounds.max.y,
+                                        B->bounds.min.y, B->bounds.max.y);
+            const float oz = overlap_1d(A->bounds.min.z, A->bounds.max.z,
+                                        B->bounds.min.z, B->bounds.max.z);
+            if (ox <= RG_OVERLAP_TOLERANCE || oy <= RG_OVERLAP_TOLERANCE
+             || oz <= RG_OVERLAP_TOLERANCE) {
+                continue;                       /* disjoints sur au moins un axe */
+            }
+
+            /*
+             * Fatal dès qu'une BORNE est en cause, et seulement là.
+             *
+             * Une borne doit se tenir dans du vide : on ne joue pas sur un
+             * caisson encastré dans son voisin. Le reste s'imbrique légitimement
+             * — une poutre repose sur ses piliers, un tabouret glisse sous un
+             * comptoir, une affiche se plaque contre un mur. Le premier essai de
+             * ce contrôle refusait la poutre et son pilier, ce qui aurait
+             * transformé un garde-fou utile en bruit qu'on apprend à ignorer.
+             */
+            const bool fatal = (A->kind == RG_SOLID_CABINET) || (B->kind == RG_SOLID_CABINET);
+            if (fatal) {
+                tool_fatalf("« %s » et « %s » occupent le même volume : "
+                            "recouvrement de %.3f x %.3f x %.3f m\n"
+                            "  %s : [%.2f %.2f %.2f] - [%.2f %.2f %.2f]\n"
+                            "  %s : [%.2f %.2f %.2f] - [%.2f %.2f %.2f]",
+                            A->name, B->name, (double)ox, (double)oy, (double)oz,
+                            A->name,
+                            (double)A->bounds.min.x, (double)A->bounds.min.y, (double)A->bounds.min.z,
+                            (double)A->bounds.max.x, (double)A->bounds.max.y, (double)A->bounds.max.z,
+                            B->name,
+                            (double)B->bounds.min.x, (double)B->bounds.min.y, (double)B->bounds.min.z,
+                            (double)B->bounds.max.x, (double)B->bounds.max.y, (double)B->bounds.max.z);
+            }
+            if (warned < 8) {
+                tool_warnf("« %s » et « %s » se recouvrent de %.2f x %.2f x %.2f m "
+                           "(structure ou mobilier : toléré)",
+                           A->name, B->name, (double)ox, (double)oy, (double)oz);
+                warned++;
+            }
+        }
+    }
+    if (warned >= 8) tool_infof("... et d'autres recouvrements de mobilier");
 }
 
 static int material_index(const rg_builder *b, const char *name, const char *used_by)
@@ -582,7 +764,7 @@ static void parse_boxes(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[GLTF_MAX_NAME];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name);
+            record_solid(b, name, RG_SOLID_BOX);
         }
     }
 }
@@ -757,8 +939,11 @@ static void parse_mouldings(rg_builder *b, const tool_json *doc, const tool_json
 
 static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
                           const tool_json_value *e, const char *owner,
-                          float screen_local[3], float screen_size[2])
+                          rg_cab_anchors *anchors)
 {
+    float *const screen_local = anchors->screen;
+    float *const screen_size  = anchors->screen_size;
+
     char m_body[64], m_screen[64], m_marquee[64], m_panel[64], m_trim[64];
     tool_json_get_string(doc, e, "materialBody", m_body, sizeof m_body);
     tool_json_get_string(doc, e, "screen", m_screen, sizeof m_screen);
@@ -884,27 +1069,52 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);
 
+    float btn_x = 0.0f, btn_y = 0.0f, btn_z = 0.0f;
     for (int i = 0; i < 4; ++i) {
+        const ns_v3 at = ns_v3_make(0.02f + (float)(i % 2) * 0.075f,
+                                    0.958f + (float)(i / 2) * 0.004f,
+                                    hd + 0.045f + (float)(i / 2) * 0.075f);
+        btn_x += at.x * 0.25f; btn_y += at.y * 0.25f; btn_z += at.z * 0.25f;
+
         geo_mesh_init(&part);
         geo_box(&part, ns_v3_make(0.038f, 0.016f, 0.038f), 0.007f,
                 GEO_FACE_NO_BOTTOM, &uv_trim, panel);
         x = GEO_XFORM_IDENTITY;
-        x.origin = ns_v3_make(0.02f + (float)(i % 2) * 0.075f,
-                              0.958f + (float)(i / 2) * 0.004f,
-                              hd + 0.045f + (float)(i / 2) * 0.075f);
+        x.origin = at;
         x.pitch = 9.0f * NS_DEG2RAD;
         geo_mesh_append(out, &part, &x, -1);
         geo_mesh_free(&part);
     }
 
-    /* --- trappe à jetons -------------------------------------------------- */
+    /* Le doigt touche le **dessus** des boutons, pas leur centre : demi-hauteur
+     * de la boîte (8 mm) plus l'épaisseur d'une pulpe (5 mm). Sans ça la main
+     * s'enfonce dans le panneau — le genre de détail qui ne se voit qu'une fois
+     * les bras à l'écran, et qui coûte alors une heure à retrouver. */
+    anchors->panel[0] = btn_x;
+    anchors->panel[1] = btn_y + 0.013f;
+    anchors->panel[2] = btn_z;
+
+    /* --- trappe à jetons --------------------------------------------------
+     *
+     * Centrée à 58 cm, donc débordant de 46 à 70 cm — le dessous du panneau de
+     * commande commence exactement à 70. Elle était à 44 cm : c'est la hauteur
+     * d'un genou, et surtout c'est **hors d'atteinte** d'un bras de 67 cm partant
+     * d'une épaule à 1,48 m, à 1,08 m du meuble. Un joueur ne pouvait pas mettre
+     * son jeton sans que le bras traverse le caisson. La cote juste est de toute
+     * façon 55 à 75 cm sur une vraie borne. */
     geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.20f, 0.26f, 0.03f), 0.005f,
+    geo_box(&part, ns_v3_make(0.20f, 0.24f, 0.03f), 0.005f,
             GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_trim, trim);
     x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.44f, hd - 0.005f);
+    x.origin = ns_v3_make(0.0f, 0.58f, hd - 0.005f);
     geo_mesh_append(out, &part, &x, -1);
     geo_mesh_free(&part);
+
+    /* La fente est dans le tiers haut de la trappe, sur sa face avant (la
+     * trappe est centrée en z = hd − 5 mm et fait 3 cm d'épaisseur). */
+    anchors->coin[0] = 0.0f;
+    anchors->coin[1] = 0.58f + 0.070f;
+    anchors->coin[2] = hd + 0.012f;
 
     (void)hw;
 }
@@ -933,9 +1143,9 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         const float yaw_deg = tool_json_get_float(doc, e, "yaw", 0.0f);
         const float yaw = yaw_deg * NS_DEG2RAD;
 
-        float screen_local[3], screen_size[2];
+        rg_cab_anchors anchors; memset(&anchors, 0, sizeof anchors);
         geo_mesh local; geo_mesh_init(&local);
-        build_cabinet(b, &local, doc, e, name, screen_local, screen_size);
+        build_cabinet(b, &local, doc, e, name, &anchors);
 
         geo_xform x = GEO_XFORM_IDENTITY;
         x.origin = ns_v3_make(at[0], at[1], at[2]);
@@ -945,7 +1155,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         geo_mesh_append(&placed, &local, &x, -1);
         geo_mesh_free(&local);
         emit_object(b, name, &placed, RG_SMOOTH_HARD);
-        record_solid(b, name);
+        record_solid(b, name, RG_SOLID_CABINET);
 
         /* Report du repère local vers le monde. Le lacet suit la convention de
          * `geo_xform` : X' = X cos + Z sin, Z' = -X sin + Z cos. */
@@ -969,14 +1179,23 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         cab->bounds_max[1] = b->last_bounds.max.y;
         cab->bounds_max[2] = b->last_bounds.max.z;
 
-        cab->screen_center[0] = at[0] + screen_local[0] * c + screen_local[2] * s;
-        cab->screen_center[1] = at[1] + screen_local[1];
-        cab->screen_center[2] = at[2] - screen_local[0] * s + screen_local[2] * c;
+#define RG_TO_WORLD(dst, src)                                              \
+        do {                                                               \
+            (dst)[0] = at[0] + (src)[0] * c + (src)[2] * s;                \
+            (dst)[1] = at[1] + (src)[1];                                   \
+            (dst)[2] = at[2] - (src)[0] * s + (src)[2] * c;                \
+        } while (0)
+
+        RG_TO_WORLD(cab->screen_center, anchors.screen);
+        RG_TO_WORLD(cab->panel_centre,  anchors.panel);
+        RG_TO_WORLD(cab->coin_slot,     anchors.coin);
+#undef RG_TO_WORLD
+
         cab->screen_normal[0] = s;
         cab->screen_normal[1] = 0.0f;
         cab->screen_normal[2] = c;
-        cab->screen_size[0] = screen_size[0];
-        cab->screen_size[1] = screen_size[1];
+        cab->screen_size[0] = anchors.screen_size[0];
+        cab->screen_size[1] = anchors.screen_size[1];
 
         /* Où se plante le joueur : 70 cm devant l'écran, pieds au sol. Assez près
          * pour que le bras atteigne le bouton en A7, assez loin pour ne pas
@@ -1124,7 +1343,7 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[64];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name);
+            record_solid(b, name, RG_SOLID_PROP);
 
             /* Un point d'intérêt déclaré : le moteur cessera de repérer le
              * billard et le canapé en cherchant des sous-chaînes dans les noms de
@@ -1542,9 +1761,18 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
                 (double)c->screen_normal[0], (double)c->screen_normal[1],
                 (double)c->screen_normal[2],
                 (double)c->screen_size[0], (double)c->screen_size[1]);
-        fprintf(f, "      \"playerAnchor\": [%.4f, %.4f, %.4f] }%s\n",
+        fprintf(f, "      \"playerAnchor\": [%.4f, %.4f, %.4f],\n",
                 (double)c->player_anchor[0], (double)c->player_anchor[1],
-                (double)c->player_anchor[2],
+                (double)c->player_anchor[2]);
+        /* Les deux points que la main vise. Ils sortent d'ici pour la même raison
+         * que le centre d'écran : ils sont écrits à trois lignes des boîtes
+         * qu'ils désignent, et une seconde copie dériverait. */
+        fprintf(f, "      \"panelCentre\": [%.4f, %.4f, %.4f], "
+                   "\"coinSlot\": [%.4f, %.4f, %.4f] }%s\n",
+                (double)c->panel_centre[0], (double)c->panel_centre[1],
+                (double)c->panel_centre[2],
+                (double)c->coin_slot[0], (double)c->coin_slot[1],
+                (double)c->coin_slot[2],
                 (i + 1 < b->cabinet_count) ? "," : "");
     }
     fprintf(f, "  ],\n");
@@ -1648,6 +1876,10 @@ int main(int argc, char **argv)
     parse_mouldings(&b, &doc, root);
     parse_cabinets(&b, &doc, root);
     parse_props(&b, &doc, root);
+
+    /* Après tout le mobilier, avant d'écrire quoi que ce soit. */
+    check_solid_overlaps(&b);
+    check_fixture_naming(&b);
 
     if (b.meshes.count == 0) tool_fatalf("%s : la description ne produit aucun objet", in_path);
 

@@ -306,9 +306,24 @@ void geo_panel(geo_mesh *m, ns_v3 centre, ns_v3 normal, ns_v3 right,
     const ns_v3 c = ns_v3_add(ns_v3_add(centre, dx), dy);
     const ns_v3 e = ns_v3_add(ns_v3_sub(centre, dx), dy);
 
+    /*
+     * `a` et `b` sont le bas du panneau, `c` et `e` le haut — et **V croît vers
+     * le bas** : glTF place l'origine des UV en haut à gauche, là où OBJ la place
+     * en bas à gauche. `obj2gltf` fait déjà cette conversion à la lecture
+     * (`t->y = 1 - v`) ; ici il n'y a pas de conversion à faire, seulement la
+     * bonne convention à respecter du premier coup.
+     *
+     * Elle ne l'était pas : `v0` était attribué au bas du quad, donc **tout
+     * panneau déclaré était rendu à l'envers** — l'enseigne NINETEEN, les
+     * marquees des dix-neuf bornes, leurs écrans, les huit affiches. Sur une
+     * texture pavable un retournement en V ne se voit pas, et c'est pour ça que
+     * le défaut a traversé A3 et A4 : il ne se lit que sur du texte. La
+     * comparaison avec `--room=legacy`, dont les UV viennent du modèle de 2020,
+     * l'a montrée en une capture.
+     */
     quad_facing(m, a, b, c, e,
-                ns_v2_make(u0, v0), ns_v2_make(u1, v0),
-                ns_v2_make(u1, v1), ns_v2_make(u0, v1), n, material);
+                ns_v2_make(u0, v1), ns_v2_make(u1, v1),
+                ns_v2_make(u1, v0), ns_v2_make(u0, v0), n, material);
 }
 
 /* ========================================================================== */
