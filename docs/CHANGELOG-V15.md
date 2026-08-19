@@ -48,6 +48,17 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **Les grilles de haut-parleur existent enfin.** Les deux couronnes du bandeau étaient dessinées
+  dans le noir de ce bandeau — noir sur noir, donc absentes : entre l'écran et le marquee la borne
+  n'avait qu'une plaque morte. Ce qui fait lire une grille n'est pas sa couleur mais son MÉTAL,
+  d'où un matériau propre (`borne_grille`, `metal_plate_02`, métallique 0,9, pavage 9 cm) qui
+  accroche une lumière que la plaque mate absorbe.
+- **Deux essais abandonnés, notés pour qu'on ne les refasse pas.** (1) Baisser de 38 % les onze
+  luminaires de plafond : la saturation ne tombait qu'à 6,7 % mais la médiane de l'allée passait
+  de 80 à 58 et le classement à 50 % de pixels sous 16. (2) Désaturer et assombrir les caissons
+  pour qu'ils cessent de paraître plastique : sous cet éclairage un albédo neutre de valeur
+  moyenne vire au PASTEL crayeux, ce qui est pire. La laque saturée est un correctif documenté du
+  « trop sombre » (le caisson valait 4 % d'albédo) et il ne faut pas la défaire.
 - **Le plafond lumineux est un diffuseur, plus un réflecteur blanc.** Le haut du cadre de
   l'allée était une nappe blanche continue — 8,6 % des pixels au-dessus de 200. La cause n'était
   pas l'émissif (le baisser de 1,05 à 0,58 n'a rien changé : 8,5 %) mais l'ALBÉDO, à (1,00 0,975

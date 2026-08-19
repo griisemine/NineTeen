@@ -1070,6 +1070,25 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      */
     const int dark_i = material_index_opt(b, "borne_noir");
     const int dark   = (dark_i >= 0) ? dark_i : trim;
+    /*
+     * La grille de haut-parleur, et pourquoi elle mérite son propre matériau.
+     *
+     * Les deux couronnes étaient dessinées dans le NOIR du bandeau — noir sur
+     * noir, donc invisibles. Résultat : entre l'écran et le marquee, la borne
+     * n'avait qu'une plaque morte d'un seul tenant, qui occupe le quart de sa
+     * face vue d'en haut. Sur les images de référence c'est exactement le
+     * contraire : les deux grilles rondes sont ce qui donne un visage à la
+     * machine.
+     *
+     * Une grille se lit parce qu'elle est MÉTALLIQUE : elle accroche une
+     * lumière que la plaque mate absorbe. C'est le seul écart nécessaire —
+     * même noir, même place, même géométrie.
+     *
+     * Facultative comme `borne_noir` : sans elle, on retombe sur le bandeau et
+     * la borne est celle d'avant.
+     */
+    const int grille_i = material_index_opt(b, "borne_grille");
+    const int grille   = (grille_i >= 0) ? grille_i : dark;
 
     const geo_uv uv_body = material_uv(b, body);
     const geo_uv uv_trim = material_uv(b, trim);
@@ -1191,7 +1210,7 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
          * Une couronne à 12 côtés à deux mètres se lit exactement pareil.
          */
         geo_mesh_init(&part);
-        geo_cylinder(&part, 0.050f, 0.040f, 0.007f, 12, false, true, &uv_dark, dark);
+        geo_cylinder(&part, 0.050f, 0.040f, 0.009f, 12, false, true, &uv_dark, grille);
         x = GEO_XFORM_IDENTITY;
         x.origin = ns_v3_make((float)side * 0.185f,
                               hp_mid.y + 0.045f + hp_n.y * 0.002f,

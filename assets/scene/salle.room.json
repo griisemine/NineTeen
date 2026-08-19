@@ -470,6 +470,20 @@
       "_": "Le caisson d'une borne. Il portait `gris_foncer.jpg`, un aplat de 24 x 24 px à peu près noir, sur VINGT-TROIS objets dont les dix-neuf bornes : aucune quantité de lumière ne rend un matériau noir visible, et c'est là, plus que dans l'éclairage, que se jouait le « trop sombre »."
     },
     {
+      "name": "borne_grille",
+      "texture": "metal_plate_02.jpg",
+      "roughness": 0.38,
+      "metallic": 0.9,
+      "uvMetres": 0.09,
+      "baseColor": [
+        0.2,
+        0.195,
+        0.19,
+        1.0
+      ],
+      "_": "La grille des deux haut-parleurs. Elle était dessinée dans le noir du bandeau — noir sur noir — donc absente : la borne n'avait qu'une plaque morte entre l'écran et le marquee, soit le quart de sa face. Ce qui fait lire une grille n'est pas sa couleur mais son MÉTAL : elle accroche une lumière que la plaque mate absorbe. Pavage serré (9 cm) parce qu'une grille est une trame fine, pas une tôle."
+    },
+    {
       "name": "borne_noir",
       "texture": "painted_panel.jpg",
       "roughness": 0.34,
