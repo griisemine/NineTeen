@@ -1,19 +1,39 @@
 /*
  * test_online.c — le client HTTP et la couche de classement, sans deviner.
  *
- * Ce test ouvre de VRAIES sockets vers un serveur local lancé par CTest. C'est
- * délibéré : le reste du moteur se vérifie sans périphérique, mais un client
- * réseau qu'on ne fait jamais parler à personne est un client dont on ne sait
- * rien. Le serveur de test répond exactement ce que répond le vrai sur les deux
- * routes que le client lit.
+ * Ce test ouvre de VRAIES sockets. C'est délibéré : le reste du moteur se
+ * vérifie sans périphérique, mais un client réseau qu'on ne fait jamais parler
+ * à personne est un client dont on ne sait rien.
  *
- * Ce qui est vérifié avant tout : **le verrou**. `--offline` et l'absence d'URL
- * doivent empêcher toute connexion, et ça se teste en demandant un classement
- * puis en constatant qu'aucune réponse n'arrive jamais.
+ * Trois régimes, selon les arguments — et CTest ne lance AUCUN serveur, contre
+ * ce que disait cette entête jusqu'ici :
+ *
+ *   ns_test_online
+ *       découpage d'URL, verrou `--offline`, serveur mort. C'est ce que fait la
+ *       CI, et ça ne demande rien.
+ *
+ *   ns_test_online <url>
+ *       + le classement mondial, contre un serveur qui répond comme le vrai.
+ *
+ *   ns_test_online <url> <jeton-de-session>
+ *       + LA CHAÎNE ENTIÈRE contre le vrai `nineteend` et sa base : billet,
+ *       partie, sceau, file, envoi, classement. C'est le seul régime qui
+ *       confronte les deux moitiés écrites en C et en Go ; il se lance à la
+ *       main, avec un serveur de développement :
+ *
+ *         NINETEEN_DB_URL=… go run ./cmd/nineteend &
+ *         jeton=$(curl -s -X POST …/api/v1/auth/login … | …)
+ *         ns_test_online http://127.0.0.1:8080 "$jeton"
+ *
+ * Ce qui est vérifié avant tout dans le régime sans argument : **le verrou**.
+ * `--offline` et l'absence d'URL doivent empêcher toute connexion, et ça se
+ * teste en demandant un classement puis en constatant qu'aucune réponse
+ * n'arrive jamais.
  */
 #include "ns_core.h"
 #include "ns_http.h"
 #include "ns_online.h"
+#include "ns_runlog.h"
 
 #include <SDL3/SDL.h>
 
@@ -168,6 +188,100 @@ static void test_serveur_mort(void)
     CHECK(true, "l'arrêt se passe bien malgré l'échec");
 }
 
+/*
+ * La chaîne COMPLÈTE, contre un vrai serveur : billet → partie → sceau → file
+ * → envoi → classement.
+ *
+ * Ne tourne que si un jeton de session est fourni — c'est-à-dire face au vrai
+ * `nineteend` avec sa base, pas face au bouchon de CTest. C'est le seul test qui
+ * mette bout à bout les deux moitiés écrites de part et d'autre (C et Go), et
+ * les deux défauts qu'il attrape sont ceux qui ont réellement eu lieu :
+ *
+ *  - une graine relue en `float` : le client joue une AUTRE partie que celle
+ *    ouverte, et le serveur refuse le sceau ;
+ *  - une enveloppe postée telle quelle : `DisallowUnknownFields` répond 400,
+ *    donc le fichier est supprimé et la partie perdue en croyant l'envoyer.
+ *
+ * Les deux se voient ici, et nulle part ailleurs.
+ */
+static void test_partie_en_ligne(const char *url, const char *token)
+{
+    char queue[1024];
+    char *cwd = SDL_GetCurrentDirectory();   /* rendu sur le tas : à libérer */
+    SDL_snprintf(queue, sizeof queue, "%stest-online-queue", cwd ? cwd : "./");
+    SDL_free(cwd);
+    ns_runlog_set_queue_dir(queue);
+
+    ns_online_config cfg;
+    SDL_zero(cfg);
+    cfg.server_url = url;
+    cfg.token = token;
+    if (!ns_online_init(&cfg)) { CHECK(false, "le réseau démarre"); return; }
+
+    /* Le billet arrive quand il arrive — mais pas indéfiniment. */
+    ns_online_ticket t;
+    bool got = false;
+    for (int i = 0; i < 120 && !got; ++i) {
+        got = ns_online_take_ticket("flappy", "normal", &t);
+        if (!got) SDL_Delay(50);
+    }
+    CHECK(got, "le serveur délivre un billet (statut : %s)", ns_online_status());
+    if (!got) { ns_online_shutdown(); return; }
+
+    CHECK(t.run_id[0] != '\0', "avec un identifiant (« %s »)", t.run_id);
+    CHECK(t.secret_len == 32, "un secret de 32 octets (%zu)", t.secret_len);
+    /*
+     * La graine est tirée sur 63 bits : la voir tenir sur 24 serait le symptôme
+     * exact d'une relecture en flottant. Une graine de moins de 2^40 est
+     * possible mais improbable (une chance sur 8 millions) ; ce qui ne l'est
+     * pas, c'est qu'elle soit un multiple d'une grande puissance de deux, ce
+     * qu'un arrondi de `float` produirait à tous les coups.
+     */
+    CHECK(t.seed > 0, "une graine positive (%lld)", (long long)t.seed);
+    CHECK((t.seed & 0xFFFFFFull) != 0 || t.seed < (1LL << 40),
+          "et qui a gardé ses bits de poids faible (%lld)", (long long)t.seed);
+
+    /* Une partie qu'un serveur acceptera : le barème de Flappy compte 1 par
+     * tuyau, donc quatre passages valent 4. */
+    ns_runlog *r = ns_runlog_create(32);
+    if (!r) { CHECK(false, "journal"); ns_online_shutdown(); return; }
+    ns_runlog_begin(r, "flappy", "normal", t.seed, t.secret, t.secret_len);
+    ns_runlog_set_run_id(r, t.run_id);
+    for (int i = 0; i < 4; ++i) ns_runlog_event(r, 2000 + i * 1500, "pipe", 0);
+    ns_runlog_event(r, 8000, "death", 0);
+    ns_runlog_end(r, 8000, 4);
+
+    CHECK(ns_runlog_enqueue(r), "la partie entre dans la file");
+    ns_runlog_destroy(r);
+
+    uint32_t sent = 0, failed = 0;
+    ns_online_flush_queue();
+    for (int i = 0; i < 120; ++i) {
+        SDL_Delay(50);
+        ns_online_stats(&sent, &failed);
+        if (sent || failed) break;
+    }
+    CHECK(sent == 1 && failed == 0,
+          "elle est ACCEPTÉE par le serveur (%u envoyée(s), %u refusée(s), %s)",
+          sent, failed, ns_online_status());
+    CHECK(ns_runlog_pending() == 0, "et la file est vide (%u)", ns_runlog_pending());
+
+    /* Et le score ressort par la porte d'à côté : le classement mondial. */
+    ns_online_request_board("flappy", "normal");
+    ns_online_board board;
+    bool seen = false;
+    for (int i = 0; i < 100 && !seen; ++i) {
+        SDL_Delay(50);
+        seen = ns_online_board_get("flappy", "normal", &board);
+    }
+    CHECK(seen && board.count >= 1, "le score reparaît au classement mondial");
+    if (seen && board.count >= 1) {
+        CHECK(board.row[0].score == 4, "avec sa valeur recalculée (%u)", board.row[0].score);
+    }
+
+    ns_online_shutdown();
+}
+
 int main(int argc, char **argv)
 {
     ns_log_set_level(NS_LOG_ERROR);
@@ -176,7 +290,8 @@ int main(int argc, char **argv)
     test_verrou_hors_ligne();
     test_serveur_mort();
 
-    if (argc > 1) test_classement_en_ligne(argv[1]);
+    if (argc > 2)      test_partie_en_ligne(argv[1], argv[2]);
+    else if (argc > 1) test_classement_en_ligne(argv[1]);
     else printf("  (pas d'URL fournie : le test en ligne est sauté)\n");
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

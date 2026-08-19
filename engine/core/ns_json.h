@@ -39,6 +39,14 @@ const ns_json_value *ns_json_at(const ns_json *doc, const ns_json_value *arr, in
 
 /* Lectures typées, avec repli. Chacune accepte un `obj` nul (renvoie le repli). */
 float ns_json_get_float(const ns_json *doc, const ns_json_value *obj, const char *key, float fallback);
+/*
+ * Un entier 64 bits, sans passer par un flottant : `float` n'a que 24 bits de
+ * mantisse, et une graine de partie en a 63. Repli si la valeur est absente,
+ * n'est pas un nombre, ou n'est pas un ENTIER décimal — « 1.5 » et « 1e9 »
+ * rendent le repli plutôt qu'une troncature silencieuse.
+ */
+int64_t ns_json_get_i64(const ns_json *doc, const ns_json_value *obj, const char *key,
+                        int64_t fallback);
 bool  ns_json_get_bool(const ns_json *doc, const ns_json_value *obj, const char *key, bool fallback);
 void  ns_json_get_string(const ns_json *doc, const ns_json_value *obj, const char *key,
                          char *out, size_t out_size);
@@ -49,6 +57,13 @@ void  ns_json_get_string(const ns_json *doc, const ns_json_value *obj, const cha
  * d'un objet, ce qui obligeait à envelopper toute liste de mots dans des objets
  * à une clé. */
 void  ns_json_string(const ns_json *doc, const ns_json_value *v, char *out, size_t out_size);
+
+/*
+ * L'intervalle d'octets qu'occupe une valeur dans `doc->text` — objets et
+ * tableaux compris, accolades incluses. Sert à extraire un sous-document
+ * inchangé, octet pour octet.
+ */
+bool  ns_json_span(const ns_json *doc, const ns_json_value *v, size_t *start, size_t *end);
 
 /* Lit un tableau de trois nombres ; les composantes manquantes prennent `fallback`. */
 void ns_json_get_vec3(const ns_json *doc, const ns_json_value *obj, const char *key,

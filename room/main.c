@@ -379,10 +379,55 @@ static const char *quality_name(ns_quality q)
  * Le meilleur vient donc de `ns_scores`, qui est la seule source de vérité :
  * `finish_run` l'y écrit avant qu'on le relise.
  */
-static void start_run(const ns_game_api *api, void *game, uint64_t seed, bool hard)
+static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
+                      uint64_t seed, bool hard)
 {
+    const char *difficulty = hard ? "hard" : "normal";
+
+    /*
+     * Le BILLET, et pourquoi la graine peut changer sous nos pieds.
+     *
+     * `ns_online_take_ticket` rend, sans réseau et sans attente, un billet que
+     * le fil est allé chercher AVANT qu'on en ait besoin. Il porte trois choses
+     * qu'on ne peut pas fabriquer soi-même : l'identifiant de la partie, la
+     * graine que le serveur a tirée, et le secret dont dépend le sceau. Quand il
+     * y en a un, la partie se joue sur LA graine du serveur — c'est ce qui fait
+     * que le score cesse d'être une valeur annoncée pour devenir une conséquence
+     * recalculable.
+     *
+     * Sans billet — hors ligne, serveur muet, ou billet pas encore arrivé — on
+     * garde la graine locale et un secret nul. La partie se joue exactement
+     * pareil, `ns_runlog_enqueue` la refusera d'elle-même, et rien n'échoue.
+     * C'est la règle d'A2b, tenue jusqu'ici.
+     *
+     * Et les captures ? La graine passée par l'appelant est fixe là où une image
+     * doit se refaire à l'identique (`--play-at=`, `--game=` sans écran). Un
+     * billet la remplace — mais un billet n'existe que si un serveur est
+     * configuré, ce qu'aucune capture ne fait. La garantie exacte est donc :
+     * **une capture hors ligne est reproductible**, ce qui couvre toutes celles
+     * du dépôt. Prétendre plus serait faux, et interdire le billet en mode sans
+     * écran rendrait au passage la chaîne en ligne invérifiable ici.
+     */
+    ns_online_ticket ticket;
+    const bool ticketed = ns_online_take_ticket(api->id, difficulty, &ticket);
+    if (ticketed) seed = (uint64_t)ticket.seed;
+
     api->reset(game, seed, hard);
-    api->set_best(game, ns_scores_best(api->id, hard ? "hard" : "normal"));
+    api->set_best(game, ns_scores_best(api->id, difficulty));
+
+    /* Une nouvelle partie, donc un nouveau journal : poursuivre l'ancien
+     * enverrait au serveur deux parties collées bout à bout. */
+    if (log) {
+        ns_runlog_begin(log, api->id, difficulty,
+                        (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull),
+                        ticketed ? ticket.secret : NULL,
+                        ticketed ? ticket.secret_len : 0);
+        ns_runlog_set_run_id(log, ticketed ? ticket.run_id : NULL);
+        if (ticketed) {
+            NS_INFO("%s : partie %s ouverte sur le serveur (graine %lld)",
+                    api->title, ticket.run_id, (long long)ticket.seed);
+        }
+    }
 }
 
 /*
@@ -416,9 +461,18 @@ static uint32_t finish_run(ns_runlog *log, int64_t run_ms,
             rank ? "classé" : "hors classement",
             ns_scores_best(api->id, difficulty));
 
-    /* Au mieux, jamais bloquant. Sans secret de partie — c'est-à-dire hors
-     * ligne — la mise en file refuse d'elle-même : voir `ns_runlog_enqueue`. */
-    if (!offline) (void)ns_runlog_enqueue(log);
+    /*
+     * Au mieux, jamais bloquant. Sans secret de partie — c'est-à-dire hors
+     * ligne — la mise en file refuse d'elle-même : voir `ns_runlog_enqueue`.
+     *
+     * Et la file DOIT être poussée, sinon elle n'est qu'un dossier qui grossit.
+     * C'était le trou : le journal était scellé et rangé, et personne ne
+     * demandait jamais son envoi. `ns_online_flush_queue` ne fait que poser la
+     * demande — le fil s'en charge, la boucle de jeu ne s'arrête pas.
+     */
+    if (!offline) {
+        if (ns_runlog_enqueue(log)) ns_online_flush_queue();
+    }
     return rank;
 }
 
@@ -439,6 +493,7 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
 {
     const ns_game_api *api = ns_game_find(id);
     if (!api || !sprites) return NULL;
+
     if (*cur == api) return api;
 
     if (*cur) {
@@ -799,6 +854,13 @@ int main(int argc, char **argv)
      */
     ns_runlog *runlog = ns_runlog_create(16384);
     int64_t    run_ms = 0;
+    /*
+     * La graine des parties de DÉMONSTRATION, qui s'enchaînent en pilote
+     * automatique. Elle avance par un pas déterministe plutôt que par l'horloge :
+     * une capture d'une salle en attract mode doit se refaire à l'identique, et
+     * c'est le même raisonnement que pour l'avance rapide de `--warmup=`.
+     */
+    uint64_t   demo_seed = 20240418u;
     ns_scores_load();
 
     /*
@@ -831,6 +893,11 @@ int main(int argc, char **argv)
         if (pending) {
             NS_INFO("%u partie(s) en attente d'envoi dans « %s »",
                     pending, ns_runlog_queue_dir());
+            /* Ce qui a été joué hors ligne la dernière fois part maintenant. Une
+             * partie mise en file survit à une coupure, à une fermeture et à un
+             * serveur éteint — elle attend le prochain démarrage, et c'est ici
+             * que l'attente se termine. */
+            ns_online_flush_queue();
         }
     }
     /*
@@ -934,9 +1001,11 @@ int main(int argc, char **argv)
             const uint64_t seed = opt.headless ? 20240418u
                                                : (uint64_t)SDL_GetPerformanceCounter();
             game_hard = false;
-            start_run(game_api, game, seed, game_hard);
-            ns_runlog_begin(runlog, game_api->id, "normal",
-                            (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+            /* Le billet n'arrivera pas à temps pour CETTE partie — une partie ne
+             * s'attend pas — mais il sera là pour la suivante, et `--autoplay`
+             * en enchaîne. */
+            ns_online_prefetch_ticket(game_api->id, "normal");
+            start_run(game_api, game, runlog, seed, game_hard);
             run_ms = 0;
             in_game = true;
             fullscreen_game = true;      /* `--game=` est le mode plein écran */
@@ -1019,8 +1088,8 @@ int main(int argc, char **argv)
                 goto play_at_done;
             }
             game_hard = hard;
-            start_run(game_api, game, 20240418, hard);
-            ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal", 20240418, NULL, 0);
+            ns_online_prefetch_ticket(game_api->id, hard ? "hard" : "normal");
+            start_run(game_api, game, runlog, 20240418, hard);
             run_ms = 0;
             in_game = true;
             fullscreen_game = false;
@@ -1085,9 +1154,7 @@ play_at_done: ;
                  * partie, donc la capture reste rejouable à l'identique.
                  */
                 const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
-                start_run(game_api, game, seed, game_hard);
-                ns_runlog_begin(runlog, game_api->id, game_hard ? "hard" : "normal",
-                                (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+                start_run(game_api, game, runlog, seed, game_hard);
                 run_ms = 0;
             }
         }
@@ -1251,14 +1318,7 @@ play_at_done: ;
                                               || ev.key.key == SDLK_RETURN);
                             if (dead && action && dead_time > 0.8f) {
                                 const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                                start_run(game_api, game, seed, game_hard);
-                                /* Une nouvelle partie, donc un nouveau journal :
-                                 * poursuivre l'ancien enverrait au serveur deux
-                                 * parties collées bout à bout. */
-                                ns_runlog_begin(runlog, game_api->id,
-                                                game_hard ? "hard" : "normal",
-                                                (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull),
-                                                NULL, 0);
+                                start_run(game_api, game, runlog, seed, game_hard);
                                 run_ms = 0;
                             } else {
                                 ns_game_button b = NS_GAME_ACTION;
@@ -1364,9 +1424,7 @@ play_at_done: ;
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
                             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
                             game_hard = hard;
-                            start_run(game_api, game, seed, hard);
-                            ns_runlog_begin(runlog, game_api->id, hard ? "hard" : "normal",
-                                            (int64_t)(seed & 0x7FFFFFFFFFFFFFFFull), NULL, 0);
+                            start_run(game_api, game, runlog, seed, hard);
                             run_ms = 0;
                             in_game = true;
                             /*
@@ -1482,6 +1540,21 @@ play_at_done: ;
             cam.input_up = 0.0f;
         }
 
+        /*
+         * Le billet se demande quand le joueur ARRIVE devant la borne, pas quand
+         * il appuie. Entre les deux il y a la main qui s'avance, le jeton qui
+         * tombe et le bouton qu'on presse — une seconde et demie, largement de
+         * quoi faire un aller-retour HTTP sans que la salle ne se fige. C'est
+         * toute la raison d'être du billet d'avance : une partie commence quand
+         * le joueur appuie, pas quand le serveur répond.
+         */
+        if (!in_game && cam.mode == ROOM_CAM_PLAYER) {
+            const ns_cabinet *ahead = room_viewmodel_target(&scene, &cam);
+            if (ahead && ahead->game[0]) {
+                ns_online_prefetch_ticket(ahead->game, ahead->difficulty);
+            }
+        }
+
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
@@ -1555,6 +1628,31 @@ play_at_done: ;
                     last_rank = finish_run(runlog, run_ms, game_api, game,
                                            game_hard ? "hard" : "normal",
                                            opt.player, opt.offline);
+                }
+
+                /*
+                 * En pilote automatique, la partie REPART toute seule.
+                 *
+                 * Sans ça, `--autoplay` jouait une partie et laissait ensuite un
+                 * écran de fin figé jusqu'à la fermeture — une borne morte, ce
+                 * qui est l'exact contraire de l'ambiance qu'on cherche : une
+                 * salle d'arcade, c'est des écrans qui bougent tout seuls. La
+                 * temporisation est la même que pour un humain (`dead_time`),
+                 * pour qu'on ait le temps de LIRE le score avant que ça reparte.
+                 *
+                 * C'est aussi ce qui rend la chaîne en ligne observable sans
+                 * joueur : la première partie d'un processus démarre forcément
+                 * sans billet — une partie n'attend pas le réseau — et c'est la
+                 * deuxième qui en porte un.
+                 */
+                if (opt.autoplay) {
+                    float dead_time = 0.0f;
+                    if (game_api->dead(game, &dead_time) && dead_time > 1.5f) {
+                        demo_seed = demo_seed * 6364136223846793005ull
+                                  + 1442695040888963407ull;
+                        start_run(game_api, game, runlog, demo_seed, game_hard);
+                        run_ms = 0;
+                    }
                 }
             }
         }
@@ -1751,16 +1849,28 @@ play_at_done: ;
              * En headless, `--frames` est une LIMITE — pour tout le monde.
              *
              * Elle ne l'était que pour `--screenshot` et `--bench`. Sans l'un des
-             * deux, `--headless --frames=3` rendait indéfiniment, et finissait par
-             * tomber dans l'épuisement du pool de descripteurs de lavapipe :
-             * `VULKAN_INTERNAL_AllocateDescriptorSets` déréférence, et le jeu
-             * meurt sur SIGSEGV en ayant l'air d'avoir planté tout seul. Le
-             * commentaire précédent avait déjà fait le constat pour `--bench`
-             * sans voir qu'il valait pour le mode entier.
+             * deux, `--headless --frames=3` rendait indéfiniment et finissait par
+             * mourir sur SIGSEGV en ayant l'air d'avoir planté tout seul. C'est
+             * aussi ce qui empêchait de vérifier quoi que ce soit sur le chemin
+             * de SORTIE — les réglages gardés, le classement écrit, les fuites
+             * annoncées : le programme n'y arrivait jamais.
              *
-             * C'est aussi ce qui empêchait de vérifier quoi que ce soit sur le
-             * chemin de SORTIE — les réglages gardés, le classement écrit, les
-             * fuites annoncées : le programme n'y arrivait jamais.
+             * Ce que ça ne règle PAS, et il faut le dire : dans ce conteneur,
+             * une session headless longue meurt vers la trentième image, quelle
+             * que soit la valeur de `--frames` et quel que soit le palier de
+             * qualité — `low` compris. La pile est ENTIÈREMENT dans
+             * `libvulkan_lvp.so` (un memset sur un pointeur nul, sur un fil du
+             * pilote), avec 15 Gio de mémoire libre et 2,8 Gio de RSS. Aucune
+             * image du moteur n'y figure, et le moteur ne crée aucun objet GPU
+             * par image : tampons de transfert créés et relâchés dans la même
+             * fonction, pipelines et cibles créés à l'initialisation ou au
+             * redimensionnement.
+             *
+             * Ce qui est donc établi : le rastériseur logiciel de ce conteneur
+             * ne tient pas une longue session. Ce qui ne l'est PAS : que la
+             * même chose n'arrive jamais sur un vrai GPU. Je n'en ai pas ici, je
+             * ne peux pas le savoir, et je ne le prétends pas. Les captures
+             * courtes (4 à 8 images) passent, c'est ce dont elles ont besoin.
              */
             if (opt.headless && frames_rendered >= opt.frames) {
                 ns_texture_destroy(rhi, &offscreen);

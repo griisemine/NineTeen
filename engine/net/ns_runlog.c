@@ -2,6 +2,7 @@
 #include "ns_runlog.h"
 
 #include "ns_core.h"
+#include "ns_json.h"
 
 #include <SDL3/SDL.h>
 
@@ -157,6 +158,7 @@ size_t ns_base64_raw(const uint8_t *data, size_t len, char *out, size_t cap)
 struct ns_runlog {
     char     game[32], difficulty[16];
     int64_t  seed;
+    char     run_id[64];
     uint8_t  secret[64];
     size_t   secret_len;
 
@@ -198,6 +200,7 @@ void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
     SDL_strlcpy(r->difficulty, (difficulty && *difficulty) ? difficulty : "normal",
                 sizeof r->difficulty);
     r->secret_len = 0;
+    r->run_id[0] = '\0';
     SDL_memset(r->secret, 0, sizeof r->secret);
     if (secret && secret_len) {
         r->secret_len = (secret_len > sizeof r->secret) ? sizeof r->secret : secret_len;
@@ -262,6 +265,14 @@ size_t ns_runlog_canonical(const ns_runlog *r, char *out, size_t cap)
     return n;
 }
 
+void ns_runlog_set_run_id(ns_runlog *r, const char *run_id)
+{
+    if (!r) return;
+    SDL_snprintf(r->run_id, sizeof r->run_id, "%s", run_id ? run_id : "");
+}
+
+const char *ns_runlog_run_id(const ns_runlog *r) { return r ? r->run_id : ""; }
+
 bool ns_runlog_authenticated(const ns_runlog *r) { return r && r->secret_len > 0; }
 uint32_t ns_runlog_event_count(const ns_runlog *r) { return r ? r->count : 0u; }
 
@@ -320,6 +331,14 @@ bool ns_runlog_enqueue(const ns_runlog *r)
          * tentative d'envoi, et remplirait le disque de parties irrecevables. */
         return false;
     }
+    if (!r->run_id[0]) {
+        /* Un sceau sans identifiant n'a aucune adresse : `/runs/{id}/submit`
+         * demande les deux. Ça ne devrait pas arriver — un secret vient
+         * toujours avec un identifiant — mais le vérifier ici coûte une ligne
+         * et évite d'écrire un fichier que rien ne saura envoyer. */
+        NS_WARN("file d'attente : partie scellée sans identifiant, ignorée");
+        return false;
+    }
 
     const char *dir = ns_runlog_queue_dir();
     if (!SDL_CreateDirectory(dir)) {
@@ -360,10 +379,30 @@ bool ns_runlog_enqueue(const ns_runlog *r)
     json_escape(r->difficulty, esc, sizeof esc);
     SDL_WriteIO(io, esc, SDL_strlen(esc));
 
+    /*
+     * UNE ENVELOPPE, et à l'intérieur la soumission telle que le serveur
+     * l'attend — pas l'inverse.
+     *
+     * La première version mettait tout à plat : `game`, `difficulty`, `runId`,
+     * `seed` à côté de `events`, `claimedScore`, `durationMs` et `seal`. Ça
+     * paraissait plus simple, et ça ne pouvait pas marcher : `decodeJSON`
+     * appelle `dec.DisallowUnknownFields()` (`server/internal/api/api.go:701`),
+     * donc les quatre premiers champs auraient fait répondre 400 — un 4xx, donc
+     * un fichier supprimé. Toutes les parties de la file auraient été jetées
+     * une par une, sans qu'aucune n'arrive, et le journal aurait seulement dit
+     * « partie refusée (400) ».
+     *
+     * Le contenu de `submission` est donc EXACTEMENT `runs.Submission`, et il
+     * part tel quel : `ns_runlog_queue_read` en rend les octets sans les
+     * reconstruire. Le reste — l'identifiant qui forme l'URL, la graine, le jeu
+     * — est de l'enveloppe : ce dont le transport a besoin pour savoir où
+     * envoyer, et ce dont un humain a besoin pour lire le fichier.
+     */
     len = SDL_snprintf(buf, sizeof buf,
-                       "\",\"seed\":%lld,\"claimedScore\":%lld,\"durationMs\":%lld,"
+                       "\",\"runId\":\"%s\",\"seed\":%lld,\"submission\":{"
+                       "\"claimedScore\":%lld,\"durationMs\":%lld,"
                        "\"seal\":\"%s\",\"events\":[",
-                       (long long)r->seed, (long long)r->claimed,
+                       r->run_id, (long long)r->seed, (long long)r->claimed,
                        (long long)r->duration_ms, seal);
     SDL_WriteIO(io, buf, (size_t)len);
 
@@ -374,7 +413,7 @@ bool ns_runlog_enqueue(const ns_runlog *r)
                            (long long)r->event[i].value);
         SDL_WriteIO(io, buf, (size_t)len);
     }
-    len = SDL_snprintf(buf, sizeof buf, "]}\n");
+    len = SDL_snprintf(buf, sizeof buf, "]}}\n");
     SDL_WriteIO(io, buf, (size_t)len);
     SDL_CloseIO(io);
 
@@ -390,4 +429,67 @@ uint32_t ns_runlog_pending(void)
     if (!files) return 0;
     SDL_free(files);
     return (uint32_t)(count < 0 ? 0 : count);
+}
+
+/* ==========================================================================
+ * Relecture d'un fichier de file
+ * ==========================================================================
+ * Le transport a besoin de deux choses : l'IDENTIFIANT, pour former l'URL, et
+ * le CORPS, à poster tel quel.
+ *
+ * Le corps n'est pas le fichier : c'est la valeur de `submission`, et rien
+ * d'autre. On la découpe par ses bornes d'octets plutôt que de la réécrire —
+ * un sceau porte sur des octets précis, et re-sérialiser serait le seul moyen
+ * d'en changer un sans s'en apercevoir.
+ * ========================================================================== */
+
+bool ns_runlog_queue_read(const char *path, char *run_id, size_t run_id_cap,
+                          char **body, size_t *body_len)
+{
+    if (run_id && run_id_cap) run_id[0] = '\0';
+    if (body) *body = NULL;
+    if (body_len) *body_len = 0;
+    if (!path || !body || !body_len) return false;
+
+    size_t size = 0;
+    void *data = SDL_LoadFile(path, &size);
+    if (!data || size == 0) {
+        SDL_free(data);
+        return false;
+    }
+
+    ns_arena arena;
+    if (!ns_arena_init(&arena, 256u * 1024u, "json file d'attente")) {
+        SDL_free(data);
+        return false;
+    }
+
+    bool ok = false;
+    ns_json doc;
+    if (ns_json_parse(&doc, (const char *)data, size, &arena)) {
+        const ns_json_value *root = ns_json_root(&doc);
+        char id[64] = { 0 };
+        ns_json_get_string(&doc, root, "runId", id, sizeof id);
+
+        size_t from = 0, to = 0;
+        const ns_json_value *sub = ns_json_get(&doc, root, "submission");
+        if (id[0] && ns_json_span(&doc, sub, &from, &to) && to > from) {
+            const size_t n = to - from;
+            char *copy = (char *)SDL_malloc(n + 1);
+            if (copy) {
+                SDL_memcpy(copy, (const char *)data + from, n);
+                copy[n] = '\0';
+                if (run_id && run_id_cap) {
+                    SDL_snprintf(run_id, run_id_cap, "%s", id);
+                }
+                *body = copy;
+                *body_len = n;
+                ok = true;
+            }
+        }
+    }
+
+    ns_arena_free(&arena);
+    SDL_free(data);
+    return ok;
 }

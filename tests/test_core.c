@@ -6,6 +6,7 @@
  * chemins de fichiers non bornés.
  */
 #include "ns_core.h"
+#include "ns_json.h"
 #include "ns_math.h"
 
 #include <SDL3/SDL.h>
@@ -401,6 +402,83 @@ static void test_mount_priority(void)
     SDL_RemovePath(over_dir);
 }
 
+/* ========================================================================== */
+/* JSON : les entiers 64 bits, et les octets bruts d'une valeur               */
+/* ========================================================================== */
+
+static void test_json_i64_and_span(void)
+{
+    /*
+     * Ce que ce test protège, en une phrase : **la graine de partie**.
+     *
+     * Le serveur en tire une de 63 bits (`randomSeed`, bit de signe effacé) et
+     * la renvoie en nombre JSON. Relue par `ns_json_get_float`, elle repasse par
+     * 24 bits de mantisse : le client jouerait une autre partie que celle qui a
+     * été ouverte, scellerait son journal sur SA graine, et le serveur
+     * recalculerait sur la sienne. Chaque partie refusée pour sceau invalide,
+     * sans qu'une seule ligne dise pourquoi.
+     */
+    printf("JSON : entiers 64 bits et bornes de valeur\n");
+
+    const char *text =
+        "{\"seed\":9007199254740993,\"neg\":-4611686018427387904,"
+        "\"petit\":42,\"reel\":1.5,\"expo\":1e9,\"vrai\":true,\"nul\":null,"
+        "\"mot\":\"12\",\"submission\":{\"a\":[1,2],\"s\":\"}{\"},\"apres\":7}";
+
+    ns_arena arena;
+    if (!ns_arena_init(&arena, 64u * 1024u, "test json")) { CHECK(false, "arène"); return; }
+
+    ns_json doc;
+    if (!ns_json_parse(&doc, text, strlen(text), &arena)) {
+        CHECK(false, "analyse");
+        ns_arena_free(&arena);
+        return;
+    }
+    const ns_json_value *root = ns_json_root(&doc);
+
+    /* 2^53+1 : le premier entier que même un `double` ne sait plus distinguer
+     * de son voisin. Un `float` s'y trompe de plus de 500 millions. */
+    CHECK(ns_json_get_i64(&doc, root, "seed", 0) == 9007199254740993LL,
+          "2^53+1 revient exact : %lld", (long long)ns_json_get_i64(&doc, root, "seed", 0));
+    CHECK((int64_t)ns_json_get_float(&doc, root, "seed", 0.0f) != 9007199254740993LL,
+          "et le chemin flottant, lui, le perd — c'est bien le défaut visé");
+    CHECK(ns_json_get_i64(&doc, root, "neg", 0) == -4611686018427387904LL, "un négatif aussi");
+    CHECK(ns_json_get_i64(&doc, root, "petit", 0) == 42, "un petit entier");
+
+    /* Le repli plutôt qu'une troncature muette : « 1.5 » n'est pas un entier,
+     * et rendre 1 serait pire que d'annoncer qu'on n'a pas su lire. */
+    CHECK(ns_json_get_i64(&doc, root, "reel", -7) == -7, "« 1.5 » rend le repli");
+    CHECK(ns_json_get_i64(&doc, root, "expo", -7) == -7, "« 1e9 » aussi");
+    CHECK(ns_json_get_i64(&doc, root, "vrai", -7) == -7, "« true » aussi");
+    CHECK(ns_json_get_i64(&doc, root, "nul", -7) == -7, "« null » aussi");
+    CHECK(ns_json_get_i64(&doc, root, "mot", -7) == -7, "et une CHAÎNE « 12 » n'est pas un nombre");
+    CHECK(ns_json_get_i64(&doc, root, "absent", -7) == -7, "une clé absente rend le repli");
+
+    /*
+     * Les bornes d'un sous-document : c'est ce qui permet de sortir de
+     * l'enveloppe de la file d'attente la soumission que le serveur attend,
+     * sans la réécrire — donc sans changer l'octet sur lequel porte le sceau.
+     * L'accolade PIÉGÉE dans « }{ » est là exprès : un découpage par comptage
+     * naïf d'accolades s'arrêterait dessus.
+     */
+    size_t from = 0, to = 0;
+    const ns_json_value *sub = ns_json_get(&doc, root, "submission");
+    CHECK(ns_json_span(&doc, sub, &from, &to), "les bornes d'un objet se lisent");
+    if (to > from) {
+        const size_t n = to - from;
+        CHECK(text[from] == '{' && text[to - 1] == '}',
+              "elles vont d'accolade à accolade");
+        CHECK(n == strlen("{\"a\":[1,2],\"s\":\"}{\"}"),
+              "et couvrent l'objet entier, accolade piégée comprise (%zu)", n);
+        CHECK(strncmp(text + from, "{\"a\":[1,2],\"s\":\"}{\"}", n) == 0,
+              "octet pour octet");
+    }
+    CHECK(ns_json_get_i64(&doc, root, "apres", 0) == 7,
+          "et le membre qui SUIT l'objet se lit encore");
+
+    ns_arena_free(&arena);
+}
+
 int main(void)
 {
     if (!SDL_Init(0)) {
@@ -417,6 +495,7 @@ int main(void)
     test_math();
     test_paths();
     test_mount_priority();
+    test_json_i64_and_span();
 
     printf("\n%d vérifications, %d échec(s)\n", g_checks, g_failures);
     SDL_Quit();

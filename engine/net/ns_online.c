@@ -4,6 +4,7 @@
 #include "ns_core.h"
 #include "ns_http.h"
 #include "ns_json.h"
+#include "ns_runlog.h"
 
 #include <SDL3/SDL.h>
 
@@ -39,8 +40,62 @@ static struct {
     uint32_t    game_count;
     bool        games_known;
 
+    /*
+     * UN billet d'avance, au plus, et le jeu pour lequel il a été tiré. En
+     * garder plusieurs ne servirait à rien — on ne joue qu'une partie à la fois
+     * — et en garder zéro obligerait à attendre le réseau au moment où le
+     * joueur appuie sur le bouton.
+     */
+    bool             ticket_ready;
+    char             ticket_game[24];
+    char             ticket_diff[16];
+    ns_online_ticket ticket;
+    char             want_ticket[24];   /* un billet à tirer, ou vide */
+    char             want_ticket_diff[16];
+    /*
+     * L'heure avant laquelle on ne REDEMANDE pas de billet après un échec.
+     *
+     * Sans elle, la demande restait armée tant qu'aucun billet n'arrivait : un
+     * serveur qui répond 401 — le cas normal quand on n'a pas de jeton de
+     * session — faisait repartir le fil aussitôt, sans attente, à pleine
+     * vitesse. C'est très exactement la boucle de la V1
+     * (`while (updateMeilleureScoreStruct(...) == EXIT_FAILURE);`, room.c:1302)
+     * que l'audit reproche, et je venais de la réécrire. Un échec coûte
+     * maintenant quinze secondes de silence.
+     */
+    uint64_t         ticket_retry_at_ms;
+
+    bool        want_flush;
+
     uint32_t    sent, failed;
 } g;
+
+/*
+ * Décodage base64 « brut » — sans remplissage, comme `base64.RawStdEncoding`
+ * côté Go. Le secret voyage sous cette forme et doit revenir aux 32 octets
+ * exacts : un décodeur qui exigerait les `=` finaux échouerait sur chaque
+ * billet, et le seul symptôme serait des parties refusées pour sceau invalide.
+ */
+static size_t base64_decode(const char *in, uint8_t *out, size_t cap)
+{
+    static const char *ALPHA =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    uint32_t acc = 0;
+    int bits = 0;
+    size_t n = 0;
+    for (const char *p = in; *p; ++p) {
+        if (*p == '=') break;
+        const char *q = SDL_strchr(ALPHA, *p);
+        if (!q) continue;               /* espaces, retours à la ligne */
+        acc = (acc << 6) | (uint32_t)(q - ALPHA);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            if (n < cap) out[n++] = (uint8_t)((acc >> bits) & 0xFFu);
+        }
+    }
+    return n;
+}
 
 /* ==========================================================================
  * Le fil
@@ -113,6 +168,42 @@ static int game_id_for(const char *slug)
     return -1;
 }
 
+/*
+ * Le NOM que le serveur donne à ce que le client appelle « flappy » + « hard ».
+ *
+ * Les deux moitiés n'ont jamais parlé la même langue, et personne ne s'en était
+ * aperçu : le moteur porte un identifiant de jeu (`flappy`) et une difficulté
+ * (`normal` / `hard`) séparés — c'est ce que déclare chaque borne — tandis que
+ * la base du serveur en fait un seul créneau par tableau : `flappy-easy`,
+ * `flappy-hard`, et `pacman` tout court là où il n'y a qu'un mode. Le client
+ * cherchait « flappy », qui n'existe nulle part côté serveur : `game_id_for`
+ * rendait −1, le classement mondial était donc introuvable pour les huit jeux,
+ * et l'ouverture de partie répondait « jeu inconnu ». Le test qui existait ne
+ * l'a pas vu parce qu'il interroge un bouchon dont le jeu s'appelle « snake ».
+ *
+ * On résout donc contre la liste que le serveur a RÉELLEMENT renvoyée, dans cet
+ * ordre : le créneau de la difficulté demandée, puis le nom nu. Rien n'est
+ * codé en dur au-delà du suffixe, et un jeu que le serveur ne connaît pas
+ * reste un jeu inconnu — pas un identifiant inventé.
+ *
+ * Appelée avec `g.lock` tenu.
+ */
+static int resolve_game(const char *game, const char *diff, char *out, size_t cap)
+{
+    if (!game || !game[0]) return -1;
+    const bool hard = diff && SDL_strcasecmp(diff, "hard") == 0;
+
+    char candidate[24];
+    SDL_snprintf(candidate, sizeof candidate, "%s-%s", game, hard ? "hard" : "easy");
+    int id = game_id_for(candidate);
+    if (id < 0) {
+        SDL_snprintf(candidate, sizeof candidate, "%s", game);
+        id = game_id_for(candidate);
+    }
+    if (id >= 0 && out && cap) SDL_snprintf(out, cap, "%s", candidate);
+    return id;
+}
+
 static ns_online_board *board_slot(const char *game, const char *diff)
 {
     for (uint32_t i = 0; i < g.boards; ++i) {
@@ -132,10 +223,10 @@ static void fetch_board(const char *game, const char *diff)
     if (!g.games_known) fetch_games();
 
     SDL_LockMutex(g.lock);
-    const int id = game_id_for(game);
+    const int id = resolve_game(game, diff, NULL, 0);
     SDL_UnlockMutex(g.lock);
     if (id < 0) {
-        set_status("« %s » inconnu du serveur", game);
+        set_status("« %s/%s » inconnu du serveur", game, diff ? diff : "normal");
         return;
     }
 
@@ -189,23 +280,194 @@ static void fetch_board(const char *game, const char *diff)
     ns_http_response_free(&r);
 }
 
+/*
+ * Tire un billet : `POST /api/v1/runs`, qui rend un identifiant, une graine et
+ * un secret. Sans jeton de session, le serveur répond 401 et l'on reste hors
+ * ligne — ce qui est le comportement voulu, pas une panne : **le jeu ne demande
+ * jamais de compte pour jouer**.
+ */
+#define NS_ONLINE_TICKET_RETRY_MS 15000u
+
+/* Un échec met la demande en sommeil : voir `ticket_retry_at_ms`. */
+static void ticket_backoff(void)
+{
+    SDL_LockMutex(g.lock);
+    g.ticket_retry_at_ms = SDL_GetTicks() + NS_ONLINE_TICKET_RETRY_MS;
+    SDL_UnlockMutex(g.lock);
+}
+
+static void fetch_ticket(const char *game, const char *diff)
+{
+    if (!g.token[0]) {
+        set_status("classement en lecture seule (pas de jeton)");
+        ticket_backoff();
+        return;
+    }
+
+    /* Le serveur ouvre une partie sur SON créneau : « flappy » + « hard » y
+     * s'appelle « flappy-hard ». Sans cette traduction il répondait « jeu
+     * inconnu », donc 400, pour les huit jeux. */
+    if (!g.games_known) fetch_games();
+    char slug[24] = { 0 };
+    SDL_LockMutex(g.lock);
+    const int known = resolve_game(game, diff, slug, sizeof slug);
+    SDL_UnlockMutex(g.lock);
+    if (known < 0) {
+        set_status("« %s/%s » inconnu du serveur", game, diff ? diff : "normal");
+        ticket_backoff();
+        return;
+    }
+
+    char url[640];
+    SDL_snprintf(url, sizeof url, "%s/api/v1/runs", g.url);
+    char body[128];
+    const int len = SDL_snprintf(body, sizeof body, "{\"game\":\"%s\"}", slug);
+
+    ns_http_response r;
+    if (!ns_http_request("POST", url, "application/json", g.token,
+                         body, (size_t)len, 4000, &r)) {
+        set_status("serveur injoignable");
+        ns_http_response_free(&r);
+        ticket_backoff();
+        return;
+    }
+    if ((r.status != 200 && r.status != 201) || !r.body) {
+        set_status("ouverture de partie : %d", r.status);
+        ns_http_response_free(&r);
+        ticket_backoff();
+        return;
+    }
+
+    ns_arena arena;
+    if (!ns_arena_init(&arena, 64u * 1024u, "json billet")) {
+        ns_http_response_free(&r);
+        ticket_backoff();
+        return;
+    }
+    bool got = false;
+    ns_json doc;
+    if (ns_json_parse(&doc, r.body, r.length, &arena)) {
+        const ns_json_value *root = ns_json_root(&doc);
+        char run_id[64] = { 0 }, secret[128] = { 0 };
+        ns_json_get_string(&doc, root, "runId", run_id, sizeof run_id);
+        ns_json_get_string(&doc, root, "secret", secret, sizeof secret);
+        /* La graine fait 63 bits et `ns_json_get_float` n'en garde que 24 : elle
+         * se lit en entier, sinon on jouerait une AUTRE partie que celle que le
+         * serveur vient d'ouvrir, et chaque envoi serait refusé pour sceau
+         * invalide sans qu'une seule ligne dise pourquoi. */
+        const int64_t seed = ns_json_get_i64(&doc, root, "seed", 0);
+
+        if (run_id[0] && secret[0]) {
+            SDL_LockMutex(g.lock);
+            SDL_zero(g.ticket);
+            SDL_snprintf(g.ticket.run_id, sizeof g.ticket.run_id, "%s", run_id);
+            g.ticket.seed = seed;
+            g.ticket.secret_len = base64_decode(secret, g.ticket.secret,
+                                                sizeof g.ticket.secret);
+            SDL_snprintf(g.ticket_game, sizeof g.ticket_game, "%s", game);
+            SDL_snprintf(g.ticket_diff, sizeof g.ticket_diff, "%s",
+                         diff && diff[0] ? diff : "normal");
+            g.ticket_ready = g.ticket.secret_len > 0;
+            got = g.ticket_ready;
+            SDL_UnlockMutex(g.lock);
+            if (got) set_status("partie ouverte sur le serveur");
+        }
+    }
+    ns_arena_free(&arena);
+    ns_http_response_free(&r);
+    /* Une réponse 200 dont on ne tire pas de billet exploitable est un échec
+     * comme un autre : sans ce repli, elle relancerait la demande en boucle. */
+    if (!got) ticket_backoff();
+}
+
+/*
+ * Vide la file : un fichier, un `POST /api/v1/runs/{id}/submit`.
+ *
+ * Ce qui se supprime et ce qui reste, et c'est la seule décision qui compte
+ * ici : un 2xx efface le fichier, un 4xx aussi — le serveur a tranché, le
+ * renvoyer donnerait le même refus jusqu'à la fin des temps. Un 5xx ou une
+ * absence de réponse le GARDE : c'est une panne, pas un verdict.
+ */
+static void flush_queue_now(void)
+{
+    if (!g.token[0]) return;
+
+    int count = 0;
+    char **files = SDL_GlobDirectory(ns_runlog_queue_dir(), "*.json", 0, &count);
+    if (!files) return;
+
+    for (int i = 0; i < count; ++i) {
+        char path[1024];
+        SDL_snprintf(path, sizeof path, "%s/%s", ns_runlog_queue_dir(), files[i]);
+
+        char run_id[64];
+        char *body = NULL;
+        size_t body_len = 0;
+        if (!ns_runlog_queue_read(path, run_id, sizeof run_id, &body, &body_len)) {
+            /* Illisible ou sans identifiant : rien ne pourra jamais l'envoyer. */
+            NS_WARN("file d'attente : « %s » inexploitable, retiré", path);
+            SDL_RemovePath(path);
+            continue;
+        }
+
+        char url[768];
+        SDL_snprintf(url, sizeof url, "%s/api/v1/runs/%s/submit", g.url, run_id);
+
+        ns_http_response r;
+        const bool reached = ns_http_request("POST", url, "application/json", g.token,
+                                             body, body_len, 6000, &r);
+        SDL_free(body);
+
+        if (!reached || r.status >= 500 || r.status == 0) {
+            ns_http_response_free(&r);
+            set_status("envoi différé (serveur indisponible)");
+            break;   /* inutile d'insister sur les suivants */
+        }
+        if (r.status >= 200 && r.status < 300) {
+            g.sent++;
+            set_status("partie envoyée");
+        } else {
+            g.failed++;
+            NS_WARN("partie refusée par le serveur (%d) : %s", r.status, path);
+            set_status("partie refusée (%d)", r.status);
+        }
+        ns_http_response_free(&r);
+        SDL_RemovePath(path);
+    }
+    SDL_free(files);
+}
+
 static int SDLCALL worker(void *unused)
 {
     (void)unused;
     while (!SDL_GetAtomicInt(&g.quit)) {
-        bool work = false;
-        char game[24], diff[16];
+        bool board = false, ticket = false, flush = false;
+        char game[24], diff[16], tgame[24], tdiff[16];
 
         SDL_LockMutex(g.lock);
         if (g.want_board) {
             g.want_board = false;
             SDL_snprintf(game, sizeof game, "%s", g.want_game);
             SDL_snprintf(diff, sizeof diff, "%s", g.want_diff);
-            work = true;
+            board = true;
         }
+        if (g.want_ticket[0] && !g.ticket_ready
+            && SDL_GetTicks() >= g.ticket_retry_at_ms) {
+            SDL_snprintf(tgame, sizeof tgame, "%s", g.want_ticket);
+            SDL_snprintf(tdiff, sizeof tdiff, "%s", g.want_ticket_diff);
+            /* La demande est CONSOMMÉE. La laisser armée jusqu'à ce qu'un billet
+             * arrive transformait le moindre refus en boucle d'attente active :
+             * c'est `ns_online_take_ticket` et `ns_online_prefetch_ticket` qui la
+             * réarment, une fois, quand on en a de nouveau besoin. */
+            g.want_ticket[0] = '\0';
+            ticket = true;
+        }
+        if (g.want_flush) { g.want_flush = false; flush = true; }
         SDL_UnlockMutex(g.lock);
 
-        if (work) fetch_board(game, diff);
+        if (board) fetch_board(game, diff);
+        else if (flush) flush_queue_now();
+        else if (ticket) fetch_ticket(tgame, tdiff);
         else SDL_Delay(60);
     }
     return 0;
@@ -310,25 +572,73 @@ bool ns_online_board_get(const char *game, const char *difficulty, ns_online_boa
     return found;
 }
 
+/* Un billet vaut pour UN créneau : « flappy/hard » n'ouvre pas une partie de
+ * « flappy/normal ». Les deux tableaux sont distincts côté serveur, et deux
+ * bornes voisines de la salle jouent justement le même jeu à deux difficultés. */
+static bool ticket_matches(const char *game, const char *diff)
+{
+    const char *d = (diff && diff[0]) ? diff : "normal";
+    return g.ticket_ready
+        && SDL_strcasecmp(g.ticket_game, game) == 0
+        && SDL_strcasecmp(g.ticket_diff, d) == 0;
+}
+
+static void arm_ticket(const char *game, const char *diff)
+{
+    SDL_snprintf(g.want_ticket, sizeof g.want_ticket, "%s", game);
+    SDL_snprintf(g.want_ticket_diff, sizeof g.want_ticket_diff, "%s",
+                 (diff && diff[0]) ? diff : "normal");
+}
+
+void ns_online_prefetch_ticket(const char *game, const char *difficulty)
+{
+    if (!g.enabled || !game || !game[0]) return;
+    SDL_LockMutex(g.lock);
+    /* Un billet déjà prêt pour CE créneau : rien à faire. Pour un autre, on
+     * demande celui-ci — le joueur a changé de borne, l'ancien ne servira plus.
+     * Un seul d'avance, jamais deux : on ne joue qu'une partie à la fois. */
+    if (!ticket_matches(game, difficulty)) arm_ticket(game, difficulty);
+    SDL_UnlockMutex(g.lock);
+}
+
+bool ns_online_take_ticket(const char *game, const char *difficulty, ns_online_ticket *out)
+{
+    if (!out) return false;
+    SDL_zerop(out);
+    if (!g.enabled || !game || !game[0]) return false;
+
+    bool got = false;
+    SDL_LockMutex(g.lock);
+    if (ticket_matches(game, difficulty)) {
+        *out = g.ticket;
+        g.ticket_ready = false;
+        SDL_zero(g.ticket);
+        got = true;
+    }
+    /* Qu'on ait pris un billet ou non, on en redemande un pour CE créneau :
+     * c'est ce qui fait qu'il y en a un de prêt à la partie suivante — et une
+     * partie suivante, à une borne, c'est dans quelques secondes. */
+    arm_ticket(game, difficulty);
+    SDL_UnlockMutex(g.lock);
+    return got;
+}
+
 void ns_online_flush_queue(void)
 {
     /*
-     * Rien à envoyer, et ce n'est PAS une lacune : c'est la conséquence directe
-     * de l'anti-triche de M6.
+     * Une partie jouée HORS LIGNE reste locale, définitivement, et ce n'est pas
+     * une lacune : le serveur tire la graine ET le secret avant qu'on joue, donc
+     * une partie sans billet n'a rien à prouver. `ns_runlog_enqueue` la refuse
+     * déjà.
      *
-     * Le serveur tire la graine ET le secret d'une partie AVANT qu'elle soit
-     * jouée ; le score n'est plus une valeur que le client annonce mais une
-     * conséquence que le serveur recalcule à partir d'un journal scellé avec CE
-     * secret. Une partie jouée hors ligne n'a ni l'un ni l'autre : elle n'est
-     * donc pas soumettable, et la rendre soumettable reviendrait à accepter des
-     * scores non vérifiables — c'est-à-dire à revenir exactement à la V1, où le
-     * client annonçait son score et le serveur le croyait.
-     *
-     * Les parties hors ligne restent donc locales, définitivement, et le
-     * classement local les affiche comme telles. C'est un choix de conception,
-     * pas un travail qui reste à faire.
+     * Ce qui est en file, en revanche, est scellé ET adressé : ça part. Le fil
+     * s'en charge — on ne fait que le lui demander, parce qu'une boucle de jeu
+     * n'attend pas une requête HTTP.
      */
     if (!g.enabled) return;
+    SDL_LockMutex(g.lock);
+    g.want_flush = true;
+    SDL_UnlockMutex(g.lock);
 }
 
 void ns_online_stats(uint32_t *sent, uint32_t *failed)

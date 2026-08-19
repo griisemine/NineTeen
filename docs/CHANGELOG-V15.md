@@ -93,6 +93,23 @@ que le chantier est terminé.
 - **Une partie jouée hors ligne n'est pas soumettable**, par conception : le serveur tire la graine
   et le secret AVANT la partie, et un score sans eux n'est pas vérifiable. L'accepter reviendrait
   à la V1, où le client annonçait son score et le serveur le croyait.
+- **Le billet de partie, et l'envoi.** Le client demande `POST /api/v1/runs` quand le joueur
+  ARRIVE devant la borne, joue sur la graine reçue, et poste la partie scellée sur
+  `POST /api/v1/runs/{id}/submit`. Rien n'attend : sans billet prêt, la partie se joue hors
+  ligne. La file garde ce qu'un 5xx n'a pas pu livrer et le renvoie au démarrage suivant.
+- **Le test qui déroule tout.** `ns_test_online <url> <jeton>` fait la chaîne entière contre le
+  vrai `nineteend` et sa base. C'est le seul endroit qui confronte les deux moitiés écrites en C
+  et en Go, et il a trouvé trois défauts qu'aucun test unitaire n'aurait pu voir, parce qu'ils
+  vivent ENTRE les deux :
+  1. Le serveur nomme ses tableaux `flappy-easy` / `flappy-hard` ; le moteur porte un jeu et une
+     difficulté séparés. Le client cherchait « flappy », qui n'existe nulle part côté serveur :
+     classement mondial introuvable pour les huit jeux, et ouverture de partie refusée.
+  2. La graine de partie fait **63 bits** et se lisait dans un `float` — 24 bits de mantisse.
+     Le client aurait joué une autre partie que celle ouverte, et chaque envoi aurait été refusé
+     pour sceau invalide sans qu'une ligne dise pourquoi.
+  3. Le fichier de file était posté tel quel, avec ses champs d'enveloppe ; le serveur décode
+     avec `DisallowUnknownFields` et aurait répondu 400 — donc un 4xx, donc un fichier supprimé.
+     Toutes les parties auraient été jetées une par une en croyant les envoyer.
 
 ### Les bornes
 - **Le caisson est une EXTRUSION DE PROFIL**, plus une boîte. Ce qui fait qu'on reconnaît une
@@ -302,6 +319,14 @@ que le chantier est terminé.
 - **Classement local**, écrit atomiquement, sans jamais demander de compte. Le journal de partie
   est scellé au format exact du serveur (HMAC-SHA256, charge canonique), et
   `tests/test_scores.c` le confronte à des vecteurs produits par le code Go lui-même.
+- **Classement en ligne, de bout en bout.** Le client prend un billet de partie
+  (`POST /api/v1/runs`) AVANT de jouer, joue sur la graine du serveur, scelle son journal avec
+  le secret reçu, le range dans une file sur disque et l'envoie
+  (`POST /api/v1/runs/{id}/submit`). Un 5xx ou un silence garde le fichier ; un verdict — 2xx
+  comme 4xx — l'efface. Le tout **sans jamais faire attendre une partie** : le billet est tiré
+  d'avance, et sans billet on joue hors ligne. La chaîne a été déroulée contre le vrai serveur
+  Go et PostgreSQL — score recalculé côté serveur, verdict `ok`, ligne au classement mondial —
+  et `ns_test_online <url> <jeton>` la rejoue.
 - **Cinq paliers de qualité chiffrés** (`potato` à `ultra`), réglables en jeu par `F7`/`F8` et
   gardés d'une session à l'autre.
 - **Du vrai mobilier** : `roomgen` sait instancier un glTF (`tools/geo_import.c`, sur le `cgltf`
@@ -318,11 +343,9 @@ que le chantier est terminé.
   vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
-- **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
-  du serveur, la file d'attente sur disque existe et `--offline` est un verrou. Il manque la
-  socket, délibérément : le temps réel et les duels se conçoivent avant de s'écrire. Le binaire
-  importe cinq symboles réseau depuis B15 — plus zéro, et la phrase a été corrigée partout plutôt
-  que laissée à traîner. Ce qui reste vrai : sans URL configurée, aucun n'est appelé.
+- **Le temps réel — présence et duels.** C'est tout ce qui reste côté réseau, et c'est
+  délibéré : ça se conçoit avant de s'écrire. Le classement en ligne, lui, **fonctionne de
+  bout en bout** (voir ci-dessus).
 - **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
   pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
   au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
@@ -336,7 +359,17 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Trente-neuf défauts trouvés en chemin, tous instructifs.
+Quarante-trois défauts trouvés en chemin, tous instructifs.
+
+**Deux moitiés d'un même projet peuvent être justes chacune et fausses ensemble.**
+Le client et le serveur du classement ont été écrits, relus et testés séparément,
+et tous leurs tests passaient. Mis bout à bout, ils ne pouvaient rien s'échanger :
+l'un demandait « flappy », l'autre ne connaissait que `flappy-easy` ; l'un lisait
+la graine dans un `float` là où l'autre en envoyait 63 bits ; l'un postait une
+enveloppe là où l'autre refuse tout champ inconnu. Trois défauts, aucun visible
+d'un seul côté. La leçon n'est pas « écrire plus de tests unitaires » — ils
+étaient là et ils étaient verts — mais **faire parler les deux moitiés au moins
+une fois pour de vrai**, contre la vraie base, avant de dire que ça marche.
 
 **Un ratio oublié dans une table rend un jeu injouable sans rien casser.**
 L'ellipse du missile ennemi de base de Shooter s'écrit

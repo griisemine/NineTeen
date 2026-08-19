@@ -281,6 +281,11 @@ add_test(NAME menu COMMAND ns_test_menu "$<TARGET_FILE_DIR:ns_test_menu>")
 # parler à personne est un client dont on ne sait rien. Sans URL passée en
 # argument, le test se limite au découpage d'URL, au verrou hors ligne et au
 # serveur mort ; c'est ce que fait la CI par défaut.
+#
+# Avec une URL ET un jeton de session, le même binaire déroule la chaîne
+# complète contre le vrai serveur Go et sa base — billet, sceau, envoi,
+# classement. Ça demande PostgreSQL, donc ça ne s'ajoute pas ici : la marche à
+# suivre est en tête de `test_online.c`.
 add_executable(ns_test_online test_online.c)
 target_link_libraries(ns_test_online PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_online)

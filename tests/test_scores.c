@@ -214,6 +214,32 @@ static void test_unauthenticated_is_not_queued(void)
     ns_runlog_destroy(r);
 }
 
+static void test_sealed_without_id_is_not_queued(void)
+{
+    /*
+     * Scellée mais SANS ADRESSE.
+     *
+     * `POST /api/v1/runs/{id}/submit` demande les deux : le sceau dit que la
+     * partie est honnête, l'identifiant dit de quelle partie il s'agit. Le
+     * premier jet de la file n'écrivait que le sceau — un fichier que rien ne
+     * pouvait envoyer, même avec un serveur en face et un joueur connecté. Il
+     * n'y avait aucun message : la file grossissait, et c'est tout.
+     */
+    ns_runlog_set_queue_dir(g_tmp_queue);
+    const uint32_t before = ns_runlog_pending();
+
+    ns_runlog *r = ns_runlog_create(8);
+    if (!r) { CHECK(false, "création"); return; }
+    ns_runlog_begin(r, "flappy", "hard", 99, (const uint8_t *)"secret", 6);
+    ns_runlog_event(r, 1200, "score", 1);
+    ns_runlog_end(r, 4000, 1);
+
+    CHECK(ns_runlog_authenticated(r), "elle est bien authentifiée");
+    CHECK(!ns_runlog_enqueue(r), "et pourtant elle n'entre pas dans la file");
+    CHECK(ns_runlog_pending() == before, "aucun fichier écrit (%u)", ns_runlog_pending());
+    ns_runlog_destroy(r);
+}
+
 static void test_queue_writes_one_file(void)
 {
     ns_runlog_set_queue_dir(g_tmp_queue);
@@ -222,12 +248,56 @@ static void test_queue_writes_one_file(void)
     ns_runlog *r = ns_runlog_create(16);
     if (!r) { CHECK(false, "création"); return; }
     ns_runlog_begin(r, "flappy", "hard", 99, (const uint8_t *)"secret", 6);
+    ns_runlog_set_run_id(r, "run-abcdef0123456789");
+    CHECK(strcmp(ns_runlog_run_id(r), "run-abcdef0123456789") == 0,
+          "l'identifiant est retenu : %s", ns_runlog_run_id(r));
     ns_runlog_event(r, 1200, "score", 1);
     ns_runlog_event(r, 3400, "death", 0);
     ns_runlog_end(r, 4000, 1);
 
-    CHECK(ns_runlog_enqueue(r), "la partie authentifiée entre dans la file");
+    CHECK(ns_runlog_enqueue(r), "la partie authentifiée et adressée entre dans la file");
     CHECK(ns_runlog_pending() == before + 1, "un fichier de plus (%u)", ns_runlog_pending());
+
+    /*
+     * L'ALLER-RETOUR, qui est le seul point où l'on vérifie que le transport
+     * pourra faire quelque chose du fichier.
+     *
+     * Deux choses se jouent ici, et les deux ont déjà été fausses :
+     *  - l'identifiant se relit, sinon l'URL ne peut pas être formée ;
+     *  - le corps rendu est EXACTEMENT `runs.Submission` — ni plus, ni moins.
+     *    Le serveur décode avec `DisallowUnknownFields` : un `runId` ou un
+     *    `game` resté dans le corps ferait répondre 400, donc supprimer le
+     *    fichier, donc perdre la partie en croyant l'avoir soumise.
+     */
+    int count = 0;
+    char **files = SDL_GlobDirectory(g_tmp_queue, "*.json", 0, &count);
+    CHECK(files && count > 0, "la file se relit (%d)", count);
+    if (files && count > 0) {
+        /* Le nom est l'horodatage : le dernier alphabétiquement est le nôtre. */
+        int last = 0;
+        for (int i = 1; i < count; ++i) if (strcmp(files[i], files[last]) > 0) last = i;
+        char path[1024];
+        SDL_snprintf(path, sizeof path, "%s/%s", g_tmp_queue, files[last]);
+
+        char id[64] = { 0 };
+        char *body = NULL;
+        size_t body_len = 0;
+        CHECK(ns_runlog_queue_read(path, id, sizeof id, &body, &body_len),
+              "le fichier de file se relit");
+        CHECK(strcmp(id, "run-abcdef0123456789") == 0, "l'identifiant en revient : « %s »", id);
+        if (body) {
+            CHECK(body[0] == '{' && body[body_len - 1] == '}',
+                  "le corps est un objet JSON complet");
+            CHECK(strstr(body, "\"claimedScore\"") && strstr(body, "\"durationMs\"")
+                  && strstr(body, "\"seal\"") && strstr(body, "\"events\""),
+                  "il porte les quatre champs de runs.Submission");
+            CHECK(!strstr(body, "\"runId\"") && !strstr(body, "\"game\"")
+                  && !strstr(body, "\"seed\"") && !strstr(body, "\"difficulty\""),
+                  "et AUCUN champ d'enveloppe : %s", body);
+            SDL_free(body);
+        }
+    }
+    SDL_free(files);
     ns_runlog_destroy(r);
 }
 
@@ -515,6 +585,7 @@ int main(void)
     test_events_use_declared_kinds();
     test_canonical_empty();
     test_unauthenticated_is_not_queued();
+    test_sealed_without_id_is_not_queued();
     test_queue_writes_one_file();
     test_event_overflow();
     test_scores_basics();

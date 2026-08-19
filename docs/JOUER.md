@@ -304,6 +304,58 @@ Le temps réel — présence, duels — se conçoit avant de s'écrire, et cette
 conception reste à faire. En attendant, une partie jouée sans serveur est
 classée localement et **rien n'échoue**.
 
+### Ce que « en ligne » veut dire concrètement, et comment le vérifier
+
+La chaîne complète tourne, et elle a été **déroulée en entier** contre le vrai
+`nineteend` et sa base : billet → partie → sceau → file → envoi → classement.
+Voici ce qui se passe, dans l'ordre :
+
+1. **Le billet est pris d'avance.** Quand le joueur arrive devant une borne — ou
+   qu'un jeu se charge — le client demande `POST /api/v1/runs`, et le serveur
+   répond avec un identifiant de partie, **la graine** et **le secret**. Ça se
+   passe pendant que la main s'avance vers le jeton.
+2. **La partie se joue sur la graine du serveur.** C'est ce qui rend le score
+   recalculable : le serveur rejoue le journal et retrouve la valeur.
+3. **La partie scellée entre dans une file locale**, un fichier par partie.
+4. **La file part** à la fin de chaque partie et au démarrage suivant, sur
+   `POST /api/v1/runs/{id}/submit`. Un 2xx ou un 4xx efface le fichier — le
+   serveur a tranché ; un 5xx ou un silence le **garde** : c'est une panne, pas
+   un verdict, et la partie repartira plus tard.
+
+**Une partie n'attend jamais le réseau.** Elle commence quand le joueur appuie
+sur le bouton. S'il n'y a pas encore de billet, elle se joue hors ligne, le score
+est acquis localement, et c'est tout — ce qui veut dire, concrètement, que la
+toute première partie d'une session est souvent locale et les suivantes en
+ligne.
+
+Pour le vérifier soi-même, avec un serveur de développement :
+
+```sh
+# 1. le serveur
+NINETEEN_DB_URL=postgres://…/nineteen go run ./server/cmd/nineteend &
+
+# 2. un compte, puis son jeton de session
+curl -s -X POST localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' \
+     -d '{"username":"moi","email":"moi@exemple.invalid","password":"un-mot-de-passe-long"}'
+jeton=$(curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+        -d '{"username":"moi","password":"un-mot-de-passe-long"}' \
+        | sed 's/.*"sessionKey":"\([^"]*\)".*/\1/')
+
+# 3. la chaîne entière, de bout en bout
+./build/linux-x64/bin/ns_test_online http://127.0.0.1:8080 "$jeton"
+```
+
+Le jeton se range dans `network.token` de `settings.cfg` pour que le jeu lui-même
+s'en serve. **Sans jeton, tout marche encore** : le classement mondial s'affiche
+en lecture seule, et les parties restent locales.
+
+Deux détails que cette vérification a mis au jour, et qu'aucun test unitaire
+n'aurait attrapés parce qu'ils vivent *entre* les deux moitiés du projet : le
+serveur nomme ses tableaux `flappy-easy` / `flappy-hard` là où le moteur porte un
+jeu et une difficulté séparés (la traduction se fait maintenant contre la liste
+que le serveur renvoie), et la graine de partie fait 63 bits, donc la relire dans
+un `float` la détruisait silencieusement.
+
 ### `--offline`
 
 ```sh

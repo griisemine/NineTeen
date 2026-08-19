@@ -58,6 +58,21 @@ void       ns_runlog_destroy(ns_runlog *r);
 void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
                      int64_t seed, const uint8_t *secret, size_t secret_len);
 
+/*
+ * L'IDENTIFIANT que le serveur a donné à cette partie, et sans lequel elle
+ * n'est envoyable nulle part.
+ *
+ * `POST /api/v1/runs/{id}/submit` : le sceau prouve QUE la partie est honnête,
+ * l'identifiant dit DE QUELLE partie il s'agit. La file d'attente ne portait que
+ * le premier — un fichier scellé qu'aucune adresse n'attendait, donc un envoi
+ * qui ne pouvait pas aboutir même avec un serveur en face.
+ *
+ * Vide ou NULL : partie hors ligne, non soumettable, et `ns_runlog_enqueue` le
+ * refuse comme il refuse déjà une partie sans secret.
+ */
+void ns_runlog_set_run_id(ns_runlog *r, const char *run_id);
+const char *ns_runlog_run_id(const ns_runlog *r);
+
 /* Un fait de jeu. `kind` est un mot court : « score », « death », « flap ». */
 void ns_runlog_event(ns_runlog *r, int64_t at_ms, const char *kind, int64_t value);
 
@@ -104,6 +119,14 @@ uint32_t ns_runlog_pending(void);
 
 uint32_t ns_runlog_event_count(const ns_runlog *r);
 bool     ns_runlog_authenticated(const ns_runlog *r);
+
+/*
+ * Lit un fichier de la file, rend son identifiant de partie et son corps JSON.
+ * `body` reçoit ce qu'il faut poster tel quel. Renvoie false si le fichier est
+ * illisible ou n'a pas d'identifiant — auquel cas il n'y a rien à en faire.
+ */
+bool ns_runlog_queue_read(const char *path, char *run_id, size_t run_id_cap,
+                          char **body, size_t *body_len);
 
 /* ---------------------------------------------------------------------------
  * Primitives exposées pour les tests.

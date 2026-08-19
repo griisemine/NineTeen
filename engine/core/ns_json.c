@@ -165,6 +165,38 @@ float ns_json_get_float(const ns_json *doc, const ns_json_value *obj, const char
     return token_to_float(doc, ns_json_get(doc, obj, key), fallback);
 }
 
+/*
+ * Un entier 64 bits LU COMME TEL, et pourquoi ce n'est pas un doublon de
+ * `ns_json_get_float`.
+ *
+ * Un `float` porte 24 bits de mantisse. La graine de partie que le serveur tire
+ * en fait 63 (`randomSeed`, bit de signe effacé) : la relire en flottant en
+ * arrondit tout ce qui est sous ~2^39. Le client jouerait alors une autre partie
+ * que celle que le serveur a ouverte, scellerait son journal sur SA graine, et
+ * le serveur recalculerait sur la sienne — chaque soumission refusée pour sceau
+ * invalide, sans qu'aucune ligne ne dise pourquoi. Le symptôme aurait été « le
+ * classement en ligne ne marche pas », et la cause, six bits de mantisse.
+ */
+int64_t ns_json_get_i64(const ns_json *doc, const ns_json_value *obj, const char *key,
+                        int64_t fallback)
+{
+    const ns_json_value *v = ns_json_get(doc, obj, key);
+    if (!v || v->tok.type != JSMN_PRIMITIVE) return fallback;
+
+    char buf[32];
+    const int len = v->tok.end - v->tok.start;
+    if (len <= 0 || len >= (int)sizeof buf) return fallback;
+    SDL_memcpy(buf, doc->text + v->tok.start, (size_t)len);
+    buf[len] = '\0';
+
+    char *end = NULL;
+    const long long n = SDL_strtoll(buf, &end, 10);
+    /* `end == buf` : « true », « null ». `*end` non nul : « 1.5 », « 1e9 » — un
+     * entier tronqué en silence serait pire qu'un repli annoncé. */
+    if (end == buf || *end != '\0') return fallback;
+    return (int64_t)n;
+}
+
 bool ns_json_get_bool(const ns_json *doc, const ns_json_value *obj, const char *key, bool fallback)
 {
     const ns_json_value *v = ns_json_get(doc, obj, key);
@@ -174,6 +206,24 @@ bool ns_json_get_bool(const ns_json *doc, const ns_json_value *obj, const char *
     if (c == 'f') return false;
     if (c == 'n') return fallback;                       /* null : on garde le repli */
     return token_to_float(doc, v, fallback ? 1.0f : 0.0f) != 0.0f;
+}
+
+/*
+ * Les octets BRUTS d'une valeur, dans le document d'origine.
+ *
+ * Pour un objet ou un tableau, jsmn borne le jeton sur l'accolade fermante :
+ * l'intervalle rendu est donc le sous-document complet, réutilisable tel quel.
+ * C'est ce qui permet de sortir d'une enveloppe le morceau qu'un tiers attend
+ * — ici la soumission qu'un serveur décode avec `DisallowUnknownFields` — sans
+ * le re-sérialiser, donc sans risquer d'en changer un octet.
+ */
+bool ns_json_span(const ns_json *doc, const ns_json_value *v, size_t *start, size_t *end)
+{
+    if (!doc || !v || !start || !end) return false;
+    if (v->tok.start < 0 || v->tok.end <= v->tok.start) return false;
+    *start = (size_t)v->tok.start;
+    *end   = (size_t)v->tok.end;
+    return true;
 }
 
 void ns_json_string(const ns_json *doc, const ns_json_value *v, char *out, size_t out_size)
