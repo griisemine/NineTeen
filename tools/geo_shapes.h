@@ -133,6 +133,35 @@ void geo_cylinder(geo_mesh *m, float r_bottom, float r_top, float height,
                   const geo_uv *uv, int32_t material);
 
 /* ========================================================================== */
+/* Surface de révolution                                                      */
+/* ========================================================================== */
+
+/*
+ * Fait tourner un profil autour de l'axe +Y. Le profil est une suite de couples
+ * (rayon, hauteur), du BAS vers le haut ; un rayon nul ferme la forme en pointe.
+ *
+ * Pourquoi ça manquait, et pourquoi un empilement de cylindres ne suffit pas.
+ * La boule d'un manche d'arcade était faite de trois troncs de cône empilés — un
+ * raccord, un ventre, une calotte — à dix côtés. Ça donne un écrou, pas une
+ * boule : les trois arêtes horizontales entre les tronçons sont vives, elles
+ * accrochent chacune un liseré, et l'œil lit trois anneaux au lieu d'une sphère.
+ * C'est l'objet que le joueur a le plus près des yeux pendant toute une partie,
+ * et le seul qu'il touche.
+ *
+ * Une révolution résout les deux à la fois : les anneaux successifs viennent
+ * d'un profil CONTINU, donc les normales se lissent d'elles-mêmes par le seuil
+ * d'angle de `geo_mesh`, et il n'y a plus d'arête à accrocher.
+ *
+ * Les UV : `u` fait le tour (à l'échelle de `uv`), `v` suit la longueur d'arc
+ * cumulée du profil — c'est ce qui empêche une texture de s'étirer là où le
+ * profil est raide et de se tasser là où il est plat.
+ *
+ * La couture est en −X, comme celle de `geo_cylinder`, et pour la même raison.
+ */
+void geo_revolve(geo_mesh *m, const float *profile_ry, int count, int sides,
+                 const geo_uv *uv, int32_t material);
+
+/* ========================================================================== */
 /* Plan subdivisé                                                             */
 /* ========================================================================== */
 

@@ -740,6 +740,117 @@ static void test_bouchons_a_part(void)
     geo_mesh_free(&m);
 }
 
+static void test_revolve(void)
+{
+    printf("surface de révolution\n");
+
+    /*
+     * Une SPHÈRE de rayon 1, faite d'un demi-cercle du pôle sud au pôle nord.
+     * C'est le cas qui a motivé la primitive — la boule d'un manche d'arcade —
+     * et c'est aussi le seul dont on connaisse le volume exact, donc le seul qui
+     * puisse dire si la révolution est juste plutôt que plausible.
+     */
+    enum { RINGS = 33, SIDES = 48 };
+    float prof[RINGS * 2];
+    for (int k = 0; k < RINGS; ++k) {
+        const float a = -NS_PI * 0.5f + (float)k / (float)(RINGS - 1) * NS_PI;
+        prof[k * 2]     = cosf(a);
+        prof[k * 2 + 1] = sinf(a);
+    }
+
+    geo_mesh m; geo_mesh_init(&m);
+    const geo_uv uv = geo_uv_tile(1.0f);
+    geo_revolve(&m, prof, RINGS, SIDES, &uv, 0);
+
+    /*
+     * Volume signé POSITIF : c'est le contrôle qui attrape un enroulement
+     * inversé, et un solide retourné ne se voit pas autrement — le moteur ne
+     * fait pas de face culling, et `gbuffer.frag` retourne la normale des faces
+     * arrière, donc un objet à l'envers s'affiche normalement jusqu'à ce qu'on
+     * s'étonne de son éclairage.
+     */
+    const float vol = geo_signed_volume(&m);
+    const float exact = 4.0f / 3.0f * NS_PI;
+    CHECK(vol > 0.0f, "volume signé positif (%.4f)", (double)vol);
+    /* Un polyèdre INSCRIT est toujours plus petit que sa sphère : à 48x32 le
+     * déficit mesuré est de 1,0 %. On vérifie qu'on est DESSOUS et pas loin —
+     * au-dessus, c'est que des triangles se recouvrent ou qu'une calotte est
+     * comptée à l'envers. */
+    CHECK(vol < exact && vol > exact * 0.985f,
+          "volume proche de 4pi/3 par en dessous : %.4f pour %.4f",
+          (double)vol, (double)exact);
+
+    CHECK(geo_check_degenerate(&m, 1e-9f) == 0,
+          "aucun triangle dégénéré, y compris aux deux pôles");
+
+    /*
+     * Les pôles : un anneau de rayon nul ne doit produire qu'UN triangle par
+     * méridien, pas deux dont un plat. Deux anneaux dégénérés, donc
+     * 2 x SIDES triangles économisés sur le compte plein.
+     */
+    const size_t full = (size_t)(RINGS - 1) * SIDES * 2;
+    CHECK(geo_mesh_tri_count(&m) == full - (size_t)SIDES * 2,
+          "les pôles ne portent qu'un triangle par méridien (%zu pour %zu)",
+          geo_mesh_tri_count(&m), full - (size_t)SIDES * 2);
+
+    /*
+     * Les normales pointent vers l'EXTÉRIEUR. Sur une sphère centrée en
+     * l'origine c'est exactement la position normalisée, ce qui en fait le seul
+     * cas où l'on peut vérifier chaque sommet plutôt qu'une moyenne.
+     */
+    float worst = 1.0f;
+    for (size_t i = 0; i < geo_mesh_vertex_count(&m); ++i) {
+        const gltf_vertex *vx = &TOOL_VEC_AT(&m.verts, gltf_vertex, i);
+        const ns_v3 p = ns_v3_make(vx->position[0], vx->position[1], vx->position[2]);
+        const ns_v3 n = ns_v3_make(vx->normal[0], vx->normal[1], vx->normal[2]);
+        const float len = ns_v3_len(p);
+        if (len < 1e-4f) continue;
+        const float d = ns_v3_dot(ns_v3_scale(p, 1.0f / len), n);
+        if (d < worst) worst = d;
+    }
+    CHECK(worst > 0.98f, "toutes les normales sortent (pire produit scalaire %.4f)",
+          (double)worst);
+
+    geo_mesh_free(&m);
+
+    /*
+     * Un CYLINDRE par révolution doit redonner le volume d'un cylindre : c'est
+     * le contrôle que le profil n'est pas parcouru à l'envers ni décalé d'un
+     * anneau. Rayon 2, hauteur 3 -> 12pi.
+     */
+    geo_mesh c; geo_mesh_init(&c);
+    const float tube[4 * 2] = { 0.0f, 0.0f,  2.0f, 0.0f,  2.0f, 3.0f,  0.0f, 3.0f };
+    geo_revolve(&c, tube, 4, 64, &uv, 0);
+    CHECK_NEAR(geo_signed_volume(&c), 12.0f * NS_PI, 0.07f);
+    geo_mesh_free(&c);
+
+    /*
+     * ET LE MÊME CYLINDRE PAR `geo_cylinder`, qui doit rendre le même volume.
+     *
+     * C'est ce contrôle qui a révélé que les deux bouchons de `geo_cylinder`
+     * étaient enroulés à l'envers depuis A3 : le bouchon du haut se retranchait,
+     * et un cylindre fermé rendait 12,55 au lieu de 37,70. Personne ne l'avait
+     * vu parce que la normale de sommet, elle, était juste, et que le rendu
+     * n'élimine pas les faces arrière — mais `gbuffer.frag` retourne la normale
+     * d'une face vue de dos, si bien que le dessus de chaque bouton, de chaque
+     * grille et de chaque rondelle de la salle était éclairé comme s'il
+     * regardait le sol.
+     *
+     * Aucun test ne mesurait le volume d'un cylindre. C'est celui-là.
+     */
+    geo_mesh cy; geo_mesh_init(&cy);
+    geo_cylinder(&cy, 2.0f, 2.0f, 3.0f, 64, true, true, &uv, 0);
+    CHECK_NEAR(geo_signed_volume(&cy), 12.0f * NS_PI, 0.07f);
+    CHECK(geo_signed_volume(&cy) > 0.0f, "et il est positif, pas retourné");
+    geo_mesh_free(&cy);
+
+    /* Un cône : le bouchon du bas seul, la pointe en haut. r=1, h=3 -> pi. */
+    geo_mesh co; geo_mesh_init(&co);
+    geo_cylinder(&co, 1.0f, 0.0f, 3.0f, 64, true, false, &uv, 0);
+    CHECK_NEAR(geo_signed_volume(&co), NS_PI, 0.01f);
+    geo_mesh_free(&co);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1) {
@@ -753,6 +864,7 @@ int main(int argc, char **argv)
     test_box_chamfered();
     test_box_face_mask();
     test_plane();
+    test_revolve();
     test_panel();
     test_extrude();
     test_profil_concave();

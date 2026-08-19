@@ -1445,35 +1445,70 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     (void)PANEL_H;
 
     /*
-     * Le manche : une embase, une tige, une boule — et non plus un cube.
+     * Le manche : une rondelle, une tige, et une VRAIE BOULE.
      *
-     * Le premier jet était une seule boîte de 5 cm chanfreinée à 12 mm. Une fois
-     * les mains posées sur les commandes, ce cube gris se lit pour ce qu'il est :
-     * un cube. Trois boîtes suffisent à en faire un manche, et la boule est
-     * simplement une boîte de 42 mm chanfreinée à 19 mm — le chanfrein y mange
-     * presque tout, ce qui donne un solide à vingt-six faces qu'on ne distingue
-     * pas d'une sphère à cette taille, sans avoir à écrire un générateur de
-     * révolution pour ce seul objet.
+     * Généalogie de cette pièce, parce qu'elle a été fausse deux fois. Le
+     * premier jet était une boîte de 5 cm chanfreinée : posée sous les mains du
+     * joueur, elle se lisait pour ce qu'elle était, un cube. Le second empilait
+     * trois troncs de cône à dix côtés — raccord, ventre, calotte — et donnait
+     * un ÉCROU : les deux arêtes horizontales entre les tronçons sont vives,
+     * elles accrochent chacune un liseré, et l'œil compte trois anneaux au lieu
+     * de voir une sphère.
+     *
+     * C'est l'objet que le joueur a le plus près des yeux pendant toute une
+     * partie, et le seul qu'il touche. Il méritait la primitive qui lui manquait
+     * plutôt qu'un troisième contournement : `geo_revolve` fait tourner un profil
+     * CONTINU, donc les normales se lissent par le seuil d'angle de `geo_mesh`
+     * et il n'y a plus une seule arête à accrocher.
+     *
+     * Le coût est nul, et c'est ce qui rend l'arbitrage facile : douze méridiens
+     * sur six parallèles font 132 triangles là où les trois troncs en faisaient
+     * une centaine, pour une silhouette ronde à toutes les distances.
      */
     const int stick_mat = material_index(b, m_trim[0] ? m_trim : m_body, owner);
-    /* Posé SUR la tôle, embase à demi enfoncée : 6 mm de la boîte d'embase sous
-     * la surface, ce qui la fait tenir au lieu de flotter. */
+    /* Posé SUR la tôle, rondelle à demi enfoncée : 6 mm sous la surface, ce qui
+     * la fait tenir au lieu de flotter. */
     const ns_v3 stick_at = ns_v3_make(-0.20f, panel_surface(0.0f) - 0.006f, PANEL_Z);
 
-    struct { float r0, r1, h, dy; bool cap_lo, cap_hi; float roll; } stick[5] = {
-        { 0.036f, 0.032f, 0.010f, 0.000f, false, true,  0.0f  },  /* embase          */
-        { 0.010f, 0.009f, 0.055f, 0.008f, false, false, 0.16f },  /* tige            */
-        { 0.014f, 0.021f, 0.010f, 0.060f, false, false, 0.16f },  /* raccord         */
-        { 0.021f, 0.021f, 0.020f, 0.070f, false, false, 0.16f },  /* ventre de boule */
-        { 0.021f, 0.006f, 0.012f, 0.090f, false, true,  0.16f },  /* calotte         */
+    /* La rondelle anti-poussière et la tige restent des cylindres : ce sont
+     * vraiment des cylindres. Douze côtés au lieu de dix — une tige de 20 mm
+     * regardée à cinquante centimètres montrait ses facettes. */
+    struct { float r0, r1, h, dy; bool cap_lo, cap_hi; float roll; } stick[2] = {
+        { 0.036f, 0.032f, 0.010f, 0.000f, false, true,  0.0f  },  /* rondelle */
+        { 0.010f, 0.009f, 0.062f, 0.008f, false, false, 0.16f },  /* tige     */
     };
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 2; ++i) {
         geo_mesh_init(&part);
-        geo_cylinder(&part, stick[i].r0, stick[i].r1, stick[i].h, 10,
+        geo_cylinder(&part, stick[i].r0, stick[i].r1, stick[i].h, 12,
                      stick[i].cap_lo, stick[i].cap_hi, &uv_trim, stick_mat);
         x = GEO_XFORM_IDENTITY;
         x.origin = ns_v3_make(stick_at.x, stick_at.y + stick[i].dy, stick_at.z);
-        x.roll = stick[i].roll;   /* l'embase reste à plat, le manche penche */
+        x.roll = stick[i].roll;   /* la rondelle reste à plat, le manche penche */
+        geo_mesh_append(out, &part, &x, -1);
+        geo_mesh_free(&part);
+    }
+
+    /*
+     * La boule : un demi-cercle de rayon 21 mm, du pôle sud au pôle nord, très
+     * légèrement aplati en bas (0,86) là où elle coiffe la tige — une boule
+     * d'arcade est moulée sur son insert, elle n'est pas parfaitement ronde.
+     */
+    {
+        const float R = 0.021f;
+        float ball[7 * 2];
+        for (int k = 0; k < 7; ++k) {
+            const float t = (float)k / 6.0f;            /* 0 = bas, 1 = haut */
+            const float a = -NS_PI * 0.5f + t * NS_PI;
+            ball[k * 2]     = cosf(a) * R;
+            ball[k * 2 + 1] = sinf(a) * R * (sinf(a) < 0.0f ? 0.86f : 1.0f);
+        }
+        geo_mesh_init(&part);
+        geo_revolve(&part, ball, 7, 12, &uv_trim, stick_mat);
+        x = GEO_XFORM_IDENTITY;
+        /* Le centre de la boule est à R au-dessus du sommet de la tige, moins le
+         * chevauchement qui l'empêche de flotter. */
+        x.origin = ns_v3_make(stick_at.x, stick_at.y + 0.070f + R * 0.86f, stick_at.z);
+        x.roll = 0.16f;
         geo_mesh_append(out, &part, &x, -1);
         geo_mesh_free(&part);
     }
@@ -1490,11 +1525,13 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
      * longueur est une main. La cote sort d'ici pour la même raison que les deux
      * autres : elle est écrite à dix lignes de la géométrie qu'elle désigne.
      *
-     * 0,102 = les quatre tronçons empilés : embase 0,010 (dont 0,006 enfoncés),
-     * tige 0,055, raccord 0,010, ventre 0,020, calotte 0,012.
+     * 0,106 = la rondelle 0,010 (dont 0,006 enfoncés) + la tige 0,062 posée à
+     * 0,008, soit un sommet de tige à 0,070, plus le diamètre utile de la boule
+     * (0,021 x 0,86 sous son centre, 0,021 au-dessus) = 0,070 + 0,018 + 0,021.
+     * Le chiffre est écrit ici parce qu'il se relit dix lignes au-dessus.
      */
     anchors->stick[0] = stick_at.x;
-    anchors->stick[1] = stick_at.y + 0.102f;
+    anchors->stick[1] = stick_at.y + 0.109f;
     anchors->stick[2] = stick_at.z;
 
     /*

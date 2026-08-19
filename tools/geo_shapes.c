@@ -228,6 +228,117 @@ void geo_box(geo_mesh *m, ns_v3 size, float chamfer, uint32_t faces,
 /* Plan subdivisé                                                             */
 /* ========================================================================== */
 
+void geo_revolve(geo_mesh *m, const float *profile_ry, int count, int sides,
+                 const geo_uv *uv, int32_t material)
+{
+    const geo_uv fallback = geo_uv_tile(1.0f);
+    if (!uv) uv = &fallback;
+
+    if (!profile_ry || count < 2) {
+        tool_fatalf("geo_revolve : profil de %d point(s), il en faut au moins deux", count);
+    }
+    if (sides < 3) {
+        tool_fatalf("geo_revolve : %d côtés, il en faut au moins trois", sides);
+    }
+
+    const float mpt = (uv->metres_per_tile > 1e-6f) ? uv->metres_per_tile : 1.0f;
+
+    /* Rayon maximal : il fixe l'échelle de `u`, pour que le pavage ne dépende
+     * pas de l'endroit du profil où on le mesure. */
+    float rmax = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        if (profile_ry[i * 2] > rmax) rmax = profile_ry[i * 2];
+    }
+    if (rmax <= 1e-5f) tool_fatalf("geo_revolve : profil de rayon nul partout");
+    const float circ = NS_TAU * rmax;
+
+    /*
+     * Longueur d'arc cumulée, pour `v`. Un profil parcouru à vitesse variable
+     * étirerait la texture sans ça — visible sur une boule, dont le pas
+     * vertical est trois fois plus serré au pôle qu'à l'équateur.
+     */
+    float *arc = (float *)malloc(sizeof(float) * (size_t)count);
+    if (!arc) tool_fatalf("geo_revolve : mémoire");
+    arc[0] = 0.0f;
+    for (int i = 1; i < count; ++i) {
+        const float dr = profile_ry[i * 2]     - profile_ry[(i - 1) * 2];
+        const float dy = profile_ry[i * 2 + 1] - profile_ry[(i - 1) * 2 + 1];
+        arc[i] = arc[i - 1] + sqrtf(dr * dr + dy * dy);
+    }
+
+    uint32_t *prev = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)(sides + 1));
+    uint32_t *cur  = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)(sides + 1));
+    if (!prev || !cur) tool_fatalf("geo_revolve : mémoire");
+
+    for (int k = 0; k < count; ++k) {
+        const float r = profile_ry[k * 2];
+        const float y = profile_ry[k * 2 + 1];
+
+        /*
+         * La normale du profil, tournée vers l'extérieur : c'est la
+         * perpendiculaire au segment, prise sur le voisin qui existe. Aux
+         * extrémités on n'a qu'un côté ; au milieu on moyenne les deux, ce qui
+         * est exactement ce qui rend une boule lisse plutôt que facettée.
+         */
+        float nr = 0.0f, ny = 0.0f;
+        for (int side = 0; side < 2; ++side) {
+            const int j = side ? k + 1 : k - 1;
+            if (j < 0 || j >= count) continue;
+            const float dr = profile_ry[j * 2]     - r;
+            const float dy = profile_ry[j * 2 + 1] - y;
+            const float len = sqrtf(dr * dr + dy * dy);
+            if (len <= 1e-7f) continue;
+            /* Perpendiculaire à (dr, dy), orientée vers +r ; le signe suit le
+             * sens de parcours pour que les deux voisins s'additionnent. */
+            const float s = side ? 1.0f : -1.0f;
+            nr += s * (dy / len);
+            ny += s * (-dr / len);
+        }
+        float nlen = sqrtf(nr * nr + ny * ny);
+        if (nlen <= 1e-7f) { nr = 1.0f; ny = 0.0f; nlen = 1.0f; }
+        nr /= nlen; ny /= nlen;
+
+        for (int i = 0; i <= sides; ++i) {
+            const float a = (float)i / (float)sides * NS_TAU;
+            const float ca = cosf(a), sa = sinf(a);
+            /* Au pôle (r = 0) la normale radiale n'a pas de sens : on garde la
+             * composante axiale seule, sinon le sommet reçoit une normale qui
+             * pointe de côté et le pôle apparaît comme un trou noir. */
+            const ns_v3 n = (r <= 1e-5f)
+                ? ns_v3_make(0.0f, ny >= 0.0f ? 1.0f : -1.0f, 0.0f)
+                : ns_v3_make(ca * nr, ny, sa * nr);
+            cur[i] = geo_mesh_push_vertex(m, ns_v3_make(ca * r, y, sa * r), n,
+                                          (circ * (float)i / (float)sides) / mpt,
+                                          arc[k] / mpt);
+        }
+
+        if (k > 0) {
+            for (int i = 0; i < sides; ++i) {
+                /* Un anneau de rayon nul dégénère : on n'émet alors qu'un
+                 * triangle, sinon `geo_check_degenerate` refuse la salle. */
+                const float rp = profile_ry[(k - 1) * 2];
+                if (rp <= 1e-5f) {
+                    /* Pôle BAS : l'éventail sort vers −Y, ce qui est la bonne
+                     * face pour un dessous. */
+                    geo_mesh_push_tri(m, prev[i], cur[i], cur[i + 1], material);
+                } else if (r <= 1e-5f) {
+                    /* Pôle HAUT : il faut l'orientation INVERSE du pôle bas.
+                     * Le premier jet reprenait le même sens et retranchait sa
+                     * calotte — la sphère de contrôle rendait 12,55 au lieu de
+                     * 37,70, exactement comme le bouchon de `geo_cylinder`. */
+                    geo_mesh_push_tri(m, prev[i + 1], prev[i], cur[i], material);
+                } else {
+                    geo_mesh_push_tri(m, prev[i], cur[i], cur[i + 1], material);
+                    geo_mesh_push_tri(m, prev[i], cur[i + 1], prev[i + 1], material);
+                }
+            }
+        }
+        uint32_t *swap = prev; prev = cur; cur = swap;
+    }
+
+    free(prev); free(cur); free(arc);
+}
+
 void geo_plane(geo_mesh *m, float size_x, float size_z, int subdiv_x, int subdiv_z,
                bool face_up, const geo_uv *uv, int32_t material)
 {
@@ -993,8 +1104,27 @@ void geo_cylinder(geo_mesh *m, float r_bottom, float r_top, float height,
                                                     (0.5f + ca * 0.5f) * r / mpt,
                                                     (0.5f + sa * 0.5f) * r / mpt);
             if (i == 0) { first = v; prev = v; continue; }
-            if (cap) geo_mesh_push_tri(m, centre, prev, v, material);
-            else     geo_mesh_push_tri(m, centre, v, prev, material);
+            /*
+             * L'ENROULEMENT des deux bouchons était inversé, et il l'était
+             * depuis A3.
+             *
+             * Avec `a` croissant, l'éventail (centre, prev, v) donne une normale
+             * géométrique vers −Y : c'est ce qu'il faut pour le bouchon DU BAS,
+             * pas pour celui du haut. Les deux étaient pris à l'envers.
+             *
+             * Pourquoi ça n'a pas crevé les yeux : la normale de SOMMET poussée
+             * juste au-dessus est correcte (+Y en haut), et le rendu désactive
+             * l'élimination des faces arrière. Mais `gbuffer.frag` retourne la
+             * normale quand la face est vue de dos — et une face dont
+             * l'enroulement ment est vue de dos DEPUIS LE DESSUS. Le dessus de
+             * chaque bouton d'arcade, de chaque grille, de chaque rondelle et de
+             * chaque pied de tabouret était donc éclairé comme s'il regardait le
+             * sol. C'est mesurable : un cylindre fermé de rayon 2 et de hauteur 3
+             * rendait un volume signé de 12,55 au lieu de 37,70, le bouchon du
+             * haut se RETRANCHANT au lieu de s'ajouter.
+             */
+            if (cap) geo_mesh_push_tri(m, centre, v, prev, material);
+            else     geo_mesh_push_tri(m, centre, prev, v, material);
             prev = v;
         }
         (void)first;

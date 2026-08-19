@@ -48,6 +48,18 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **Les deux bouchons de `geo_cylinder` étaient enroulés à l'envers depuis A3.** Un cylindre fermé
+  de rayon 2 et de hauteur 3 rendait un volume signé de 12,55 au lieu de 37,70 : le bouchon du haut
+  se RETRANCHAIT. Invisible jusqu'ici parce que la normale de sommet, elle, était juste et que le
+  rendu n'élimine pas les faces arrière — mais `gbuffer.frag` retourne la normale d'une face vue de
+  dos, si bien que **le dessus de chaque bouton, de chaque grille, de chaque rondelle et de chaque
+  pied de tabouret de la salle était éclairé comme s'il regardait le sol**. Aucun test ne mesurait
+  le volume d'un cylindre ; il y en a un maintenant, plus un cône et une sphère.
+- **`geo_revolve`** : la primitive de révolution que le plan réclamait depuis A3 pour « les pieds de
+  tabouret, l'abat-jour, les bouteilles, le jeton ». Le manche de borne y gagne une VRAIE boule :
+  il était fait de trois troncs de cône empilés, dont les arêtes vives accrochaient chacune un
+  liseré — l'œil comptait trois anneaux au lieu de voir une sphère, sur le seul objet que le joueur
+  touche et le plus proche de ses yeux pendant toute une partie.
 - **Le panneau de commande a une sérigraphie** (`tools/panelart`). Les dix-neuf bornes portaient
   le `bordeaux.jpg` de 2020 en pavage : un APLAT, sans bord, sans motif, sans repère — sur la plus
   grande surface que le joueur ait sous les yeux quand il joue, plus grande que la dalle. La
