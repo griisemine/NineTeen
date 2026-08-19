@@ -434,6 +434,20 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${GEN}/games/pacman/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/pacman"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/1_pacman/Textures/pacman.png"
+            "${SRC_LEGACY}/games/1_pacman/Textures/enemy.png"
+            "${GEN}/games/pacman/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/pacman/.stamp"
+    DEPENDS "${SRC_LEGACY}/games/1_pacman/Textures/pacman.png"
+            "${SRC_LEGACY}/games/1_pacman/Textures/enemy.png"
+    COMMENT "Copie des planches de Pac-Man"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -457,6 +471,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/games/demineur/.stamp"
         "${GEN}/games/tetris/.stamp"
         "${GEN}/games/asteroid/.stamp"
+        "${GEN}/games/pacman/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}

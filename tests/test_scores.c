@@ -385,7 +385,7 @@ static const struct {
     { "asteroid", { "rock", "bonus", "wave", "shot", "death", NULL } },
     { "shooter",  { "enemy", "boss", "wave", "death", NULL } },
     { "demineur", { "cell", "flag", "win", "move", "death", NULL } },
-    { "pacman",   { "pellet", "power", "ghost", "level", "death", NULL } },
+    { "pacman",   { "pellet", "power", "ghost", "level", "turn", "death", NULL } },
     { "piano",    { "note", "combo", "death", NULL } },
 };
 
@@ -474,7 +474,22 @@ static void test_events_use_declared_kinds(void)
             }
             if (api->dead(g, NULL)) break;
         }
-        CHECK(saw_blip, "« %s » : un geste a été observé en une minute", api->id);
+        /*
+         * Un GESTE n'est pas obligatoire, et Piano est la raison.
+         *
+         * Un geste est un événement muet qu'on journalise pour que
+         * l'anti-triche ait quelque chose à limiter en fréquence : un battement
+         * d'aile, un virage, un tir. Dans un jeu de rythme, la seule entrée EST
+         * la note comptée — émettre en plus un « geste » à chaque frappe
+         * doublerait le journal sans rien y ajouter, et `rulesTable["piano"]`
+         * ne déclare d'ailleurs aucun événement muet hors la mort.
+         *
+         * Ce qu'on exige de tous, en revanche : que la partie produise quelque
+         * chose de journalisable en une minute. Un jeu qui n'émet RIEN est un
+         * jeu dont le serveur ne peut pas dire s'il a été joué.
+         */
+        CHECK(saw_blip || saw_score,
+              "« %s » : la partie journalise quelque chose en une minute", api->id);
         CHECK(saw_score, "« %s » : un gain a été observé en une minute", api->id);
         SDL_free(g);
     }

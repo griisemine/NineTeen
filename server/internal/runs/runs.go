@@ -394,16 +394,27 @@ var rulesTable = map[string]gameRules{
 		minDurationMs:    1000,
 	},
 	"pacman": {
-		silent:           map[string]bool{"death": true},
+		// Cette table attendait depuis le début un Pac-Man COMPLET — pastilles,
+		// super-pastilles, fantômes, niveaux — alors que celui de 2020 n'avait
+		// ni fantôme ni score. Elle décrivait le jeu qu'il devait être ; c'est
+		// maintenant le jeu qui existe.
+		//
+		// Un fantôme vaut 200 à plat, et la chaîne du jeu d'arcade — 200, 400,
+		// 800, 1 600 — se journalise en autant d'événements que le multiple le
+		// demande. C'est ce qui garde le score et le journal d'accord sans
+		// dupliquer un barème dans les deux langages.
+		silent:           map[string]bool{"death": true, "turn": true},
 		points:           map[string]int64{"pellet": 10, "power": 50, "ghost": 200, "level": 1000},
-		maxRatePerSecond: map[string]float64{"pellet": 10, "power": 1, "ghost": 2, "level": 0.1},
+		maxRatePerSecond: map[string]float64{"pellet": 10, "power": 1, "ghost": 8, "level": 0.1, "turn": 30},
 		minDurationMs:    2000,
 	},
 	"piano": {
 		silent:           map[string]bool{"death": true},
 		points:           map[string]int64{"note": 5, "combo": 25},
 		maxRatePerSecond: map[string]float64{"note": 14, "combo": 4},
-		minDurationMs:    1000,
+		// La partition accélère de 8 % par tour ; au dixième elle va deux fois
+		// plus vite, et c'est ce qui fait qu'une partie finit.
+		minDurationMs: 1000,
 	},
 }
 

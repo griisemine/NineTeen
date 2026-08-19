@@ -111,13 +111,17 @@ déplace case par case et **maintenir une direction le fait défiler**. La grill
 2020 — 16 x 25, cent bombes, soit le quart des cases — et le premier coup est **toujours sûr** :
 les bombes ne sont posées qu'ensuite, en épargnant la case jouée et ses voisines.
 
+Le **Piano** se joue au manche : les quatre directions sont les quatre voies, et **frapper une
+voie vide termine la partie** — c'est la règle de 2020, et c'est elle qui empêche de marteler.
+Laisser passer une note ne fait que casser le combo.
+
 Le **Tetris** de 2020 ne compte pas comme les autres, et c'est voulu : chaque ligne
 simultanée vaut le **double** de la précédente — un quadruple fait donc 1 500 et non 400 — et une
 ligne d'**une seule couleur** vaut **dix fois** son total. Viser la couleur rapporte plus que viser
 le quadruple.
 
 Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur`,
-`--game=tetris` ou `--game=asteroid` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
+`--game=tetris`, `--game=asteroid`, `--game=pacman` ou `--game=piano` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
 la même commande rend exactement la même image.
 
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
@@ -194,9 +198,9 @@ un réglage a changé.
 
 Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **trois des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris et Asteroid sont portés et
-  jouables, sur leur borne comme en plein écran. Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 2 200 lignes ;
+- **un des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris, Asteroid, Pac-Man et Piano
+  sont portés et jouables, sur leur borne comme en plein écran. Seul Shooter tourne encore sur le
+  code de 2020 dans `legacy/` — 1 680 lignes, sur les 9 800 du départ ;
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux

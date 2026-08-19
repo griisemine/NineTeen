@@ -15,6 +15,8 @@ add_library(nineteen_games STATIC
     demineur/demineur.c
     tetris/tetris.c
     asteroid/asteroid.c
+    pacman/pacman.c
+    piano/piano.c
 )
 add_library(nineteen::games ALIAS nineteen_games)
 

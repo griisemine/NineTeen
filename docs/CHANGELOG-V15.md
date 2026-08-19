@@ -190,6 +190,25 @@ que le chantier est terminé.
     nulle part avant : un vaisseau qui pivote ne se dessine pas avec des
     rectangles alignés sur les axes, et l'approcher par une pile de bandes
     horizontales donne une écharde à quarante-cinq degrés.
+- **Pac-Man** et **Piano** — et il faut dire ce qu'ils étaient. Le Pac-Man de
+  2020 tient en 251 lignes : une grille de pastilles, un labyrinthe dont
+  `carte1()` ne trace QUE le bord, un personnage qui avance en ligne droite. Pas
+  de score, pas de mort, pas de niveau, et **aucun fantôme** — `enemy.png` est
+  là, chargé par personne. Le Piano en fait 308 et **ne compte pas un seul
+  point**. Ce ne sont pas des jeux, ce sont des amorces.
+  - `rulesTable` le disait déjà : elle attend `pellet`, `power`, `ghost` et
+    `level` pour l'un, `note` et `combo` pour l'autre. **Les tables décrivaient
+    depuis M6 les jeux qu'ils devaient être.**
+  - Pac-Man reçoit donc un vrai **labyrinthe** — écrit en clair, symétrique,
+    avec ses tunnels — et **quatre fantômes** aux quatre comportements de la
+    borne de 1980 (poursuite, embuscade, dispersion, hasard), leur alternance
+    dispersion/poursuite, les super-pastilles et la chaîne 200/400/800/1600.
+  - Piano garde ce qui faisait son jeu : la partition de `musique.txt` recopiée
+    à l'entier près, et la règle qui décide de tout — **frapper une voie vide
+    termine la partie**. Laisser passer une note, en revanche, ne fait que
+    casser le combo : c'est la faute de commission qui est punie, pas l'oubli.
+    La partition boucle **8 % plus vite à chaque tour**, sans quoi treize notes
+    font cinq secondes de jeu.
 - Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
   secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
   pareil à 120 Hz et à 40 Hz.
@@ -281,9 +300,9 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Trois des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris et Asteroid sont portés et
-  jouables, sur leur borne comme en plein écran. Shooter, Pac-Man et Piano tournent encore sur le
-  code de 2020 dans `legacy/` — environ 2 200 lignes. Ajouter un jeu est désormais une ligne
+- **Un des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris, Asteroid, Pac-Man et Piano
+  sont portés et jouables, sur leur borne comme en plein écran. Seul Shooter tourne encore sur le
+  code de 2020 dans `legacy/` — 1 680 lignes, sur les 9 800 du départ. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
@@ -304,7 +323,22 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Trente-six défauts trouvés en chemin, tous instructifs.
+Trente-huit défauts trouvés en chemin, tous instructifs.
+
+**Un labyrinthe relu à l'œil ment.** Le premier plan de Pac-Man avait ses vingt
+et une lignes de la bonne longueur et toutes ses pastilles atteignables — et
+l'enclos des fantômes **fermé de tous les côtés**. Les quatre fantômes naissaient
+dans une poche murée, dont l'un carrément DANS un mur, et n'en sortaient jamais.
+Sur une capture, ça ressemblait à un Pac-Man tranquille. Le contrôle de
+connexité, qui tient en un parcours en largeur, l'a dit en une seconde ; il est
+maintenant dans `tests/test_pacman.c`, avec la longueur des lignes et la
+symétrie.
+
+**Et des fantômes trop rapides ne font pas un jeu difficile, ils font une
+exécution.** À 90 % de la vitesse du joueur, le joueur automatique tenait
+treize secondes et marquait quarante points en une minute. La borne de 1980 les
+met à 75 %, et c'est cette marge qui FAIT la poursuite. Le chiffre est
+maintenant un test : il exige une survie moyenne d'au moins huit secondes.
 
 **Comparer deux angles bruts de part et d'autre d'un tour donne 6,28 radians de
 rotation là où il n'y en a aucune.** `BASE_ANGLE` vaut 3π/2 et le vaisseau
