@@ -60,6 +60,7 @@ typedef struct options {
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* URL du classement en ligne, sinon la config */
     const char *input_log;   /* où déposer le journal d'entrées de la partie */
+    const char *replay;      /* un journal d'entrées à rejouer, sans fenêtre */
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -98,6 +99,9 @@ static void print_usage(const char *exe)
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
+        "  --rejouer=F          rejoue le journal d'entrées F et imprime le score,\n"
+        "                       sans fenêtre ni GPU : c'est ce qui rend un rapport\n"
+        "                       de bug reproductible\n"
         "  --journal-entrees=F  écrit les commandes de la partie dans F : une partie\n"
         "                       redevient reproductible, et un rapport de bug devient\n"
         "                       un fichier plutôt qu'un souvenir\n"
@@ -293,6 +297,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
         } else if (SDL_strncmp(a, "--journal-entrees=", 18) == 0) {
             o->input_log = a + 18;
+        } else if (SDL_strncmp(a, "--rejouer=", 10) == 0) {
+            o->replay = a + 10;
         } else if (SDL_strncmp(a, "--server=", 9) == 0) {
             o->server = a + 9;
         } else if (SDL_strcmp(a, "--offline") == 0) {
@@ -527,10 +533,119 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
     return api;
 }
 
+
+/*
+ * Rejoue un journal d'entrées et imprime ce qu'il produit.
+ *
+ * C'est la seconde moitié de `--journal-entrees=`. Un enregistrement qu'on ne
+ * sait pas relire est une moitié d'outil : c'est la lecture qui transforme le
+ * fichier en « je reproduis ton bug » plutôt qu'en « j'ai ton fichier ».
+ *
+ * Le journal donne le jeu, la difficulté et la graine ; on remonte la partie
+ * dessus et on la fait avancer pas par pas, en appliquant les changements de
+ * commandes aux tics où ils ont été enregistrés. Entre deux changements, l'état
+ * des maintiens est CONSERVÉ — c'est tout l'intérêt de n'écrire que les
+ * changements, et l'oublier donnerait un joueur qui relâche tout entre deux
+ * lignes.
+ */
+static int replay_inputs(const char *path)
+{
+    char game[32] = { 0 }, difficulty[16] = { 0 };
+    int64_t seed = 0;
+    ns_run_input *input = NULL;
+    uint32_t count = 0;
+
+    if (!ns_runlog_read_inputs(path, game, sizeof game, difficulty, sizeof difficulty,
+                               &seed, &input, &count)) {
+        return 2;
+    }
+
+    const ns_game_api *api = ns_game_find(game);
+    if (!api) {
+        fprintf(stderr, "« %s » : jeu « %s » inconnu\n", path, game);
+        SDL_free(input);
+        return 2;
+    }
+
+    void *state = SDL_calloc(1, api->state_size);
+    if (!state) { SDL_free(input); return 1; }
+
+    const bool hard = (SDL_strcasecmp(difficulty, "hard") == 0);
+    api->reset(state, (uint64_t)seed, hard);
+    api->set_best(state, 0);
+
+    /* Le dernier tic du journal donne la durée : rejouer plus longtemps
+     * ajouterait des pas que personne n'a joués. */
+    const int32_t last = count ? input[count - 1].tick : 0;
+    const float step = 1.0f / (float)NS_DEFAULT_TICK_HZ;
+
+    uint8_t held_mask = 0;
+    uint32_t cursor = 0;
+    int64_t gains = 0;
+    int32_t died_at = -1;
+
+    for (int32_t tick = 0; tick <= last; ++tick) {
+        uint8_t press_mask = 0;
+        while (cursor < count && input[cursor].tick == tick) {
+            held_mask = input[cursor].held;
+            press_mask |= input[cursor].pressed;
+            cursor++;
+        }
+
+        for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+            if (press_mask & (1u << b)) api->press(state, (ns_game_button)b);
+        }
+        if (api->hold) {
+            bool held[NS_GAME_BUTTON_COUNT];
+            for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+                held[b] = (held_mask & (1u << b)) != 0;
+            }
+            api->hold(state, held);
+        }
+        api->tick(state, step);
+
+        /* `events` CONSOMME : la boucle de jeu l'appelle à chaque pas, et ne pas
+         * le faire ici rejouerait un jeu différent de celui qu'on a joué. */
+        ns_game_events ev; SDL_zero(ev);
+        api->events(state, &ev);
+        if (ev.score) gains += ev.score_value;
+        if (ev.die && died_at < 0) died_at = tick;
+    }
+
+    printf("rejeu de « %s »\n", path);
+    printf("  jeu ............ %s (%s), graine %lld\n", api->title, difficulty, (long long)seed);
+    printf("  journal ........ %u changement(s), %d pas\n", count, last + 1);
+    printf("  score .......... %u\n", api->score(state));
+    printf("  gains cumulés .. %lld\n", (long long)gains);
+    if (died_at >= 0) {
+        printf("  mort au pas .... %d (%.1f s)\n", died_at, (double)died_at * (double)step);
+    } else {
+        printf("  mort ........... non, la partie courait encore\n");
+    }
+
+    SDL_free(state);
+    SDL_free(input);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     options opt;
     if (!parse_options(argc, argv, &opt)) return 0;
+
+    /*
+     * LE REJEU, avant tout le reste.
+     *
+     * Il ne demande ni fenêtre, ni GPU, ni assets, ni réseau : un mini-jeu est
+     * une simulation à pas fixe et le dessin n'y change rien. C'est ce qui
+     * permet de rejouer le journal de quelqu'un sur une machine sans écran, dans
+     * l'intégration continue, ou sous un débogueur — c'est-à-dire là où l'on
+     * cherche un bug.
+     *
+     * Placé ici, avant la moindre allocation, pour que le mode ne traîne pas
+     * derrière lui l'initialisation de tout un moteur dont il n'a aucun besoin.
+     */
+    if (opt.replay) return replay_inputs(opt.replay);
 
     /*
      * `--pose` est validé ici, avant que quoi que ce soit soit alloué : c'est une

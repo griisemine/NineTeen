@@ -114,9 +114,14 @@ ne faisait que le premier, ce qui est l'inverse du besoin : on veut ce fichier
 quand quelque chose a mal tourné, et dans ce cas la partie n'est jamais
 « terminée ».
 
-Ce qui reste pour un duel, du coup, n'est plus l'enregistrement mais le
-TRANSPORT : une route pour déposer et récupérer un journal, et le second jeu
-dessiné à côté du sien.
+Et il se relit : `--rejouer=partie.txt` remonte la partie et imprime ce qu'elle
+donne, **sans fenêtre ni GPU**. Un enregistrement qu'on ne sait pas relire est
+une moitié d'outil.
+
+Ce qui reste pour un duel, du coup, n'est plus l'enregistrement NI le rejeu mais
+le TRANSPORT : une route pour déposer et récupérer un journal, et le second jeu
+dessiné à côté du sien. C'est la partie qui demande ta décision, parce que la
+forme du transport dépend de la forme du duel.
 
 ---
 

@@ -406,6 +406,74 @@ static void json_escape(const char *in, char *out, size_t cap)
     out[n] = '\0';
 }
 
+
+bool ns_runlog_read_inputs(const char *path,
+                           char *game, size_t game_cap,
+                           char *difficulty, size_t difficulty_cap,
+                           int64_t *seed,
+                           ns_run_input **out_input, uint32_t *out_count)
+{
+    if (out_input) *out_input = NULL;
+    if (out_count) *out_count = 0;
+    if (!path || !out_input || !out_count) return false;
+
+    size_t size = 0;
+    void *file = SDL_LoadFile(path, &size);
+    if (!file || size == 0) {
+        NS_ERROR("journal d'entrées illisible : %s", path);
+        SDL_free(file);
+        return false;
+    }
+    char *text = (char *)file;
+
+    char g[32] = { 0 }, d[16] = { 0 };
+    long long sd = 0;
+    /*
+     * L'en-tête est lu AVANT tout le reste, et son échec est fatal : rejouer un
+     * journal dont on ne connaît ni le jeu ni la graine ne rejouerait rien —
+     * ça jouerait une partie neuve avec de vieux boutons.
+     */
+    if (SDL_sscanf(text, "v1 %31s %15s %lld", g, d, &sd) != 3) {
+        NS_ERROR("« %s » : en-tête « v1 <jeu> <difficulté> <graine> » attendu", path);
+        SDL_free(file);
+        return false;
+    }
+    if (game && game_cap) SDL_snprintf(game, game_cap, "%s", g);
+    if (difficulty && difficulty_cap) SDL_snprintf(difficulty, difficulty_cap, "%s", d);
+    if (seed) *seed = (int64_t)sd;
+
+    /* Une passe pour compter, une pour lire : le fichier est du texte de
+     * quelques kilo-octets, et deux passes valent mieux qu'un tableau qui
+     * grandit à tâtons. */
+    uint32_t lines = 0;
+    for (const char *c = text; *c; ++c) if (*c == '\n') lines++;
+
+    ns_run_input *arr = (ns_run_input *)SDL_calloc(lines ? lines : 1, sizeof *arr);
+    if (!arr) { SDL_free(file); return false; }
+
+    uint32_t n = 0;
+    char *save = NULL;
+    char *line = SDL_strtok_r(text, "\n", &save);          /* l'en-tête, sautée */
+    line = SDL_strtok_r(NULL, "\n", &save);
+    while (line && n < lines) {
+        int tick = 0; unsigned held = 0, pressed = 0;
+        if (SDL_sscanf(line, "%d %u %u", &tick, &held, &pressed) == 3) {
+            arr[n].tick    = tick;
+            arr[n].held    = (uint8_t)held;
+            arr[n].pressed = (uint8_t)pressed;
+            n++;
+        }
+        line = SDL_strtok_r(NULL, "\n", &save);
+    }
+    SDL_free(file);
+
+    *out_input = arr;
+    *out_count = n;
+    NS_INFO("journal d'entrées : %u changement(s) relus de « %s » (%s/%s, graine %lld)",
+            n, path, g, d, sd);
+    return true;
+}
+
 bool ns_runlog_enqueue(const ns_runlog *r)
 {
     if (!r || !r->closed) return false;

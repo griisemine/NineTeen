@@ -370,8 +370,23 @@ rejoue. Le fichier s'écrit à la fin de la partie **et** à la fermeture du jeu
 parce que le cas où on en a besoin est justement celui où la partie ne s'est pas
 terminée normalement.
 
-`tests/test_replay.c` vérifie que les huit jeux se rejouent à l'identique par ce
-chemin — score, gains, et état comparé au bit près.
+Et pour le relire :
+
+```sh
+./build/linux-x64/bin/nineteen --rejouer=partie.txt
+```
+
+**Ni fenêtre, ni GPU, ni assets, ni réseau** : un mini-jeu est une simulation à
+pas fixe, et le dessin n'y change rien. On peut donc rejouer le journal de
+quelqu'un sur une machine sans écran, dans l'intégration continue, ou sous un
+débogueur — c'est-à-dire là où l'on cherche un bug. La commande imprime le jeu,
+la graine, le nombre de pas, le score, les gains cumulés et le pas où la partie
+s'est terminée.
+
+`tests/test_replay.c` vérifie que les huit jeux se rejouent à l'identique en
+mémoire — score, gains, et état comparé au bit près — et `rejeu-cli` vérifie
+l'outil lui-même : deux rejeux du même fichier donnent la même sortie, un
+fichier qui n'est pas un journal est refusé, un fichier absent aussi.
 
 ### `--offline`
 

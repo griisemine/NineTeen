@@ -122,6 +122,22 @@ const ns_run_input  *ns_runlog_inputs(const ns_runlog *r);
  */
 bool ns_runlog_write_inputs(const ns_runlog *r, const char *path);
 
+/*
+ * Relit un journal d'entrées. Un enregistrement qu'on ne sait pas rejouer est
+ * une moitié d'outil : c'est la lecture qui transforme le fichier en « je
+ * reproduis ton bug » plutôt qu'en « j'ai ton fichier ».
+ *
+ * `out_input` est alloué par la fonction et revient à l'appelant, qui le libère
+ * par `SDL_free`. Les trois champs d'en-tête sont rendus tels qu'ils étaient à
+ * l'enregistrement — le jeu, la difficulté, la graine — parce que rejouer sur
+ * une autre graine ne rejoue rien.
+ */
+bool ns_runlog_read_inputs(const char *path,
+                           char *game, size_t game_cap,
+                           char *difficulty, size_t difficulty_cap,
+                           int64_t *seed,
+                           ns_run_input **out_input, uint32_t *out_count);
+
 /* Un fait de jeu. `kind` est un mot court : « score », « death », « flap ». */
 void ns_runlog_event(ns_runlog *r, int64_t at_ms, const char *kind, int64_t value);
 
