@@ -499,10 +499,17 @@
     },
     {
       "name": "borne_commande",
-      "texture": "bordeaux.jpg",
-      "roughness": 0.46,
-      "metallic": 0.0,
-      "uvMetres": 0.6
+      "texture": "panneau_borne.png",
+      "roughness": 0.52,
+      "metallic": 0.05,
+      "fit": true,
+      "baseColor": [
+        0.78,
+        0.26,
+        0.21,
+        1.0
+      ],
+      "_": "La sérigraphie du panneau, dessinée par `tools/panelart`. Les dix-neuf bornes portaient le `bordeaux.jpg` de 2020 en pavage : un APLAT, sans bord, sans motif, sans repère — sur la plus grande surface que le joueur ait sous les yeux quand il joue, plus grande que la dalle. La planche est en niveaux de gris et c'est `baseColor` qui donne le rouge : la forme vient du dessin, la couleur du matériau, exactement comme le flanc. `fit` parce que le panneau est un quad à UV 0..1 : un pavage remettrait un motif qui ne connaît pas les bords de la pièce qu'il habille."
     },
     {
       "_": "Les matériaux des modèles CC0 importés. Un par matériau du glTF : le modèle apporte sa géométrie et ses UV, la salle décide de la matière — c'est ce qui garde une seule table de matériaux, donc un seul endroit où régler l'aspect de la salle. Ils sont en mode `fit` par nature : les UV viennent du modèle et ne se pavent pas.",
@@ -1014,6 +1021,10 @@
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
   "retiredTextures": [
+    {
+      "file": "bordeaux.jpg",
+      "why": "l'aplat rouge du panneau de commande des dix-neuf bornes ; remplacé par la sérigraphie dessinée `panneau_borne.png`, qui a des filets, un nez usé et un bord"
+    },
     {
       "file": "gris_foncer.jpg",
       "why": "aplat 24x24 quasi noir ; remplacé par painted_panel teinté"

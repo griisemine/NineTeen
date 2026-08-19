@@ -87,14 +87,44 @@ add_custom_command(
     VERBATIM
 )
 
+# La sérigraphie du panneau de commande, même famille et même répertoire que
+# l'art latéral : le flanc et le panneau partagent la trame en losanges, à deux
+# pas différents. Les dix-neuf bornes portaient jusqu'ici le `bordeaux.jpg` de
+# 2020 en pavage — un aplat, sur la plus grande surface que le joueur ait sous
+# les yeux quand il joue.
+set(PANELART "${GEN}/sideart/panneau_borne.png")
+set(PANELART_RUNTIME "${GEN}/scene/textures/panneau_borne.png")
+add_custom_command(
+    OUTPUT  "${PANELART}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND panelart --field=0.30 "${PANELART}"
+    DEPENDS panelart
+    COMMENT "Sérigraphie de panneau : panneau_borne.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${PANELART_RUNTIME}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PANELART}" "${PANELART_RUNTIME}"
+    DEPENDS "${PANELART}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/materials/panneau_borne_n.png" "${GEN}/materials/panneau_borne_orm.png"
+    COMMAND texgen --strength=0.7 "${PANELART}" "${GEN}/materials"
+    DEPENDS texgen "${PANELART}"
+    COMMENT "Matériau PBR : panneau_borne"
+    VERBATIM
+)
+
 
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-# +1 : l'art latéral, dessiné par `sideart` juste au-dessus.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 1")
+# +2 : l'art latéral et la sérigraphie de panneau, dessinés juste au-dessus.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 2")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -108,7 +138,7 @@ add_custom_command(
                     # Racine des modèles CC0 instanciés dans la salle.
                     "--assets=${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
-            ${CC0_MODELS} "${SIDEART}"
+            ${CC0_MODELS} "${SIDEART}" "${PANELART}"
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
@@ -260,7 +290,10 @@ set(ALBEDO_Radio              0.16)   # 0,117
 
 set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"
                    "${GEN}/materials/flanc_borne_n.png"
-                   "${GEN}/materials/flanc_borne_orm.png")
+                   "${GEN}/materials/flanc_borne_orm.png"
+                   "${PANELART}" "${PANELART_RUNTIME}"
+                   "${GEN}/materials/panneau_borne_n.png"
+                   "${GEN}/materials/panneau_borne_orm.png")
 foreach(tex IN LISTS ROOM_TEXTURES)
     get_filename_component(tex_name "${tex}" NAME_WE)
 

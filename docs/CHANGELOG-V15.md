@@ -48,6 +48,12 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **Le panneau de commande a une sérigraphie** (`tools/panelart`). Les dix-neuf bornes portaient
+  le `bordeaux.jpg` de 2020 en pavage : un APLAT, sans bord, sans motif, sans repère — sur la plus
+  grande surface que le joueur ait sous les yeux quand il joue, plus grande que la dalle. La
+  planche reprend la trame en losanges du flanc à un pas trois fois plus court, avec deux filets
+  sous la rangée de boutons et un nez de panneau plus clair du seul côté que les avant-bras usent.
+  En niveaux de gris, teintée par le matériau : la forme vient du dessin, la couleur du jeu.
 - **Les grilles de haut-parleur existent enfin.** Les deux couronnes du bandeau étaient dessinées
   dans le noir de ce bandeau — noir sur noir, donc absentes : entre l'écran et le marquee la borne
   n'avait qu'une plaque morte. Ce qui fait lire une grille n'est pas sa couleur mais son MÉTAL,
