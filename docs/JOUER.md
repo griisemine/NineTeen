@@ -121,7 +121,7 @@ ligne d'**une seule couleur** vaut **dix fois** son total. Viser la couleur rapp
 le quadruple.
 
 Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur`,
-`--game=tetris`, `--game=asteroid`, `--game=pacman` ou `--game=piano` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
+`--game=tetris`, `--game=asteroid`, `--game=pacman`, `--game=piano` ou `--game=shooter` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
 la même commande rend exactement la même image.
 
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
@@ -198,9 +198,8 @@ un réglage a changé.
 
 Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
-- **un des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris, Asteroid, Pac-Man et Piano
-  sont portés et jouables, sur leur borne comme en plein écran. Seul Shooter tourne encore sur le
-  code de 2020 dans `legacy/` — 1 680 lignes, sur les 9 800 du départ ;
+- ~~les mini-jeux~~ : **les huit sont portés**, et les dix-neuf bornes de la salle jouent
+  toutes ;
 - **le transport réseau**, délibérément : voir la section précédente ;
 - **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
   limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux

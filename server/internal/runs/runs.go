@@ -369,10 +369,15 @@ var rulesTable = map[string]gameRules{
 		valueMax:         50_000,
 	},
 	"shooter": {
-		silent:           map[string]bool{"death": true},
-		scaled:           map[string]int64{"enemy": 15},
-		points:           map[string]int64{"boss": 2000, "wave": 300},
-		maxRatePerSecond: map[string]float64{"enemy": 20, "boss": 0.2, "wave": 0.5},
+		// La seule table qui n'a RIEN eu à changer au portage : « enemy » porte
+		// les POINTS DE VIE de l'ennemi abattu — 1, 7, 25, 40 ou 90 — et quinze
+		// points par point de vie était déjà le barème écrit ici en M6.
+		scaled: map[string]int64{"enemy": 15},
+		points: map[string]int64{"boss": 2000, "wave": 300},
+		// « shot » est un geste : muet, compté, et c'est sur lui que porte la
+		// limite de fréquence.
+		silent:           map[string]bool{"death": true, "shot": true},
+		maxRatePerSecond: map[string]float64{"enemy": 20, "boss": 0.2, "wave": 0.5, "shot": 40},
 		minDurationMs:    2000,
 	},
 	"demineur": {

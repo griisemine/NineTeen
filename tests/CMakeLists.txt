@@ -112,6 +112,13 @@ nineteen_set_warnings(ns_test_snake)
 nineteen_apply_sanitizers(ns_test_snake)
 add_test(NAME snake COMMAND ns_test_snake)
 
+add_executable(ns_test_shooter test_shooter.c)
+target_link_libraries(ns_test_shooter PRIVATE nineteen::games)
+target_include_directories(ns_test_shooter PRIVATE "${CMAKE_SOURCE_DIR}/games/shooter")
+nineteen_set_warnings(ns_test_shooter)
+nineteen_apply_sanitizers(ns_test_shooter)
+add_test(NAME shooter COMMAND ns_test_shooter)
+
 add_executable(ns_test_piano test_piano.c)
 target_link_libraries(ns_test_piano PRIVATE nineteen::games)
 target_include_directories(ns_test_piano PRIVATE "${CMAKE_SOURCE_DIR}/games/piano")

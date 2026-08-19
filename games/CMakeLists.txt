@@ -17,6 +17,7 @@ add_library(nineteen_games STATIC
     asteroid/asteroid.c
     pacman/pacman.c
     piano/piano.c
+    shooter/shooter.c
 )
 add_library(nineteen::games ALIAS nineteen_games)
 

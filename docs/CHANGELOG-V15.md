@@ -209,6 +209,18 @@ que le chantier est terminé.
     casser le combo : c'est la faute de commission qui est punie, pas l'oubli.
     La partition boucle **8 % plus vite à chaque tour**, sans quoi treize notes
     font cinq secondes de jeu.
+- **Shooter** — le couloir étroit d'un tiers d'écran, le vaisseau à
+  `SHIP_SPEED 10` px/image et son amortissement de 0,9, les **cinq emplacements
+  d'armes** et la table `WEAPON_DISPOSITION` qui décide lesquels s'allument
+  — deux canons ne sont pas les deux premiers mais le deuxième et le quatrième,
+  donc symétriques — les trois missiles alliés, et les **cinq types d'ennemis**
+  avec leurs points de vie `{1, 7, 25, 40, 90}`, leurs sept armes, leurs
+  rechargements, leurs rafales et leur type de visée.
+  - C'est **la seule table du serveur que le portage n'a pas eu à changer** :
+    `scaled{"enemy": 15}` était déjà le barème, et la valeur d'un ennemi est ses
+    points de vie. Un ennemi à 90 vaut 1 350, un ennemi à 1 en vaut 15.
+- **Les dix-neuf bornes de la salle jouent toutes.** Plus une seule ne dit
+  « pas encore porté ».
 - Tout le temps de 2020 est compté **en images à 30 Hz**. Chaque constante est convertie en
   secondes, sa valeur d'origine écrite à côté, et un test vérifie que le jeu se comporte
   pareil à 120 Hz et à 40 Hz.
@@ -300,9 +312,10 @@ que le chantier est terminé.
 
 ## Ce qui reste
 
-- **Un des huit mini-jeux.** Flappy Bird, Snake, Démineur, Tetris, Asteroid, Pac-Man et Piano
-  sont portés et jouables, sur leur borne comme en plein écran. Seul Shooter tourne encore sur le
-  code de 2020 dans `legacy/` — 1 680 lignes, sur les 9 800 du départ. Ajouter un jeu est désormais une ligne
+- **Les huit mini-jeux sont portés.** Flappy Bird, Snake, Démineur, Tetris, Asteroid, Pac-Man,
+  Piano et Shooter, jouables sur leur borne comme en plein écran. Les 9 800 lignes de 2020 sont
+  toutes passées sur `ns_sprite`, au pas fixe, avec leurs tables recopiées et leurs règles
+  vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
 - **Le transport réseau.** Le classement local marche, le journal de partie est scellé au format
@@ -323,7 +336,16 @@ que le chantier est terminé.
 
 ## Ce que la reconstruction a appris
 
-Trente-huit défauts trouvés en chemin, tous instructifs.
+Trente-neuf défauts trouvés en chemin, tous instructifs.
+
+**Un ratio oublié dans une table rend un jeu injouable sans rien casser.**
+L'ellipse du missile ennemi de base de Shooter s'écrit
+`{0, 0, 12.5*RATIO_SIZE_MISSILE_3, 12.5*RATIO_SIZE_MISSILE_3}` — et le ratio
+vaut **0,4**. Recopier 12,5 en oubliant le 0,4 fait des balles deux fois et
+demie trop grosses. Le jeu tourne, il est seulement impossible, et aucune
+adresse ne le rattrape : dans un couloir de six cent quarante pixels sous un tir
+en rafale, la marge de passage disparaît. C'est le genre de défaut qu'on
+n'attribue jamais à la bonne cause — on croit avoir mal réglé la difficulté.
 
 **Un labyrinthe relu à l'œil ment.** Le premier plan de Pac-Man avait ses vingt
 et une lignes de la bonne longueur et toutes ses pastilles atteignables — et

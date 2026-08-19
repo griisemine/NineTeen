@@ -5,6 +5,7 @@
 #include "asteroid/asteroid.h"
 #include "pacman/pacman.h"
 #include "piano/piano.h"
+#include "shooter/shooter.h"
 #include "tetris/tetris.h"
 #include "snake/snake.h"
 
@@ -24,7 +25,7 @@
 static const ns_game_api *const g_games[] = {
     &g_flappy_api,
     &g_snake_api,
-    &g_demineur_api, &g_tetris_api, &g_asteroid_api, &g_pacman_api, &g_piano_api,
+    &g_demineur_api, &g_tetris_api, &g_asteroid_api, &g_pacman_api, &g_piano_api, &g_shooter_api,
 };
 
 int ns_game_count(void) { return (int)(sizeof g_games / sizeof g_games[0]); }

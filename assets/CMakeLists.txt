@@ -448,6 +448,18 @@ add_custom_command(
     VERBATIM
 )
 
+add_custom_command(
+    OUTPUT "${GEN}/games/shooter/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/shooter"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_LEGACY}/games/4_shooter/Textures/background.png"
+            "${GEN}/games/shooter/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/shooter/.stamp"
+    DEPENDS "${SRC_LEGACY}/games/4_shooter/Textures/background.png"
+    COMMENT "Copie du fond de Shooter"
+    VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # 4. Données écrites à la main (affectation des bornes, hitbox, ambiances)
 # ---------------------------------------------------------------------------
@@ -472,6 +484,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/games/tetris/.stamp"
         "${GEN}/games/asteroid/.stamp"
         "${GEN}/games/pacman/.stamp"
+        "${GEN}/games/shooter/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
         ${LEGACY_ROOM_OUTPUTS}
