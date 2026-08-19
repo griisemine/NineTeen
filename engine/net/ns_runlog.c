@@ -165,6 +165,13 @@ struct ns_runlog {
     ns_run_event *event;
     uint32_t      count, capacity;
 
+    /* Le journal d'entrées. Séparé du journal d'événements parce qu'il ne
+     * répond pas à la même question : celui-ci rejoue, l'autre authentifie. */
+    ns_run_input *input;
+    uint32_t      input_count, input_capacity;
+    uint8_t       last_held;
+    bool          input_started;
+
     int64_t duration_ms, claimed;
     bool    closed;
 };
@@ -187,12 +194,19 @@ void ns_runlog_destroy(ns_runlog *r)
 {
     if (!r) return;
     SDL_free(r->event);
+    SDL_free(r->input);
     SDL_free(r);
 }
 
 void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
                      int64_t seed, const uint8_t *secret, size_t secret_len)
 {
+    /* Une nouvelle partie, un nouveau journal d'entrées : le garder ferait
+     * rejouer la précédente collée devant celle-ci. */
+    r->input_count = 0;
+    r->last_held = 0;
+    r->input_started = false;
+
     if (!r) return;
     r->count = 0; r->duration_ms = 0; r->claimed = 0; r->closed = false;
     r->seed = seed;
@@ -206,6 +220,76 @@ void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
         r->secret_len = (secret_len > sizeof r->secret) ? sizeof r->secret : secret_len;
         memcpy(r->secret, secret, r->secret_len);
     }
+}
+
+
+void ns_runlog_input(ns_runlog *r, int32_t tick, uint8_t held, uint8_t pressed)
+{
+    if (!r || r->closed) return;
+
+    /*
+     * On n'écrit que les CHANGEMENTS — sauf le tout premier pas, qui pose
+     * l'état initial même s'il est nul. Sans cette exception, une partie qui
+     * commence touche déjà relâchée n'aurait aucune ligne, et le rejeu ne
+     * saurait pas distinguer « rien n'a été enregistré » de « rien n'était
+     * pressé ».
+     *
+     * Les APPUIS, eux, s'écrivent toujours quand il y en a : un appui est un
+     * front, pas un état, et deux appuis identiques à deux pas différents sont
+     * deux événements distincts.
+     */
+    const bool changed = (held != r->last_held) || (pressed != 0) || !r->input_started;
+    r->last_held = held;
+    r->input_started = true;
+    if (!changed) return;
+
+    if (r->input_count == r->input_capacity) {
+        const uint32_t want = r->input_capacity ? r->input_capacity * 2u : 256u;
+        /* La même borne que les événements : un journal qui grossit sans fin
+         * sur une partie qui tourne mal remplirait la mémoire du joueur. */
+        if (want > NS_RUNLOG_MAX_EVENTS) {
+            if (r->input_count == NS_RUNLOG_MAX_EVENTS) return;
+        }
+        ns_run_input *grown = (ns_run_input *)SDL_realloc(r->input, want * sizeof *grown);
+        if (!grown) return;
+        r->input = grown;
+        r->input_capacity = want;
+    }
+    r->input[r->input_count].tick    = tick;
+    r->input[r->input_count].held    = held;
+    r->input[r->input_count].pressed = pressed;
+    r->input_count++;
+}
+
+uint32_t ns_runlog_input_count(const ns_runlog *r) { return r ? r->input_count : 0u; }
+
+const ns_run_input *ns_runlog_inputs(const ns_runlog *r) { return r ? r->input : NULL; }
+
+bool ns_runlog_write_inputs(const ns_runlog *r, const char *path)
+{
+    if (!r || !path) return false;
+
+    SDL_IOStream *io = SDL_IOFromFile(path, "w");
+    if (!io) {
+        NS_WARN("journal d'entrées : écriture impossible (%s) : %s", path, SDL_GetError());
+        return false;
+    }
+    char line[160];
+    int n = SDL_snprintf(line, sizeof line, "v1 %s %s %lld\n",
+                         r->game[0] ? r->game : "?",
+                         r->difficulty[0] ? r->difficulty : "normal",
+                         (long long)r->seed);
+    SDL_WriteIO(io, line, (size_t)n);
+    for (uint32_t i = 0; i < r->input_count; ++i) {
+        n = SDL_snprintf(line, sizeof line, "%d %u %u\n",
+                         r->input[i].tick,
+                         (unsigned)r->input[i].held,
+                         (unsigned)r->input[i].pressed);
+        SDL_WriteIO(io, line, (size_t)n);
+    }
+    SDL_CloseIO(io);
+    NS_INFO("journal d'entrées : %u changement(s) écrits dans « %s »", r->input_count, path);
+    return true;
 }
 
 void ns_runlog_event(ns_runlog *r, int64_t at_ms, const char *kind, int64_t value)

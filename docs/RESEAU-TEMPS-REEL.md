@@ -79,22 +79,44 @@ irreproductible.
 Ce que ça ne dit pas : rien sur le déterminisme ENTRE machines différentes. Tout
 tourne ici sur la même.
 
-## Ce qui MANQUE, précisément
+## Le journal d'entrées existe maintenant
 
-**Une seule chose, mais elle est structurante : le journal ne porte pas les
-entrées.**
+`ns_runlog` porte un second journal, à côté de celui des événements, et pour une
+raison qui n'attend pas les duels : **une partie devient reproductible.**
 
-Pour rejouer une partie ailleurs il faut, par tic où quelque chose change, le
-masque des boutons tenus. Le moteur a déjà cette information au bon endroit —
-`api->press` et `api->hold` la reçoivent dans la boucle à pas fixe de
-`room/main.c` — elle n'est simplement écrite nulle part.
+```sh
+./build/linux-x64/bin/nineteen --journal-entrees=partie.txt
+```
 
-Ordre de grandeur, pour que la discussion ait des chiffres : une partie de trois
-minutes à 120 Hz fait 21 600 tics. En n'écrivant que les CHANGEMENTS d'état des
-cinq boutons, une partie de Flappy tient dans quelques centaines d'octets ; le
-Snake, qui tourne en tenant une direction, dans quelques milliers. C'est du même
-ordre que le journal d'événements actuel, dont la borne est déjà de
-200 000 entrées (`NS_RUNLOG_MAX_EVENTS`, alignée sur celle du serveur).
+Un rapport de bug cesse d'être « ça a planté quelque part après deux minutes »
+pour devenir un fichier qu'on rejoue. C'est pour ça que cette moitié est écrite
+et que le réseau temps réel ne l'est pas.
+
+Deux journaux et pas un, parce qu'ils ne répondent pas à la même question : celui
+des événements enregistre des conséquences et sert à AUTHENTIFIER un score — le
+serveur le recalcule, le sceau le protège ; celui des entrées enregistre des
+appuis et sert à REJOUER. Le second n'entre ni dans la charge canonique ni dans
+le sceau : il n'a rien à prouver au serveur.
+
+Le format est du texte, une ligne par changement :
+
+```
+v1 demineur normal 20240418
+0 0 0
+281 4 0
+```
+
+Du texte parce qu'il se lit à l'œil quand on débogue, et qu'une partie tient dans
+quelques kilo-octets — la compresser serait optimiser ce qu'on n'a pas mesuré.
+
+Il s'écrit à la fin de la partie **et à la sortie du programme**. Le premier jet
+ne faisait que le premier, ce qui est l'inverse du besoin : on veut ce fichier
+quand quelque chose a mal tourné, et dans ce cas la partie n'est jamais
+« terminée ».
+
+Ce qui reste pour un duel, du coup, n'est plus l'enregistrement mais le
+TRANSPORT : une route pour déposer et récupérer un journal, et le second jeu
+dessiné à côté du sien.
 
 ---
 

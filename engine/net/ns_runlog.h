@@ -73,6 +73,55 @@ void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
 void ns_runlog_set_run_id(ns_runlog *r, const char *run_id);
 const char *ns_runlog_run_id(const ns_runlog *r);
 
+/*
+ * Le JOURNAL D'ENTRÉES, à côté du journal d'événements.
+ *
+ * Deux journaux et pas un, parce qu'ils ne répondent pas à la même question. Le
+ * journal d'événements enregistre des CONSÉQUENCES (`pipe`, `score`, `death`)
+ * et sert à AUTHENTIFIER un score : c'est lui que le serveur recalcule et que
+ * le sceau protège. Le journal d'entrées enregistre des APPUIS, et sert à
+ * REJOUER une partie.
+ *
+ * J'ai longtemps écrit que le premier faisait le travail du second. C'est faux,
+ * et ça se lit dans les données : on y trouve qu'un tuyau a été passé à
+ * 2 340 ms, jamais que la barre d'espace a été pressée au tic 281.
+ *
+ * Ce que le rejeu vaut AUJOURD'HUI, sans aucun duel : une partie devient
+ * reproductible. Un rapport de bug cesse d'être « ça a planté quelque part
+ * après deux minutes » pour devenir un fichier qu'on rejoue. C'est pour ça que
+ * cette moitié est écrite maintenant et que le réseau temps réel ne l'est pas.
+ *
+ * Le journal d'entrées n'entre PAS dans la charge canonique ni dans le sceau :
+ * il n'a rien à prouver au serveur, et l'y mettre changerait un format que deux
+ * langages tiennent d'accord.
+ */
+typedef struct ns_run_input {
+    int32_t  tick;      /* numéro de pas fixe depuis le début de la partie */
+    uint8_t  held;      /* masque des maintiens */
+    uint8_t  pressed;   /* masque des appuis de ce pas */
+} ns_run_input;
+
+/*
+ * Enregistre l'état des commandes à ce pas. N'écrit une ligne QUE si quelque
+ * chose a changé depuis le pas précédent : une partie de trois minutes fait
+ * 21 600 pas, et un joueur n'en change pas mille fois.
+ */
+void ns_runlog_input(ns_runlog *r, int32_t tick, uint8_t held, uint8_t pressed);
+
+uint32_t             ns_runlog_input_count(const ns_runlog *r);
+const ns_run_input  *ns_runlog_inputs(const ns_runlog *r);
+
+/*
+ * Écrit le journal d'entrées en texte, une ligne par changement :
+ *   v1 <jeu> <difficulté> <graine>
+ *   <tic> <maintiens> <appuis>
+ *
+ * Du texte parce qu'il se lit à l'œil quand on débogue, et qu'un journal
+ * d'entrées de partie tient dans quelques kilo-octets — le compresser serait
+ * optimiser ce qu'on n'a pas encore mesuré.
+ */
+bool ns_runlog_write_inputs(const ns_runlog *r, const char *path);
+
 /* Un fait de jeu. `kind` est un mot court : « score », « death », « flap ». */
 void ns_runlog_event(ns_runlog *r, int64_t at_ms, const char *kind, int64_t value);
 

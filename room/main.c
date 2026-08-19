@@ -59,6 +59,7 @@ typedef struct options {
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* URL du classement en ligne, sinon la config */
+    const char *input_log;   /* où déposer le journal d'entrées de la partie */
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -97,6 +98,9 @@ static void print_usage(const char *exe)
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
+        "  --journal-entrees=F  écrit les commandes de la partie dans F : une partie\n"
+        "                       redevient reproductible, et un rapport de bug devient\n"
+        "                       un fichier plutôt qu'un souvenir\n"
         "  --server=URL         classement en ligne (http://hôte:port) ; sinon la config\n"
         "  --offline            verrou : aucune connexion, aucune mise en file\n"
         "  --menu[=N]           ouvre le menu de réglages (ligne N) : pour les captures\n"
@@ -287,6 +291,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->exposure = (float)SDL_atof(a + 11);
         } else if (SDL_strncmp(a, "--particles=", 12) == 0) {
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
+        } else if (SDL_strncmp(a, "--journal-entrees=", 18) == 0) {
+            o->input_log = a + 18;
         } else if (SDL_strncmp(a, "--server=", 9) == 0) {
             o->server = a + 9;
         } else if (SDL_strcmp(a, "--offline") == 0) {
@@ -855,6 +861,14 @@ int main(int argc, char **argv)
     ns_runlog *runlog = ns_runlog_create(16384);
     int64_t    run_ms = 0;
     /*
+     * Le numéro de pas de la partie, et les appuis survenus depuis le pas
+     * précédent. Le journal d'entrées se compte en PAS FIXES et pas en
+     * millisecondes : c'est la seule unité à laquelle un rejeu retombe sur ses
+     * pieds, puisque c'est celle à laquelle le jeu avance.
+     */
+    int32_t    run_tick = 0;
+    uint8_t    pending_press = 0;
+    /*
      * La graine des parties de DÉMONSTRATION, qui s'enchaînent en pilote
      * automatique. Elle avance par un pas déterministe plutôt que par l'horloge :
      * une capture d'une salle en attract mode doit se refaire à l'identique, et
@@ -1007,6 +1021,7 @@ int main(int argc, char **argv)
             ns_online_prefetch_ticket(game_api->id, "normal");
             start_run(game_api, game, runlog, seed, game_hard);
             run_ms = 0;
+            run_tick = 0; pending_press = 0;
             in_game = true;
             fullscreen_game = true;      /* `--game=` est le mode plein écran */
             NS_INFO("%s : partie démarrée", game_api->title);
@@ -1091,6 +1106,7 @@ int main(int argc, char **argv)
             ns_online_prefetch_ticket(game_api->id, hard ? "hard" : "normal");
             start_run(game_api, game, runlog, 20240418, hard);
             run_ms = 0;
+            run_tick = 0; pending_press = 0;
             in_game = true;
             fullscreen_game = false;
             playing_material = pick->screen_material;
@@ -1156,6 +1172,8 @@ play_at_done: ;
                 const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
                 start_run(game_api, game, runlog, seed, game_hard);
                 run_ms = 0;
+            run_tick = 0; pending_press = 0;
+                run_tick = 0; pending_press = 0;
             }
         }
         NS_INFO("%s : %.1f s avancées (%d pas), %d partie(s), score %u",
@@ -1320,6 +1338,9 @@ play_at_done: ;
                                 const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
                                 start_run(game_api, game, runlog, seed, game_hard);
                                 run_ms = 0;
+                                run_tick = 0; pending_press = 0;
+            run_tick = 0; pending_press = 0;
+                run_tick = 0; pending_press = 0;
                             } else {
                                 ns_game_button b = NS_GAME_ACTION;
                                 switch (ev.key.key) {
@@ -1330,6 +1351,10 @@ play_at_done: ;
                                     default: break;
                                 }
                                 game_api->press(game, b);
+                                /* Le même appui, pour le journal d'entrées : il
+                                 * arrive du gestionnaire d'événements, donc
+                                 * AVANT le pas, et sera consommé par lui. */
+                                pending_press |= (uint8_t)(1u << b);
                             }
                         }
                         break;
@@ -1426,6 +1451,8 @@ play_at_done: ;
                             game_hard = hard;
                             start_run(game_api, game, runlog, seed, hard);
                             run_ms = 0;
+            run_tick = 0; pending_press = 0;
+                run_tick = 0; pending_press = 0;
                             in_game = true;
                             /*
                              * On reste EN 3D : le jeu tourne dans la dalle de la
@@ -1599,6 +1626,32 @@ play_at_done: ;
                     held[NS_GAME_ACTION] = keys[SDL_SCANCODE_SPACE];
                     game_api->hold(game, held);
                 }
+
+                /*
+                 * Le journal d'ENTRÉES, écrit ici parce que c'est le seul
+                 * endroit où l'on sait ce que le jeu a réellement reçu à ce pas.
+                 *
+                 * Il ne sert pas au serveur — le sceau ne le couvre pas — mais
+                 * il rend une partie REPRODUCTIBLE : `--journal-entrees=` la
+                 * dépose dans un fichier, et un rapport de bug cesse d'être
+                 * « ça a planté après deux minutes » pour devenir quelque chose
+                 * qu'on rejoue. `tests/test_replay.c` vérifie que les huit jeux
+                 * se rejouent à l'identique par ce chemin.
+                 */
+                {
+                    uint8_t hmask = 0;
+                    if (game_api->hold) {
+                        if (keys[SDL_SCANCODE_UP]    || keys[SDL_SCANCODE_W]) hmask |= 1u << NS_GAME_UP;
+                        if (keys[SDL_SCANCODE_DOWN]  || keys[SDL_SCANCODE_S]) hmask |= 1u << NS_GAME_DOWN;
+                        if (keys[SDL_SCANCODE_LEFT]  || keys[SDL_SCANCODE_A]) hmask |= 1u << NS_GAME_LEFT;
+                        if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D]) hmask |= 1u << NS_GAME_RIGHT;
+                        if (keys[SDL_SCANCODE_SPACE]) hmask |= 1u << NS_GAME_ACTION;
+                    }
+                    ns_runlog_input(runlog, run_tick, hmask, pending_press);
+                    pending_press = 0;
+                    run_tick++;
+                }
+
                 game_api->tick(game, (float)clock.tick_seconds);
                 /*
                  * L'horloge de la partie est celle de la SIMULATION, pas celle
@@ -1628,6 +1681,12 @@ play_at_done: ;
                     last_rank = finish_run(runlog, run_ms, game_api, game,
                                            game_hard ? "hard" : "normal",
                                            opt.player, opt.offline);
+                    /* La partie est finie : c'est le moment où son journal
+                     * d'entrées est complet. L'écrire plus tôt donnerait une
+                     * partie tronquée, plus tard une partie déjà relancée. */
+                    if (opt.input_log) {
+                        ns_runlog_write_inputs(runlog, opt.input_log);
+                    }
                 }
 
                 /*
@@ -1652,6 +1711,8 @@ play_at_done: ;
                                   + 1442695040888963407ull;
                         start_run(game_api, game, runlog, demo_seed, game_hard);
                         run_ms = 0;
+            run_tick = 0; pending_press = 0;
+                run_tick = 0; pending_press = 0;
                     }
                 }
             }
@@ -1911,6 +1972,22 @@ play_at_done: ;
 
     ns_scores_save();
     ns_online_shutdown();
+    /*
+     * LE JOURNAL D'ENTRÉES S'ÉCRIT AUSSI À LA SORTIE, et pas seulement quand la
+     * partie se termine.
+     *
+     * Le premier jet ne l'écrivait qu'à la mort du joueur — et c'est
+     * exactement l'inverse du besoin. On veut ce fichier quand quelque chose a
+     * mal tourné : un plantage, une fermeture, une partie qu'on interrompt
+     * parce qu'elle fait n'importe quoi. Dans tous ces cas la partie n'est
+     * jamais « terminée », et le premier jet ne produisait rien.
+     *
+     * `ns_runlog_write_inputs` est idempotente : réécrire un journal déjà
+     * écrit à la mort ne coûte qu'un fichier identique.
+     */
+    if (opt.input_log && ns_runlog_input_count(runlog) > 0) {
+        ns_runlog_write_inputs(runlog, opt.input_log);
+    }
     ns_runlog_destroy(runlog);
     if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);

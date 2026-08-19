@@ -357,6 +357,22 @@ jeu et une difficulté séparés (la traduction se fait maintenant contre la lis
 que le serveur renvoie), et la graine de partie fait 63 bits, donc la relire dans
 un `float` la détruisait silencieusement.
 
+### Rendre une partie reproductible
+
+```sh
+./build/linux-x64/bin/nineteen --journal-entrees=partie.txt
+```
+
+Écrit les commandes de la partie — un masque de boutons par pas fixe, seulement
+quand quelque chose change — dans un fichier texte. Un rapport de bug cesse
+d'être « ça a planté après deux minutes » pour devenir quelque chose qu'on
+rejoue. Le fichier s'écrit à la fin de la partie **et** à la fermeture du jeu,
+parce que le cas où on en a besoin est justement celui où la partie ne s'est pas
+terminée normalement.
+
+`tests/test_replay.c` vérifie que les huit jeux se rejouent à l'identique par ce
+chemin — score, gains, et état comparé au bit près.
+
 ### `--offline`
 
 ```sh
