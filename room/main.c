@@ -966,6 +966,13 @@ int main(int argc, char **argv)
     int   sfx_blip = -1, sfx_score = -1, sfx_die = -1;
     bool in_game = false;
     /*
+     * L'objectif de regard, quand une partie démarre : la vue se pose sur la
+     * dalle en `look_settle` secondes, puis la tête redevient entièrement au
+     * joueur. Un tangage imposé d'un coup se lit comme un bogue de caméra ;
+     * imposé en permanence, il enlève le droit de regarder ailleurs.
+     */
+    float look_pitch = 0.0f, look_settle = 0.0f;
+    /*
      * Le journal de la partie en cours, et son horloge de simulation.
      *
      * Il est tenu même hors ligne : sans secret de serveur il ne sera pas mis en
@@ -1566,9 +1573,42 @@ play_at_done: ;
                             game_hard = hard;
                             start_run(game_api, game, runlog, seed, hard);
                             run_ms = 0;
-            run_tick = 0; pending_press = 0;
-                run_tick = 0; pending_press = 0;
+                            run_tick = 0; pending_press = 0;
                             in_game = true;
+
+                            /*
+                             * POSER LE REGARD SUR LA DALLE — la vraie cause du
+                             * « je suis obligé de m'accroupir ».
+                             *
+                             * `--play-at=` calculait déjà ce tangage ; ce
+                             * chemin-ci, celui qu'on emprunte RÉELLEMENT en
+                             * jouant, ne le faisait pas. On appuyait sur E, la
+                             * partie démarrait, et la vue restait à
+                             * l'horizontale — avec un champ vertical de 62°
+                             * (donc ±31°) et une dalle 26° plus bas, l'image
+                             * était en bas du cadre, presque hors champ. On
+                             * s'accroupissait pour la ramener au centre.
+                             *
+                             * Deux enseignements de la capture `--play-at`, que
+                             * j'ai mis trop longtemps à rapprocher : elle était
+                             * bien cadrée, et elle était la SEULE à l'être. Une
+                             * vérification qui emprunte un chemin que le joueur
+                             * n'emprunte pas ne vérifie rien.
+                             *
+                             * C'est un objectif, pas une téléportation :
+                             * `look_settle` amène la vue en un tiers de seconde
+                             * et rend la main. Baisser les yeux vers l'écran est
+                             * le geste qu'on fait devant une vraie borne ; le
+                             * lui arracher ensuite ne l'est pas.
+                             */
+                            {
+                                const float ex = near->screen_center.x - cam.position.x;
+                                const float ey = near->screen_center.y - cam.position.y;
+                                const float ez = near->screen_center.z - cam.position.z;
+                                const float flat = sqrtf(ex * ex + ez * ez);
+                                look_pitch = atan2f(ey, ns_maxf(0.05f, flat));
+                                look_settle = 0.33f;
+                            }
                             /*
                              * On reste EN 3D : le jeu tourne dans la dalle de la
                              * borne, et la tête reste libre. C'est toute la
@@ -1670,6 +1710,25 @@ play_at_done: ;
             cam.running = false;
             cam.mouse_dx = cam.mouse_dy = 0.0f;
         }
+        if (in_game) {
+            /*
+             * PENDANT UNE PARTIE, LES DIRECTIONS APPARTIENNENT AU JEU.
+             *
+             * Elles ne l'étaient pas : ZQSD et les flèches pilotaient le serpent
+             * ET le joueur en même temps. On dirigeait sa partie en s'éloignant
+             * de la borne — jusqu'à sortir de portée, la partie continuant à
+             * jouer toute seule dans une dalle qu'on ne regardait plus.
+             *
+             * Le menu était déjà traité ainsi trois lignes plus haut ; c'est le
+             * même besoin, et il manquait pour le cas le plus fréquent.
+             *
+             * La TÊTE, elle, reste libre : on joue dans la salle, pas dans un
+             * plein écran, et pouvoir regarder son voisin pendant qu'on joue est
+             * précisément ce qu'on cherchait en gardant la 3D autour du jeu.
+             */
+            cam.input_forward = cam.input_strafe = 0.0f;
+            cam.running = false;
+        }
 
         /* Espace et Ctrl ne veulent pas dire la même chose selon le mode : en vol
          * libre ils montent et descendent, en mode joueur ils sautent et
@@ -1700,6 +1759,20 @@ play_at_done: ;
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
+
+            /*
+             * La descente du regard vers la dalle, APRÈS le pas de caméra : la
+             * souris du joueur a déjà été intégrée, donc bouger la souris
+             * pendant ces trois dixièmes de seconde n'est pas ignoré, seulement
+             * ramené vers l'écran. Et quand `look_settle` tombe à zéro, plus
+             * rien ne touche au tangage — la tête est rendue, entièrement.
+             */
+            if (look_settle > 0.0f) {
+                const float dt = (float)clock.tick_seconds;
+                const float k = ns_minf(1.0f, dt / look_settle);
+                cam.pitch += (look_pitch - cam.pitch) * k;
+                look_settle -= dt;
+            }
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
 
             /*
