@@ -24,4 +24,39 @@ target_compile_definitions(nineteen PRIVATE
 
 add_dependencies(nineteen nineteen_assets)
 
+# --------------------------------------------------------------------------
+# Installation
+# --------------------------------------------------------------------------
+#
+# LE BINAIRE SEUL NE SUFFIT PAS, et c'est ce que cette règle faisait jusqu'ici.
+#
+# `ns_paths` monte « <dossier du binaire>/assets » — c'est la disposition d'un
+# paquet installé, et le commentaire de `ns_paths.c:82` le dit. Or seul
+# l'exécutable était installé : un `cmake --install` produisait un arbre où le
+# jeu ne trouvait ni scène, ni texture, ni son, et se serait arrêté sur
+# « scène introuvable ». Personne ne s'en apercevait parce que personne
+# n'installait — on lançait toujours depuis l'arbre de build, où le chemin est
+# passé en dur par `NINETEEN_BUILD_ASSET_DIR`.
+#
+# Les assets vont donc À CÔTÉ du binaire, dans `bin/assets`, exactement là où le
+# moteur les cherche. Pas dans `share/` : ce serait plus conforme aux usages
+# Unix, et ça demanderait au moteur un point de montage de plus dont un paquet
+# .dmg ou .msi n'aurait que faire.
 install(TARGETS nineteen RUNTIME DESTINATION bin)
+
+# On installe les quatre répertoires QUE LE JEU LIT, et pas le contenu du
+# dossier de build. La première version copiait `${NINETEEN_GEN_DIR}/` en bloc :
+# 455 Mio, dont les `CMakeFiles`, les `CTestTestfile.cmake`, les WAV de contrôle
+# du mixeur et le répertoire intermédiaire de l'art généré. Un paquet qui
+# emporte ses gravats est un paquet qu'on n'a pas regardé.
+foreach(_dir scene materials sounds games)
+    install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION bin/assets)
+endforeach()
+
+# De quoi lancer le jeu depuis un menu, sur les bureaux qui en ont un.
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/nineteen.desktop"
+            DESTINATION share/applications)
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/nineteen.png"
+            DESTINATION share/icons/hicolor/256x256/apps)
+endif()

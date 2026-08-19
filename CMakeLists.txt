@@ -51,6 +51,44 @@ add_subdirectory(games)
 add_subdirectory(room)
 add_subdirectory(tests)
 
+# ==========================================================================
+# Empaquetage
+# ==========================================================================
+#
+# Ce que CPack fait ici, et ce qu'il ne fait pas.
+#
+# IL FAIT : une archive autonome par plateforme, avec le binaire et ses assets
+# côte à côte — la disposition exacte que `ns_paths` attend. Ça se vérifie sans
+# rien signer et sans rien téléverser : `cpack -G TGZ` puis on lance le jeu
+# depuis l'archive déballée. C'est le test qui manquait, et c'est lui qui a
+# montré que `install()` n'emportait pas les assets.
+#
+# IL NE FAIT PAS la signature. Un .dmg notarié demande un certificat Apple
+# Developer ID, un .msi signé un certificat Authenticode : ce sont des secrets
+# qui appartiennent à qui publie, pas au dépôt. Le workflow de release les
+# consomme s'ils existent et produit des paquets NON SIGNÉS sinon, en le
+# disant — plutôt que d'échouer, et plutôt que de prétendre.
+set(CPACK_PACKAGE_NAME "nineteen")
+set(CPACK_PACKAGE_VENDOR "Nineteen")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "La salle d'arcade : huit jeux, dix-neuf bornes")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "nineteen-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "nineteen")
+set(CPACK_VERBATIM_VARIABLES ON)
+# L'archive contient un dossier racine : déballer chez soi ne doit pas déverser
+# `bin/` dans le répertoire courant.
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+elseif(APPLE)
+    set(CPACK_GENERATOR "TGZ")
+else()
+    set(CPACK_GENERATOR "TGZ")
+endif()
+
+include(CPack)
+
 message(STATUS "")
 message(STATUS "Nineteen ${PROJECT_VERSION}")
 message(STATUS "  build type ......... ${CMAKE_BUILD_TYPE}")

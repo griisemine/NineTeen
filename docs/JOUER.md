@@ -368,6 +368,38 @@ observable — une partie sans secret de serveur n'est de toute façon pas mise 
 file — et il est là pour que la garantie soit exprimable dès maintenant plutôt
 que rajoutée après coup.
 
+## Installer, ou fabriquer un paquet
+
+Le jeu se lance très bien depuis l'arbre de build — c'est ce que fait tout le
+reste de cette page. Pour le donner à quelqu'un, il faut un paquet :
+
+```sh
+cmake --preset linux-x64 -DCMAKE_BUILD_TYPE=Release
+cmake --build --preset linux-x64
+cpack --config build/linux-x64/CPackConfig.cmake -B build/linux-x64/paquets
+```
+
+Une archive par plateforme, autonome : `bin/nineteen` et `bin/assets/` côte à
+côte, ce qui est exactement la disposition que `ns_paths` cherche. Déballer et
+lancer, rien à installer, rien à configurer.
+
+**Ce que ça pèse : 421 Mio compressés**, et c'est presque entièrement des cartes
+de normales et d'ORM en PNG (163 + 152 Mio sur 345). C'est le prix de ne pas
+avoir encore fait la compression KTX2/BC7, qui diviserait ça par cinq. Le chiffre
+est écrit ici plutôt que découvert au téléchargement.
+
+**Vérifié plutôt qu'affirmé** : l'archive a été déballée et le jeu lancé depuis
+l'arbre déballé, **avec les assets du build masqués** pour qu'aucun montage de
+développement ne puisse le sauver. C'est ce test qui a montré que la règle
+d'installation n'emportait que le binaire : `cmake --install` produisait un
+arbre sans une seule texture, et personne ne s'en apercevait parce que personne
+n'installait.
+
+La signature est affaire de certificats, donc de qui publie : le workflow
+`.github/workflows/release.yml` signe si les secrets existent et produit des
+paquets **non signés** sinon, en le disant. Un paquet non signé se télécharge et
+se lance, mais macOS le met en quarantaine et Windows affiche SmartScreen.
+
 ## Régler la fluidité
 
 ### Les cinq paliers, chiffrés

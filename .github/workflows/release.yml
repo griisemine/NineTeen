@@ -1,0 +1,181 @@
+# Paquets de release — un fichier par plateforme, attaché à la balise.
+#
+# Ce que ce workflow promet, et ce qu'il ne promet pas
+# ----------------------------------------------------
+# IL PROMET une archive autonome par plateforme, contenant le binaire et ses
+# assets dans la disposition exacte que `ns_paths` attend — celle qui a été
+# vérifiée en installant puis en lançant le jeu depuis l'arbre installé, avec
+# les assets du build masqués pour qu'aucun montage de développement ne puisse
+# le sauver.
+#
+# IL NE PROMET PAS la signature par défaut. Un `.dmg` notarié demande un
+# certificat Apple Developer ID, un `.msi` signé un certificat Authenticode :
+# ce sont des secrets qui appartiennent à qui publie, pas au dépôt. Les étapes
+# de signature ne s'exécutent QUE si les secrets existent, et le paquet part
+# non signé sinon — en le disant dans le résumé du job plutôt qu'en échouant, et
+# surtout plutôt qu'en laissant croire le contraire.
+#
+# Conséquence pour qui télécharge un paquet non signé : macOS le mettra en
+# quarantaine (Gatekeeper) et Windows affichera SmartScreen. C'est écrit dans
+# les notes de version, pas caché.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Balise à empaqueter (vide = HEAD)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Paquet (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux x64",       os: ubuntu-24.04,  preset: linux-x64,       extra_configure: "-DNINETEEN_SHADERCROSS=ON" }
+          - { name: "macOS universal", os: macos-14,      preset: macos-universal, extra_configure: "" }
+          - { name: "Windows x64",     os: windows-2022,  preset: windows-x64,     extra_configure: "" }
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Les mêmes dépendances que la CI. Elles sont recopiées plutôt que
+      # partagées : un workflow de release qui dépend d'un autre fichier casse
+      # le jour où l'on touche à la CI sans y penser, et c'est le jour de la
+      # publication qu'on s'en aperçoit.
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build glslang-tools \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev \
+            mesa-vulkan-drivers
+
+      - name: Dépendances macOS
+        if: runner.os == 'macOS'
+        run: brew install ninja glslang
+
+      - name: Dépendances Windows
+        if: runner.os == 'Windows'
+        run: choco install --no-progress vulkan-sdk
+        shell: pwsh
+
+      - name: Configuration
+        run: cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=Release ${{ matrix.extra_configure }}
+
+      - name: Compilation
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # Un paquet issu d'un arbre dont les tests échouent n'a rien à faire dans
+      # une release. `core` tourne partout ; le rendu demande un GPU que les
+      # runners n'ont pas toujours.
+      - name: Tests hors rendu
+        run: ctest --preset ${{ matrix.preset }} -R "core|geo|shapes|scores|flappy|snake|tetris|demineur|asteroid|pacman|piano|shooter|menu|online"
+
+      - name: Archive
+        run: cpack --config build/${{ matrix.preset }}/CPackConfig.cmake -B build/${{ matrix.preset }}/paquets
+
+      # ------------------------------------------------------------------
+      # Signature — uniquement si les secrets existent
+      # ------------------------------------------------------------------
+      - name: Signature macOS
+        if: runner.os == 'macOS' && env.MACOS_CERT_P12 != ''
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          echo "$MACOS_CERT_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_SIGN_IDENTITY" \
+            build/${{ matrix.preset }}/bin/nineteen
+          rm -f /tmp/cert.p12
+
+      - name: Signature Windows
+        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX != ''
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx",
+            [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          & signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "build/${{ matrix.preset }}/bin/nineteen.exe"
+          Remove-Item "$env:TEMP\cert.pfx"
+
+      - name: Ce que contient ce paquet
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.name }}"
+            echo ""
+            ls -la build/${{ matrix.preset }}/paquets/ || true
+            echo ""
+            if [ -n "${{ secrets.MACOS_CERT_P12 }}${{ secrets.WINDOWS_CERT_PFX }}" ]; then
+              echo "Binaire signé."
+            else
+              echo "**Paquet NON SIGNÉ** — aucun certificat n'est configuré dans les"
+              echo "secrets du dépôt. macOS le mettra en quarantaine, Windows"
+              echo "affichera SmartScreen. C'est attendu, pas une panne."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nineteen-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/paquets/nineteen-*
+
+  publier:
+    name: Attacher à la release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: paquets
+          merge-multiple: true
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: paquets/*
+          body: |
+            ## Nineteen ${{ github.ref_name }}
+
+            Déballer, puis lancer `bin/nineteen`. Les assets voyagent avec le
+            binaire ; il n'y a rien à installer et rien à configurer, et le jeu
+            n'ouvre aucune connexion tant qu'aucun serveur n'est configuré.
+
+            **Ces paquets ne sont pas signés** tant qu'aucun certificat n'est
+            fourni au dépôt. macOS mettra l'application en quarantaine
+            (« développeur non identifié ») et Windows affichera SmartScreen.
+            Sur macOS : clic droit → Ouvrir, ou
+            `xattr -dr com.apple.quarantine bin/nineteen`.
+
+            Prérequis réels : un GPU Vulkan (Linux, Windows) ou Metal (macOS).
+            Une machine Windows sans pilote Vulkan ne lancera pas le jeu — voir
+            `docs/JOUER.md`.

@@ -8,6 +8,12 @@ que le chantier est terminé.
 ## Ce qui tourne
 
 ### Build et portabilité
+- **`cmake --install` n'emportait que le binaire.** `ns_paths` monte « <dossier du binaire>/assets »
+  — la disposition d'un paquet installé, et son commentaire le dit — mais la règle d'installation
+  n'installait pas un seul asset : l'arbre produit n'avait ni scène, ni texture, ni son. Invisible
+  parce que personne n'installait, on lançait toujours depuis l'arbre de build où le chemin est
+  passé en dur. Corrigé, plus `cpack` et un workflow de release, vérifiés en déballant l'archive
+  et en lançant le jeu **assets de build masqués** — sans quoi le test ne prouve rien.
 - Un seul arbre CMake, presets `linux-x64`, `linux-x64-asan`, `macos-universal`, `windows-x64`.
 - SDL3 récupéré sur un tag épinglé ; dépendances header-only vendorées, donc build hermétique.
 - Shaders GLSL compilés au build et **embarqués dans le binaire** : rien à retrouver à
@@ -407,8 +413,13 @@ que le chantier est terminé.
   pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
   au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
   de composer l'image finale, et je ne livre pas ce que je ne peux pas regarder.
-- **Paquets de release.** Le workflow de compilation existe ; celui qui produit AppImage, `.dmg`
-  et `.msi` signés reste à écrire.
+- **La signature des paquets.** Les paquets eux-mêmes sont faits (`cpack`, une archive autonome
+  par plateforme, et `.github/workflows/release.yml` qui les attache à une balise) et vérifiés en
+  déballant puis en lançant le jeu **avec les assets du build masqués**. Ce qui manque est le
+  certificat : un `.dmg` notarié demande un Developer ID Apple, un `.msi` signé un certificat
+  Authenticode. Le workflow signe si les secrets existent et produit des paquets non signés
+  sinon, en le disant plutôt qu'en échouant. C'est au propriétaire du dépôt de fournir les
+  certificats, pas au dépôt de les contenir.
 - **Compression des textures.** Les cartes générées sont des PNG. Un passage en KTX2/BC7
   diviserait ça par cinq et accélérerait le chargement.
 
