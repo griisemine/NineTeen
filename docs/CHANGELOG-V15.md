@@ -496,7 +496,12 @@ importé ne déclarerait pas.
   partie n'est PAS un format de rejeu. Il enregistre des conséquences (`pipe`, `score`,
   `death`), pas des appuis sur des boutons — il authentifie un score, il ne rejoue pas une
   partie. Ce qui est acquis, en revanche, et c'est la partie difficile : les **huit** jeux ont
-  un test de déterminisme, sans quoi aucun duel n'est possible quel que soit le réseau.
+  un test de déterminisme, sans quoi aucun duel n'est possible quel que soit le réseau — et
+  `tests/test_replay.c` mesure désormais la propriété exacte dont un duel dépendrait, qu'aucun
+  test ne couvrait : **une suite de masques de boutons, un par pas fixe, suffit-elle à
+  reproduire une partie ?** Oui, 8/8, état comparé au bit près et pas seulement le score. Utile
+  sans aucun duel : un jeu qui lirait une horloge, un `rand()` non semé ou un état résiduel
+  entre deux parties serait signalé là.
 
 ---
 

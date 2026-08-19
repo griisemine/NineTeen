@@ -44,6 +44,41 @@ est acquise pour les huit.
 
 ---
 
+## La propriété dont tout dépend est maintenant mesurée
+
+`tests/test_replay.c` répond à la seule question qui décide si un duel est
+possible : **une suite de masques de boutons, un par pas fixe, suffit-elle à
+reproduire une partie ?**
+
+Pour chacun des huit jeux, il fabrique une suite d'entrées plausible et
+reproductible — une direction tenue quelques dixièmes de seconde, le bouton
+d'action tapé par à-coups, pas du bruit blanc qui ne ferait rien bouger dans un
+jeu où l'on tourne en tenant une touche — la joue deux fois à travers
+`press`/`hold`, et compare :
+
+- le score,
+- les gains cumulés vus par `events`,
+- **et l'état complet, au bit près** — deux parties peuvent finir sur le même
+  score en ayant divergé, et pour un duel les deux machines doivent voir LA MÊME
+  partie, pas seulement le même nombre.
+
+Plus deux garde-fous contre un test qui passerait à vide : une AUTRE suite
+d'entrées doit donner une autre partie (sans quoi le test passerait sur un jeu
+qui ignore ses commandes), et l'état final doit différer d'un état fraîchement
+remis à zéro (sans quoi il passerait sur une partie qui n'a pas bougé).
+
+**Résultat : 8/8 rejoués à l'identique, 49 vérifications.** Sept des huit
+meurent avant la fin du journal, ce qui est exactement ce que fait une suite
+d'entrées prise au hasard ; Piano n'a pas de condition de mort.
+
+Ce que ça vaut sans aucun duel : un jeu qui lirait une horloge, un `rand()` non
+semé ou un état résiduel entre deux parties serait signalé ici. Trois défauts
+qui ne se voient pas en jouant et qui rendent tout rapport de bug
+irreproductible.
+
+Ce que ça ne dit pas : rien sur le déterminisme ENTRE machines différentes. Tout
+tourne ici sur la même.
+
 ## Ce qui MANQUE, précisément
 
 **Une seule chose, mais elle est structurante : le journal ne porte pas les
@@ -78,10 +113,8 @@ synchroniser : on télécharge un journal d'entrées et on le rejoue.
   récupérer, un second jeu dessiné en surimpression.
 - **Ce que ça ne demande pas** : socket persistante, autorité serveur,
   interpolation.
-- **Le risque** : nul côté réseau. Le seul risque est que le déterminisme casse
-  un jour sans qu'on le voie — d'où les huit tests, qu'il faudrait alors étendre
-  à « même graine + même journal d'entrées → même score », ce qui n'existe pas
-  encore.
+- **Le risque** : nul côté réseau, et le risque de déterminisme est désormais
+  MESURÉ plutôt que supposé — voir « la propriété dont tout dépend » ci-dessus.
 - **C'est de loin le meilleur rapport plaisir / risque**, et c'est ce que je
   recommanderais : « affronter ses amis comme en enfance » ne demande pas qu'ils
   soient là à la même seconde.
@@ -119,10 +152,10 @@ les bornes.
 
 Dans cet ordre, parce que chaque étape rend la suivante moins risquée :
 
-1. **Écrire les entrées dans le journal** et ajouter, aux huit jeux, un test
-   « même graine + même journal → même score ». Utile immédiatement même sans
-   duel : ça rend une partie reproductible pour le débogage, et ça transformerait
-   un rapport de bug en fichier.
+1. **Écrire les entrées dans le journal** — le format et le transport, la
+   partie qui reste. Le test qui prouve que ça marcherait est fait
+   (`tests/test_replay.c`) ; ce qui manque est de garder la trace d'une VRAIE
+   partie plutôt que d'une suite fabriquée, et de choisir comment la compresser.
 2. **Le duel en différé** (forme 1). C'est jouable, c'est sans latence, et ça
    répond à « affronter ses amis ».
 3. Mesurer le déterminisme **entre plateformes** avant d'envisager la forme 2.

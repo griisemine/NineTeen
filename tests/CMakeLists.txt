@@ -304,3 +304,12 @@ add_test(NAME cartes-plafonnees
                  -DMAPS_DIR=${NINETEEN_GEN_DIR}/materials
                  -DMAX_MAP=${NINETEEN_MAX_MAP}
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/check_map_size.cmake)
+
+# Un journal d'ENTRÉES rejoue-t-il une partie ? C'est la propriété dont dépend
+# n'importe quelle forme de duel, et elle n'était pas mesurée — j'affirmais
+# même qu'elle l'était. Voir `docs/RESEAU-TEMPS-REEL.md`.
+add_executable(ns_test_replay test_replay.c)
+target_link_libraries(ns_test_replay PRIVATE nineteen::engine nineteen::games)
+nineteen_set_warnings(ns_test_replay)
+nineteen_apply_sanitizers(ns_test_replay)
+add_test(NAME replay COMMAND ns_test_replay)
