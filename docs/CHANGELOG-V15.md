@@ -183,6 +183,37 @@ que le chantier est terminé.
      avec `DisallowUnknownFields` et aurait répondu 400 — donc un 4xx, donc un fichier supprimé.
      Toutes les parties auraient été jetées une par une en croyant les envoyer.
 
+### La borne, confrontée à tes images
+
+Le profil de la référence se lit de bas en haut sur l'arête AVANT ; le dos est
+vertical. Voici les neuf gradins que montrent tes vues, et ce que la borne
+générée en fait. `docs/render-borne-profil.png` est la capture de côté qui
+permet de vérifier au lieu de me croire.
+
+| # | Hauteur | Sur tes images | Dans `build_cabinet` |
+|---|---|---|---|
+| 1 | 0 → 10 cm | socle noir, en retrait | plinthe en retrait de 3 cm |
+| 2 | 10 → 86 cm | face avant verticale, porte à monnayeur | face verticale + bloc monnayeur, deux fentes, trappe de caisse |
+| 3 | 86 → 92 cm | le panneau de commande jaillit | porte-à-faux du panneau |
+| 4 | 92 → 97 cm | sa tôle inclinée | plan incliné, sérigraphié depuis B25b |
+| 5 | 97 → 110 cm | la face recule sous l'écran | retrait du profil |
+| 6 | 110 → 148 cm | l'écran incliné, en retrait | dalle 16:9 déclarée, cadre à quatre plats |
+| 7 | 148 → 162 cm | panneau haut-parleurs, deux grilles rondes | plan incliné noir + deux grilles métalliques (B25) |
+| 8 | 162 → 190 cm | marquee en SURPLOMB | caisson lumineux débordant de 16 cm |
+| 9 | 190 cm → dos | le dessus redescend vers l'arrière | pente arrière du profil |
+
+Les neuf y sont, et le caisson est une **extrusion de ce profil** — pas une
+boîte avec des décalcomanies, ce qu'il était jusqu'à B14.
+
+Ce qui n'est PAS fait, et qui est une décision et non un oubli : le modèle
+free3d lui-même n'est pas importé. Il demande un compte, il n'est pas CC0, et le
+versionner casserait à la fois la reconstructibilité hors ligne promise en A2b et
+la clarté des licences d'`assets/cc0/LICENSES.md`. La borne est **reproduite
+d'après les images**, ce qui a par ailleurs l'avantage de garder les ancres
+déclarées — centre d'écran, centre de panneau, fente à jetons, sommet du manche —
+dont dépendent l'IK des bras et le placement des mini-jeux, et qu'un maillage
+importé ne déclarerait pas.
+
 ### Les bornes
 - **Le caisson est une EXTRUSION DE PROFIL**, plus une boîte. Ce qui fait qu'on reconnaît une
   borne d'arcade au premier coup d'œil n'est ni sa couleur ni son marquee : c'est son profil
