@@ -28,11 +28,29 @@
  * Cotes du corps, en mètres
  * -------------------------------------------------------------------------- */
 
-/* Bras d'adulte : humérus 30 cm, avant-bras 27 cm, main 10 cm du poignet au bout
- * de l'index. La portée du poignet est donc de 57 cm, celle du doigt de 67 cm. */
-#define VM_UPPER   0.30f
+/*
+ * Humérus 32 cm, avant-bras 27 cm, main 13,5 cm du poignet au bout du doigt.
+ *
+ * LA MAIN VALAIT 10 cm sous un commentaire qui annonçait « bras d'adulte ».
+ * Dix centimètres du poignet au bout du doigt, c'est la PAUME seule d'un
+ * adulte, ou la main entière d'un enfant de quatre ans — d'où deux petites
+ * mains de poupée posées sur des commandes à l'échelle, ce qu'on voyait sans
+ * savoir le nommer.
+ *
+ * 13,5 ET PAS 18,5, et c'est un compromis assumé plutôt qu'une cote anatomique.
+ * `VM_HAND` sert partout comme distance poignet -> bout du doigt, y compris
+ * dans la seconde passe d'IK qui POSE LE DOIGT sur sa cible : allonger la main
+ * recule donc le poignet d'autant. Essayé à 18,5 — la vraie cote — le poignet
+ * reculait de 8,5 cm et les deux mains sortaient par le bas d'un champ de
+ * vision de 58°, dont la demi-ouverture verticale ne fait que 29°. Le résultat
+ * était anatomiquement juste et visuellement pire : deux paquets de doigts au
+ * ras du bord. Les viewmodels de jeu à la première personne sont
+ * volontairement raccourcis pour cette raison exacte ; celui-ci l'est aussi,
+ * et maintenant il le DIT au lieu de prétendre le contraire.
+ */
+#define VM_UPPER   0.32f
 #define VM_FORE    0.27f
-#define VM_HAND    0.10f
+#define VM_HAND    0.135f
 #define VM_REACH   (VM_UPPER + VM_FORE)
 
 /* Épaules, sous l'œil et un peu en arrière. */

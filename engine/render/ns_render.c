@@ -1563,14 +1563,24 @@ static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
      *
      * L'ordre suit `ns_viewmodel_segment` : manche, avant-bras, main, à gauche
      * puis à droite, puis le jeton.
+     *
+     * LA PEAU EST PLUS SATURÉE QU'ELLE N'EN A L'AIR, et il faut le dire parce
+     * que la valeur surprend hors contexte. Mesuré sur une capture au ras d'une
+     * borne, l'ancienne peau (0,315 0,215 0,170 — un rapport 1 : 0,68 : 0,54)
+     * ressortait à (178 162 150), soit 1 : 0,91 : 0,84 : presque grise. Les
+     * mains n'étaient pas surexposées — 178 n'est pas 255 — elles étaient
+     * DÉLAVÉES, parce qu'ACES désature ce qui est clair et que le spéculaire
+     * blanc s'ajoute par-dessus. Une peau qui doit se lire comme de la peau à
+     * cette luminance doit donc partir plus saturée que la mesure d'un
+     * nuancier : 1 : 0,51 : 0,36.
      */
     static const struct { float rgb[3], roughness, metallic; } vm_material[NS_VM_SEGMENT_COUNT] = {
         { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },   /* manche : toile sombre */
         { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
-        { { 0.315f, 0.215f, 0.170f }, 0.62f, 0.0f },   /* main : peau, mate */
+        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f },   /* main : peau — voir plus bas */
         { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
         { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
-        { { 0.315f, 0.215f, 0.170f }, 0.62f, 0.0f },
+        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f },
         { { 0.72f,  0.56f,  0.24f  }, 0.28f, 0.9f },   /* jeton : laiton */
     };
 

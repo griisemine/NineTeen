@@ -48,6 +48,18 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **Les mains étaient celles d'un enfant de quatre ans.** `VM_HAND` valait 10 cm du poignet au
+  bout du doigt, sous un commentaire annonçant « bras d'adulte » : c'est la PAUME seule d'un
+  adulte. Portée à 13,5 cm — un compromis assumé et non la cote anatomique (18,5), parce que
+  `VM_HAND` sert aussi de distance dans l'IK qui pose le doigt sur sa cible : à 18,5 le poignet
+  recule de 8,5 cm et les deux mains sortent par le bas d'un champ de vision de 58°. Les
+  viewmodels de jeu à la première personne sont raccourcis pour cette raison exacte ; celui-ci
+  le dit maintenant au lieu de prétendre le contraire.
+- **La peau était délavée, pas surexposée.** Mesuré au pixel sur une capture au ras d'une borne :
+  l'ancienne peau (rapport 1 : 0,68 : 0,54) ressortait à (178 162 150), soit 1 : 0,91 : 0,84 —
+  presque grise. 178 n'est pas 255, donc ce n'était pas une surexposition : ACES désature ce qui
+  est clair, et le spéculaire blanc s'ajoute par-dessus. Une peau qui doit se LIRE comme de la
+  peau à cette luminance part donc plus saturée qu'un nuancier ne le dirait : 1 : 0,51 : 0,36.
 - **Les deux bouchons de `geo_cylinder` étaient enroulés à l'envers depuis A3.** Un cylindre fermé
   de rayon 2 et de hauteur 3 rendait un volume signé de 12,55 au lieu de 37,70 : le bouchon du haut
   se RETRANCHAIT. Invisible jusqu'ici parce que la normale de sommet, elle, était juste et que le
