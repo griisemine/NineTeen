@@ -48,6 +48,14 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **Le plafond lumineux est un diffuseur, plus un réflecteur blanc.** Le haut du cadre de
+  l'allée était une nappe blanche continue — 8,6 % des pixels au-dessus de 200. La cause n'était
+  pas l'émissif (le baisser de 1,05 à 0,58 n'a rien changé : 8,5 %) mais l'ALBÉDO, à (1,00 0,975
+  0,94) : le luminaire est 18 cm sous la dalle et l'éclaire à bout portant, donc la face visible
+  était dominée par sa réflexion, et une surface assez claire sature en blanc quelle que soit la
+  teinte de son émissif. Albédo à (0,28 0,22 0,15) : 6,9 %, la trame des dalles redevient
+  lisible, et le blanc devient crème. Les marquees passent de 1,15 à 1,52 — un panneau
+  rétroéclairé, pas un autocollant.
 - **Ombres par lumière.** Le lancer de rayons retient les **quatre sources** qui contribuent le
   plus à chaque pixel et écrit leur visibilité exacte ; les autres gardent la moyenne pondérée.
   Un point à l'ombre d'un pilier ne perd plus la lumière des écrans de bornes.

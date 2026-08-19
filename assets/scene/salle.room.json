@@ -136,20 +136,22 @@
     {
       "name": "panneau_lumineux",
       "baseColor": [
-        1.0,
-        0.975,
-        0.94,
+        0.28,
+        0.22,
+        0.15,
         1.0
       ],
-      "roughness": 0.35,
+      "roughness": 0.62,
       "metallic": 0.0,
       "emissive": [
         1.0,
-        0.975,
-        0.94
+        0.80,
+        0.55
       ],
-      "emissiveStrength": 1.05,
-      "_": "Sans texture : le moteur retombe alors sur son blanc de substitut, et l'émissif — désormais multiplié par l'albédo depuis A0 — donne une dalle lumineuse unie plutôt qu'un aplat parasite."
+      "emissiveStrength": 1.35,
+      "_": "Sans texture : le moteur retombe alors sur son blanc de substitut, et l'émissif — multiplié par l'albédo depuis A0 — donne une dalle lumineuse unie plutôt qu'un aplat parasite.",
+      "_chaud": "Une dalle lumineuse est un DIFFUSEUR, pas un réflecteur blanc — et c'est tout le correctif. Le haut du cadre de l'allée était une nappe blanche continue : 8,6 % des pixels au-dessus de 200, un couloir d'hôpital plutôt qu'une salle tamisée. J'ai d'abord cru que c'était l'émissif, et je l'ai baissé de 1,05 à 0,58 : 8,6 % sont devenus 8,5 %. Ce n'était donc pas ça. La vraie cause est l'ALBÉDO, qui valait (1,00 0,975 0,94) : le luminaire est à 18 cm sous la dalle et l'éclaire à bout portant, si bien que la face qu'on voit était dominée par sa réflexion — et une surface assez claire sature en blanc quelle que soit la teinte de son émissif. En baissant l'albédo à (0,28 0,22 0,15), la réflexion s'efface et c'est l'émissif chaud qui porte la lueur : 6,9 % au-dessus de 200, la trame des dalles redevient lisible, et le blanc devient crème.",
+      "_essai_rate": "Essai abandonné, noté pour qu'on ne le refasse pas : baisser de 38 % les onze luminaires de plafond. Les pixels saturés ne descendaient qu'à 6,7 %, mais la médiane de l'allée tombait de 80 à 58 et le classement passait à 50 % de pixels sous 16. Ce sont les lumières qui rendent la salle LISIBLE ; ce n'est pas elles qui la font saturer."
     },
     {
       "name": "pilier",
@@ -692,7 +694,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
@@ -704,7 +706,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
@@ -716,7 +718,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
@@ -728,7 +730,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
@@ -740,7 +742,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
@@ -752,7 +754,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.15,
+      "emissiveStrength": 1.52,
       "fit": true
     },
     {
