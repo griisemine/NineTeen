@@ -48,6 +48,14 @@ que le chantier est terminé.
 - `bvhbake` : BVH par découpage SAH, partagé entre rendu, collision et audio.
 
 ### Atmosphère
+- **La suspension du billard existe.** La salle déclarait sa LUMIÈRE — chaude, basse, avec un
+  commentaire disant qu'« une table de billard a sa propre lampe » — et aucun LUMINAIRE. Une
+  source sans objet visible est précisément ce que le plan s'interdit : c'est ce qui fait qu'une
+  pièce paraît éclairée par magie. On ne pouvait pas l'ajouter parce qu'un prop ne savait faire
+  que des boîtes et des panneaux ; les types `cylinder` et `sphere` (sur `geo_revolve`) manquaient.
+  Câble, abat-jour tronconique ouvert vers le bas, ampoule émissive, et la lumière descendue de
+  2,05 à 1,68 m pour passer SOUS l'abat-jour. La table gagne au passage trois billes posées —
+  une partie interrompue, pas un meuble. Mesuré : médiane 26 -> 28, pixels sous 16 : 32,5 % -> 29,9 %.
 - **Les mains étaient celles d'un enfant de quatre ans.** `VM_HAND` valait 10 cm du poignet au
   bout du doigt, sous un commentaire annonçant « bras d'adulte » : c'est la PAUME seule d'un
   adulte. Portée à 13,5 cm — un compromis assumé et non la cote anatomique (18,5), parce que

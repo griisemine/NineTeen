@@ -470,6 +470,54 @@
       "_": "Le caisson d'une borne. Il portait `gris_foncer.jpg`, un aplat de 24 x 24 px à peu près noir, sur VINGT-TROIS objets dont les dix-neuf bornes : aucune quantité de lumière ne rend un matériau noir visible, et c'est là, plus que dans l'éclairage, que se jouait le « trop sombre »."
     },
     {
+      "name": "billard_abatjour",
+      "texture": "metal_plate_02.jpg",
+      "roughness": 0.34,
+      "metallic": 0.35,
+      "uvMetres": 0.5,
+      "baseColor": [
+        0.46,
+        0.14,
+        0.11,
+        1.0
+      ],
+      "_": "L'émail extérieur de la suspension : rouge sombre, comme les abat-jour de salle de billard. L'intérieur n'est pas un matériau à part — c'est l'ampoule qui porte la lumière visible, et un abat-jour éclairé par en dessous se lit tout seul."
+    },
+    {
+      "name": "billard_ampoule",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.22,
+      "metallic": 0.0,
+      "uvMetres": 0.3,
+      "baseColor": [
+        1.0,
+        0.86,
+        0.66,
+        1.0
+      ],
+      "emissive": [
+        1.0,
+        0.78,
+        0.52
+      ],
+      "emissiveStrength": 2.2,
+      "_": "L'ampoule. La salle déclarait `suspension_billard` — une lumière chaude à 2,05 m, avec un commentaire disant qu'« une table de billard a sa propre lampe » — et il n'y avait AUCUN luminaire à cet endroit. Une source sans objet visible est ce que le plan s'interdit explicitement : c'est ce qui fait qu'une pièce paraît éclairée par magie. Voici l'objet."
+    },
+    {
+      "name": "billard_bille",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.12,
+      "metallic": 0.0,
+      "uvMetres": 0.2,
+      "baseColor": [
+        0.72,
+        0.66,
+        0.6,
+        1.0
+      ],
+      "_": "Les billes. Une table de billard sans bille est un meuble ; avec trois billes posées, c'est une partie interrompue — et c'est ce qui distingue une salle vécue d'un plan d'architecte."
+    },
+    {
       "name": "borne_grille",
       "texture": "metal_plate_02.jpg",
       "roughness": 0.38,
@@ -1329,7 +1377,7 @@
       "name": "suspension_billard",
       "at": [
         -7.2,
-        2.05,
+        1.68,
         -1.6
       ],
       "colour": [
@@ -2492,6 +2540,59 @@
             0.16
           ],
           "chamfer": 0.012
+        },
+        {
+          "_": "LA SUSPENSION. La salle déclarait sa lumière et pas son luminaire — une source sans objet visible, ce que le plan s'interdit. Trois morceaux : le câble, l'abat-jour tronconique, l'ampoule. L'abat-jour est ouvert vers le bas (pas de bouchon bas) pour qu'on voie l'ampoule dedans depuis la table.",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [0.0, 1.90, 0.0],
+          "radius": 0.008,
+          "height": 1.00,
+          "sides": 8
+        },
+        {
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [0.0, 1.64, 0.0],
+          "radius": 0.30,
+          "radiusTop": 0.11,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "billard_ampoule",
+          "at": [0.0, 1.66, 0.0],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "_": "Trois billes posées, pas rangées en triangle : une partie interrompue, pas une table de démonstration.",
+          "type": "sphere",
+          "material": "billard_bille",
+          "at": [-0.42, 0.791, 0.18],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "billard_bille",
+          "at": [0.31, 0.791, -0.24],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "billard_bille",
+          "at": [0.58, 0.791, 0.09],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
         }
       ],
       "_": "Le billard. Son tapis était NOYÉ dans le bâti : `geo_box` occupe Y de 0 à `size.y`, donc le corps en bois posé à 0,584 sur 0,20 de haut montait à 0,784, tandis que le drap posé à 0,716 sur 0,02 s'arrêtait à 0,736 — cinq centimètres SOUS le bois qui le recouvrait. Le feutre vert n'a jamais été visible depuis A4, et l'on ne voyait qu'une dalle noire. Mesuré en albédo : (9, 7, 6) là où la texture donne un vert franc."

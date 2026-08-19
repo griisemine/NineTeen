@@ -1872,9 +1872,54 @@ static void emit_prop_parts(rg_builder *b, const tool_json *doc, const tool_json
             }
             geo_panel(&piece, ns_v3_zero(), ns_v3_make(0, 0, 1), ns_v3_make(1, 0, 0),
                       size[0], size[1], rect[0], rect[1], rect[2], rect[3], mat);
+        } else if (strcmp(type, "cylinder") == 0) {
+            /*
+             * Le cylindre et le cône, enfin disponibles pour un prop.
+             *
+             * Ils manquaient, et ça se voyait à un endroit précis : la
+             * suspension du billard. La salle déclarait sa LUMIÈRE — chaude,
+             * basse, avec un commentaire expliquant qu'« une table de billard a
+             * sa propre lampe » — et aucun LUMINAIRE. Une source sans objet
+             * visible est exactement ce que le plan s'interdit : c'est ce qui
+             * fait qu'une pièce paraît éclairée par magie. On ne pouvait pas
+             * l'ajouter parce qu'un prop ne savait faire que des boîtes.
+             */
+            const float r0 = tool_json_get_float(doc, p, "radius", 0.0f);
+            const float r1 = tool_json_get_float(doc, p, "radiusTop", r0);
+            const float hh = tool_json_get_float(doc, p, "height", 0.0f);
+            if (r0 <= 0.0f || hh <= 0.0f) {
+                tool_fatalf("« %s », morceau %d : cylindre sans « radius » ou « height »",
+                            owner, i);
+            }
+            const int sides = (int)tool_json_get_float(doc, p, "sides", 16.0f);
+            geo_cylinder(&piece, r0, r1, hh, sides,
+                         tool_json_get_bool(doc, p, "capBottom", true),
+                         tool_json_get_bool(doc, p, "capTop", true), &uv, mat);
+        } else if (strcmp(type, "sphere") == 0) {
+            /* Une sphère par révolution : les billes, les ampoules, les boules.
+             * Le profil est un demi-cercle, donc la primitive suffit et il n'y a
+             * pas de générateur de sphère à écrire. */
+            const float r0 = tool_json_get_float(doc, p, "radius", 0.0f);
+            if (r0 <= 0.0f) {
+                tool_fatalf("« %s », morceau %d : sphère sans « radius »", owner, i);
+            }
+            const int sides = (int)tool_json_get_float(doc, p, "sides", 12.0f);
+            const int rings = (int)tool_json_get_float(doc, p, "rings", 7.0f);
+            if (rings < 3 || rings > 33) {
+                tool_fatalf("« %s », morceau %d : « rings » = %d, attendu 3..33",
+                            owner, i, rings);
+            }
+            float prof[33 * 2];
+            for (int k = 0; k < rings; ++k) {
+                const float t = (float)k / (float)(rings - 1);
+                const float a = -NS_PI * 0.5f + t * NS_PI;
+                prof[k * 2]     = cosf(a) * r0;
+                prof[k * 2 + 1] = sinf(a) * r0 + r0;   /* posée sur Y = 0 */
+            }
+            geo_revolve(&piece, prof, rings, sides, &uv, mat);
         } else {
-            tool_fatalf("« %s », morceau %d : type « %s » inconnu (box, panel)",
-                        owner, i, type);
+            tool_fatalf("« %s », morceau %d : type « %s » inconnu "
+                        "(box, panel, cylinder, sphere)", owner, i, type);
         }
 
         geo_xform x = GEO_XFORM_IDENTITY;
