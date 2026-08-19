@@ -216,7 +216,26 @@ permet de vérifier au lieu de me croire.
 Les neuf y sont, et le caisson est une **extrusion de ce profil** — pas une
 boîte avec des décalcomanies, ce qu'il était jusqu'à B14.
 
-Ce qui n'est PAS fait, et qui est une décision et non un oubli : le modèle
+### Le modèle de référence : ce que j'ai cherché, et ce que j'ai trouvé
+
+La consigne était double — « implémente la borne que je t'ai envoyée, à
+l'identique » ET « n'aie pas peur de télécharger des modèles d'objet open source
+bien faits ». J'ai longtemps répondu à la première par une objection de licence
+sans avoir rien vérifié de la seconde. Voici les faits, mesurés :
+
+| Source | Résultat |
+|---|---|
+| la page free3d de la référence | **HTTP 403** depuis ce conteneur — inatteignable, licence mise à part |
+| Poly Haven, 521 modèles CC0 | **aucune borne d'arcade**. Les résultats sur « cabinet » sont des meubles : gothique, chinois, à tiroirs, en bois peint |
+| glTF-Sample-Assets de Khronos, 148 modèles | **aucune** |
+
+Il n'existe donc pas, dans les deux bibliothèques ouvertes que ce projet peut
+atteindre, de borne d'arcade à importer. Ce n'est plus une préférence de ma part,
+c'est un constat — et c'est ce qui rend la borne paramétrique nécessaire plutôt
+que seulement commode. Les modèles CC0 qui existent et servent déjà (tabourets,
+canapé, extincteur) viennent de la même recherche, faite pour le mobilier.
+
+Ce qui n'est PAS fait, et qui est donc une contrainte et non un oubli : le modèle
 free3d lui-même n'est pas importé. Il demande un compte, il n'est pas CC0, et le
 versionner casserait à la fois la reconstructibilité hors ligne promise en A2b et
 la clarté des licences d'`assets/cc0/LICENSES.md`. La borne est **reproduite
