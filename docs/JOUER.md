@@ -383,7 +383,7 @@ Une archive par plateforme, autonome : `bin/nineteen` et `bin/assets/` côte à
 côte, ce qui est exactement la disposition que `ns_paths` cherche. Déballer et
 lancer, rien à installer, rien à configurer.
 
-**Ce que ça pèse : 225 Mio compressés.** C'était 421 : les cartes de normales et
+**Ce que ça pèse : 153 Mio compressés.** C'était 421 : les cartes de normales et
 d'ORM étaient écrites à la résolution de leur texture source, quelle qu'elle soit
 — jusqu'à 3840 x 2160 pour l'image d'un écran de jeu. Elles sont désormais
 plafonnées à 1024 de côté (`NINETEEN_MAX_MAP`), ce qui divise ces deux familles
@@ -392,8 +392,15 @@ pente que l'éclairage intègre sur plusieurs pixels, là où un albédo porte d
 lettrage et se lit au texel. Un test relit l'entête PNG de chaque carte produite
 et refuse celle qui dépasse.
 
-Le reste — un passage en KTX2/BC7 — diviserait encore par trois ou quatre. Ce
-n'est pas fait.
+Puis les cartes sont passées en **blocs compressés** : BC5 pour les normales
+(deux canaux, Z reconstruit dans le shader), BC1 pour l'ORM, mips comprises,
+dans un conteneur maison de vingt octets d'en-tête (`engine/core/nstex.h`). 148
+Mio de cartes deviennent 69, et l'archive tombe à 153.
+
+Ça demande un GPU qui lit le BC — c'est-à-dire tout GPU de bureau, y compris les
+Mac Apple Silicon. Le moteur le **vérifie** avant de créer la texture et le dit
+s'il manque, plutôt que d'afficher du noir sans message. `-DNINETEEN_BC_MAPS=OFF`
+redonne des PNG si un jour une plateforme visée ne suit pas.
 
 **Vérifié plutôt qu'affirmé** : l'archive a été déballée et le jeu lancé depuis
 l'arbre déballé, **avec les assets du build masqués** pour qu'aucun montage de

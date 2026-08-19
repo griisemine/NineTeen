@@ -21,6 +21,27 @@ set(GEN      "${CMAKE_BINARY_DIR}/assets")
 # albédo qui porte du lettrage et de la trame.
 set(NINETEEN_MAX_MAP 1024 CACHE STRING
     "Côté maximal des cartes de normales et ORM (0 = aucun plafond)")
+
+# Les cartes en blocs compressés (BC5 pour les normales, BC1 pour l'ORM), dans
+# le conteneur `engine/core/nstex.h`, mips comprises.
+#
+# ON par défaut : tout GPU de bureau lit du BC — c'est la base de Direct3D
+# depuis vingt ans, et les Mac Apple Silicon le gèrent. Le moteur VÉRIFIE quand
+# même le support avant de créer la texture, et le dit s'il manque, plutôt que
+# d'afficher du noir sans message.
+#
+# OFF redonne des PNG : c'est le repli si un jour une plateforme visée ne suit
+# pas, et c'est aussi ce qui rend la comparaison possible.
+option(NINETEEN_BC_MAPS "Cartes de normales et ORM en blocs compressés (.nstex)" ON)
+if(NINETEEN_BC_MAPS)
+    set(_bc "--bc")
+    set(_map_n "_n.nstex")
+    set(_map_orm "_orm.nstex")
+else()
+    set(_bc "")
+    set(_map_n "_n.png")
+    set(_map_orm "_orm.png")
+endif()
 if(NOT NINETEEN_MAX_MAP MATCHES "^[0-9]+$")
     message(FATAL_ERROR "NINETEEN_MAX_MAP doit être un entier, pas « ${NINETEEN_MAX_MAP} »")
 endif()
@@ -94,8 +115,8 @@ add_custom_command(
 # Elle passe par `texgen` comme toutes les autres : une planche sans normale ni
 # ORM serait la seule surface plate de la salle.
 add_custom_command(
-    OUTPUT  "${GEN}/materials/flanc_borne_n.png" "${GEN}/materials/flanc_borne_orm.png"
-    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} --strength=0.8 "${SIDEART}" "${GEN}/materials"
+    OUTPUT  "${GEN}/materials/flanc_borne${_map_n}" "${GEN}/materials/flanc_borne${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.8 "${SIDEART}" "${GEN}/materials"
     DEPENDS texgen "${SIDEART}"
     COMMENT "Matériau PBR : flanc_borne"
     VERBATIM
@@ -124,8 +145,8 @@ add_custom_command(
     VERBATIM
 )
 add_custom_command(
-    OUTPUT  "${GEN}/materials/panneau_borne_n.png" "${GEN}/materials/panneau_borne_orm.png"
-    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} --strength=0.7 "${PANELART}" "${GEN}/materials"
+    OUTPUT  "${GEN}/materials/panneau_borne${_map_n}" "${GEN}/materials/panneau_borne${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.7 "${PANELART}" "${GEN}/materials"
     DEPENDS texgen "${PANELART}"
     COMMENT "Matériau PBR : panneau_borne"
     VERBATIM
@@ -303,11 +324,11 @@ set(ALBEDO_pilonne_rouge      0.16)   # 0,105
 set(ALBEDO_Radio              0.16)   # 0,117
 
 set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"
-                   "${GEN}/materials/flanc_borne_n.png"
-                   "${GEN}/materials/flanc_borne_orm.png"
+                   "${GEN}/materials/flanc_borne${_map_n}"
+                   "${GEN}/materials/flanc_borne${_map_orm}"
                    "${PANELART}" "${PANELART_RUNTIME}"
-                   "${GEN}/materials/panneau_borne_n.png"
-                   "${GEN}/materials/panneau_borne_orm.png")
+                   "${GEN}/materials/panneau_borne${_map_n}"
+                   "${GEN}/materials/panneau_borne${_map_orm}")
 foreach(tex IN LISTS ROOM_TEXTURES)
     get_filename_component(tex_name "${tex}" NAME_WE)
 
@@ -326,8 +347,8 @@ foreach(tex IN LISTS ROOM_TEXTURES)
     # La dé-cuisson, quand cette texture en a une de déclarée. `texgen` produit
     # alors `<nom>_c.png`, que le moteur préfère à l'image du glTF — voir
     # `engine/scene/ns_scene.c`, résolution des triplets.
-    set(texgen_outputs "${GEN}/materials/${tex_name}_n.png"
-                       "${GEN}/materials/${tex_name}_orm.png")
+    set(texgen_outputs "${GEN}/materials/${tex_name}${_map_n}"
+                       "${GEN}/materials/${tex_name}${_map_orm}")
     set(albedo "")
     if(DEFINED ALBEDO_${tex_name})
         set(albedo "--albedo=${ALBEDO_${tex_name}}")
@@ -336,7 +357,7 @@ foreach(tex IN LISTS ROOM_TEXTURES)
 
     add_custom_command(
         OUTPUT  ${texgen_outputs}
-        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${upscale} ${albedo} "${tex}" "${GEN}/materials"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} ${upscale} ${albedo} "${tex}" "${GEN}/materials"
         DEPENDS texgen "${tex}"
         COMMENT "Matériau PBR : ${tex_name}"
         VERBATIM

@@ -119,7 +119,23 @@ void main()
     if (u_params.z > 0.5) {
         vec3 T = normalize(v_tangent.xyz - N * dot(N, v_tangent.xyz));
         vec3 B = cross(N, T) * v_tangent.w;
-        vec3 tn = texture(u_normalMap, uv).xyz * 2.0 - 1.0;
+        /*
+         * Z est RECONSTRUIT, jamais lu.
+         *
+         * Une normale de l'espace tangent est unitaire et pointe vers
+         * l'extérieur : z = sqrt(1 - x² - y²) la détermine entièrement. Le
+         * stocker était donc un canal payé pour rien, et c'est ce qui permet
+         * aux cartes de passer en BC5, qui ne code que deux canaux et qui est
+         * LE format d'une carte de normales — BC1 y donne le banding vert bien
+         * connu, parce qu'il code le vert sur six bits et interpole en RGB.
+         *
+         * Le calcul est valable pour les DEUX sources sans drapeau ni
+         * variante : sur une carte RVB il retrouve le z qui y était écrit, à
+         * l'erreur d'encodage près. C'est ce qui rend le passage au format
+         * bloc sans risque de migration.
+         */
+        vec2 nxy = texture(u_normalMap, uv).xy * 2.0 - 1.0;
+        vec3 tn = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
         N = normalize(mat3(T, B, N) * tn);
     }
     /* Une face vue de dos (mur regardé depuis l'extérieur, géométrie non

@@ -7,7 +7,16 @@
 
 function(nineteen_add_tool name)
     add_executable(${name} ${ARGN})
-    target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    # `engine/core` en plus du répertoire des outils : quelques en-têtes sont
+    # des CONTRATS partagés entre l'outil qui écrit et le moteur qui lit —
+    # `ns_math.h` pour les matrices, `nstex.h` pour le conteneur de textures
+    # compressées. Les recopier côté outils ferait deux descriptions du même
+    # format, qui divergeraient d'un champ un jour ou l'autre. Ça ne fait
+    # dépendre les outils ni de SDL ni du moteur : ces en-têtes n'incluent que
+    # la bibliothèque standard.
+    target_include_directories(${name} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/engine/core")
     target_link_libraries(${name} PRIVATE nineteen::stb nineteen::cgltf)
     if(UNIX)
         target_link_libraries(${name} PRIVATE m)

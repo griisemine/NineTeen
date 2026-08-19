@@ -1,5 +1,6 @@
 /* ns_rhi.c — implémentation de la couche de rendu au-dessus de SDL3 GPU. */
 #include "ns_rhi.h"
+#include "nstex.h"
 
 /* Registre des shaders embarqués : sert ici uniquement à savoir quels formats le
  * binaire contient, pour n'annoncer que ceux-là à SDL. */
@@ -66,6 +67,12 @@ struct ns_rhi {
 
 static uint32_t format_bytes_per_pixel(SDL_GPUTextureFormat f)
 {
+    /* Les formats BLOC n'ont pas d'octets-par-texel : quatre bits pour BC1,
+     * huit pour BC5, et seulement par bloc de 4x4. Les faire passer par ici
+     * rendrait un chiffre faux qui servirait ensuite à dimensionner un
+     * téléversement ; ils ont leur propre chemin (`upload_blocks`). */
+    NS_ASSERT(f != SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM
+              && f != SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM);
     switch (f) {
     case SDL_GPU_TEXTUREFORMAT_R8_UNORM:              return 1;
     case SDL_GPU_TEXTUREFORMAT_R8G8_UNORM:            return 2;
@@ -632,9 +639,181 @@ bool ns_texture_upload(ns_rhi *r, ns_texture *t, const void *pixels, uint32_t by
     return true;
 }
 
+/*
+ * Téléversement d'une texture compressée, niveau par niveau.
+ *
+ * Deux différences avec `ns_texture_upload`, et ce sont elles qui imposent une
+ * fonction séparée plutôt qu'un drapeau :
+ *
+ *  - la taille se compte en BLOCS de 4x4, pas en texels. `pixels_per_row` d'un
+ *    transfert vaut alors la largeur en texels ARRONDIE au bloc supérieur : une
+ *    texture de 1x1 occupe un bloc entier, et donner 1 ici décrit une source
+ *    plus petite que ce que le pilote va lire.
+ *  - les mips viennent du FICHIER. Aucune API ne sait générer une mip sur une
+ *    texture bloc par blit, donc `SDL_GenerateMipmapsForGPUTexture` n'est pas
+ *    une option — c'est `texgen` qui les a calculées, sur l'image d'origine et
+ *    non sur un niveau déjà compressé.
+ */
+static bool upload_blocks(ns_rhi *r, ns_texture *t, const uint8_t *data, size_t bytes,
+                          uint32_t format, uint32_t levels)
+{
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tb.size  = (uint32_t)bytes;
+
+    SDL_GPUTransferBuffer *tmp = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!tmp) {
+        NS_ERROR("transfert bloc non créé pour « %s » : %s",
+                 t->name ? t->name : "?", SDL_GetError());
+        return false;
+    }
+    void *mapped = SDL_MapGPUTransferBuffer(r->device, tmp, false);
+    if (!mapped) {
+        SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+        return false;
+    }
+    SDL_memcpy(mapped, data, bytes);
+    SDL_UnmapGPUTransferBuffer(r->device, tmp);
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(cmd);
+
+    uint32_t off = 0, lw = t->width, lh = t->height;
+    for (uint32_t i = 0; i < levels; ++i) {
+        SDL_GPUTextureTransferInfo src;
+        SDL_zero(src);
+        src.transfer_buffer = tmp;
+        src.offset          = off;
+        src.pixels_per_row  = ((lw + 3u) / 4u) * 4u;
+        src.rows_per_layer  = ((lh + 3u) / 4u) * 4u;
+
+        SDL_GPUTextureRegion dst;
+        SDL_zero(dst);
+        dst.texture   = t->handle;
+        dst.mip_level = i;
+        dst.w = lw; dst.h = lh; dst.d = 1;
+
+        SDL_UploadToGPUTexture(pass, &src, &dst, false);
+
+        off += nstex_level_bytes(lw, lh, format);
+        lw = (lw > 1) ? lw / 2 : 1;
+        lh = (lh > 1) ? lh / 2 : 1;
+    }
+    SDL_EndGPUCopyPass(pass);
+
+    SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+    SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+    return true;
+}
+
+/*
+ * Charge une carte `.nstex` si elle existe à la place du PNG.
+ *
+ * Renvoie `false` sans rien dire quand le fichier n'est pas là : ce n'est pas
+ * une erreur, c'est le cas normal d'un arbre construit sans `--bc`.
+ */
+static bool try_load_nstex(ns_rhi *r, ns_texture *out, const char *logical_path)
+{
+    /* `materials/x_n.png` -> `materials/x_n.nstex`. On ne devine rien d'autre :
+     * un chemin sans extension connue n'a pas de variante bloc. */
+    const char *dot = SDL_strrchr(logical_path, '.');
+    if (!dot) return false;
+    char alt[1024];
+    const size_t stem = (size_t)(dot - logical_path);
+    if (stem + 7u >= sizeof alt) return false;
+    SDL_memcpy(alt, logical_path, stem);
+    SDL_memcpy(alt + stem, ".nstex", 7);
+
+    /*
+     * On SONDE avant d'ouvrir, et c'est la deuxième fois que cette ligne
+     * manque. `ns_file_read_all` journalise en ERROR quand le fichier n'est pas
+     * là — ce qui est juste pour un asset attendu, et faux ici où l'absence est
+     * le cas normal : tous les albédos passent par ce chemin et aucun n'a de
+     * variante bloc. Sans ce garde-fou, chaque démarrage crachait une
+     * cinquantaine de lignes rouges pour un fonctionnement parfaitement sain,
+     * exactement comme la sonde des `_c.png` en B17.
+     */
+    char probe[1024];
+    if (!ns_path_resolve(alt, probe, sizeof probe)) return false;
+
+    ns_arena tmp;
+    if (!ns_arena_init(&tmp, 96u * 1024u * 1024u, "chargement nstex")) return false;
+    size_t size = 0;
+    void *file = ns_file_read_all(&tmp, alt, &size);
+    if (!file || size < NSTEX_HEADER_BYTES) { ns_arena_free(&tmp); return false; }
+
+    const uint8_t *b = (const uint8_t *)file;
+    if (b[0] != NSTEX_MAGIC0 || b[1] != NSTEX_MAGIC1
+        || b[2] != NSTEX_MAGIC2 || b[3] != NSTEX_MAGIC3 || b[4] != NSTEX_VERSION) {
+        NS_ERROR("« %s » : en-tête nstex invalide", alt);
+        ns_arena_free(&tmp);
+        return false;
+    }
+    const uint32_t fmt    = b[5];
+    const uint32_t levels = (uint32_t)b[6] | ((uint32_t)b[7] << 8);
+    uint32_t w = 0, h = 0, total = 0;
+    for (int i = 0; i < 4; ++i) {
+        w     |= (uint32_t)b[8 + i]  << (i * 8);
+        h     |= (uint32_t)b[12 + i] << (i * 8);
+        total |= (uint32_t)b[16 + i] << (i * 8);
+    }
+    if (size < NSTEX_HEADER_BYTES + total || levels == 0 || w == 0 || h == 0) {
+        NS_ERROR("« %s » : fichier tronqué (%zu octets pour %u annoncés)", alt, size, total);
+        ns_arena_free(&tmp);
+        return false;
+    }
+
+    const SDL_GPUTextureFormat sdl_fmt = (fmt == NSTEX_FORMAT_BC5)
+        ? SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM
+        : SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM;
+
+    /*
+     * Le format doit être SUPPORTÉ, et on le demande plutôt que de l'espérer.
+     * Tous les GPU de bureau savent lire du BC — c'est la base de D3D depuis
+     * vingt ans, et les Mac Apple Silicon le gèrent — mais l'annoncer sans le
+     * vérifier donnerait une texture noire sans message, qui est précisément le
+     * genre de panne qu'on a passé ce projet à éliminer.
+     */
+    if (!SDL_GPUTextureSupportsFormat(r->device, sdl_fmt,
+                                      SDL_GPU_TEXTURETYPE_2D,
+                                      SDL_GPU_TEXTUREUSAGE_SAMPLER)) {
+        NS_ERROR("« %s » : ce GPU ne gère pas %s — carte ignorée", alt,
+                 (fmt == NSTEX_FORMAT_BC5) ? "BC5" : "BC1");
+        ns_arena_free(&tmp);
+        return false;
+    }
+
+    ns_texture_desc d;
+    SDL_zero(d);
+    d.width = w; d.height = h;
+    d.format = sdl_fmt;
+    d.sampled = true;
+    d.mip_levels = levels;
+    d.name = logical_path;
+
+    bool ok = ns_texture_create(r, out, &d);
+    if (ok) ok = upload_blocks(r, out, b + NSTEX_HEADER_BYTES, total, fmt, levels);
+    if (ok) {
+        NS_DEBUG("texture %s : %ux%u, %u niveaux, %s", alt, w, h, levels,
+                 (fmt == NSTEX_FORMAT_BC5) ? "BC5" : "BC1");
+    }
+    ns_arena_free(&tmp);
+    return ok;
+}
+
 bool ns_texture_load(ns_rhi *r, ns_texture *out, const char *logical_path, bool srgb, bool gen_mips)
 {
     NS_ASSERT(out && logical_path);
+
+    /* La variante compressée d'abord : c'est elle qui est installée dans un
+     * paquet. Absente, on retombe sur le PNG sans un mot — un arbre construit
+     * sans `--bc` est parfaitement valide. */
+    if (try_load_nstex(r, out, logical_path)) return true;
 
     ns_arena tmp;
     if (!ns_arena_init(&tmp, 64u * 1024u * 1024u, "chargement image")) return false;

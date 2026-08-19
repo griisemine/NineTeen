@@ -13,6 +13,7 @@ réseau nécessaire, pas de version qui dérive sous les pieds dans cinq ans.
 | `stb/stb_image.h` | lecture PNG/JPEG (outils d'assets) | MIT / domaine public |
 | `stb/stb_image_write.h` | écriture PNG (captures d'écran, maps générées) | MIT / domaine public |
 | `stb/stb_image_resize2.h` | redimensionnement Lanczos/Mitchell (upscale des textures) | MIT / domaine public |
+| `stb/stb_dxt.h` | compression BC1/BC4/BC5 des cartes (`texgen --bc`) | MIT / domaine public |
 | `cgltf/cgltf.h` | lecture glTF 2.0 (scène de la salle) | MIT |
 | `jsmn/jsmn.h` | lecture JSON (hitbox, config de scène) | MIT |
 

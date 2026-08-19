@@ -8,6 +8,17 @@ que le chantier est terminé.
 ## Ce qui tourne
 
 ### Build et portabilité
+- **Les cartes sont compressées par blocs.** BC5 pour les normales, BC1 pour l'ORM, mips
+  comprises, dans `engine/core/nstex.h` — vingt octets d'en-tête, lu sans dépendance. Pas du
+  KTX2 : rien n'est échangé avec un tiers ici, et prétendre écrire du KTX2 sans en écrire serait
+  pire qu'assumer un format maison. BC5 plutôt que BC1 pour les normales n'est pas un détail :
+  BC1 y donne le banding vert bien connu, parce qu'il code le vert sur six bits et interpole en
+  RGB. Le shader RECONSTRUIT z par sqrt(1 - x² - y²), ce qui est exact pour une normale unitaire
+  — et valable pour les deux sources sans drapeau, donc sans risque de migration. Les mips
+  viennent du fichier : aucune API ne sait en générer sur une texture bloc, et les calculer à la
+  compilation est de toute façon meilleur (on filtre l'image d'origine, pas un niveau déjà
+  compressé). Cartes : 148 -> 69 Mio ; archive : 225 -> 153 Mio ; image inchangée (médiane 63
+  sur `allee`, avant comme après).
 - **Les cartes étaient écrites à la résolution de leur source.** Des normales en 3840 x 2160 pour
   l'image d'un écran de jeu, en 2048² pour le flanc d'une radio : 330 des 421 Mio de l'archive de
   release. Une carte de normales et une carte ORM ne portent pas la même information qu'un
@@ -460,10 +471,8 @@ importé ne déclarerait pas.
   Authenticode. Le workflow signe si les secrets existent et produit des paquets non signés
   sinon, en le disant plutôt qu'en échouant. C'est au propriétaire du dépôt de fournir les
   certificats, pas au dépôt de les contenir.
-- **Compression des textures en KTX2/BC7.** Les cartes générées restent des PNG. Le plus gros
-  du gaspillage est parti autrement (voir ci-dessus : 421 -> 225 Mio en plafonnant la résolution
-  des cartes) ; un vrai codec bloc diviserait encore par trois ou quatre et accélérerait le
-  chargement.
+- **Le temps réel — présence et duels.** C'est tout ce qui reste, et c'est délibéré : ça se
+  conçoit avant de s'écrire.
 
 ---
 
