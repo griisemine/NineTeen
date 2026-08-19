@@ -383,10 +383,17 @@ Une archive par plateforme, autonome : `bin/nineteen` et `bin/assets/` côte à
 côte, ce qui est exactement la disposition que `ns_paths` cherche. Déballer et
 lancer, rien à installer, rien à configurer.
 
-**Ce que ça pèse : 421 Mio compressés**, et c'est presque entièrement des cartes
-de normales et d'ORM en PNG (163 + 152 Mio sur 345). C'est le prix de ne pas
-avoir encore fait la compression KTX2/BC7, qui diviserait ça par cinq. Le chiffre
-est écrit ici plutôt que découvert au téléchargement.
+**Ce que ça pèse : 225 Mio compressés.** C'était 421 : les cartes de normales et
+d'ORM étaient écrites à la résolution de leur texture source, quelle qu'elle soit
+— jusqu'à 3840 x 2160 pour l'image d'un écran de jeu. Elles sont désormais
+plafonnées à 1024 de côté (`NINETEEN_MAX_MAP`), ce qui divise ces deux familles
+par 2,8 sans différence visible : une carte de normales porte une variation de
+pente que l'éclairage intègre sur plusieurs pixels, là où un albédo porte du
+lettrage et se lit au texel. Un test relit l'entête PNG de chaque carte produite
+et refuse celle qui dépasse.
+
+Le reste — un passage en KTX2/BC7 — diviserait encore par trois ou quatre. Ce
+n'est pas fait.
 
 **Vérifié plutôt qu'affirmé** : l'archive a été déballée et le jeu lancé depuis
 l'arbre déballé, **avec les assets du build masqués** pour qu'aucun montage de

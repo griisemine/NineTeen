@@ -8,6 +8,15 @@ que le chantier est terminé.
 ## Ce qui tourne
 
 ### Build et portabilité
+- **Les cartes étaient écrites à la résolution de leur source.** Des normales en 3840 x 2160 pour
+  l'image d'un écran de jeu, en 2048² pour le flanc d'une radio : 330 des 421 Mio de l'archive de
+  release. Une carte de normales et une carte ORM ne portent pas la même information qu'un
+  albédo — l'albédo porte du lettrage et de la trame et se lit au texel, les cartes portent une
+  variation que l'éclairage intègre sur plusieurs pixels. `texgen --max-map=` les plafonne à 1024
+  (l'albédo dé-cuit garde sa résolution), la moyenne de boîte renormalise les normales pour ne
+  pas aplatir le relief deux fois, et l'archive tombe à 225 Mio pour une image identique
+  (médiane 64 -> 63 sur `allee`). Un test relit l'entête PNG de chaque carte et refuse celle qui
+  dépasse — mutation-testé : à 256 il en signale 128.
 - **`cmake --install` n'emportait que le binaire.** `ns_paths` monte « <dossier du binaire>/assets »
   — la disposition d'un paquet installé, et son commentaire le dit — mais la règle d'installation
   n'installait pas un seul asset : l'arbre produit n'avait ni scène, ni texture, ni son. Invisible
@@ -420,8 +429,10 @@ que le chantier est terminé.
   Authenticode. Le workflow signe si les secrets existent et produit des paquets non signés
   sinon, en le disant plutôt qu'en échouant. C'est au propriétaire du dépôt de fournir les
   certificats, pas au dépôt de les contenir.
-- **Compression des textures.** Les cartes générées sont des PNG. Un passage en KTX2/BC7
-  diviserait ça par cinq et accélérerait le chargement.
+- **Compression des textures en KTX2/BC7.** Les cartes générées restent des PNG. Le plus gros
+  du gaspillage est parti autrement (voir ci-dessus : 421 -> 225 Mio en plafonnant la résolution
+  des cartes) ; un vrai codec bloc diviserait encore par trois ou quatre et accélérerait le
+  chargement.
 
 ---
 

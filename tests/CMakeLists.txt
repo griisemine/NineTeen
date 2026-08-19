@@ -292,3 +292,15 @@ nineteen_set_warnings(ns_test_online)
 nineteen_apply_sanitizers(ns_test_online)
 add_test(NAME online COMMAND ns_test_online)
 set_tests_properties(online PROPERTIES TIMEOUT 60)
+
+# Le plafond des cartes se vérifie sur les FICHIERS PRODUITS, pas sur l'intention.
+#
+# `texgen --max-map=` est un drapeau qu'on peut oublier de passer à l'un des
+# trois appels — c'est arrivé pendant l'écriture, et la seule trace en était
+# 197 Mio de plus dans l'archive, ce qui ne se voit nulle part. Le test relit
+# l'entête PNG de chaque carte générée et refuse celle qui dépasse.
+add_test(NAME cartes-plafonnees
+         COMMAND ${CMAKE_COMMAND}
+                 -DMAPS_DIR=${NINETEEN_GEN_DIR}/materials
+                 -DMAX_MAP=${NINETEEN_MAX_MAP}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/check_map_size.cmake)

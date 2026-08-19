@@ -39,6 +39,7 @@ typedef struct options {
     int   blur_radius;       /* rayon du flou servant de référence basse fréquence */
     float albedo;            /* réflectance linéaire visée ; 0 = pas de dé-cuisson */
     float albedo_contrast;   /* compression du contraste vers la moyenne */
+    int   max_map;           /* côté maximal des CARTES ; 0 = aucun plafond */
 } options;
 
 /* Luminance perceptuelle (Rec. 709) : c'est ce que l'œil lit comme « clair ou
@@ -99,6 +100,7 @@ int main(int argc, char **argv)
         .blur_radius = 4,
         .albedo = 0.0f,
         .albedo_contrast = 0.70f,
+        .max_map = 0,
     };
 
     const char *in_path = NULL, *out_dir = NULL;
@@ -109,6 +111,7 @@ int main(int argc, char **argv)
         else if (strncmp(argv[i], "--rough-max=", 12) == 0) opt.rough_max = (float)atof(argv[i] + 12);
         else if (strncmp(argv[i], "--ao=", 5) == 0)        opt.ao_strength = (float)atof(argv[i] + 5);
         else if (strncmp(argv[i], "--blur=", 7) == 0)      opt.blur_radius = atoi(argv[i] + 7);
+        else if (strncmp(argv[i], "--max-map=", 10) == 0)  opt.max_map = atoi(argv[i] + 10);
         else if (strncmp(argv[i], "--albedo=", 9) == 0)    opt.albedo = (float)atof(argv[i] + 9);
         else if (strncmp(argv[i], "--albedo-contrast=", 18) == 0)
             opt.albedo_contrast = (float)atof(argv[i] + 18);
@@ -126,6 +129,7 @@ int main(int argc, char **argv)
             "  --rough-max=F  rugosité des zones texturées (défaut 0.92)\n"
             "  --ao=F         intensité de l'occlusion de cavité (défaut 1.0)\n"
             "  --blur=N       rayon de la référence basse fréquence (défaut 4)\n"
+            "  --max-map=N    côté maximal des cartes _n et _orm (0 = aucun plafond)\n"
             "  --albedo=F     réflectance linéaire visée : produit <nom>_c.png\n"
             "                 (0, le défaut, ne produit rien — voir la dé-cuisson)\n"
             "  --albedo-contrast=F  compression du contraste (défaut 0.70)\n", argv[0]);
@@ -249,8 +253,87 @@ int main(int argc, char **argv)
     snprintf(out_n,   sizeof out_n,   "%s/%s_n.png", out_dir, base);
     snprintf(out_orm, sizeof out_orm, "%s/%s_orm.png", out_dir, base);
 
-    if (!stbi_write_png(out_n, w, h, 3, normal, w * 3))   tool_fatalf("écriture impossible : %s", out_n);
-    if (!stbi_write_png(out_orm, w, h, 3, orm, w * 3))    tool_fatalf("écriture impossible : %s", out_orm);
+    /*
+     * LE PLAFOND DES CARTES, et pourquoi il n'y en avait pas.
+     *
+     * Les cartes étaient écrites à la résolution de l'ALBÉDO, quelle qu'elle
+     * soit — d'où des normales en 3840 x 2160 pour l'image d'un écran de jeu,
+     * et en 2048² pour le flanc d'une radio. Sur les 421 Mio de l'archive de
+     * release, 330 sont ces deux familles de cartes.
+     *
+     * Une carte de normales et une carte ORM ne portent PAS la même information
+     * qu'un albédo. L'albédo porte le dessin — le lettrage d'un marquee, la
+     * trame d'une moquette — et se lit de près ; les cartes portent une
+     * variation de pente et de rugosité que l'éclairage intègre sur plusieurs
+     * pixels. Les rendre à la moitié du côté est invisible ; les rendre à
+     * 3840 de large est du gaspillage pur, quatorze fois.
+     *
+     * On plafonne donc les cartes SEULES. L'albédo dé-cuit (`_c`) garde sa
+     * résolution : c'est lui qu'on regarde.
+     *
+     * Le filtre est une moyenne de boîte sur des blocs entiers. Pour une
+     * normale, moyenner puis renormaliser est correct — c'est la même chose
+     * que d'aplatir légèrement le relief, ce que fait n'importe quel niveau de
+     * mipmap. Pour l'ORM, ce sont trois scalaires : la moyenne est exactement
+     * ce qu'il faut.
+     */
+    int mw = w, mh = h;
+    unsigned char *map_n = normal, *map_orm = orm;
+    unsigned char *down_n = NULL, *down_orm = NULL;
+    if (opt.max_map > 0 && (w > opt.max_map || h > opt.max_map)) {
+        int step = 1;
+        while ((w + step - 1) / (step + 1) > 0
+               && ((w + step) / (step + 1) > opt.max_map
+                   || (h + step) / (step + 1) > opt.max_map)) {
+            step++;
+            if (step > 64) break;
+        }
+        step++;                       /* le facteur, pas l'indice */
+        mw = (w + step - 1) / step;
+        mh = (h + step - 1) / step;
+        down_n   = (unsigned char *)malloc((size_t)mw * mh * 3);
+        down_orm = (unsigned char *)malloc((size_t)mw * mh * 3);
+        if (!down_n || !down_orm) tool_fatalf("texgen : mémoire (réduction)");
+
+        for (int y = 0; y < mh; ++y) {
+            for (int x = 0; x < mw; ++x) {
+                int acc_n[3] = { 0, 0, 0 }, acc_o[3] = { 0, 0, 0 }, taken = 0;
+                for (int by = 0; by < step; ++by) {
+                    const int sy = y * step + by;
+                    if (sy >= h) break;
+                    for (int bx = 0; bx < step; ++bx) {
+                        const int sx = x * step + bx;
+                        if (sx >= w) break;
+                        const size_t o = ((size_t)sy * w + sx) * 3;
+                        for (int c = 0; c < 3; ++c) {
+                            acc_n[c] += normal[o + c];
+                            acc_o[c] += orm[o + c];
+                        }
+                        taken++;
+                    }
+                }
+                const size_t d = ((size_t)y * mw + x) * 3;
+                /* Renormalisation de la normale moyennée : sans elle, une pente
+                 * moyennée se raccourcit et la surface s'aplatit deux fois. */
+                float nx = (float)acc_n[0] / (float)taken / 127.5f - 1.0f;
+                float ny = (float)acc_n[1] / (float)taken / 127.5f - 1.0f;
+                float nz = (float)acc_n[2] / (float)taken / 127.5f - 1.0f;
+                const float len = sqrtf(nx * nx + ny * ny + nz * nz);
+                if (len > 1e-6f) { nx /= len; ny /= len; nz /= len; }
+                down_n[d + 0] = (unsigned char)((nx * 0.5f + 0.5f) * 255.0f + 0.5f);
+                down_n[d + 1] = (unsigned char)((ny * 0.5f + 0.5f) * 255.0f + 0.5f);
+                down_n[d + 2] = (unsigned char)((nz * 0.5f + 0.5f) * 255.0f + 0.5f);
+                for (int c = 0; c < 3; ++c) {
+                    down_orm[d + c] = (unsigned char)(acc_o[c] / taken);
+                }
+            }
+        }
+        map_n = down_n; map_orm = down_orm;
+    }
+
+    if (!stbi_write_png(out_n, mw, mh, 3, map_n, mw * 3))   tool_fatalf("écriture impossible : %s", out_n);
+    if (!stbi_write_png(out_orm, mw, mh, 3, map_orm, mw * 3)) tool_fatalf("écriture impossible : %s", out_orm);
+    free(down_n); free(down_orm);
 
     /* ======================================================================
      * La dé-cuisson : rendre une couleur de base à une texture qui n'en a pas

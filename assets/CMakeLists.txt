@@ -11,6 +11,20 @@ set(SRC_LEGACY "${CMAKE_SOURCE_DIR}/legacy")
 set(SRC_ROOM "${SRC_LEGACY}/room")
 set(GEN      "${CMAKE_BINARY_DIR}/assets")
 
+# Le côté maximal des CARTES (_n et _orm), pas de l'albédo.
+#
+# Elles étaient écrites à la résolution de la texture source, quelle qu'elle
+# soit : des normales en 3840 x 2160 pour l'image d'un écran de jeu, en 2048²
+# pour le flanc d'une radio. Sur les 421 Mio de l'archive de release, 330
+# étaient ces deux familles — pour une information que l'éclairage intègre sur
+# plusieurs pixels et qui ne se lit jamais au texel près, contrairement à un
+# albédo qui porte du lettrage et de la trame.
+set(NINETEEN_MAX_MAP 1024 CACHE STRING
+    "Côté maximal des cartes de normales et ORM (0 = aucun plafond)")
+if(NOT NINETEEN_MAX_MAP MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "NINETEEN_MAX_MAP doit être un entier, pas « ${NINETEEN_MAX_MAP} »")
+endif()
+
 file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 
 # ---------------------------------------------------------------------------
@@ -81,7 +95,7 @@ add_custom_command(
 # ORM serait la seule surface plate de la salle.
 add_custom_command(
     OUTPUT  "${GEN}/materials/flanc_borne_n.png" "${GEN}/materials/flanc_borne_orm.png"
-    COMMAND texgen --strength=0.8 "${SIDEART}" "${GEN}/materials"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} --strength=0.8 "${SIDEART}" "${GEN}/materials"
     DEPENDS texgen "${SIDEART}"
     COMMENT "Matériau PBR : flanc_borne"
     VERBATIM
@@ -111,7 +125,7 @@ add_custom_command(
 )
 add_custom_command(
     OUTPUT  "${GEN}/materials/panneau_borne_n.png" "${GEN}/materials/panneau_borne_orm.png"
-    COMMAND texgen --strength=0.7 "${PANELART}" "${GEN}/materials"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} --strength=0.7 "${PANELART}" "${GEN}/materials"
     DEPENDS texgen "${PANELART}"
     COMMENT "Matériau PBR : panneau_borne"
     VERBATIM
@@ -322,7 +336,7 @@ foreach(tex IN LISTS ROOM_TEXTURES)
 
     add_custom_command(
         OUTPUT  ${texgen_outputs}
-        COMMAND texgen ${upscale} ${albedo} "${tex}" "${GEN}/materials"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${upscale} ${albedo} "${tex}" "${GEN}/materials"
         DEPENDS texgen "${tex}"
         COMMENT "Matériau PBR : ${tex_name}"
         VERBATIM
