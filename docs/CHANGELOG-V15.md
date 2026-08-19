@@ -491,7 +491,12 @@ importé ne déclarerait pas.
   sinon, en le disant plutôt qu'en échouant. C'est au propriétaire du dépôt de fournir les
   certificats, pas au dépôt de les contenir.
 - **Le temps réel — présence et duels.** C'est tout ce qui reste, et c'est délibéré : ça se
-  conçoit avant de s'écrire.
+  conçoit avant de s'écrire. `docs/RESEAU-TEMPS-REEL.md` établit les faits pour cette
+  conception, et corrige au passage une affirmation fausse que je répétais : le journal de
+  partie n'est PAS un format de rejeu. Il enregistre des conséquences (`pipe`, `score`,
+  `death`), pas des appuis sur des boutons — il authentifie un score, il ne rejoue pas une
+  partie. Ce qui est acquis, en revanche, et c'est la partie difficile : les **huit** jeux ont
+  un test de déterminisme, sans quoi aucun duel n'est possible quel que soit le réseau.
 
 ---
 

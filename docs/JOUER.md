@@ -301,7 +301,8 @@ secret du serveur ne peut pas être vérifiée, et l'accepter reviendrait
 exactement à la V1, où le client annonçait son score et le serveur le croyait.
 
 Le temps réel — présence, duels — se conçoit avant de s'écrire, et cette
-conception reste à faire. En attendant, une partie jouée sans serveur est
+conception reste à faire : `docs/RESEAU-TEMPS-REEL.md` en pose les faits, les
+trois formes possibles et leur coût. En attendant, une partie jouée sans serveur est
 classée localement et **rien n'échoue**.
 
 ### Ce que « en ligne » veut dire concrètement, et comment le vérifier
