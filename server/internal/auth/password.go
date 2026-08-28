@@ -97,6 +97,28 @@ func VerifyPassword(password, encoded string) (bool, error) {
 		return false, ErrInvalidHash
 	}
 
+	// Les deux longueurs sont VERIFIEES avant d'etre employees, et ce n'est pas
+	// une formalite pour faire taire un analyseur.
+	//
+	// `want` sort d'un base64 lu dans la base : c'est lui qui dicte la longueur
+	// de cle demandee a Argon2. Une empreinte tronquee a un octet donnerait une
+	// comparaison sur huit bits, qu'une chance sur 256 suffit a passer — et
+	// `ConstantTimeCompare` la validerait sans broncher, puisqu'elle compare
+	// bien deux tableaux egaux. Une empreinte de 2^32 octets, elle, tronquerait
+	// a la conversion. Les deux sont des empreintes MALFORMEES, et une empreinte
+	// malformee doit etre refusee, pas utilisee.
+	//
+	// 16 et 64 octets encadrent tout ce que ce service ecrit (32) et tout ce
+	// qu'une migration raisonnable pourrait ecrire. Le sel suit la meme regle :
+	// RFC 9106 recommande 16 octets et en exige 8 au minimum.
+	if len(salt) < 8 || len(salt) > 64 || len(want) < 16 || len(want) > 64 {
+		return false, ErrInvalidHash
+	}
+
+	// #nosec G115 -- la conversion est bornee par le test qui precede : `want`
+	// fait entre 16 et 64 octets, donc la valeur tient dans un uint32 avec
+	// vingt-six bits de marge. gosec ne suit pas l'invariant a travers le `if`,
+	// mais il est ecrit trois lignes plus haut et il est verifie a l'execution.
 	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

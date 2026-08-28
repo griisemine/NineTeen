@@ -45,6 +45,7 @@ NINETEEN_LOG=json \
 |---|---|
 | `NINETEEN_DB_URL` | URL PostgreSQL. **Requis.** Le mot de passe est masqué dans les journaux. |
 | `NINETEEN_ADDR` | adresse d'écoute, défaut `:8080` |
+| `NINETEEN_INSECURE_OK` | autorise une écoute **publique sans cookies `Secure`**. Le serveur refuse de démarrer dans ce cas, parce qu'un oubli de `-secure` sur une adresse joignable envoie le cookie de session en clair et que le seul symptôme serait l'absence d'un attribut que personne ne lit. L'écoute en boucle locale est exemptée — un navigateur ignore un cookie `Secure` reçu sur `http://`, donc l'exiger en développement rendrait la session impossible à établir. Le `docker-compose` fourni pose ce drapeau et dit pourquoi : dans un conteneur il FAUT écouter sur toutes les interfaces, et c'est la publication `127.0.0.1:8080:8080` qui borne l'exposition |
 | `NINETEEN_SECURE` | à définir derrière HTTPS : active les cookies `Secure` et HSTS |
 | `NINETEEN_LOG` | `text` ou `json` |
 

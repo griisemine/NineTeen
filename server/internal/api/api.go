@@ -220,6 +220,14 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, playerID i
 		return "", err
 	}
 
+	// #nosec G124 -- `Secure` est piloté par `s.secure`, et l'écrire en dur
+	// casserait le développement local au lieu de le sécuriser : un navigateur
+	// IGNORE purement et simplement un cookie `Secure` reçu sur `http://`, donc
+	// un `true` constant rendrait la session impossible à établir hors HTTPS et
+	// pousserait à désactiver le cookie entièrement. `s.secure` vient de
+	// `-secure` / `NINETEEN_SECURE`, et `serveDeployment` refuse de démarrer en
+	// production sans lui (voir cmd/nineteend). `HttpOnly` et `SameSite=Strict`
+	// sont, eux, inconditionnels.
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    clear,
@@ -239,6 +247,9 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, playerID i
 		return "", err
 	}
 	csrf := base64.RawURLEncoding.EncodeToString(token)
+	// #nosec G124 -- même raison que ci-dessus. `HttpOnly` est FAUX ici et c'est
+	// voulu : le jeton CSRF en double soumission doit être lisible par le script
+	// du site pour être recopié dans un en-tête. C'est tout le mécanisme.
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookie,
 		Value:    csrf,
@@ -253,6 +264,9 @@ func (s *Server) issueSession(w http.ResponseWriter, r *http.Request, playerID i
 
 func (s *Server) clearSessionCookies(w http.ResponseWriter) {
 	for _, name := range []string{sessionCookie, csrfCookie} {
+		// #nosec G124 -- cookies d'EFFACEMENT : `MaxAge: -1` et une valeur vide.
+		// Leurs attributs doivent correspondre à ceux de la pose, sans quoi le
+		// navigateur les considère comme d'autres cookies et ne supprime rien.
 		http.SetCookie(w, &http.Cookie{
 			Name: name, Value: "", Path: "/", MaxAge: -1,
 			Secure: s.secure, SameSite: http.SameSiteStrictMode,

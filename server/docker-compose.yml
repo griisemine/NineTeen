@@ -32,6 +32,14 @@ services:
     environment:
       NINETEEN_DB_URL: postgres://nineteen:${NINETEEN_DB_PASSWORD:-nineteen_dev}@db:5432/nineteen?sslmode=disable
       NINETEEN_ADDR: ":8080"
+      # Le serveur REFUSE une ecoute publique sans cookies Secure. Ici c'est un
+      # faux positif, et il est leve explicitement plutot que desarme : dans un
+      # conteneur, ecouter sur la boucle locale rendrait le service injoignable
+      # depuis l'hote — il FAUT « :8080 ». Ce qui borne l'exposition, c'est la
+      # publication ci-dessous, « 127.0.0.1:8080:8080 », qui ne sort pas de la
+      # machine. Derriere un vrai proxy TLS, retirer cette ligne et poser
+      # NINETEEN_SECURE=1.
+      NINETEEN_INSECURE_OK: "1"
       NINETEEN_LOG: json
     ports:
       - "127.0.0.1:8080:8080"

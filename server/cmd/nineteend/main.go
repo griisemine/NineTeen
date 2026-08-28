@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,18 +29,58 @@ import (
 
 const version = "15.0.0"
 
+// isLoopbackAddr dit si une adresse d'ecoute ne sort pas de la machine.
+//
+// Une adresse sans hote — « :8080 » — ecoute sur TOUTES les interfaces : c'est
+// le defaut, et c'est le cas dangereux, pas le cas local.
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if host == "" {
+		return false // « :8080 » : toutes les interfaces
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func main() {
 	var (
-		addr      = flag.String("addr", envOr("NINETEEN_ADDR", ":8080"), "adresse d'écoute")
-		dbURL     = flag.String("db", os.Getenv("NINETEEN_DB_URL"), "URL PostgreSQL")
-		migrate   = flag.Bool("migrate", true, "appliquer les migrations au démarrage")
-		secure    = flag.Bool("secure", envOr("NINETEEN_SECURE", "") != "", "servi derrière HTTPS (cookies Secure, HSTS)")
-		logFormat = flag.String("log", envOr("NINETEEN_LOG", "text"), "format de journal : text ou json")
+		addr       = flag.String("addr", envOr("NINETEEN_ADDR", ":8080"), "adresse d'écoute")
+		dbURL      = flag.String("db", os.Getenv("NINETEEN_DB_URL"), "URL PostgreSQL")
+		migrate    = flag.Bool("migrate", true, "appliquer les migrations au démarrage")
+		secure     = flag.Bool("secure", envOr("NINETEEN_SECURE", "") != "", "servi derrière HTTPS (cookies Secure, HSTS)")
+		logFormat  = flag.String("log", envOr("NINETEEN_LOG", "text"), "format de journal : text ou json")
+		insecureOK = flag.Bool("insecure-ok", envOr("NINETEEN_INSECURE_OK", "") != "",
+			"autoriser l'écoute publique SANS cookies Secure (à n'employer qu'en connaissance de cause)")
 	)
 	flag.Parse()
 
 	logger := newLogger(*logFormat)
 	slog.SetDefault(logger)
+
+	// Une adresse publique sans `-secure` envoie le cookie de session en clair.
+	//
+	// Le drapeau existait, rien ne verifiait qu'on l'avait mis. Un oubli dans un
+	// `docker run` suffisait donc a servir la session sans l'attribut `Secure`,
+	// sur une adresse joignable — et le seul symptome aurait ete son absence
+	// dans un en-tete que personne ne lit. On refuse.
+	//
+	// L'ecoute en boucle locale est exemptee : c'est le developpement, et un
+	// navigateur IGNORE un cookie `Secure` recu sur `http://`, donc l'exiger la
+	// rendrait la session impossible a etablir. `-insecure-ok` reste pour qui
+	// termine son TLS ailleurs et le sait.
+	if !*secure && !*insecureOK && !isLoopbackAddr(*addr) {
+		logger.Error("ecoute publique sans cookies Secure",
+			"addr", *addr,
+			"aide", "passer -secure (ou NINETEEN_SECURE=1) quand un proxy TLS est devant ; "+
+				"sinon ecouter sur 127.0.0.1, ou assumer avec -insecure-ok")
+		os.Exit(1)
+	}
 
 	if *dbURL == "" {
 		logger.Error("aucune base configurée",
