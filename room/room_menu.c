@@ -58,6 +58,15 @@ static const char *const g_label[MI_COUNT] = {
     "QUITTER LE JEU",
 };
 
+int room_menu_row(const char *label)
+{
+    if (!label) return -1;
+    for (int i = 0; i < MI_COUNT; ++i) {
+        if (SDL_strcmp(g_label[i], label) == 0) return i;
+    }
+    return -1;
+}
+
 static const char *quality_word(ns_quality q)
 {
     switch (q) {

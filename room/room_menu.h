@@ -87,6 +87,22 @@ void room_menu_update(room_menu *m, float dt);
  * à la sortie : `ns_config_save` reste au choix de l'appelant. */
 void room_menu_persist(const room_menu_ctx *ctx);
 
+/*
+ * L'indice d'une ligne, par son LIBELLÉ.
+ *
+ * Existe pour les tests, et il existe parce que l'arithmétique sur le nombre de
+ * lignes est un piège : `test_menu.c` visait « PAS » par `nombre de lignes - 5`,
+ * en s'appuyant sur le fait que quatre lignes la suivaient. Le jour où une ligne
+ * « TEMPS REEL » s'est insérée entre SOURIS et REPRENDRE, le test a continué de
+ * tourner — sur la MAUVAISE ligne. C'est le pire des cas : ni rouge franc, ni
+ * vert honnête.
+ *
+ * Un joueur ne compte pas les lignes en partant de la fin ; il lit celle qu'il
+ * veut. Renvoie -1 si le libellé n'existe pas, ce qui casse le test bruyamment
+ * — un libellé renommé DOIT casser quelque chose.
+ */
+int room_menu_row(const char *label);
+
 /* Dessine dans le lot courant, en repère `ROOM_HUD_W` x `ROOM_HUD_H`. */
 void room_menu_draw(ns_sprite *s, const room_menu *m, const room_menu_ctx *ctx);
 

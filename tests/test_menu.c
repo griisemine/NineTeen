@@ -155,15 +155,14 @@ static void test_bounds(void)
     /*
      * La sensibilité de la souris.
      *
-     * Elle est repérée par sa POSITION depuis la fin : le menu se termine par
-     * TEMPS RÉEL, REPRENDRE et QUITTER, donc la souris est la quatrième en
-     * partant du bas. Ce repérage est fragile — il l'était déjà, et une ligne
-     * insérée avant les boutons vient de le montrer : le test réglait le temps
-     * réel en croyant régler la souris, et échouait sur une borne qui n'était
-     * pas la sienne.
+     * Elle est visée par son LIBELLÉ. Elle l'était par sa position depuis la
+     * fin, et une ligne « TEMPS REEL » insérée avant les boutons a montré ce
+     * que ça vaut : le test réglait le temps réel en croyant régler la souris,
+     * et se plaignait d'une valeur qui n'était pas la sienne.
      */
-    const int n = menu_item_count();
-    go_to(&m, &ctx, n - 4);
+    const int row = room_menu_row("SOURIS");
+    CHECK(row >= 0, "la ligne « SOURIS » existe");
+    go_to(&m, &ctx, row);
     for (int i = 0; i < 100; ++i) room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
     CHECK(sens >= 0.19f && sens <= 0.21f, "la sensibilité se borne en bas (%.3f)", (double)sens);
     for (int i = 0; i < 100; ++i) room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
@@ -220,13 +219,19 @@ static void test_room_levels(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
-    const int n = menu_item_count();
+    bool realtime = false;
+    const room_menu_ctx ctx = { &rs, &sens, &realtime };
     room_menu_open(&m);
 
-    /* Les deux lignes sont juste avant SOURIS, qui précède les deux boutons. */
-    const int row_steps = n - 5;
-    const int row_tone  = n - 4;
+    /* Visées par leur LIBELLÉ, et non par arithmétique sur le nombre de lignes.
+     * La version précédente écrivait `n - 5` et `n - 4` : elle a survécu à
+     * l'insertion d'une ligne « TEMPS REEL » entre SOURIS et REPRENDRE en
+     * continuant de tourner sur la mauvaise ligne. */
+    const int row_steps = room_menu_row("PAS");
+    const int row_tone  = room_menu_row("FOND DE SALLE");
+    CHECK(row_steps >= 0 && row_tone >= 0 && row_tone == row_steps + 1,
+          "les lignes « PAS » et « FOND DE SALLE » existent et se suivent (%d, %d)",
+          row_steps, row_tone);
 
     room_sound_set_level(ROOM_LEVEL_STEPS, 0.50f);
     go_to(&m, &ctx, row_steps);
@@ -283,7 +288,7 @@ static void test_room_levels(void)
     /* Les flèches sur un bouton restent inertes maintenant que deux lignes se
      * sont insérées : la garde porte sur l'INDICE des boutons, et un décalage
      * d'entrée est exactement ce qui la casserait sans bruit. */
-    go_to(&m, &ctx, n - 1);
+    go_to(&m, &ctx, room_menu_row("QUITTER LE JEU"));
     const float keep = room_sound_get_level(ROOM_LEVEL_TONE);
     room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
     room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
