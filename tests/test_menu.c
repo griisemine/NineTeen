@@ -42,7 +42,7 @@ static int menu_item_count(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
     room_menu_open(&m);
     for (int i = 1; i <= 64; ++i) {
         room_menu_input(&m, &ctx, ROOM_MENU_DOWN);
@@ -65,7 +65,7 @@ static void test_navigation(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
 
     /* Fermé, le menu ignore tout : une touche pressée pendant la partie ne doit
      * pas déplacer un curseur invisible. */
@@ -90,7 +90,7 @@ static void test_quality_preserves_the_other_rows(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
     room_menu_open(&m);
 
     /* Ligne 1 : l'échelle. Deux crans vers le bas. */
@@ -140,7 +140,7 @@ static void test_bounds(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
     room_menu_open(&m);
 
     go_to(&m, &ctx, 1);
@@ -151,9 +151,18 @@ static void test_bounds(void)
     CHECK(rs.render_scale <= 1.001f, "…et ne monte pas au-dessus de 1,00 (%.3f)",
           (double)rs.render_scale);
 
-    /* La sensibilité de la souris — la ligne juste avant les deux boutons. */
+    /*
+     * La sensibilité de la souris.
+     *
+     * Elle est repérée par sa POSITION depuis la fin : le menu se termine par
+     * TEMPS RÉEL, REPRENDRE et QUITTER, donc la souris est la quatrième en
+     * partant du bas. Ce repérage est fragile — il l'était déjà, et une ligne
+     * insérée avant les boutons vient de le montrer : le test réglait le temps
+     * réel en croyant régler la souris, et échouait sur une borne qui n'était
+     * pas la sienne.
+     */
     const int n = menu_item_count();
-    go_to(&m, &ctx, n - 3);
+    go_to(&m, &ctx, n - 4);
     for (int i = 0; i < 100; ++i) room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
     CHECK(sens >= 0.19f && sens <= 0.21f, "la sensibilité se borne en bas (%.3f)", (double)sens);
     for (int i = 0; i < 100; ++i) room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
@@ -165,7 +174,7 @@ static void test_buttons(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
     const int n = menu_item_count();
 
     room_menu_open(&m);
@@ -198,7 +207,7 @@ static void test_persist(const char *dir)
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_HIGH);
     rs.render_scale = 0.75f;
     float sens = 1.85f;
-    const room_menu_ctx ctx = { &rs, &sens };
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
 
     ns_config_init("menu-test.cfg");
     room_menu_persist(&ctx);

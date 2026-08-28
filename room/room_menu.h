@@ -60,6 +60,16 @@ typedef struct room_menu {
 typedef struct room_menu_ctx {
     ns_render_settings *rs;
     float              *mouse_sensitivity;
+    /*
+     * L'interrupteur du TEMPS RÉEL — présence dans la salle et duels.
+     *
+     * Le menu écrit ce booléen et le persiste ; il ne démarre ni n'arrête le
+     * fil réseau, et le changement prend effet au prochain lancement. C'est la
+     * règle que ce fichier tient depuis le début — il DESSINE et il règle, il
+     * ne possède aucun sous-système — et c'est ce qui le garde vérifiable sans
+     * fenêtre, ce que `tests/test_menu.c` exploite.
+     */
+    bool               *realtime;
 } room_menu_ctx;
 
 void room_menu_open(room_menu *m);

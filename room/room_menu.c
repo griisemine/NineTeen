@@ -4,6 +4,7 @@
 #include "ns_config.h"
 #include "ns_core.h"
 #include "ns_math.h"
+#include "ns_realtime.h"
 #include "room_hud.h"
 
 #include <SDL3/SDL.h>
@@ -27,6 +28,7 @@ typedef enum menu_item {
     MI_VOL_SFX,
     MI_VOL_AMBIENCE,
     MI_MOUSE,
+    MI_REALTIME,
     MI_RESUME,
     MI_QUIT,
     MI_COUNT
@@ -42,6 +44,7 @@ static const char *const g_label[MI_COUNT] = {
     "EFFETS",
     "AMBIANCE",
     "SOURIS",
+    "TEMPS REEL",
     "REPRENDRE",
     "QUITTER LE JEU",
 };
@@ -123,6 +126,41 @@ static void item_value(const room_menu_ctx *ctx, int i, char *out, size_t n,
         case MI_VOL_SFX:    pct(out, n, bus_get(NS_BUS_SFX)); break;
         case MI_VOL_AMBIENCE: pct(out, n, bus_get(NS_BUS_AMBIENCE)); break;
         case MI_MOUSE:      SDL_snprintf(out, n, "%.2f", (double)*ctx->mouse_sensitivity); break;
+        case MI_REALTIME:
+            /*
+             * L'INTERRUPTEUR du temps réel — présence dans la salle et duels.
+             *
+             * Il montre trois états et non deux, parce qu'il y a trois
+             * situations et que les confondre rendrait le réglage incompréhensible :
+             *
+             *   ACTIF    — demandé, et le fil tourne ;
+             *   SANS SERVEUR — demandé, mais aucune URL n'est configurée (ou
+             *                  `--offline` verrouille). Le joueur a dit oui et
+             *                  il ne se passe rien : il faut le lui DIRE, sans
+             *                  quoi il croira à une panne ;
+             *   INACTIF  — non demandé, ce qui est le défaut.
+             *
+             * Le troisième état est ce qui manquait à la première version : elle
+             * affichait « ACTIF » dès que la case était cochée, y compris quand
+             * rien ne pouvait démarrer.
+             */
+            /*
+             * `realtime` peut être NUL : un appelant qui ne pilote pas ce
+             * réglage — `tests/test_menu.c`, qui construit son contexte avec
+             * les seuls champs dont il a besoin — ne doit pas faire tomber le
+             * menu. Une ligne qui ne sait rien affiche « INACTIF » plutôt que
+             * de déréférencer.
+             */
+            if (!ctx->realtime || !*ctx->realtime) {
+                SDL_snprintf(out, n, "INACTIF");
+            } else if (ns_realtime_enabled()) {
+                SDL_snprintf(out, n, "ACTIF");
+                SDL_snprintf(hint, hn, "%s", ns_realtime_status());
+            } else {
+                SDL_snprintf(out, n, "SANS SERVEUR");
+                SDL_snprintf(hint, hn, "AU PROCHAIN LANCEMENT");
+            }
+            break;
         default:            out[0] = '\0'; break;
     }
     if (!ns_audio_ready() && i >= MI_VOL_MASTER && i <= MI_VOL_AMBIENCE) {
@@ -172,6 +210,16 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
         case MI_MOUSE:
             *ctx->mouse_sensitivity = ns_clampf(*ctx->mouse_sensitivity + (float)dir * 0.05f,
                                                 0.20f, 3.00f);
+            return false;
+        case MI_REALTIME:
+            /*
+             * Le choix est enregistré tout de suite et prend effet au prochain
+             * lancement. On ne démarre ni n'arrête le fil ici : ce menu ne
+             * possède aucun sous-système, il écrit des valeurs — c'est ce qui le
+             * garde dessinable et testable sans fenêtre, et la règle est déjà
+             * celle des autres lignes.
+             */
+            if (ctx->realtime) *ctx->realtime = !*ctx->realtime;
             return false;
         default: break;
     }
@@ -240,6 +288,9 @@ void room_menu_persist(const room_menu_ctx *ctx)
     ns_config_set_str(NS_CFG_QUALITY, q);
     ns_config_set_float(NS_CFG_RENDER_SCALE, ctx->rs->render_scale);
     ns_config_set_float(NS_CFG_MOUSE_SENS, *ctx->mouse_sensitivity);
+    /* Le temps réel est un RÉGLAGE PERSISTANT, pas un état de session : on ne
+     * doit pas avoir à repasser `--temps-reel` à chaque lancement. */
+    if (ctx->realtime) ns_config_set_bool(NS_CFG_REALTIME, *ctx->realtime);
     if (ns_audio_ready()) {
         ns_config_set_float(NS_CFG_VOL_MASTER,   ns_audio_bus_volume(NS_BUS_MASTER));
         ns_config_set_float(NS_CFG_VOL_MUSIC,    ns_audio_bus_volume(NS_BUS_MUSIC));

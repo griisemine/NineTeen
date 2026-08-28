@@ -23,6 +23,7 @@
 
 #include "games.h"
 #include "ns_online.h"
+#include "ns_realtime.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -56,6 +57,14 @@ typedef struct options {
     float       exposure;
     float       particles;  /* densité de poussière, < 0 = celle du palier */
     bool        offline;    /* verrou : interdit toute sortie réseau */
+    /*
+     * Le temps réel — présence et duels. Trois états et non deux : la ligne de
+     * commande peut l'ACTIVER, le DÉSACTIVER, ou ne rien dire — auquel cas
+     * c'est le réglage persistant qui tranche. Un simple booléen ferait de
+     * l'absence d'option un « non » explicite, et `--no-temps-reel` ne pourrait
+     * plus rien vouloir dire de différent.
+     */
+    int         realtime;   /* -1 : la config décide ; 0 : non ; 1 : oui */
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* URL du classement en ligne, sinon la config */
@@ -107,6 +116,9 @@ static void print_usage(const char *exe)
         "                       un fichier plutôt qu'un souvenir\n"
         "  --server=URL         classement en ligne (http://hôte:port) ; sinon la config\n"
         "  --offline            verrou : aucune connexion, aucune mise en file\n"
+        "  --temps-reel         présence dans la salle et duels (INERTE par défaut) ;\n"
+        "                       demande un serveur, et se règle aussi dans Échap\n"
+        "  --no-temps-reel      force l'inverse, quel que soit le réglage gardé\n"
         "  --menu[=N]           ouvre le menu de réglages (ligne N) : pour les captures\n"
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
@@ -236,6 +248,7 @@ static bool parse_options(int argc, char **argv, options *o)
     o->camera_mode = ROOM_CAM_PLAYER;
     o->render_scale = 0.0f;   /* 0 = non demandé : le palier ou la config décide */
     o->particles = -1.0f;       /* < 0 : on garde la densité du palier de qualité */
+    o->realtime = -1;           /* < 0 : non demandé, c'est le réglage gardé qui tranche */
 
     /* Avant la ligne de commande : elle doit pouvoir tout écraser. */
     load_env_defaults(o);
@@ -301,6 +314,10 @@ static bool parse_options(int argc, char **argv, options *o)
             o->replay = a + 10;
         } else if (SDL_strncmp(a, "--server=", 9) == 0) {
             o->server = a + 9;
+        } else if (SDL_strcmp(a, "--temps-reel") == 0) {
+            o->realtime = 1;
+        } else if (SDL_strcmp(a, "--no-temps-reel") == 0) {
+            o->realtime = 0;
         } else if (SDL_strcmp(a, "--offline") == 0) {
             o->offline = true;
         } else if (SDL_strcmp(a, "--no-hud") == 0) {
@@ -379,6 +396,193 @@ static const char *quality_name(ns_quality q)
     return "medium";
 }
 
+/* ==========================================================================
+ * Le duel en différé — le fantôme
+ * ========================================================================== */
+
+/*
+ * L'adversaire d'un duel : une partie déjà jouée, rejouée à côté de la sienne.
+ *
+ * Tout tient dans ces champs parce qu'un fantôme n'est rien d'autre qu'un
+ * second état de jeu avancé par un journal d'appuis. Il ne parle pas au réseau,
+ * ne lit pas d'horloge, et avance d'un pas exactement quand le joueur avance
+ * d'un pas — c'est ce qui garantit que les deux parties restent comparables.
+ */
+typedef struct duel_ghost {
+    ns_realtime_ghost_info info;
+    void          *state;        /* l'état du jeu de l'adversaire */
+    size_t         state_size;   /* celle du jeu pour lequel il a été alloué */
+    ns_run_input  *input;        /* son journal d'appuis */
+    uint32_t       count;
+    uint32_t       cursor;       /* où l'on en est dans le journal */
+    uint8_t        held;         /* les maintiens EN COURS, conservés entre deux lignes */
+    int32_t        last_tick;
+    int64_t        seed;
+    char           game[32];
+    bool           loaded;       /* un journal est en mémoire */
+    bool           running;      /* et il est en train d'être rejoué */
+    bool           finished;
+} duel_ghost;
+
+static void duel_release(duel_ghost *d)
+{
+    SDL_free(d->input);
+    d->input = NULL;
+    d->count = d->cursor = 0;
+    d->loaded = d->running = d->finished = false;
+}
+
+/*
+ * Prend le journal que le fil réseau vient de télécharger, s'il y en a un.
+ *
+ * Le journal est AUTOPORTANT : sa première ligne dit le jeu, la difficulté et
+ * la graine. On n'a donc rien à recouper avec ce qu'on croyait avoir demandé —
+ * et c'est voulu, parce que ce qu'on rejoue doit être ce qu'on a reçu.
+ */
+static void duel_take(duel_ghost *d)
+{
+    char *text = NULL;
+    size_t len = 0;
+    ns_realtime_ghost_info info;
+    if (!ns_realtime_take_ghost(&text, &len, &info)) return;
+
+    duel_release(d);
+
+    char diff[16] = { 0 };
+    if (ns_runlog_parse_inputs(text, len, d->game, sizeof d->game,
+                               diff, sizeof diff, &d->seed,
+                               &d->input, &d->count)) {
+        d->info = info;
+        d->last_tick = d->count ? d->input[d->count - 1].tick : 0;
+        d->loaded = d->count > 0;
+        if (d->loaded) {
+            NS_INFO("duel : fantôme de %s chargé (%s, graine %lld, %u appuis, score %lld)",
+                    info.name[0] ? info.name : "?", d->game,
+                    (long long)d->seed, d->count, (long long)info.score);
+            /* Le prochain billet doit être tiré sur LA graine de ce fantôme —
+             * sans quoi on jouerait une autre partie que la sienne, et le duel
+             * n'en serait pas un. */
+            ns_online_set_duel(d->info.run_id);
+        }
+    }
+    SDL_free(text);
+}
+
+/*
+ * Arme le fantôme pour une partie qui commence.
+ *
+ * Il ne court QUE si sa graine est celle de la partie : c'est la condition qui
+ * fait un duel. Sans billet du serveur — hors ligne — la partie se joue sur la
+ * graine locale, qui n'est pas celle du fantôme, et le fantôme reste donc au
+ * repos plutôt que de courir une partie sans rapport à côté de la nôtre.
+ */
+static void duel_begin(duel_ghost *d, const ns_game_api *api, uint64_t seed, bool hard)
+{
+    d->running = false;
+    d->finished = false;
+    d->cursor = 0;
+    d->held = 0;
+    if (!d->loaded || !api) return;
+    if (SDL_strcmp(d->game, api->id) != 0) return;
+    if ((uint64_t)d->seed != seed) {
+        NS_INFO("duel : le fantôme joue la graine %lld, la partie %llu — pas de duel",
+                (long long)d->seed, (unsigned long long)seed);
+        return;
+    }
+
+    /*
+     * L'état de l'adversaire est alloué ICI, à la taille du jeu qu'on est en
+     * train de lancer.
+     *
+     * Le faire à la charge du chargement de jeu aurait demandé de le tenir à
+     * jour à chaque changement de borne ; le faire ici le lie à la seule chose
+     * dont il dépend — le jeu réellement joué — et un duel qui n'a pas lieu ne
+     * coûte alors pas un octet.
+     */
+    if (d->state_size != api->state_size) {
+        SDL_free(d->state);
+        d->state = SDL_calloc(1, api->state_size);
+        d->state_size = d->state ? api->state_size : 0;
+    }
+    if (!d->state) return;
+
+    api->reset(d->state, seed, hard);
+    api->set_best(d->state, 0);
+    d->running = true;
+}
+
+/*
+ * Avance le fantôme d'UN pas, exactement quand le joueur en avance d'un.
+ *
+ * Les maintiens sont CONSERVÉS entre deux lignes du journal — c'est tout
+ * l'intérêt de n'enregistrer que les changements, et l'oublier donnerait un
+ * adversaire qui relâche ses commandes entre deux appuis.
+ */
+static void duel_tick(duel_ghost *d, const ns_game_api *api, int32_t tick, float dt)
+{
+    if (!d->running || !d->state || !api) return;
+    if (tick > d->last_tick) { d->finished = true; d->running = false; return; }
+
+    uint8_t press = 0;
+    while (d->cursor < d->count && d->input[d->cursor].tick == tick) {
+        d->held = d->input[d->cursor].held;
+        press |= d->input[d->cursor].pressed;
+        d->cursor++;
+    }
+    for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+        if (press & (1u << b)) api->press(d->state, (ns_game_button)b);
+    }
+    if (api->hold) {
+        bool h[NS_GAME_BUTTON_COUNT];
+        for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) h[b] = (d->held & (1u << b)) != 0;
+        api->hold(d->state, h);
+    }
+    api->tick(d->state, dt);
+    /* `events` CONSOMME : la boucle de jeu l'appelle à chaque pas, et ne pas le
+     * faire ici rejouerait un jeu différent de celui qu'on rejoue. */
+    ns_game_events ev; SDL_zero(ev);
+    api->events(d->state, &ev);
+}
+
+/*
+ * Le tableau du duel : son score, le sien, et l'écart.
+ *
+ * C'est tout ce qu'un duel a besoin d'afficher. Le fantôme n'a pas de corps à
+ * l'écran — il joue la MÊME partie que nous, donc le montrer voudrait dire
+ * dessiner deux parties superposées — et ce qui compte, quand on affronte le
+ * fantôme de quelqu'un, c'est de savoir si on est devant.
+ */
+static void draw_duel(ns_sprite *s, const duel_ghost *d, const ns_game_api *api,
+                      uint32_t my_score)
+{
+    if (!d->loaded || !api || !d->state) return;
+
+    const uint32_t his = api->score(d->state);
+    const float ahead[4]  = { 0.55f, 0.95f, 0.60f, 0.95f };
+    const float behind[4] = { 0.95f, 0.55f, 0.50f, 0.95f };
+    const float label[4]  = { 0.60f, 0.72f, 0.88f, 0.85f };
+    const float back[4]   = { 0.02f, 0.04f, 0.08f, 0.60f };
+
+    const float scale = 2.0f;
+    const float x = 24.0f;
+    float y = ROOM_HUD_H * 0.5f - 40.0f;
+
+    char line[80];
+    SDL_snprintf(line, sizeof line, "DUEL - %s",
+                 d->info.name[0] ? d->info.name : "FANTOME");
+
+    ns_sprite_rect(s, x - 10.0f, y - 8.0f, 300.0f, 96.0f, back);
+    ns_sprite_text(s, x, y, 1.7f, label, line);
+    y += ns_sprite_text_height(1.7f) + 8.0f;
+
+    SDL_snprintf(line, sizeof line, "TOI  %u", my_score);
+    ns_sprite_text(s, x, y, scale, (my_score >= his) ? ahead : behind, line);
+    y += ns_sprite_text_height(scale) + 4.0f;
+
+    SDL_snprintf(line, sizeof line, "LUI  %u%s", his, d->finished ? " (FINI)" : "");
+    ns_sprite_text(s, x, y, scale, label, line);
+}
+
 /*
  * Démarrer une partie, meilleur score compris.
  *
@@ -392,7 +596,7 @@ static const char *quality_name(ns_quality q)
  * `finish_run` l'y écrit avant qu'on le relise.
  */
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
-                      uint64_t seed, bool hard)
+                      uint64_t seed, bool hard, duel_ghost *duel)
 {
     const char *difficulty = hard ? "hard" : "normal";
 
@@ -440,6 +644,18 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
                     api->title, ticket.run_id, (long long)ticket.seed);
         }
     }
+
+    /*
+     * Le FANTÔME est armé ici, et pas chez l'appelant, pour une raison précise :
+     * c'est cette fonction — et elle seule — qui sait quelle graine a REELLEMENT
+     * été jouée. Le billet du serveur remplace celle qu'on lui a passée, et un
+     * duel armé sur l'autre graine ferait courir un adversaire qui joue une
+     * partie différente de la nôtre, sans que rien ne le dise.
+     *
+     * Six appelants lancent une partie ; les faire tous se souvenir de ça était
+     * six occasions de l'oublier.
+     */
+    if (duel) duel_begin(duel, api, seed, hard);
 }
 
 /*
@@ -533,6 +749,141 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
     return api;
 }
 
+
+/*
+ * LES AUTRES JOUEURS, dessinés dans la salle.
+ *
+ * Un avatar SIMPLE ET HONNÊTE plutôt qu'un personnage raté
+ * -------------------------------------------------------
+ * Ce qu'on dessine est une plaque au nom du joueur, posée à sa position, avec
+ * la borne devant laquelle il se tient et son score en cours. Pas un bonhomme.
+ *
+ * Ce n'est pas un renoncement, c'est le constat que le projet a déjà fait pour
+ * lui-même : il n'existe aucun modèle de personnage dans ce dépôt — on n'a que
+ * des bras en vue subjective — et la scène est un tampon de géométrie CUIT au
+ * build, sans chemin pour y ajouter un maillage animé à l'exécution. Fabriquer
+ * une silhouette à la va-vite donnerait un pantin qui glisse dans l'allée, ce
+ * qui est moins lisible qu'une étiquette et beaucoup plus laid.
+ *
+ * Une plaque, en revanche, répond exactement à la question qu'on se pose en
+ * entrant dans une salle d'arcade : QUI est là, et à QUELLE borne. Elle est
+ * dessinée dans la couche 2D, par-dessus la scène, donc sans toucher au rendu.
+ *
+ * Ce qu'elle ne fait pas : elle n'est pas occultée par les murs. Un joueur
+ * derrière une cloison se voit à travers. C'est faux, et c'est assumé — le test
+ * d'occultation demanderait un lancer de rayon par joueur et par image contre le
+ * BVH, pour cacher une étiquette. La salle fait une seule pièce ouverte : le cas
+ * est rare, et la corriger coûterait plus qu'elle ne gêne.
+ */
+static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
+{
+    ns_realtime_peer peers[NS_RT_MAX_PEERS];
+    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    if (n == 0) return;
+
+    const ns_m4 view = ns_m4_look_at(cam->position,
+                                     ns_v3_add(cam->position, cam->forward),
+                                     cam->up);
+    const ns_m4 proj = ns_m4_perspective(cam->fov_y_degrees * NS_DEG2RAD, aspect,
+                                         cam->znear, cam->zfar, true);
+    const ns_m4 vp = ns_m4_mul(proj, view);
+
+    const float white[4] = { 0.92f, 0.95f, 1.00f, 0.95f };
+    const float dim[4]   = { 0.62f, 0.72f, 0.85f, 0.80f };
+    const float back[4]  = { 0.03f, 0.05f, 0.09f, 0.62f };
+    /* Un pseudo NON VÉRIFIÉ se distingue : le serveur n'en répond pas, et
+     * l'afficher comme les autres reviendrait à garantir ce qu'on ne sait pas. */
+    const float unverified[4] = { 0.85f, 0.78f, 0.45f, 0.95f };
+
+    for (uint32_t i = 0; i < n; ++i) {
+        const ns_realtime_peer *p = &peers[i];
+
+        /* À hauteur de tête : une étiquette au niveau du sol se lit mal et se
+         * confond avec les bornes. */
+        const ns_v3 world = ns_v3_make(p->x, p->y + 1.75f, p->z);
+        const ns_v4 clip = ns_m4_mul_v4(vp, ns_v4_from_v3(world, 1.0f));
+        if (clip.w <= 0.0001f) continue;          /* derrière la caméra */
+
+        const float ndx = clip.x / clip.w;
+        const float ndy = clip.y / clip.w;
+        if (ndx < -1.4f || ndx > 1.4f || ndy < -1.4f || ndy > 1.4f) continue;
+
+        const float sx = (ndx * 0.5f + 0.5f) * ROOM_HUD_W;
+        const float sy = (0.5f - ndy * 0.5f) * ROOM_HUD_H;
+
+        /*
+         * L'échelle suit la DISTANCE, comme le ferait un objet réel : une
+         * étiquette de taille fixe fait paraître proche un joueur qui est au
+         * fond de la salle. Bornée aux deux bouts pour rester lisible.
+         */
+        const float dist = ns_v3_len(ns_v3_sub(world, cam->position));
+        float scale = 22.0f / ns_maxf(dist, 1.0f);
+        scale = ns_clampf(scale, 1.0f, 3.0f);
+
+        const float tw = ns_sprite_text_width(p->name, scale);
+        const float th = ns_sprite_text_height(scale);
+
+        ns_sprite_rect(s, sx - tw * 0.5f - 6.0f, sy - th * 0.5f - 4.0f,
+                       tw + 12.0f, th + 8.0f, back);
+        ns_sprite_text(s, sx - tw * 0.5f, sy - th * 0.5f, scale,
+                       p->verified ? white : unverified, p->name);
+
+        /* Ce qu'il fait, sous son nom. C'est ça qui rend la salle vivante :
+         * « Bob — TETRIS 1200 » raconte quelque chose, une position non. */
+        if (p->game[0]) {
+            char line[64];
+            if (p->score > 0) {
+                SDL_snprintf(line, sizeof line, "%s %d", p->game, (int)p->score);
+            } else {
+                SDL_snprintf(line, sizeof line, "%s", p->game);
+            }
+            const float sub = ns_maxf(scale * 0.7f, 1.0f);
+            const float sw = ns_sprite_text_width(line, sub);
+            ns_sprite_text(s, sx - sw * 0.5f, sy + th * 0.5f + 4.0f, sub, dim, line);
+        }
+    }
+}
+
+/*
+ * La liste des présents, en haut à droite.
+ *
+ * Les plaques ne montrent que ce qu'on REGARDE ; cette liste dit qui est dans
+ * la salle même quand on leur tourne le dos. Les deux répondent à deux
+ * questions différentes, et c'est pour ça qu'il y a les deux.
+ */
+static void draw_presence_roster(ns_sprite *s)
+{
+    ns_realtime_peer peers[NS_RT_MAX_PEERS];
+    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    if (n == 0) return;
+
+    const float title[4] = { 0.55f, 0.75f, 0.95f, 0.85f };
+    const float name[4]  = { 0.88f, 0.92f, 1.00f, 0.90f };
+    const float back[4]  = { 0.02f, 0.04f, 0.08f, 0.55f };
+
+    const float scale = 1.6f;
+    const float lh = ns_sprite_text_height(scale) + 5.0f;
+    const float x = ROOM_HUD_W - 210.0f;
+    float y = 18.0f;
+
+    ns_sprite_rect(s, x - 10.0f, y - 8.0f, 200.0f, lh * (float)(n + 1) + 14.0f, back);
+
+    char head[32];
+    SDL_snprintf(head, sizeof head, "DANS LA SALLE (%u)", n);
+    ns_sprite_text(s, x, y, scale, title, head);
+    y += lh;
+
+    for (uint32_t i = 0; i < n; ++i) {
+        char line[64];
+        if (peers[i].game[0]) {
+            SDL_snprintf(line, sizeof line, "%s - %s", peers[i].name, peers[i].game);
+        } else {
+            SDL_snprintf(line, sizeof line, "%s", peers[i].name);
+        }
+        ns_sprite_text(s, x, y, scale, name, line);
+        y += lh;
+    }
+}
 
 /*
  * Rejoue un journal d'entrées et imprime ce qu'il produit.
@@ -991,6 +1342,24 @@ int main(int argc, char **argv)
     int32_t    run_tick = 0;
     uint8_t    pending_press = 0;
     /*
+     * LE DUEL EN DIFFÉRÉ — le « fantôme ».
+     *
+     * L'adversaire est une partie déjà jouée par quelqu'un d'autre, sur LA MÊME
+     * GRAINE que la nôtre, qu'on rejoue pas par pas à côté de la sienne. Il n'y
+     * a ni socket persistante, ni latence, ni divergence possible : le fantôme
+     * est un journal d'appuis, et `tests/test_replay.c` a mesuré que ce journal
+     * reproduit une partie au bit près pour les huit jeux.
+     *
+     * C'est ce qui le rend jouable AUJOURD'HUI là où le duel en direct ne l'est
+     * pas : le pas verrouillé exigerait que deux machines différentes calculent
+     * la même chose en virgule flottante, ce qui n'est pas mesuré ici.
+     *
+     * Et il marche quand l'autre est déconnecté — ce qui est la situation
+     * normale entre amis.
+     */
+    duel_ghost duel;
+    SDL_zero(duel);
+    /*
      * La graine des parties de DÉMONSTRATION, qui s'enchaînent en pilote
      * automatique. Elle avance par un pas déterministe plutôt que par l'horloge :
      * une capture d'une salle en attract mode doit se refaire à l'identique, et
@@ -1019,6 +1388,31 @@ int main(int argc, char **argv)
              * la borne de classement affiche en premier. */
             ns_online_request_board("flappy", "normal");
         }
+    }
+
+    /*
+     * Le TEMPS RÉEL — se voir dans la salle, et affronter les fantômes.
+     *
+     * Inerte par défaut, et il faut trois « oui » pour qu'il s'anime : un
+     * serveur configuré, l'absence de `--offline`, et une activation explicite
+     * du joueur. Les deux premiers sont vérifiés par `ns_online` ; le troisième
+     * est celui-ci.
+     *
+     * Ce troisième verrou existe parce qu'un classement et une présence
+     * n'engagent pas la même chose. Consulter un classement ne diffuse rien de
+     * soi ; la présence publie un pseudo et une position. Une URL de serveur ne
+     * doit pas décider ça à la place du joueur — et c'est réversible d'une
+     * touche, dans le menu Échap.
+     */
+    {
+        const bool want = (opt.realtime >= 0)
+                        ? (opt.realtime != 0)
+                        : ns_config_get_bool(NS_CFG_REALTIME, false);
+        ns_realtime_config rc;
+        SDL_zero(rc);
+        rc.enabled = want;
+        rc.nickname = opt.player;
+        ns_realtime_init(&rc);
     }
 
     if (opt.offline) {
@@ -1112,7 +1506,16 @@ int main(int argc, char **argv)
      * pas un raccourci.
      */
     room_menu menu; SDL_zero(menu);
-    room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult };
+    /*
+     * L'interrupteur du temps réel, que le menu écrit et persiste.
+     *
+     * Sa valeur de départ est celle qui a RÉELLEMENT été retenue — ligne de
+     * commande comprise — et non le réglage sur disque : le menu doit montrer
+     * l'état du jeu qui tourne, pas une case cochée dans le vide. C'est aussi
+     * ce qui fait que `--no-temps-reel` se voit dans le menu.
+     */
+    bool menu_realtime = ns_realtime_enabled();
+    room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult, &menu_realtime };
     if (opt.menu) {
         room_menu_open(&menu);
         /* Une ligne hors bornes ne surligne rien et ne se répare jamais :
@@ -1141,7 +1544,7 @@ int main(int argc, char **argv)
              * s'attend pas — mais il sera là pour la suivante, et `--autoplay`
              * en enchaîne. */
             ns_online_prefetch_ticket(game_api->id, "normal");
-            start_run(game_api, game, runlog, seed, game_hard);
+            start_run(game_api, game, runlog, seed, game_hard, &duel);
             run_ms = 0;
             run_tick = 0; pending_press = 0;
             in_game = true;
@@ -1226,7 +1629,7 @@ int main(int argc, char **argv)
             }
             game_hard = hard;
             ns_online_prefetch_ticket(game_api->id, hard ? "hard" : "normal");
-            start_run(game_api, game, runlog, 20240418, hard);
+            start_run(game_api, game, runlog, 20240418, hard, &duel);
             run_ms = 0;
             run_tick = 0; pending_press = 0;
             in_game = true;
@@ -1292,7 +1695,7 @@ play_at_done: ;
                  * partie, donc la capture reste rejouable à l'identique.
                  */
                 const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
-                start_run(game_api, game, runlog, seed, game_hard);
+                start_run(game_api, game, runlog, seed, game_hard, &duel);
                 run_ms = 0;
             run_tick = 0; pending_press = 0;
                 run_tick = 0; pending_press = 0;
@@ -1458,7 +1861,7 @@ play_at_done: ;
                                               || ev.key.key == SDLK_RETURN);
                             if (dead && action && dead_time > 0.8f) {
                                 const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                                start_run(game_api, game, runlog, seed, game_hard);
+                                start_run(game_api, game, runlog, seed, game_hard, &duel);
                                 run_ms = 0;
                                 run_tick = 0; pending_press = 0;
             run_tick = 0; pending_press = 0;
@@ -1571,7 +1974,7 @@ play_at_done: ;
                             const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
                             const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
                             game_hard = hard;
-                            start_run(game_api, game, runlog, seed, hard);
+                            start_run(game_api, game, runlog, seed, hard, &duel);
                             run_ms = 0;
                             run_tick = 0; pending_press = 0;
                             in_game = true;
@@ -1756,6 +2159,59 @@ play_at_done: ;
             }
         }
 
+        /*
+         * LA PRÉSENCE : où je suis, et devant quelle borne.
+         *
+         * Déposée à chaque image, ce qui ne coûte rien — `ns_realtime_publish`
+         * écrit trois flottants sous un verrou et rend la main. C'est le fil de
+         * travail qui décide quand publier (4 Hz), et la boucle de jeu n'attend
+         * jamais une requête. Sans temps réel actif, l'appel ne fait rien du
+         * tout.
+         *
+         * On publie la borne DEVANT LAQUELLE on se tient, et pas seulement une
+         * position : « Ada est à la borne Tetris » se lit, « Ada est en (3,2 ;
+         * 0 ; 11,4) » ne se lit pas. C'est ce qui rend une salle vivante plutôt
+         * que peuplée de coordonnées.
+         */
+        /*
+         * LE FANTÔME À AFFRONTER, demandé en même temps que le billet.
+         *
+         * Même raisonnement que pour le billet : quand le joueur ARRIVE devant
+         * la borne, il lui reste le temps d'avancer la main et d'insérer le
+         * jeton — largement de quoi demander la liste des fantômes et
+         * télécharger le meilleur. Attendre l'appui figerait la salle.
+         *
+         * On prend le PREMIER de la liste, c'est-à-dire le meilleur score. Pas
+         * de menu de sélection : à une borne d'arcade on ne choisit pas son
+         * adversaire dans une liste, on essaie de battre le meilleur.
+         */
+        if (ns_realtime_enabled() && !in_game && !duel.loaded) {
+            const ns_cabinet *ahead2 = (cam.mode == ROOM_CAM_PLAYER)
+                                     ? room_viewmodel_target(&scene, &cam) : NULL;
+            if (ahead2 && ahead2->game[0]) {
+                ns_realtime_request_ghosts(ahead2->game, ahead2->difficulty);
+                ns_realtime_ghost_info best[NS_RT_MAX_GHOSTS];
+                if (ns_realtime_ghosts(best, NS_RT_MAX_GHOSTS) > 0) {
+                    ns_realtime_fetch_ghost(best[0].run_id);
+                }
+            }
+        }
+        if (ns_realtime_enabled()) duel_take(&duel);
+
+        if (ns_realtime_enabled()) {
+            const ns_cabinet *here = playing_cab;
+            if (!here && cam.mode == ROOM_CAM_PLAYER) {
+                here = room_viewmodel_target(&scene, &cam);
+            }
+            ns_realtime_publish(cam.position.x, cam.position.y, cam.position.z,
+                                cam.yaw,
+                                here ? here->name : "",
+                                (in_game && game_api) ? game_api->id
+                                                      : (here ? here->game : ""),
+                                (in_game && game_api && game)
+                                    ? (int32_t)game_api->score(game) : 0);
+        }
+
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
@@ -1837,6 +2293,18 @@ play_at_done: ;
                     }
                     ns_runlog_input(runlog, run_tick, hmask, pending_press);
                     pending_press = 0;
+
+                    /*
+                     * L'ADVERSAIRE avance du même pas, au même moment.
+                     *
+                     * C'est ici et nulle part ailleurs : un duel se synchronise
+                     * sur des NUMÉROS DE PAS, jamais sur des secondes. Les deux
+                     * parties partagent la même graine et le même pas fixe, donc
+                     * elles restent comparables sans qu'aucune horloge n'entre
+                     * en jeu — et c'est ce qui rend le duel exact plutôt
+                     * qu'approximatif.
+                     */
+                    duel_tick(&duel, game_api, run_tick, (float)clock.tick_seconds);
                     run_tick++;
                 }
 
@@ -1875,6 +2343,35 @@ play_at_done: ;
                     if (opt.input_log) {
                         ns_runlog_write_inputs(runlog, opt.input_log);
                     }
+
+                    /*
+                     * ET ON DEVIENT LE FANTÔME DE QUELQU'UN D'AUTRE.
+                     *
+                     * Le journal d'entrées de la partie qui vient de finir est
+                     * déposé sur le serveur, rattaché à la partie que celui-ci a
+                     * lui-même ouverte et dont il vient de recalculer le score.
+                     *
+                     * Ce dépôt ne crée aucun score et n'ouvre aucune porte : le
+                     * serveur refuse un journal qui ne se rattache pas à une
+                     * partie validée, et il ne le rejoue pas. Au pire on dépose
+                     * des appuis qui ne reproduisent rien, et le seul perdant est
+                     * celui qui croyait avoir enregistré son fantôme.
+                     *
+                     * Sans temps réel, sans jeton, ou hors ligne, l'appel ne fait
+                     * rien — comme tout le reste de ce fichier.
+                     */
+                    if (ns_realtime_enabled() && !opt.offline) {
+                        const char *rid = ns_runlog_run_id(runlog);
+                        if (rid && rid[0] && ns_runlog_input_count(runlog) > 0) {
+                            const size_t need = ns_runlog_format_inputs(runlog, NULL, 0) + 1;
+                            char *txt = (char *)SDL_malloc(need);
+                            if (txt) {
+                                const size_t len = ns_runlog_format_inputs(runlog, txt, need);
+                                ns_realtime_publish_ghost(rid, txt, len);
+                                SDL_free(txt);
+                            }
+                        }
+                    }
                 }
 
                 /*
@@ -1897,7 +2394,7 @@ play_at_done: ;
                     if (game_api->dead(game, &dead_time) && dead_time > 1.5f) {
                         demo_seed = demo_seed * 6364136223846793005ull
                                   + 1442695040888963407ull;
-                        start_run(game_api, game, runlog, demo_seed, game_hard);
+                        start_run(game_api, game, runlog, demo_seed, game_hard, &duel);
                         run_ms = 0;
             run_tick = 0; pending_press = 0;
                 run_tick = 0; pending_press = 0;
@@ -2061,6 +2558,36 @@ play_at_done: ;
 
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);
+                /*
+                 * Les autres joueurs, quand le temps réel est actif. Dessinés
+                 * APRÈS l'affichage de la borne et AVANT le menu : une plaque
+                 * ne doit pas passer par-dessus des réglages qu'on est en train
+                 * de lire.
+                 *
+                 * Les plaques sont dessinées dans TOUS les modes de caméra. Un
+                 * premier jet les réservait au mode joueur, pour que les
+                 * captures d'architecture n'aient pas d'étiquettes qui flottent
+                 * — mais c'est `--no-hud` qui répond déjà à ce besoin, et il
+                 * englobe tout ce bloc. La restriction ne protégeait donc rien
+                 * et privait la caméra libre (F5) de ce que le mode joueur
+                 * montre : on reste dans la même salle, avec les mêmes gens.
+                 *
+                 * Seul le plein écran d'un mini-jeu les masque : la salle n'y
+                 * est plus visible, donc une plaque posée dans la salle n'aurait
+                 * plus rien à désigner.
+                 */
+                if (ns_realtime_enabled()) {
+                    if (!fullscreen_game) {
+                        draw_presence(sprites, &render_cam,
+                                      (h > 0) ? (float)w / (float)h : 1.777f);
+                    }
+                    draw_presence_roster(sprites);
+                    /* Le tableau du duel, quand il y en a un : son score, le
+                     * sien, et lequel des deux est devant. */
+                    if (in_game && duel.running) {
+                        draw_duel(sprites, &duel, game_api, game_api->score(game));
+                    }
+                }
                 room_menu_draw(sprites, &menu, &menu_ctx);
                 ns_sprite_end(rhi, sprites, target, w, h, NULL);
             }
@@ -2159,6 +2686,12 @@ play_at_done: ;
     ns_config_save();
 
     ns_scores_save();
+    /* Le temps réel s'arrête AVANT le classement : il emprunte l'URL et le
+     * jeton de `ns_online`, et son fil envoie un dernier « je m'en vais » pour
+     * ne pas hanter la salle pendant la durée du TTL. */
+    duel_release(&duel);
+    SDL_free(duel.state);
+    ns_realtime_shutdown();
     ns_online_shutdown();
     /*
      * LE JOURNAL D'ENTRÉES S'ÉCRIT AUSSI À LA SORTIE, et pas seulement quand la
