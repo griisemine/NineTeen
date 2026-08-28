@@ -70,20 +70,39 @@ static const char *quality_word(ns_quality q)
 /*
  * Le coût mesuré de chaque palier, affiché À CÔTÉ du nom.
  *
- * C'est le seul chiffre qui aide vraiment à choisir, et il existe déjà : il est
- * dans le journal et dans `docs/JOUER.md` depuis B9. Le laisser hors de l'écran
- * revient à demander au joueur d'essayer les cinq à l'aveugle. Mesuré sur le
- * rasteriseur logiciel du conteneur de développement, donc en valeur RELATIVE :
- * c'est le rapport entre paliers qui transporte, pas la milliseconde.
+ * C'est le seul chiffre qui aide vraiment à choisir, et le laisser hors de
+ * l'écran revient à demander au joueur d'essayer les cinq à l'aveugle.
+ *
+ * Ces valeurs-ci sont mesurées sur un **vrai GPU** — Apple M1, Metal, cible
+ * 1600 x 900, `--bench` sur 40 images, minimum de trois exécutions, sur les
+ * vues `allee` et `bar`. Les précédentes venaient du rastériseur LOGICIEL du
+ * conteneur de développement, avec la note « c'est le rapport entre paliers
+ * qui transporte, pas la milliseconde ». Cette note était fausse, et c'est
+ * mesuré :
+ *
+ *     palier    annonce (logiciel)   mesure (M1)
+ *     potato          x0.17             x0.30
+ *     low             x0.42             x0.31
+ *     medium          x1.00             x1.00
+ *     high            x1.56             x1.71
+ *     ultra           x3.92             x6.20
+ *
+ * L'écart le plus utile au joueur n'est pas l'ultra : c'est que **potato et low
+ * coûtent la même chose** sur du vrai matériel, là où le logiciel les séparait
+ * d'un facteur 2,5. Ce qui les distingue — brouillard volumétrique, occlusion
+ * ambiante, poussière — ne pèse presque rien à côté de ce qui reste commun,
+ * l'écriture du G-buffer et une passe d'éclairage à quarante-sept sources sur
+ * chaque pixel. Personne ne devrait donc choisir `potato` : il coûte autant que
+ * `low` et rend moins.
  */
 static const char *quality_hint(ns_quality q)
 {
     switch (q) {
-        case NS_QUALITY_POTATO: return "x0.17";
-        case NS_QUALITY_LOW:    return "x0.42";
+        case NS_QUALITY_POTATO: return "x0.30";
+        case NS_QUALITY_LOW:    return "x0.31";
         case NS_QUALITY_MEDIUM: return "x1.00";
-        case NS_QUALITY_HIGH:   return "x1.56";
-        case NS_QUALITY_ULTRA:  return "x3.92";
+        case NS_QUALITY_HIGH:   return "x1.71";
+        case NS_QUALITY_ULTRA:  return "x6.20";
     }
     return "";
 }

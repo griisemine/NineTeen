@@ -83,7 +83,8 @@ static void print_usage(const char *exe)
         "  --screenshot=CHEMIN  écrit une capture PNG puis quitte\n"
         "  --frames=N           nombre d'images à rendre avant la capture (défaut 4)\n"
         "  --width=N --height=N résolution (défaut 1600x900)\n"
-        "  --scale=F            échelle de rendu interne, 0.4 à 2.0 (défaut 1.0)\n"
+        "  --scale=F            échelle de rendu interne, 0.4 à 2.0 — sans elle,\n"
+        "                       c'est le PALIER qui la fixe (0.50 à medium)\n"
         "  --fullscreen         plein écran\n"
         "  --no-vsync           désactive la synchronisation verticale\n"
         "  --quality=Q          potato | low | medium | high | ultra (défaut medium)\n"
@@ -458,12 +459,28 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
 static uint32_t finish_run(ns_runlog *log, int64_t run_ms,
                            const ns_game_api *api, const void *game,
                            const char *difficulty,
-                           const char *player, bool offline)
+                           const char *player, bool offline, bool demo)
 {
     const uint32_t score = api->score(game);
 
     ns_runlog_event(log, run_ms, "death", 0);
     ns_runlog_end(log, run_ms, (int64_t)score);
+
+    /*
+     * Une partie de DÉMONSTRATION ne se classe pas, et ne s'envoie pas.
+     *
+     * `--autoplay` sert aux captures, à l'intégration continue et à
+     * l'attract mode : ce n'est pas un joueur. Il écrivait pourtant dans le
+     * `scores.txt` DU JOUEUR — la revue de ce dépôt y a laissé six lignes
+     * sans le vouloir, dont des parties de 152 ms. Un outil qui pollue les
+     * données de celui qui l'emploie est un outil cassé, et le classement
+     * mondial mériterait encore moins qu'un robot y figure.
+     */
+    if (demo) {
+        NS_INFO("%s : partie de démonstration, score %u — ni classée ni envoyée",
+                api->title, score);
+        return 0;
+    }
 
     const uint32_t rank = ns_scores_record(api->id, difficulty, score,
                                            (uint32_t)run_ms, player);
@@ -1278,7 +1295,7 @@ play_at_done: ;
             if (ev.die) {
                 last_rank = finish_run(runlog, run_ms, game_api, game,
                                        game_hard ? "hard" : "normal",
-                                       opt.player, opt.offline);
+                                       opt.player, opt.offline, opt.autoplay);
                 runs++;
                 /*
                  * On RELANCE, parce que `--warmup=N` veut dire « joue N
@@ -1868,7 +1885,7 @@ play_at_done: ;
                     ns_audio_play(sfx_die, NS_BUS_SFX, 0.8f, 1.0f);
                     last_rank = finish_run(runlog, run_ms, game_api, game,
                                            game_hard ? "hard" : "normal",
-                                           opt.player, opt.offline);
+                                           opt.player, opt.offline, opt.autoplay);
                     /* La partie est finie : c'est le moment où son journal
                      * d'entrées est complet. L'écrire plus tôt donnerait une
                      * partie tronquée, plus tard une partie déjà relancée. */
@@ -1899,8 +1916,8 @@ play_at_done: ;
                                   + 1442695040888963407ull;
                         start_run(game_api, game, runlog, demo_seed, game_hard);
                         run_ms = 0;
-            run_tick = 0; pending_press = 0;
-                run_tick = 0; pending_press = 0;
+                        run_tick = 0;
+                        pending_press = 0;
                     }
                 }
             }
@@ -2007,13 +2024,27 @@ play_at_done: ;
                 ns_sprite_end(rhi, sprites, target, w, h, night);
                 ns_rhi_end_frame(rhi);
                 frames_rendered++;
-                if (opt.screenshot && frames_rendered >= opt.frames) {
-                    ns_rhi_capture_texture_png(rhi, target, w, h,
-                                               ns_rhi_swapchain_format(rhi), opt.screenshot);
-                    NS_INFO("capture : %s, score %u, %u quads en %u lot(s)",
-                            game_api->title, game_api->score(game),
-                            ns_sprite_quad_count(sprites),
-                            ns_sprite_batch_count(sprites));
+                /*
+                 * `--frames=` s'arrête, capture ou pas.
+                 *
+                 * Ce chemin-ci — le mini-jeu en plein écran — ne s'arrêtait
+                 * QUE si `--screenshot` était demandé, et il fait `continue`
+                 * juste après, donc il sautait aussi le compteur d'images
+                 * générique de la boucle principale. Résultat :
+                 * `--headless --game=flappy --frames=2` jouait indéfiniment,
+                 * et il fallait tuer le processus. Une option qui compte des
+                 * images doit compter les images ; qu'on en fasse une PNG est
+                 * une autre question.
+                 */
+                if (frames_rendered >= opt.frames && (opt.screenshot || opt.headless)) {
+                    if (opt.screenshot) {
+                        ns_rhi_capture_texture_png(rhi, target, w, h,
+                                                   ns_rhi_swapchain_format(rhi), opt.screenshot);
+                        NS_INFO("capture : %s, score %u, %u quads en %u lot(s)",
+                                game_api->title, game_api->score(game),
+                                ns_sprite_quad_count(sprites),
+                                ns_sprite_batch_count(sprites));
+                    }
                     ns_texture_destroy(rhi, &offscreen);
                     running = false;
                 }

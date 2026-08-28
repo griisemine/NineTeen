@@ -12,6 +12,15 @@ cité que pour désigner l'endroit à corriger.
 `ctest --preset macos-universal` : **32/32 en 10,6 s**. Rien de ce qui suit n'est
 attrapé par la suite de tests.
 
+> **Sur quel binaire.** Toutes les mesures et toutes les captures de ce document ont été
+> produites entre 00h19 et 00h50 avec le binaire de `7fe338f`, `cmake --build` répondant
+> « ninja: no work to do ». Pendant la rédaction, l'arbre de travail a été modifié par
+> quelqu'un d'autre — `assets/CMakeLists.txt`, `assets/blender/borne.py`,
+> `assets/models/borne/borne.bin` — et reconstruit à 00h58. Ces changements touchent le
+> maillage de la borne et la chaîne de dépendances des assets. **Les constats portant sur
+> la géométrie de la borne (R-21, R-22) sont donc à revérifier sur le nouveau maillage** ;
+> je ne les ai ni retirés ni réécrits, faute de les avoir regardés.
+
 ---
 
 ## Récapitulatif
