@@ -21,6 +21,25 @@ void main()
 {
     vec3 c = texture(u_hdr, v_uv).rgb;
 
+    /*
+     * Le halo est le SEUL endroit du moteur où un pixel contamine ses voisins,
+     * et il le fait cinq fois de suite : un non-fini isolé dans l'image
+     * éclairée y devient, après les cinq niveaux de flou séparable, un
+     * rectangle de plusieurs centaines de pixels que le tone mapping traduit en
+     * noir. La cause tenait dans une normale dégénérée du G-buffer et elle est
+     * corrigée là-bas ; ce garde-fou-ci est la deuxième ligne, parce qu'un seul
+     * pixel ne doit jamais pouvoir noircir un quart de l'écran, quelle que
+     * soit la passe amont qui l'a produit.
+     *
+     * On ÉCARTE le pixel (contribution nulle) plutôt que de le noircir en
+     * sortie : un trou d'un pixel dans le halo ne se voit pas.
+     */
+    if (isnan(c.r) || isnan(c.g) || isnan(c.b) ||
+        isinf(c.r) || isinf(c.g) || isinf(c.b)) {
+        o_color = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
     /* Luminance perceptuelle plutôt que le maximum des canaux : un bleu très
      * saturé ne doit pas fleurir autant qu'un blanc de même intensité. */
     float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));

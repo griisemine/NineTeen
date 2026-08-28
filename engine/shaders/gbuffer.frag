@@ -38,6 +38,42 @@ layout(set = 3, binding = 0) uniform Material {
     vec4  u_screen;
 };
 
+/*
+ * Normalisation SÛRE, et une base tangente qui n'a pas de cas dégénéré.
+ *
+ * `normalize` d'un vecteur nul vaut 0/0, c'est-à-dire NaN — et un SEUL pixel
+ * NaN dans le G-buffer suffit à noircir un quart de l'écran. Le chemin est
+ * mesuré, pas supposé : la normale part dans l'éclairage, l'éclairage dans le
+ * seuil de halo, et les cinq niveaux de flou séparable du halo étalent ce NaN
+ * jusqu'à couvrir un rectangle entier ; le filet de sécurité du tone mapping,
+ * qui traduit un non-fini en noir, le rend alors visible d'un coup. C'est le
+ * « flash noir » qu'on voyait passer en tournant la tête.
+ *
+ * Deux vecteurs peuvent s'annuler ici, et les deux arrivent pour de vrai :
+ *
+ *   - la normale interpolée, quand les normales du triangle s'opposent ;
+ *   - la tangente ORTHOGONALISÉE, dès que la tangente du modèle est parallèle
+ *     à la normale — ce qui est le cas normal sur une couture d'UV, donc sur
+ *     tous les modèles importés.
+ */
+vec3 safeNormalize(vec3 v, vec3 fallback)
+{
+    float l2 = dot(v, v);
+    return (l2 > 1e-12) ? v * inversesqrt(l2) : fallback;
+}
+
+/* Un vecteur unitaire perpendiculaire à `n`, sans branche et sans cas
+ * dégénéré (Duff et al., « Building an Orthonormal Basis, Revisited »).
+ * Il sert de tangente de repli : n'importe quelle direction du plan tangent
+ * convient quand le modèle n'en fournit pas d'utilisable. */
+vec3 anyPerpendicular(vec3 n)
+{
+    float s = (n.z >= 0.0) ? 1.0 : -1.0;
+    float a = -1.0 / (s + n.z);
+    float b = n.x * n.y * a;
+    return vec3(1.0 + s * n.x * n.x * a, s * b, -s * n.x);
+}
+
 /* Encodage octaédrique : projette la sphère unité sur un carré [-1,1]². */
 vec2 encodeOctahedral(vec3 n)
 {
@@ -87,7 +123,7 @@ void main()
          */
         if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
             o_albedo_ao = vec4(0.02, 0.02, 0.025, 1.0);
-            o_normal_rm = vec4(encodeOctahedral(normalize(v_normal)), 0.22, 0.0);
+            o_normal_rm = vec4(encodeOctahedral(safeNormalize(v_normal, vec3(0.0, 0.0, 1.0))), 0.22, 0.0);
             o_emissive  = vec4(0.0, 0.0, 0.0, 1.0);
             return;
         }
@@ -115,9 +151,9 @@ void main()
     float metallic  = clamp(u_params.x, 0.0, 1.0);
 
     /* --- normale --- */
-    vec3 N = normalize(v_normal);
+    vec3 N = safeNormalize(v_normal, vec3(0.0, 0.0, 1.0));
     if (u_params.z > 0.5) {
-        vec3 T = normalize(v_tangent.xyz - N * dot(N, v_tangent.xyz));
+        vec3 T = safeNormalize(v_tangent.xyz - N * dot(N, v_tangent.xyz), anyPerpendicular(N));
         vec3 B = cross(N, T) * v_tangent.w;
         /*
          * Z est RECONSTRUIT, jamais lu.
@@ -136,7 +172,7 @@ void main()
          */
         vec2 nxy = texture(u_normalMap, uv).xy * 2.0 - 1.0;
         vec3 tn = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
-        N = normalize(mat3(T, B, N) * tn);
+        N = safeNormalize(mat3(T, B, N) * tn, N);
     }
     /* Une face vue de dos (mur regardé depuis l'extérieur, géométrie non
      * fermée du modèle d'origine) doit renvoyer sa normale, sinon elle
