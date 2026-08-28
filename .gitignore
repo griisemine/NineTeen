@@ -48,3 +48,6 @@ Thumbs.db
 *.pem
 *.key
 !third_party/**/*.key
+
+# Worktrees des agents, purement locaux
+.claude/

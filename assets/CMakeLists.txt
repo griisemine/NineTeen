@@ -323,6 +323,42 @@ set(ALBEDO_billard_table      0.14)   # 0,082 — drap de billard
 set(ALBEDO_pilonne_rouge      0.16)   # 0,105
 set(ALBEDO_Radio              0.16)   # 0,117
 
+# ---------------------------------------------------------------------------
+# L'aplanissement : les textures PAVÉES qui portent un éclairage cuit
+# ---------------------------------------------------------------------------
+#
+# `--albedo` corrige la MOYENNE d'une texture ; il ne voit pas le dégradé qui
+# la traverse. Or un dégradé dans une image pavée se répète à chaque carreau :
+# on ne lit plus une surface, on lit une grille de taches claires, et cet
+# éclairage-là ne vient d'aucune lampe de la salle.
+#
+# La sélection s'est faite en DEUX temps, et le second n'est pas facultatif.
+#
+# D'abord une mesure : amplitude basse fréquence rapportée à la moyenne (image
+# ramenée à 16 x 16, écart max-min sur moyenne). Six textures pavées sur
+# vingt-deux dépassaient 0,70 ; toutes les autres étaient sous 0,40.
+#
+# Puis un COUP D'ŒIL sur chacune des six, et il en a écarté trois — la mesure
+# seule se trompe, et il faut dire comment :
+#
+#   `desk` (1,19) est un motif vectoriel de triangles, plat, SANS le moindre
+#   éclairage cuit. Son amplitude vient de ses couleurs : des triangles bleu
+#   nuit à côté de triangles jaunes. L'aplanir ne retirait aucune lumière, ça
+#   délavait le dessin — mesuré, 0,49 -> 0,65 à la grille 6 x 6, donc pire.
+#
+#   `bois_moins_noir` (0,79) et `carllage_toilette` (0,71) sont presque noirs
+#   (moyennes 0,124 et 0,161). À cette luminance l'amplitude relative explose
+#   pour un écart absolu minuscule, et le gain n'amplifierait que le bruit de
+#   compression JPEG.
+#
+# La leçon, pour la prochaine texture ajoutée : **cette mesure trie, elle ne
+# décide pas.** Un dégradé d'éclairage se voit — il est doux, unidirectionnel
+# ou radial. Un motif aussi.
+#
+set(FLATTEN_bois_noir   1.0)   # vignette radiale nette : centre clair, coins sombres
+set(FLATTEN_poutre      0.7)   # photo de marbre, dégradé d'éclairage doux
+set(FLATTEN_bois        0.7)   # chêne, coin haut-gauche assombri
+
 set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"
                    "${GEN}/materials/flanc_borne${_map_n}"
                    "${GEN}/materials/flanc_borne${_map_orm}"
@@ -350,14 +386,23 @@ foreach(tex IN LISTS ROOM_TEXTURES)
     set(texgen_outputs "${GEN}/materials/${tex_name}${_map_n}"
                        "${GEN}/materials/${tex_name}${_map_orm}")
     set(albedo "")
+    set(flatten "")
     if(DEFINED ALBEDO_${tex_name})
         set(albedo "--albedo=${ALBEDO_${tex_name}}")
+    endif()
+    if(DEFINED FLATTEN_${tex_name})
+        set(flatten "--flatten=${FLATTEN_${tex_name}}")
+    endif()
+    # L'un ou l'autre suffit à produire `<nom>_c.png` : une texture aplanie mais
+    # dont la moyenne était déjà correcte doit quand même remplacer l'image du
+    # glTF, sinon l'aplanissement ne servirait qu'aux cartes.
+    if(DEFINED ALBEDO_${tex_name} OR DEFINED FLATTEN_${tex_name})
         list(APPEND texgen_outputs "${GEN}/materials/${tex_name}_c.png")
     endif()
 
     add_custom_command(
         OUTPUT  ${texgen_outputs}
-        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} ${upscale} ${albedo} "${tex}" "${GEN}/materials"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} ${upscale} ${albedo} ${flatten} "${tex}" "${GEN}/materials"
         DEPENDS texgen "${tex}"
         COMMENT "Matériau PBR : ${tex_name}"
         VERBATIM

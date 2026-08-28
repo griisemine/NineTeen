@@ -42,6 +42,7 @@ typedef struct options {
     int   upscale;           /* facteur d'agrandissement, 1 = aucun */
     int   blur_radius;       /* rayon du flou servant de référence basse fréquence */
     float albedo;            /* réflectance linéaire visée ; 0 = pas de dé-cuisson */
+    float flatten;           /* aplanissement du gradient cuit ; 0 = aucun */
     float albedo_contrast;   /* compression du contraste vers la moyenne */
     int   max_map;           /* côté maximal des CARTES ; 0 = aucun plafond */
     bool  bc;                /* écrire les cartes en blocs (.nstex) */
@@ -53,6 +54,104 @@ typedef struct options {
 static float luminance(const unsigned char *px)
 {
     return (0.2126f * (float)px[0] + 0.7152f * (float)px[1] + 0.0722f * (float)px[2]) / 255.0f;
+}
+
+/* ==========================================================================
+ * L'aplanissement : retirer l'éclairage CUIT dans une texture pavée
+ * ==========================================================================
+ *
+ * La dé-cuisson (`--albedo`) corrige la MOYENNE d'une texture. Elle ne voit
+ * pas ce qui se passe à l'intérieur : une photo prise avec une lampe d'un côté
+ * garde son dégradé, et un dégradé dans une texture PAVÉE se répète à chaque
+ * carreau. On ne lit alors plus une surface, on lit une grille de taches
+ * claires — un éclairage qui ne vient d'aucune lampe de la salle.
+ *
+ * Mesuré sur les vingt-deux textures pavées de la salle, en amplitude basse
+ * fréquence rapportée à la moyenne (image ramenée à 16 x 16, écart max-min sur
+ * moyenne) : six dépassent 0,70, les autres sont sous 0,40.
+ *
+ * Mais cette mesure TRIE, elle ne décide pas — et c'est le piège de l'outil.
+ * Elle ne distingue pas un dégradé d'éclairage d'un motif contrasté : `desk`,
+ * un pavage vectoriel de triangles absolument plat, y sortait à 1,19 à cause
+ * de ses triangles bleu nuit voisins de triangles jaunes. L'aplanir délavait
+ * le dessin sans retirer la moindre lumière. Les textures traitées sont donc
+ * DÉCLARÉES une par une dans `assets/CMakeLists.txt`, après avoir regardé
+ * l'image : un dégradé d'éclairage est doux, unidirectionnel ou radial.
+ *
+ * Trois précautions, et aucune n'est facultative :
+ *
+ * 1. **En linéaire.** Un dégradé d'éclairage est multiplicatif sur la LUMIÈRE.
+ *    Le corriger sur des octets sRGB corrigerait autre chose.
+ * 2. **Cyclique.** La texture est pavée : son bord droit touche son bord
+ *    gauche. Un flou qui pince les bords fabriquerait un dégradé là où il n'y
+ *    en avait pas, et donc une COUTURE visible à chaque carreau — exactement
+ *    le défaut qu'on vient corriger.
+ * 3. **Très basse fréquence seulement.** Le champ correcteur est calculé sur
+ *    une grille de 6 x 6 : assez grossière pour ne contenir que l'éclairage,
+ *    trop grossière pour contenir le motif. Une grille fine mangerait le
+ *    dessin — sur `desk`, les triangles eux-mêmes.
+ */
+static void flatten_lighting(unsigned char *px, int w, int h, float strength)
+{
+    enum { G = 6 };                     /* côté de la grille basse fréquence */
+    double cell[G * G] = { 0.0 };
+    double count[G * G] = { 0.0 };
+
+    for (int y = 0; y < h; ++y) {
+        const int gy = (int)((int64_t)y * G / h);
+        for (int x = 0; x < w; ++x) {
+            const int gx = (int)((int64_t)x * G / w);
+            const unsigned char *p = &px[((size_t)y * w + x) * 4];
+            const double lin = 0.2126 * pow(p[0] / 255.0, 2.2) +
+                               0.7152 * pow(p[1] / 255.0, 2.2) +
+                               0.0722 * pow(p[2] / 255.0, 2.2);
+            cell[gy * G + gx] += lin;
+            count[gy * G + gx] += 1.0;
+        }
+    }
+    double mean = 0.0;
+    for (int i = 0; i < G * G; ++i) {
+        cell[i] = (count[i] > 0.0) ? cell[i] / count[i] : 1e-6;
+        if (cell[i] < 1e-6) cell[i] = 1e-6;
+        mean += cell[i];
+    }
+    mean /= (double)(G * G);
+
+    for (int y = 0; y < h; ++y) {
+        /* Interpolation bilinéaire CYCLIQUE : le voisin de la dernière cellule
+         * est la première, dans les deux axes. */
+        const double fy = ((double)y + 0.5) * G / (double)h - 0.5;
+        const int y0 = (int)floor(fy);
+        const double ty = fy - y0;
+        const int iy0 = ((y0 % G) + G) % G, iy1 = ((y0 + 1) % G + G) % G;
+
+        for (int x = 0; x < w; ++x) {
+            const double fx = ((double)x + 0.5) * G / (double)w - 0.5;
+            const int x0 = (int)floor(fx);
+            const double tx = fx - x0;
+            const int ix0 = ((x0 % G) + G) % G, ix1 = ((x0 + 1) % G + G) % G;
+
+            const double a = cell[iy0 * G + ix0], b = cell[iy0 * G + ix1];
+            const double c = cell[iy1 * G + ix0], d = cell[iy1 * G + ix1];
+            const double low = (a * (1.0 - tx) + b * tx) * (1.0 - ty) +
+                               (c * (1.0 - tx) + d * tx) * ty;
+
+            /* La puissance donne un réglage continu : 0 ne touche à rien, 1
+             * met le champ parfaitement à plat. Bornée, parce qu'une cellule
+             * presque noire demanderait un gain énorme et ferait exploser le
+             * bruit de compression JPEG qu'elle contient. */
+            double gain = pow(mean / low, (double)strength);
+            if (gain < 0.25) gain = 0.25;
+            if (gain > 4.00) gain = 4.00;
+
+            unsigned char *p = &px[((size_t)y * w + x) * 4];
+            for (int k = 0; k < 3; ++k) {
+                double lin = pow(p[k] / 255.0, 2.2) * gain;
+                if (lin > 1.0) lin = 1.0;
+                p[k] = (unsigned char)(pow(lin, 1.0 / 2.2) * 255.0 + 0.5);
+            }
+        }
+    }
 }
 
 static float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
@@ -270,6 +369,7 @@ int main(int argc, char **argv)
         .upscale = 1,
         .blur_radius = 4,
         .albedo = 0.0f,
+        .flatten = 0.0f,
         .albedo_contrast = 0.70f,
         .max_map = 0,
         .bc = false,
@@ -286,6 +386,7 @@ int main(int argc, char **argv)
         else if (strncmp(argv[i], "--max-map=", 10) == 0)  opt.max_map = atoi(argv[i] + 10);
         else if (strcmp(argv[i], "--bc") == 0)             opt.bc = true;
         else if (strncmp(argv[i], "--albedo=", 9) == 0)    opt.albedo = (float)atof(argv[i] + 9);
+        else if (strncmp(argv[i], "--flatten=", 10) == 0)  opt.flatten = (float)atof(argv[i] + 10);
         else if (strncmp(argv[i], "--albedo-contrast=", 18) == 0)
             opt.albedo_contrast = (float)atof(argv[i] + 18);
         else if (!in_path)  in_path = argv[i];
@@ -306,7 +407,9 @@ int main(int argc, char **argv)
             "  --bc           écrit les cartes en blocs compressés (.nstex) au lieu de PNG\n"
             "  --albedo=F     réflectance linéaire visée : produit <nom>_c.png\n"
             "                 (0, le défaut, ne produit rien — voir la dé-cuisson)\n"
-            "  --albedo-contrast=F  compression du contraste (défaut 0.70)\n", argv[0]);
+            "  --albedo-contrast=F  compression du contraste (défaut 0.70)\n"
+            "  --flatten=F    retire le dégradé d'éclairage cuit dans une texture\n"
+            "                 PAVÉE : 0 = aucun, 1 = à plat (0, le défaut)\n", argv[0]);
         return 2;
     }
     if (opt.upscale < 1 || opt.upscale > 4) tool_fatalf("--upscale doit être entre 1 et 4");
@@ -328,6 +431,12 @@ int main(int argc, char **argv)
         stbi_image_free(src);
         src = big; w = nw; h = nh;
     }
+
+    /* L'aplanissement passe AVANT tout le reste : un dégradé cuit fausse la
+     * normale (il devient une bosse à l'échelle du carreau) et l'occlusion
+     * autant que la couleur. Corriger seulement l'albédo laisserait le relief
+     * mentir. */
+    if (opt.flatten > 0.0f) flatten_lighting(src, w, h, opt.flatten);
 
     const size_t n = (size_t)w * (size_t)h;
     float *height = (float *)malloc(sizeof(float) * n);
@@ -632,6 +741,26 @@ int main(int argc, char **argv)
         if (!stbi_write_png(out_c, w, h, 3, colour, w * 3)) tool_fatalf("écriture impossible : %s", out_c);
         tool_infof("%s", out_c);
         printf("texgen %s : réflectance %.4f -> %.4f visée\n", base, mean_lin, (double)opt.albedo);
+        free(colour);
+    } else if (opt.flatten > 0.0f) {
+        /*
+         * Aplanie mais sans réflectance visée : il faut quand même écrire
+         * `_c.png`, sinon le moteur continuerait de lire l'image d'origine du
+         * glTF — celle qui porte le dégradé — et l'aplanissement ne servirait
+         * qu'aux cartes. C'est le cas de `desk`, dont la moyenne est déjà
+         * correcte (0,264) et dont seul le dégradé pose problème.
+         */
+        unsigned char *colour = (unsigned char *)malloc((size_t)w * h * 3);
+        if (!colour) tool_fatalf("mémoire épuisée pour la couleur de base");
+        for (int i = 0; i < w * h; ++i) {
+            colour[i * 3 + 0] = src[i * 4 + 0];
+            colour[i * 3 + 1] = src[i * 4 + 1];
+            colour[i * 3 + 2] = src[i * 4 + 2];
+        }
+        char out_c[768];
+        snprintf(out_c, sizeof out_c, "%s/%s_c.png", out_dir, base);
+        if (!stbi_write_png(out_c, w, h, 3, colour, w * 3)) tool_fatalf("écriture impossible : %s", out_c);
+        tool_infof("%s", out_c);
         free(colour);
     }
 

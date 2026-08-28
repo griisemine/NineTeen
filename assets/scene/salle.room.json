@@ -59,7 +59,8 @@
       "texture": "mur_gris.jpg",
       "roughness": 0.88,
       "metallic": 0.0,
-      "uvMetres": 2.5
+      "uvMetres": 0.7,
+      "_grain": "0,7 m et non 2,5. `mur_gris.jpg` fait 600 px : a 2,5 m le texel vaut 4,17 mm, et le grain visible de trois a quatre texels donne des grumeaux de 1,5 a 2 cm. Un crepi ecrase a un grain de 1 a 3 mm — la plus grande surface verticale de la salle ne se lisait donc pas comme un mur mais comme du gravier. A 0,7 m : 1,17 mm par texel, grain de 3,5 mm, et le pavage reste invisible sur le grand mur du sas, ou il occupe un tiers de l'image."
     },
     {
       "name": "mur_exterieur",
