@@ -307,7 +307,6 @@ set(ALBEDO_plafond            0.42)   # 0,002 — la plus grande surface de la s
 set(ALBEDO_moquette           0.10)   # 0,029
 set(ALBEDO_moquette_noire     0.055)  # 0,002 — le plus sombre qu'une moquette puisse être
 set(ALBEDO_floor              0.11)   # 0,039
-set(ALBEDO_poutre             0.16)   # 0,008 — acier peint
 set(ALBEDO_gris_foncer        0.09)   # 0,015 — le cadre des dix-neuf bornes
 set(ALBEDO_bois_noir          0.075)  # 0,016
 set(ALBEDO_bois_moins_noir    0.12)   # 0,011
@@ -356,7 +355,6 @@ set(ALBEDO_Radio              0.16)   # 0,117
 # ou radial. Un motif aussi.
 #
 set(FLATTEN_bois_noir   1.0)   # vignette radiale nette : centre clair, coins sombres
-set(FLATTEN_poutre      0.7)   # photo de marbre, dégradé d'éclairage doux
 set(FLATTEN_bois        0.7)   # chêne, coin haut-gauche assombri
 
 set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"

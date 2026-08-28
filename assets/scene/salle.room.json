@@ -30,13 +30,16 @@
   "materials": [
     {
       "name": "sol",
-      "texture": "moquette.jpg",
+      "texture": "floor.jpg",
       "roughness": 0.94,
       "metallic": 0.0,
-      "uvMetres": 1.5,
-      "_albedo": "Mesuré : moquette.jpg a un albédo moyen de 47/255 (81, 32, 29 — le motif bordeaux d'arcade), contre 10/255 pour moquette_noire.jpg et 30 pour floor.jpg. Le sol est la plus grande surface de la salle : à 4 % d'albédo il avale toute la lumière, et aucun réglage d'exposition ne rattrape ça. C'est aussi la texture la plus proche d'un vrai sol d'arcade.",
+      "uvMetres": 2.4,
+      "_albedo": "Le tapis NÉON de 2020, remis. La raison invoquée pour l'avoir abandonné était arithmétiquement fausse : elle comparait des moyennes d'OCTETS sRGB (30 pour floor.jpg contre 47 pour moquette.jpg), c'est-à-dire une échelle perceptuelle, alors qu'une réflectance est une grandeur LINÉAIRE — l'erreur exacte contre laquelle texgen.c met en garde. Mesuré en linéaire : floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292. Le tapis néon est donc 34 % PLUS CLAIR que la boucle bordeaux qui l'a remplacé, et la salle a perdu son objet le plus reconnaissable pour rien. Les deux passent d'ailleurs par la dé-cuisson (ALBEDO_floor 0,11) et ressortent à moins de 1 % l'un de l'autre.",
       "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
-      "footstep": "moquette"
+      "footstep": "moquette",
+      "emissive": [1.0, 0.92, 0.84],
+      "emissiveStrength": 0.25,
+      "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1."
     },
     {
       "name": "sol_sombre",
@@ -60,7 +63,8 @@
       "roughness": 0.88,
       "metallic": 0.0,
       "uvMetres": 0.7,
-      "_grain": "0,7 m et non 2,5. `mur_gris.jpg` fait 600 px : a 2,5 m le texel vaut 4,17 mm, et le grain visible de trois a quatre texels donne des grumeaux de 1,5 a 2 cm. Un crepi ecrase a un grain de 1 a 3 mm — la plus grande surface verticale de la salle ne se lisait donc pas comme un mur mais comme du gravier. A 0,7 m : 1,17 mm par texel, grain de 3,5 mm, et le pavage reste invisible sur le grand mur du sas, ou il occupe un tiers de l'image."
+      "_grain": "0,7 m et non 2,5. `mur_gris.jpg` fait 600 px : a 2,5 m le texel vaut 4,17 mm, et le grain visible de trois a quatre texels donne des grumeaux de 1,5 a 2 cm. Un crepi ecrase a un grain de 1 a 3 mm — la plus grande surface verticale de la salle ne se lisait donc pas comme un mur mais comme du gravier. A 0,7 m : 1,17 mm par texel, grain de 3,5 mm, et le pavage reste invisible sur le grand mur du sas, ou il occupe un tiers de l'image.",
+      "baseColor": [0.52, 0.44, 0.34, 1.0]
     },
     {
       "name": "mur_exterieur",
@@ -104,7 +108,8 @@
       ],
       "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
-      "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018."
+      "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018.",
+      "baseColor": [0.84, 0.78, 0.31, 1.0]
     },
     {
       "name": "rail",
@@ -156,24 +161,19 @@
     },
     {
       "name": "pilier",
-      "texture": "pilonne_rouge.jpg",
-      "baseColor": [
-        0.7,
-        0.72,
-        0.72,
-        1.0
-      ],
+      "texture": "bordeaux.jpg",
       "roughness": 0.74,
       "metallic": 0.0,
-      "uvMetres": 1.2,
-      "_": "Cette texture existe depuis 2020 et n'a jamais servi : les PILONNE du modèle portaient un matériau gris uni."
+      "uvMetres": 3.0,
+      "_": "Le bordeaux de 2020, remis. salle.mtl habille les treize PILONNE de bordeaux.jpg ; le commentaire qui affirmait ici qu'ils portaient « un matériau gris uni » était faux. La texture rapportée à leur place, pilonne_rouge.jpg, mesure en linéaire (0,500 ; 0,006 ; 0,020) : un rapport rouge/vert de 78, c'est-à-dire un rouge de signalisation. bordeaux.jpg vaut (0,0908 ; 0,0075 ; 0,0092), rapport 12. Pavée à 3,0 m et non 1,2 : l'image porte un léger dégradé, et un pilier de 3 m montrait donc deux coutures horizontales."
     },
     {
       "name": "poutre",
-      "texture": "poutre.jpg",
+      "texture": "painted_metal_shutter.jpg",
       "roughness": 0.86,
       "metallic": 0.0,
-      "uvMetres": 2.0
+      "uvMetres": 1.1,
+      "baseColor": [0.6, 0.5, 0.36, 1.0]
     },
     {
       "name": "bois_noir",
@@ -632,7 +632,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -644,7 +644,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -656,7 +656,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -668,7 +668,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -680,7 +680,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -692,7 +692,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -704,7 +704,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -716,7 +716,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -728,7 +728,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -740,7 +740,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -752,7 +752,7 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
+      "emissiveStrength": 1.35,
       "fit": true
     },
     {
@@ -843,7 +843,7 @@
       "name": "comptoir",
       "texture": "desk.jpg",
       "roughness": 0.42,
-      "uvMetres": 2.6,
+      "uvMetres": 0.9,
       "_": "Le motif du comptoir de 2020, à 2,6 m par répétition au lieu de 1,0. À un mètre il se lisait comme du bruit coloré ; à cette échelle on distingue les triangles, et c'est ce qu'ils sont."
     },
     {
@@ -1071,8 +1071,16 @@
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
   "retiredTextures": [
     {
-      "file": "bordeaux.jpg",
-      "why": "l'aplat rouge du panneau de commande des dix-neuf bornes ; remplacé par la sérigraphie dessinée `panneau_borne.png`, qui a des filets, un nez usé et un bord"
+      "file": "pilonne_rouge.jpg",
+      "why": "posée sur les piliers par la reconstruction, sous un commentaire affirmant que les PILONNE de 2020 portaient « un matériau gris uni ». C'est faux : salle.mtl les habille de bordeaux.jpg, sur treize objets. La texture rapportée mesure en linéaire (0,500 ; 0,006 ; 0,020), soit un rapport rouge/vert de 78 — un rouge de signalisation, pas le bordeaux d'une salle d'arcade. Les piliers reprennent leur texture d'origine."
+    },
+    {
+      "file": "poutre.jpg",
+      "why": "un marbre NOIR veiné de blanc, posé sur les cinq poutres qui barrent le tiers haut de presque toutes les vues. C'est bien la texture de 2020, mais elle y valait 0,011 de réflectance : elle n'a jamais été VUE, son aspect est donc accidentel et non caractéristique. Remplacée par painted_metal_shutter.jpg, déjà dans l'arbre, teintée en acier peint brun chaud."
+    },
+    {
+      "file": "moquette.jpg",
+      "why": "la boucle bordeaux qui avait remplacé le tapis néon de 2020 sur le sol du hall. Elle a été choisie sur une comparaison d'octets sRGB — 47 contre 30 — c'est-à-dire sur une échelle perceptuelle et non sur une réflectance. En linéaire, floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292 : le tapis néon était déjà 34 % plus clair. Il n'y avait donc rien à gagner, et l'objet le plus reconnaissable de la salle à perdre."
     },
     {
       "file": "gris_foncer.jpg",
@@ -1287,8 +1295,8 @@
         0.94,
         0.86
       ],
-      "intensity": 52.0,
-      "range": 4.4,
+      "intensity": 30.0,
+      "range": 3.6,
       "radius": 0.3,
       "flicker": true,
       "ceilingPanel": true,
@@ -1381,7 +1389,7 @@
         1.68,
         -1.6
       ],
-      "colour": [
+      "color": [
         1.0,
         0.76,
         0.48
@@ -1397,7 +1405,7 @@
         2.25,
         0.4
       ],
-      "colour": [
+      "color": [
         1.0,
         0.82,
         0.6
@@ -1413,7 +1421,7 @@
         2.74,
         -3.1
       ],
-      "colour": [
+      "color": [
         1.0,
         0.83,
         0.62
@@ -1429,7 +1437,7 @@
         2.74,
         1.0
       ],
-      "colour": [
+      "color": [
         1.0,
         0.8,
         0.56
@@ -1459,7 +1467,7 @@
         2.74,
         -5.0
       ],
-      "colour": [
+      "color": [
         1.0,
         0.77,
         0.52
@@ -1481,7 +1489,7 @@
         2.74,
         -6.2
       ],
-      "colour": [
+      "color": [
         1.0,
         0.79,
         0.54
@@ -2355,24 +2363,13 @@
       "offset": 0.0,
       "closed": true,
       "points": [
-        [
-          -3.043,
-          -1.333
-        ],
-        [
-          3.043,
-          -1.333
-        ],
-        [
-          3.043,
-          3.111
-        ],
-        [
-          -3.043,
-          3.111
-        ]
+        [-1.2, -4.3],
+        [1.2, -4.3],
+        [1.2, -1.9],
+        [-1.2, -1.9]
       ],
-      "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme."
+      "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme.",
+      "_defaut": "Ce nez traçait un rectangle de 6,09 x 4,44 m allant de (-3,043 ; -1,333) à (3,043 ; 3,111), alors que l'estrade qu'il est censé border occupe x de -1,2 a 1,2 et z de -4,3 a -1,9. Les deux emprises sont DISJOINTES : la moulure ne bordait rien, elle traversait la moquette du hall. Recalée sur l'emprise exacte de la boîte estrade."
     }
   ],
   "_props": "Le mobilier et le décor. Chaque objet est une composition de boîtes et de panneaux décrits DANS SON PROPRE REPÈRE, puis posé d'un bloc : on déplace un billard sans recalculer dix lignes. Ceux qui portent un « poi » deviennent des lieux d'interaction déclarés — le moteur les repérait jusqu'ici en cherchant des sous-chaînes dans les noms de nœuds du glTF.",

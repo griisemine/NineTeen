@@ -146,6 +146,59 @@ static inline const tool_json_value *tool_json_get(const tool_json *doc,
     return NULL;
 }
 
+/*
+ * Refuser une clé qu'on ne lit pas.
+ *
+ * Une clé inconnue dans un fichier de description est un défaut SILENCIEUX : la
+ * valeur est écrite, elle a l'air d'être prise en compte, et le programme
+ * emploie son défaut. Ça a coûté cher ici — six des seize lumières de la salle
+ * déclaraient « colour » là où le lecteur attend « color », et sortaient donc
+ * en BLANC PUR au lieu du tungstène chaud qu'elles annonçaient, dont les deux
+ * plus fortes de la salle. Rien ne le signalait, et la salle paraissait froide
+ * sans qu'aucune valeur ne soit fausse à la lecture.
+ *
+ * `allowed` est une liste terminée par NULL. Les clés qui commencent par « _ »
+ * passent toujours : c'est la convention de commentaire du fichier, et un
+ * commentaire n'a pas à être déclaré.
+ */
+static inline void tool_json_reject_unknown_keys(const tool_json *doc,
+                                                 const tool_json_value *obj,
+                                                 const char *const *allowed,
+                                                 const char *what)
+{
+    const int base = tool_json_index(doc, obj);
+    if (base < 0) return;
+    if (doc->tokens[base].tok.type != JSMN_OBJECT) return;
+
+    const int members = doc->tokens[base].tok.size;
+    int cursor = base + 1;
+    for (int i = 0; i < members; ++i) {
+        if (cursor >= doc->token_count) break;
+        const jsmntok_t *k = &doc->tokens[cursor].tok;
+        const int value_index = cursor + 1;
+        if (value_index >= doc->token_count) break;
+
+        const int len = k->end - k->start;
+        const char *name = doc->text + k->start;
+        if (len > 0 && name[0] != '_') {
+            bool known = false;
+            for (const char *const *a = allowed; *a && !known; ++a) {
+                known = tool_json_key_is(doc, k, *a);
+            }
+            if (!known) {
+                fprintf(stderr,
+                        "ERREUR : %s — clé « %.*s » inconnue.\n"
+                        "  Une clé qu'on ne lit pas est un réglage qui n'a aucun\n"
+                        "  effet, et rien ne le dirait à l'exécution. Corriger le\n"
+                        "  nom, ou ajouter la clé à la liste du lecteur.\n",
+                        what, len, name);
+                exit(1);
+            }
+        }
+        cursor = value_index + tool_json_span(doc, value_index);
+    }
+}
+
 static inline int tool_json_array_count(const tool_json *doc, const tool_json_value *arr)
 {
     const int base = tool_json_index(doc, arr);

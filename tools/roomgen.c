@@ -2342,6 +2342,18 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
         tool_json_get_string(doc, e, "name", base_name, sizeof base_name);
         if (!base_name[0]) tool_fatalf("une lumière sans nom (entrée %d)", i);
 
+        /* La liste EXHAUSTIVE de ce qu'une lumière peut déclarer. Elle existe
+         * parce que six des seize lumières de cette salle écrivaient « colour »
+         * pour « color » : elles s'affichaient en blanc pur, et rien ne le
+         * disait. Une clé mal orthographiée casse maintenant le build. */
+        static const char *const light_keys[] = {
+            "name", "at", "color", "intensity", "range", "radius",
+            "flicker", "ceilingPanel", "panelSize", "repeat", NULL
+        };
+        char what[128];
+        snprintf(what, sizeof what, "lumière « %s »", base_name);
+        tool_json_reject_unknown_keys(doc, e, light_keys, what);
+
         float at[3], color[3];
         tool_json_get_vec3(doc, e, "at", at, 0.0f);
         tool_json_get_vec3(doc, e, "color", color, 1.0f);
