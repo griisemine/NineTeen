@@ -61,6 +61,19 @@ void ns_config_set_bool(const char *key, bool value);
 /* Le jeton de session, si l'on en a un. Sans lui, le classement est en LECTURE
  * seule — ce qui suffit à voir les scores du monde, et n'exige aucun compte. */
 #define NS_CFG_SERVER_TOKEN "network.token"
+/*
+ * Le TEMPS RÉEL : se voir dans la salle, et affronter les fantômes des autres.
+ *
+ * Faux par défaut, et c'est un réglage distinct de l'URL du serveur pour une
+ * raison de fond : les deux n'engagent pas la même chose. Consulter un
+ * classement ne diffuse rien de soi ; la présence publie un pseudo et une
+ * position dans une salle où d'autres gens sont. Ce n'est pas à une URL de
+ * serveur de décider ça à la place du joueur.
+ *
+ * Sans serveur configuré, ce réglage ne peut rien : `ns_realtime` hérite du
+ * verrou de `ns_online` et ne démarre pas si celui-ci n'a pas démarré.
+ */
+#define NS_CFG_REALTIME     "network.realtime"
 #define NS_CFG_MOUSE_SENS      "input.mouseSensitivity"
 #define NS_CFG_ROOM_SOURCE     "room.source"            /* generated | legacy */
 

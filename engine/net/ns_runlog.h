@@ -138,6 +138,32 @@ bool ns_runlog_read_inputs(const char *path,
                            int64_t *seed,
                            ns_run_input **out_input, uint32_t *out_count);
 
+/*
+ * Les deux mêmes, EN MÉMOIRE — parce qu'un fantôme arrive par le réseau et non
+ * par le disque.
+ *
+ * `ns_runlog_read_inputs` passait par `SDL_LoadFile`, ce qui obligeait à écrire
+ * un fichier temporaire pour rejouer une partie téléchargée : deux accès disque
+ * et un fichier à nettoyer pour des données qu'on tient déjà en RAM. Le lecteur
+ * de fichier appelle maintenant celui-ci, donc les deux chemins partagent
+ * exactement le même analyseur — et il n'y a pas deux formats qui divergent.
+ *
+ * `text` n'a PAS besoin d'être terminé par un octet nul : la longueur fait foi.
+ * C'est ce qui compte quand la source est un corps HTTP, où rien ne garantit le
+ * zéro final.
+ *
+ * `ns_runlog_format_inputs` écrit dans `out` et renvoie la longueur qui AURAIT
+ * été écrite, à la manière de `snprintf` — appeler avec `cap` nul donne donc la
+ * taille à allouer.
+ */
+bool ns_runlog_parse_inputs(const char *text, size_t len,
+                            char *game, size_t game_cap,
+                            char *difficulty, size_t difficulty_cap,
+                            int64_t *seed,
+                            ns_run_input **out_input, uint32_t *out_count);
+
+size_t ns_runlog_format_inputs(const ns_runlog *r, char *out, size_t cap);
+
 /* Un fait de jeu. `kind` est un mot court : « score », « death », « flap ». */
 void ns_runlog_event(ns_runlog *r, int64_t at_ms, const char *kind, int64_t value);
 

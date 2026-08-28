@@ -263,15 +263,35 @@ func staticHandler() (http.Handler, error) {
 }
 
 // housekeeping purge périodiquement ce qui n'a plus lieu d'être.
+//
+// Deux rythmes, parce que deux durées de vie. Les sessions et les compteurs se
+// comptent en heures ; la PRÉSENCE se compte en secondes — un joueur qui ferme
+// le jeu n'envoie rien de plus, et sa ligne n'a plus de sens douze secondes
+// après. La lecture filtre déjà sur `seen_at`, donc une ligne morte n'est
+// jamais servie ; ce passage-ci ne fait que garder la table à sa taille, qui
+// est le nombre de joueurs réellement présents.
 func housekeeping(ctx context.Context, db *store.Store, logger *slog.Logger) {
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
+	slow := time.NewTicker(time.Hour)
+	defer slow.Stop()
+	fast := time.NewTicker(time.Minute)
+	defer fast.Stop()
+
+	// Large devant le TTL applicatif : on efface ce qui est mort depuis
+	// longtemps, pas ce qui vient d'expirer. Un client dont la requête traîne
+	// ne doit pas voir sa ligne disparaître sous lui.
+	const presenceKeep = 5 * time.Minute
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+
+		case <-fast.C:
+			if err := db.PurgePresence(ctx, presenceKeep); err != nil {
+				logger.Warn("purge de la présence", "err", err)
+			}
+
+		case <-slow.C:
 			if n, err := db.PurgeExpiredSessions(ctx); err != nil {
 				logger.Warn("purge des sessions", "err", err)
 			} else if n > 0 {

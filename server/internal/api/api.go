@@ -13,12 +13,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"nineteen/internal/auth"
 	"nineteen/internal/runs"
@@ -78,6 +81,15 @@ func (s *Server) routes() {
 
 	s.mux.HandleFunc("POST /api/v1/runs", s.handleRunBegin)
 	s.mux.HandleFunc("POST /api/v1/runs/{id}/submit", s.handleRunSubmit)
+	s.mux.HandleFunc("POST /api/v1/runs/{id}/inputs", s.handleRunInputs)
+
+	// Le temps réel. La présence n'exige AUCUN compte — se montrer dans la
+	// salle n'est pas une action privilégiée — et les fantômes se lisent
+	// librement pour la même raison que le classement : on doit pouvoir
+	// affronter quelqu'un sans s'inscrire.
+	s.mux.HandleFunc("POST /api/v1/presence", s.handlePresence)
+	s.mux.HandleFunc("GET /api/v1/ghosts", s.handleGhosts)
+	s.mux.HandleFunc("GET /api/v1/ghosts/{id}", s.handleGhost)
 
 	s.mux.HandleFunc("GET /api/v1/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/v1/health", s.handleHealth)
@@ -485,11 +497,11 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	// Les bornes sont contraintes ici ET dans store.Leaderboard. La duplication
 	// est volontaire : l'appelant peut changer, la requête SQL doit rester sûre
 	// quel que soit ce qu'on lui passe.
-	gameID := parseBoundedInt(q.Get("game"), 0, 0, 100)
+	gameID := gameIDParam(q.Get("game"))
 	limit := parseBoundedInt(q.Get("limit"), 20, 1, 100)
 	offset := parseBoundedInt(q.Get("offset"), 0, 0, 10000)
 
-	entries, err := s.store.Leaderboard(r.Context(), int32(gameID), limit, offset)
+	entries, err := s.store.Leaderboard(r.Context(), gameID, limit, offset)
 	if err != nil {
 		s.fail(w, r, http.StatusInternalServerError, "classement indisponible", err)
 		return
@@ -505,6 +517,19 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 type runBeginRequest struct {
 	Game string `json:"game"`
+	// Le fantôme qu'on veut affronter, ou vide. Sa présence change UNE chose :
+	// la graine n'est plus tirée au hasard, c'est celle de sa partie.
+	//
+	// C'est ce qui fait d'un duel un duel. Deux joueurs sur deux graines
+	// différentes ne jouent pas la même partie, ils jouent deux parties et
+	// comparent deux nombres — ce qui est un classement, et on en a déjà un.
+	//
+	// Rien n'est affaibli par là. Une graine n'est pas un secret : c'est
+	// justement ce qui doit être partagé pour que le duel existe. Le secret
+	// HMAC de la nouvelle partie reste tiré pour elle seule, et le score reste
+	// RECALCULÉ par le serveur depuis le journal d'événements scellé. Le
+	// fantôme ne fait entrer aucun score par la porte de derrière.
+	Ghost string `json:"ghost,omitempty"`
 }
 
 // handleRunBegin ouvre une partie AVANT qu'elle soit jouée.
@@ -550,10 +575,35 @@ func (s *Server) handleRunBegin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusInternalServerError, "ouverture impossible", err)
 		return
 	}
-	seed, err := randomSeed()
-	if err != nil {
-		s.fail(w, r, http.StatusInternalServerError, "ouverture impossible", err)
-		return
+
+	// La graine : celle du fantôme qu'on affronte, ou une neuve.
+	var seed int64
+	if req.Ghost != "" {
+		ghostSeed, ghostGame, gerr := s.store.RunSeedForGhost(r.Context(), req.Ghost)
+		if errors.Is(gerr, store.ErrNotFound) {
+			s.fail(w, r, http.StatusNotFound, "fantôme inconnu", nil)
+			return
+		}
+		if gerr != nil {
+			s.fail(w, r, http.StatusInternalServerError, "ouverture impossible", gerr)
+			return
+		}
+		// Le fantôme doit être du jeu demandé. Sans ce contrôle, on pourrait
+		// ouvrir une partie de Tetris sur la graine d'un fantôme de Flappy :
+		// le duel n'aurait aucun sens, et le client rejouerait des entrées
+		// faites pour un autre jeu.
+		if ghostGame != game.ID {
+			s.fail(w, r, http.StatusBadRequest, "ce fantôme n'est pas de ce jeu", nil)
+			return
+		}
+		seed = ghostSeed
+	} else {
+		var serr error
+		seed, serr = randomSeed()
+		if serr != nil {
+			s.fail(w, r, http.StatusInternalServerError, "ouverture impossible", serr)
+			return
+		}
 	}
 
 	id, err := s.store.BeginRun(r.Context(), sess.PlayerID, game.ID, secret, seed)
@@ -661,6 +711,329 @@ func (s *Server) handleRunSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 /* ========================================================================== */
+/* Temps réel — présence                                                      */
+/* ========================================================================== */
+
+// La durée pendant laquelle une présence reste « vivante » sans nouvelle.
+//
+// Elle est volontairement plusieurs fois plus longue que la période d'émission
+// du client (4 Hz) : sur un transport sans connexion persistante, une requête
+// qui traîne ne doit pas faire clignoter un joueur hors de la salle.
+const presenceTTL = 12 * time.Second
+
+type presenceRequest struct {
+	ClientID string  `json:"clientId"`
+	Nickname string  `json:"nickname"`
+	X        float32 `json:"x"`
+	Y        float32 `json:"y"`
+	Z        float32 `json:"z"`
+	Yaw      float32 `json:"yaw"`
+	Cabinet  string  `json:"cabinet"`
+	Game     string  `json:"game"`
+	Score    int32   `json:"score"`
+	// Le client s'en va proprement. Le TTL suffirait, mais un joueur qui quitte
+	// la salle ne devrait pas y rester douze secondes de plus.
+	Leaving bool `json:"leaving,omitempty"`
+}
+
+// handlePresence — « je suis là, qui d'autre ? », en un aller-retour.
+//
+// AUCUN COMPTE N'EST EXIGÉ, et c'est la règle du projet, pas une facilité : la
+// V1 enfermait le jeu entier derrière une vérification en ligne et ne pouvait
+// pas atteindre sa propre fenêtre sans serveur. Se montrer dans une salle
+// d'arcade n'est pas une action privilégiée.
+//
+// Ce que le serveur ne fait donc PAS : croire le pseudo. Un client sans jeton
+// déclare le nom qu'il veut, et la réponse le marque `verified: false`. Avec un
+// jeton, le serveur ÉCRASE le nom déclaré par celui du compte. C'est la même
+// logique que pour les scores — l'autorité est côté serveur — appliquée à ce
+// qu'elle peut ici réellement établir.
+func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
+	// Une présence est périodique : la limite doit tenir le rythme normal du
+	// client (4 Hz) tout en fermant la porte à une boucle. 2 000 sur dix
+	// minutes, soit un peu plus de 3/s soutenus.
+	if !s.rateLimit(w, r, "presence", 2000, 10*time.Minute) {
+		return
+	}
+
+	var req presenceRequest
+	if !decodeJSON(w, r, s, &req) {
+		return
+	}
+
+	// L'identifiant de client est tiré par le jeu et n'a aucun privilège : il
+	// ne sert qu'à ne pas se voir soi-même et à remplacer sa propre ligne. On
+	// le borne quand même, parce qu'il devient une clé primaire.
+	req.ClientID = strings.TrimSpace(req.ClientID)
+	if len(req.ClientID) < 8 || len(req.ClientID) > 64 || !isASCIIToken(req.ClientID) {
+		s.fail(w, r, http.StatusBadRequest, "identifiant de client invalide", nil)
+		return
+	}
+
+	if req.Leaving {
+		if err := s.store.DropPresence(r.Context(), req.ClientID); err != nil {
+			s.fail(w, r, http.StatusInternalServerError, "présence indisponible", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "peers": []store.Peer{}})
+		return
+	}
+
+	peer := store.Peer{
+		ClientID: req.ClientID,
+		Nickname: sanitizeNickname(req.Nickname),
+		X:        safeCoord(req.X),
+		Y:        safeCoord(req.Y),
+		Z:        safeCoord(req.Z),
+		Yaw:      safeCoord(req.Yaw),
+		Cabinet:  sanitizeShort(req.Cabinet, 32),
+		Game:     sanitizeShort(req.Game, 32),
+		Score:    req.Score,
+	}
+	if peer.Score < 0 {
+		peer.Score = 0
+	}
+
+	// Le jeton, s'il y en a un, TRANCHE le pseudo. Sans jeton on garde ce qui a
+	// été déclaré, et on le dit.
+	var playerID *int64
+	if sess, err := s.authenticate(r); err == nil {
+		peer.Nickname = sess.Username
+		peer.Verified = true
+		id := sess.PlayerID
+		playerID = &id
+	}
+
+	peers, err := s.store.TouchPresence(r.Context(), peer, playerID, presenceTTL)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "présence indisponible", err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "peers": peers, "ttlMs": presenceTTL.Milliseconds(),
+	})
+}
+
+/* ========================================================================== */
+/* Temps réel — fantômes                                                      */
+/* ========================================================================== */
+
+// Le journal d'entrées voyage en TEXTE BRUT, dans les deux sens, et ce n'est
+// pas un raccourci : c'est la correction d'un défaut qui aurait été invisible
+// de chaque côté.
+//
+// Le premier jet le transportait dans un champ JSON. Or l'analyseur JSON du
+// client (`ns_json_string`, engine/core/ns_json.c) ne DÉSÉCHAPPE pas : il rend
+// les octets bruts entre les guillemets. Un journal de trois cents lignes,
+// encodé en JSON, y serait donc arrivé comme une seule ligne parsemée de « \n »
+// littéraux — et l'analyseur de journal, qui découpe sur les retours à la
+// ligne, en aurait tiré zéro entrée. Le duel aurait échoué en silence, avec un
+// fantôme immobile et aucun message pour dire pourquoi.
+//
+// Les deux moitiés étaient justes séparément : le serveur produisait du JSON
+// valide, le client lisait ce qu'on lui avait dit de lire. C'est exactement la
+// leçon que le changelog tire du classement en ligne, et la réponse est la
+// même : supprimer l'endroit où les deux peuvent diverger. Du texte brut n'a
+// pas d'échappement, donc pas de désaccord possible sur son échappement.
+const inputsContentType = "text/plain"
+
+// journalCharset — l'alphabet EXACT d'un journal d'entrées.
+//
+// Lettres, chiffres, espace, retour à la ligne, tiret et souligné. Rien d'autre.
+//
+// Ce n'est pas une coquetterie : c'est ce qui rend le contenu PROUVABLEMENT non
+// exécutable. Un journal ne peut contenir ni '<', ni '>', ni guillemet, ni
+// esperluette, donc il ne peut pas être du HTML, ni du JavaScript, ni une
+// entité. Le service sert ce texte depuis sa propre origine ; l'invariant
+// ci-dessous est ce qui fait que le servir est sans conséquence, plutôt que
+// « sans conséquence tant que le navigateur respecte `nosniff` ».
+//
+// Il est vérifié À L'ENTRÉE — on ne stocke pas ce qu'on refuserait de servir —
+// et redemandé à la SORTIE, parce qu'une base peut être alimentée autrement que
+// par cette route (restauration, migration, accès direct) et qu'une défense qui
+// dépend de l'historique des écritures n'en est pas une.
+func validJournalByte(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == ' ' || c == '\n' || c == '-' || c == '_'
+}
+
+func validJournal(s string) bool {
+	if !strings.HasPrefix(s, "v1 ") {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if !validJournalByte(s[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// readPlainBody lit un corps en texte brut, borné.
+func readPlainBody(w http.ResponseWriter, r *http.Request, s *Server, max int64) (string, bool) {
+	if ct := r.Header.Get("Content-Type"); ct != "" &&
+		!strings.HasPrefix(ct, inputsContentType) {
+		s.fail(w, r, http.StatusUnsupportedMediaType, "corps attendu en texte brut", nil)
+		return "", false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, max)
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.fail(w, r, http.StatusRequestEntityTooLarge, "journal trop volumineux", err)
+		return "", false
+	}
+	return string(b), true
+}
+
+// handleRunInputs attache un journal d'ENTRÉES à une partie déjà soumise.
+//
+// C'est le transport qui manquait au duel, et rien de plus. Le journal d'entrées
+// n'entre ni dans la charge canonique ni dans le sceau : il n'a rien à prouver
+// au serveur, qui ne le rejoue pas. Ce qui garantit qu'un fantôme vaut son
+// score, c'est que le score vient de la partie — ouverte par le serveur, scellée
+// par le client, RECALCULÉE par le serveur — et pas de ces lignes-ci.
+//
+// Autrement dit : déposer un journal d'entrées ne peut pas créer de score. Au
+// pire on dépose des entrées qui ne reproduisent pas la partie, et le seul
+// perdant est celui qui croyait avoir enregistré son fantôme.
+func (s *Server) handleRunInputs(w http.ResponseWriter, r *http.Request) {
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	if !s.rateLimit(w, r, "run-inputs|"+strconv.FormatInt(sess.PlayerID, 10), 120, time.Hour) {
+		return
+	}
+
+	// La même borne que la contrainte SQL. Dupliquée volontairement : la
+	// contrainte protège la base quoi qu'on lui passe, celle-ci donne au client
+	// un refus lisible plutôt qu'une erreur de contrainte.
+	inputs, ok2 := readPlainBody(w, r, s, 262144)
+	if !ok2 {
+		return
+	}
+	if inputs == "" {
+		s.fail(w, r, http.StatusBadRequest, "journal vide", nil)
+		return
+	}
+	// L'alphabet strict : en-tête « v1 », puis rien que des lettres, des
+	// chiffres, des espaces et des retours à la ligne. Voir `validJournal`.
+	//
+	// Ce contrôle remplace trois vérifications séparées qu'il englobe toutes —
+	// le préfixe, l'absence d'octet nul (que PostgreSQL refuse en colonne
+	// `text`) et la validité UTF-8 — et il en ajoute la propriété qui compte :
+	// ce qu'on stocke ne peut pas être du HTML.
+	if !validJournal(inputs) {
+		s.fail(w, r, http.StatusBadRequest,
+			"journal mal formé : « v1 » puis des nombres, rien d'autre", nil)
+		return
+	}
+
+	saved, err := s.store.SaveGhost(r.Context(), r.PathValue("id"), sess.PlayerID, inputs)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "enregistrement impossible", err)
+		return
+	}
+	if !saved {
+		// Partie inconnue, pas la sienne, pas encore soumise, refusée, ou
+		// fantôme déjà déposé. On ne distingue pas : ça ne regarde pas
+		// l'appelant, et distinguer renseignerait sur les parties des autres.
+		s.fail(w, r, http.StatusConflict, "aucune partie validée à laquelle rattacher ce journal", nil)
+		return
+	}
+
+	s.log.Info("fantôme enregistré", "player", sess.Username, "run", r.PathValue("id"),
+		"octets", len(inputs))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleGhosts liste les fantômes d'un jeu, SANS leur journal.
+//
+// Deux routes et pas une, parce qu'un journal pèse mille fois la ligne qui le
+// décrit : afficher « qui peux-tu affronter » ne doit pas télécharger dix
+// parties dont on n'en jouera qu'une.
+func (s *Server) handleGhosts(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	gameID := gameIDParam(q.Get("game"))
+	limit := parseBoundedInt(q.Get("limit"), 10, 1, 50)
+
+	list, err := s.store.Ghosts(r.Context(), gameID, limit)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "fantômes indisponibles", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "game": gameID, "ghosts": list,
+	})
+}
+
+func (s *Server) handleGhost(w http.ResponseWriter, r *http.Request) {
+	g, err := s.store.GhostByID(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, r, http.StatusNotFound, "fantôme inconnu", nil)
+		return
+	}
+	if err != nil {
+		// Un identifiant qui n'est pas un UUID arrive ici : c'est une requête
+		// mal formée, pas une panne du serveur.
+		if strings.Contains(err.Error(), "uuid") {
+			s.fail(w, r, http.StatusBadRequest, "identifiant invalide", err)
+			return
+		}
+		s.fail(w, r, http.StatusInternalServerError, "fantôme indisponible", err)
+		return
+	}
+	// Le journal, tel quel. Pas de JSON autour : voir `inputsContentType`.
+	//
+	// Il est SELF-DESCRIPTIF — sa première ligne porte « v1 <jeu> <difficulté>
+	// <graine> » — donc le client n'a besoin de rien d'autre pour le rejouer.
+	// Le score et le nom de l'adversaire, eux, sont déjà venus par la liste.
+
+	// L'invariant est REVÉRIFIÉ ici, et pas seulement à l'écriture.
+	//
+	// Ce contenu vient d'un autre joueur et ressort par notre origine : c'est
+	// la définition d'un XSS stocké si jamais il pouvait être du HTML. Il ne
+	// peut pas l'être — `validJournal` interdit '<', '>', '"' et '&' — mais
+	// s'appuyer uniquement sur le contrôle fait à l'écriture reviendrait à
+	// parier que la base n'a jamais été alimentée autrement (restauration,
+	// migration, accès direct). Une défense qui dépend de l'historique des
+	// écritures n'en est pas une, et ce contrôle coûte un parcours de quelques
+	// kilo-octets.
+	if !validJournal(g.Inputs) {
+		s.fail(w, r, http.StatusInternalServerError, "fantôme illisible",
+			errors.New("journal stocké hors alphabet"))
+		return
+	}
+
+	h := w.Header()
+	h.Set("Content-Type", inputsContentType+"; charset=utf-8")
+	h.Set("Content-Length", strconv.Itoa(len(g.Inputs)))
+	// `nosniff` est déjà posé pour tout le service ; on le redit ici parce que
+	// c'est la seule route qui renvoie du contenu écrit par un autre joueur, et
+	// qu'un en-tête global peut être déplacé par mégarde.
+	h.Set("X-Content-Type-Options", "nosniff")
+	// Et on refuse explicitement que le navigateur en fasse une page : ce
+	// fichier est une donnée que le jeu consomme, pas un document à afficher.
+	h.Set("Content-Disposition", "attachment; filename=\"ghost.txt\"")
+	// Ce qu'on affiche à côté du fantôme, sans imposer un second aller-retour à
+	// qui n'a pas gardé la liste. Le pseudo est passé au crible du même
+	// alphabet : un en-tête HTTP ne tolère ni retour à la ligne ni octet exotique.
+	h.Set("X-Nineteen-Ghost-Score", strconv.FormatInt(g.Score, 10))
+	h.Set("X-Nineteen-Ghost-Player", sanitizeShort(g.Username, 24))
+	w.WriteHeader(http.StatusOK)
+	// #nosec G705 -- `g.Inputs` vient de passer `validJournal` deux lignes plus
+	// haut : son alphabet exclut '<', '>', '"' et '&', donc le contenu ne peut
+	// pas être du HTML ni un script. L'analyse par teinte voit une donnée issue
+	// de la base atteindre la réponse et ne peut pas suivre cette garantie à
+	// travers PostgreSQL ; la garantie est pourtant établie ICI, sur la valeur
+	// exacte qui est écrite, et non ailleurs dans le programme. S'ajoutent
+	// `nosniff` et `Content-Disposition: attachment` posés juste au-dessus.
+	_, _ = io.WriteString(w, g.Inputs)
+}
+
+/* ========================================================================== */
 /* Divers                                                                     */
 /* ========================================================================== */
 
@@ -712,6 +1085,24 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, s *Server, dst any) bool
 	return true
 }
 
+// gameIDParam lit un identifiant de jeu et le rend DÉJÀ borné, en int32.
+//
+// La conversion est faite ici, une fois, plutôt qu'à chaque appelant : bornée à
+// 0..100 juste au-dessus, elle ne peut pas déborder — mais l'analyse statique ne
+// peut pas le savoir en voyant un `int32(x)` isolé, et elle a raison d'être
+// méfiante. Concentrer la conversion à l'endroit où la borne est visible rend
+// la sûreté LOCALE : on n'a pas à remonter l'appelant pour se convaincre.
+func gameIDParam(raw string) int32 {
+	v := parseBoundedInt(raw, 0, 0, 100)
+	if v < 0 {
+		v = 0
+	}
+	if v > 100 {
+		v = 100
+	}
+	return int32(v)
+}
+
 func parseBoundedInt(raw string, fallback, min, max int) int {
 	if raw == "" {
 		return fallback
@@ -719,6 +1110,103 @@ func parseBoundedInt(raw string, fallback, min, max int) int {
 	v, err := strconv.Atoi(raw)
 	if err != nil || v < min || v > max {
 		return fallback
+	}
+	return v
+}
+
+/* -------------------------------------------------------------------------- */
+/* Assainissement des champs de présence                                      */
+/*                                                                            */
+/* Ces champs viennent d'un client NON AUTHENTIFIÉ : c'est la seule surface du */
+/* service dans ce cas, et c'est donc la seule où l'assainissement ne peut pas */
+/* s'appuyer sur « de toute façon il a un compte ».                           */
+/* -------------------------------------------------------------------------- */
+
+// isASCIIToken — lettres, chiffres, tiret et souligné. L'identifiant de client
+// devient une clé primaire et se retrouve dans des journaux : on ne lui laisse
+// ni espace, ni caractère de contrôle, ni octet non ASCII.
+func isASCIIToken(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		ok := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_'
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// sanitizeNickname rend un pseudo affichable, jamais vide, d'au plus 24 runes.
+//
+// La troncature est faite en RUNES et pas en octets : couper « Émilie » au
+// milieu d'un caractère produirait de l'UTF-8 invalide, que PostgreSQL refuse
+// en colonne `text` — un 500 pour un pseudo accentué, c'est-à-dire pour un
+// joueur français sur un jeu français.
+//
+// Les caractères de contrôle sautent : le pseudo est dessiné dans la salle et
+// écrit dans les journaux du serveur, et un retour à la ligne dans un pseudo
+// est le début d'une falsification de journal.
+func sanitizeNickname(raw string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range strings.TrimSpace(raw) {
+		if n >= 24 {
+			break
+		}
+		if r < 0x20 || r == 0x7F || !utf8.ValidRune(r) {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	out := strings.TrimSpace(b.String())
+	if out == "" {
+		// Anonyme est permis — on ne demande de compte à personne — mais la
+		// contrainte SQL veut au moins un caractère, et un joueur sans nom doit
+		// quand même se voir dans la salle.
+		return "Anonyme"
+	}
+	return out
+}
+
+// sanitizeShort — même traitement pour les champs courts (borne, jeu), qui sont
+// des identifiants et non du texte libre.
+func sanitizeShort(raw string, max int) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range strings.TrimSpace(raw) {
+		if n >= max {
+			break
+		}
+		if r < 0x20 || r == 0x7F || !utf8.ValidRune(r) {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
+}
+
+// safeCoord écarte NaN et les infinis.
+//
+// PostgreSQL accepte NaN en `real`, et il ressortirait tel quel chez les autres
+// joueurs — où il empoisonnerait une interpolation de position et ferait
+// disparaître un avatar au lieu de le placer. Un client qui envoie NaN est
+// soit cassé, soit malveillant ; dans les deux cas zéro est une réponse.
+func safeCoord(v float32) float32 {
+	f := float64(v)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0
+	}
+	// La salle fait quelques dizaines de mètres. Une coordonnée hors de cette
+	// borne ne décrit rien de la salle : on la ramène plutôt que de la servir.
+	const limit = 1000.0
+	if f > limit {
+		return limit
+	}
+	if f < -limit {
+		return -limit
 	}
 	return v
 }

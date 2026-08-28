@@ -53,6 +53,14 @@ static struct {
     char             want_ticket[24];   /* un billet à tirer, ou vide */
     char             want_ticket_diff[16];
     /*
+     * Le dernier créneau pour lequel on a demandé un billet. `want_ticket` est
+     * CONSOMMÉ par le fil ; celui-ci ne l'est pas, et c'est ce qui permet de
+     * redemander un billet sans que l'appelant ait à répéter le nom du jeu —
+     * notamment quand `ns_online_set_duel` jette un billet devenu faux.
+     */
+    char             last_ticket[24];
+    char             last_ticket_diff[16];
+    /*
      * L'heure avant laquelle on ne REDEMANDE pas de billet après un échec.
      *
      * Sans elle, la demande restait armée tant qu'aucun billet n'arrivait : un
@@ -66,6 +74,16 @@ static struct {
     uint64_t         ticket_retry_at_ms;
 
     bool        want_flush;
+
+    /*
+     * Le fantôme que le prochain billet doit affronter, ou vide.
+     *
+     * Un seul, parce qu'on n'affronte qu'un adversaire à la fois. Il est envoyé
+     * au serveur dans le corps de `POST /api/v1/runs`, qui reprend alors la
+     * graine de CETTE partie-là au lieu d'en tirer une neuve : c'est la seule
+     * chose qui distingue un duel de deux parties sans rapport.
+     */
+    char        duel_ghost[64];
 
     uint32_t    sent, failed;
 } g;
@@ -320,8 +338,23 @@ static void fetch_ticket(const char *game, const char *diff)
 
     char url[640];
     SDL_snprintf(url, sizeof url, "%s/api/v1/runs", g.url);
-    char body[128];
-    const int len = SDL_snprintf(body, sizeof body, "{\"game\":\"%s\"}", slug);
+
+    /* Le fantôme, s'il y en a un : le serveur reprend alors SA graine. Le champ
+     * est omis quand il n'y en a pas — le décodeur du serveur refuse les champs
+     * inconnus, mais un champ absent reste un champ absent. */
+    char ghost[64];
+    SDL_LockMutex(g.lock);
+    SDL_snprintf(ghost, sizeof ghost, "%s", g.duel_ghost);
+    SDL_UnlockMutex(g.lock);
+
+    char body[192];
+    int len;
+    if (ghost[0]) {
+        len = SDL_snprintf(body, sizeof body, "{\"game\":\"%s\",\"ghost\":\"%s\"}",
+                           slug, ghost);
+    } else {
+        len = SDL_snprintf(body, sizeof body, "{\"game\":\"%s\"}", slug);
+    }
 
     ns_http_response r;
     if (!ns_http_request("POST", url, "application/json", g.token,
@@ -588,6 +621,8 @@ static void arm_ticket(const char *game, const char *diff)
     SDL_snprintf(g.want_ticket, sizeof g.want_ticket, "%s", game);
     SDL_snprintf(g.want_ticket_diff, sizeof g.want_ticket_diff, "%s",
                  (diff && diff[0]) ? diff : "normal");
+    SDL_snprintf(g.last_ticket, sizeof g.last_ticket, "%s", g.want_ticket);
+    SDL_snprintf(g.last_ticket_diff, sizeof g.last_ticket_diff, "%s", g.want_ticket_diff);
 }
 
 void ns_online_prefetch_ticket(const char *game, const char *difficulty)
@@ -645,4 +680,69 @@ void ns_online_stats(uint32_t *sent, uint32_t *failed)
 {
     if (sent) *sent = g.sent;
     if (failed) *failed = g.failed;
+}
+
+/* ==========================================================================
+ * Ce que le temps réel emprunte ici — voir ns_online.h
+ * ========================================================================== */
+
+/*
+ * NULL quand le réseau est inactif, et c'est tout l'intérêt : `ns_realtime` ne
+ * peut rien ouvrir que `ns_online_init` n'ait déjà autorisé. Le verrou d'A2b
+ * reste écrit une fois.
+ */
+const char *ns_online_server_url(void)
+{
+    return (g.enabled && g.url[0]) ? g.url : NULL;
+}
+
+const char *ns_online_session_token(void)
+{
+    return (g.enabled && g.token[0]) ? g.token : NULL;
+}
+
+int ns_online_game_id(const char *game, const char *difficulty)
+{
+    if (!g.enabled || !game || !game[0]) return -1;
+    SDL_LockMutex(g.lock);
+    const int id = g.games_known ? resolve_game(game, difficulty, NULL, 0) : -1;
+    SDL_UnlockMutex(g.lock);
+    return id;
+}
+
+void ns_online_set_duel(const char *ghost_run_id)
+{
+    if (!g.enabled) return;
+    SDL_LockMutex(g.lock);
+    if (ghost_run_id && ghost_run_id[0]) {
+        SDL_snprintf(g.duel_ghost, sizeof g.duel_ghost, "%s", ghost_run_id);
+    } else {
+        g.duel_ghost[0] = '\0';
+    }
+    /*
+     * Un billet déjà prêt a été tiré sur une AUTRE graine que celle du fantôme
+     * qu'on vient de choisir : le garder ferait jouer un duel qui n'en est pas
+     * un, sans que rien ne le dise. On le jette et on en redemande un.
+     *
+     * C'est le genre de défaut qui ne se voit pas en jouant — la partie se
+     * déroule normalement, le fantôme est simplement... quelqu'un d'autre.
+     */
+    g.ticket_ready = false;
+    SDL_zero(g.ticket);
+    /*
+     * Et on en REDEMANDE un tout de suite, pour le même créneau. Sans cette
+     * ligne le billet jeté n'était jamais remplacé — `want_ticket` ayant été
+     * consommé par le fil — et le duel se jouait hors ligne : la partie
+     * démarrait sur la graine locale, donc pas sur celle du fantôme, donc
+     * contre un adversaire qui jouait à un autre jeu que le sien.
+     *
+     * L'attente d'après-échec est levée du même coup : ce n'est pas un échec,
+     * c'est un changement d'avis du joueur, et il ne doit pas coûter quinze
+     * secondes d'attente devant la borne.
+     */
+    if (g.last_ticket[0]) {
+        arm_ticket(g.last_ticket, g.last_ticket_diff);
+        g.ticket_retry_at_ms = 0;
+    }
+    SDL_UnlockMutex(g.lock);
 }
