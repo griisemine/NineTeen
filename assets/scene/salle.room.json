@@ -37,7 +37,11 @@
       "_albedo": "Le tapis NÉON de 2020, remis. La raison invoquée pour l'avoir abandonné était arithmétiquement fausse : elle comparait des moyennes d'OCTETS sRGB (30 pour floor.jpg contre 47 pour moquette.jpg), c'est-à-dire une échelle perceptuelle, alors qu'une réflectance est une grandeur LINÉAIRE — l'erreur exacte contre laquelle texgen.c met en garde. Mesuré en linéaire : floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292. Le tapis néon est donc 34 % PLUS CLAIR que la boucle bordeaux qui l'a remplacé, et la salle a perdu son objet le plus reconnaissable pour rien. Les deux passent d'ailleurs par la dé-cuisson (ALBEDO_floor 0,11) et ressortent à moins de 1 % l'un de l'autre.",
       "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
       "footstep": "moquette",
-      "emissive": [1.0, 0.92, 0.84],
+      "emissive": [
+        1.0,
+        0.92,
+        0.84
+      ],
       "emissiveStrength": 0.25,
       "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1."
     },
@@ -64,7 +68,12 @@
       "metallic": 0.0,
       "uvMetres": 0.7,
       "_grain": "0,7 m et non 2,5. `mur_gris.jpg` fait 600 px : a 2,5 m le texel vaut 4,17 mm, et le grain visible de trois a quatre texels donne des grumeaux de 1,5 a 2 cm. Un crepi ecrase a un grain de 1 a 3 mm — la plus grande surface verticale de la salle ne se lisait donc pas comme un mur mais comme du gravier. A 0,7 m : 1,17 mm par texel, grain de 3,5 mm, et le pavage reste invisible sur le grand mur du sas, ou il occupe un tiers de l'image.",
-      "baseColor": [0.52, 0.44, 0.34, 1.0]
+      "baseColor": [
+        0.52,
+        0.44,
+        0.34,
+        1.0
+      ]
     },
     {
       "name": "mur_exterieur",
@@ -109,7 +118,12 @@
       "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
       "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018.",
-      "baseColor": [0.84, 0.78, 0.31, 1.0]
+      "baseColor": [
+        0.84,
+        0.78,
+        0.31,
+        1.0
+      ]
     },
     {
       "name": "rail",
@@ -151,7 +165,7 @@
       "metallic": 0.0,
       "emissive": [
         1.0,
-        0.80,
+        0.8,
         0.55
       ],
       "emissiveStrength": 1.35,
@@ -173,7 +187,12 @@
       "roughness": 0.86,
       "metallic": 0.0,
       "uvMetres": 1.1,
-      "baseColor": [0.6, 0.5, 0.36, 1.0]
+      "baseColor": [
+        0.6,
+        0.5,
+        0.36,
+        1.0
+      ]
     },
     {
       "name": "bois_noir",
@@ -1121,6 +1140,48 @@
         0.46,
         1.0
       ]
+    },
+    {
+      "name": "billard_poche",
+      "texture": "cuir_rouge.jpg",
+      "roughness": 0.72,
+      "metallic": 0.0,
+      "uvMetres": 0.25,
+      "baseColor": [
+        0.16,
+        0.12,
+        0.1,
+        1.0
+      ],
+      "_": "Le cuir des six poches et leur filet. Sombre et mat : ce qui doit se lire, c'est le TROU, pas sa doublure."
+    },
+    {
+      "name": "billard_metal",
+      "texture": "metal_plate_02.jpg",
+      "roughness": 0.3,
+      "metallic": 0.85,
+      "uvMetres": 0.18,
+      "baseColor": [
+        0.62,
+        0.58,
+        0.48,
+        1.0
+      ],
+      "_": "Les quatre pieces d'angle et les six cercles de poche. C'est le seul metal de la table, et c'est lui qui accroche la suspension : sans lui les poches disparaissent dans le bois."
+    },
+    {
+      "name": "billard_repere",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.28,
+      "metallic": 0.0,
+      "uvMetres": 0.06,
+      "baseColor": [
+        0.86,
+        0.82,
+        0.72,
+        1.0
+      ],
+      "_": "Les visees incrustees dans les chapeaux, trois par demi-longueur. Ce sont elles qui font qu'un chapeau de bois n'est pas une planche."
     }
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
@@ -1441,7 +1502,11 @@
       "_ampoule": "1,56 m et non 1,68, et c'est un CORRECTIF, pas un réglage. L'ampoule du luminaire est une sphère de rayon 4,5 cm centrée à 1,66 m : elle occupe donc de 1,615 à 1,705, et la lumière était déclarée à 1,68 — À L'INTÉRIEUR. Le lancer de rayons ne connaît pas les matériaux émissifs : chaque rayon d'ombre partant d'un point de la table devait traverser le verre de sa propre ampoule, et la suspension s'éteignait elle-même. Mesuré : à intensité identique, descendre la source de 12 cm sous la sphère fait passer la vue de 11 à 17 de médiane et de 66 % à 47 % de pixels sous 16. La preuve que c'était bien l'occultation et non la puissance : à 1,68 m, multiplier l'intensité par 2,6 ne changeait RIEN (médiane 11 puis 12), alors qu'au palier medium, sans ombres lancées, la même intensité éclairait la pièce.",
       "_intensite": "150 et non 76. La valeur de 76 avait été réglée à l'œil pendant que la lampe était occultée par sa propre ampoule : elle compensait un défaut qui n'existe plus. À 150 la table reçoit une vraie nappe de lumière, les billes portent une ombre, et seuls 0,3 % des pixels de la vue saturent.",
       "name": "suspension_billard",
-      "at": [-7.2, 1.56, -1.6],
+      "at": [
+        -7.2,
+        1.56,
+        -1.6
+      ],
       "color": [
         1.0,
         0.76,
@@ -2416,10 +2481,22 @@
       "offset": 0.0,
       "closed": true,
       "points": [
-        [-1.2, -4.3],
-        [1.2, -4.3],
-        [1.2, -1.9],
-        [-1.2, -1.9]
+        [
+          -1.2,
+          -4.3
+        ],
+        [
+          1.2,
+          -4.3
+        ],
+        [
+          1.2,
+          -1.9
+        ],
+        [
+          -1.2,
+          -1.9
+        ]
       ],
       "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme.",
       "_defaut": "Ce nez traçait un rectangle de 6,09 x 4,44 m allant de (-3,043 ; -1,333) à (3,043 ; 3,111), alors que l'estrade qu'il est censé border occupe x de -1,2 a 1,2 et z de -4,3 a -1,9. Les deux emprises sont DISJOINTES : la moulure ne bordait rien, elle traversait la moquette du hall. Recalée sur l'emprise exacte de la boîte estrade."
@@ -2441,171 +2518,48 @@
         0.0,
         -0.978
       ],
+      "model": "models/billard/billard.gltf",
+      "material": "billard_bois",
+      "materials": [
+        "billard_bois",
+        "billard_tapis",
+        "billard_poche",
+        "billard_metal",
+        "billard_repere"
+      ],
+      "_": "La table, construite par `assets/blender/billard.py`. Elle etait onze boites empilees : pas de poche, pas de mouluration, des pieds carres, et un placage de bois pave a 0,80 m sur des bandes de 6 cm — d'ou des bandes qui se lisaient comme une pile de planches. Les cotes hors tout n'ont pas bouge (2,36 x 1,36, drap a 0,784) pour que ni le controle de chevauchement ni la collision ne changent."
+    },
+    {
+      "name": "suspension_billard",
+      "at": [
+        -7.2,
+        0.0,
+        -1.6
+      ],
+      "yaw": 12.0,
       "parts": [
-        {
-          "type": "box",
-          "material": "billard_bois",
-          "at": [
-            0.0,
-            0.584,
-            0.0
-          ],
-          "size": [
-            2.36,
-            0.2,
-            1.36
-          ],
-          "chamfer": 0.02
-        },
-        {
-          "type": "box",
-          "material": "billard_tapis",
-          "at": [
-            0.0,
-            0.784,
-            0.0
-          ],
-          "size": [
-            2.1,
-            0.014,
-            1.1
-          ],
-          "chamfer": 0.004
-        },
-        {
-          "type": "box",
-          "material": "billard_bois",
-          "at": [
-            0.0,
-            0.784,
-            -0.551
-          ],
-          "size": [
-            2.36,
-            0.06,
-            0.12
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "billard_bois",
-          "at": [
-            0.0,
-            0.784,
-            0.551
-          ],
-          "size": [
-            2.36,
-            0.06,
-            0.12
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "billard_bois",
-          "at": [
-            -0.974,
-            0.784,
-            0.0
-          ],
-          "size": [
-            0.12,
-            0.06,
-            1.36
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "billard_bois",
-          "at": [
-            0.974,
-            0.784,
-            0.0
-          ],
-          "size": [
-            0.12,
-            0.06,
-            1.36
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "bois_noir",
-          "at": [
-            -0.852,
-            0.0,
-            -0.462
-          ],
-          "size": [
-            0.16,
-            0.62,
-            0.16
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "bois_noir",
-          "at": [
-            0.852,
-            0.0,
-            -0.462
-          ],
-          "size": [
-            0.16,
-            0.62,
-            0.16
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "bois_noir",
-          "at": [
-            -0.852,
-            0.0,
-            0.462
-          ],
-          "size": [
-            0.16,
-            0.62,
-            0.16
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "bois_noir",
-          "at": [
-            0.852,
-            0.0,
-            0.462
-          ],
-          "size": [
-            0.16,
-            0.62,
-            0.16
-          ],
-          "chamfer": 0.012
-        },
         {
           "_": "LA SUSPENSION. La salle déclarait sa lumière et pas son luminaire — une source sans objet visible, ce que le plan s'interdit. Trois morceaux : le câble, l'abat-jour tronconique, l'ampoule. L'abat-jour est ouvert vers le bas (pas de bouchon bas) pour qu'on voie l'ampoule dedans depuis la table.",
           "type": "cylinder",
           "material": "bois_noir",
-          "at": [0.0, 1.90, 0.0],
+          "at": [
+            0.0,
+            1.9,
+            0.0
+          ],
           "radius": 0.008,
-          "height": 1.00,
+          "height": 1.0,
           "sides": 8
         },
         {
           "type": "cylinder",
           "material": "billard_abatjour",
-          "at": [0.0, 1.64, 0.0],
-          "radius": 0.30,
+          "at": [
+            0.0,
+            1.64,
+            0.0
+          ],
+          "radius": 0.3,
           "radiusTop": 0.11,
           "height": 0.22,
           "sides": 20,
@@ -2615,16 +2569,36 @@
         {
           "type": "sphere",
           "material": "billard_ampoule",
-          "at": [0.0, 1.66, 0.0],
+          "at": [
+            0.0,
+            1.66,
+            0.0
+          ],
           "radius": 0.045,
           "sides": 12,
           "rings": 7
-        },
+        }
+      ],
+      "_": "Le luminaire, separe de la table depuis que celle-ci est un modele importe : roomgen impose qu'un objet soit SOIT un empilement de morceaux, SOIT un modele. La lumiere qui va avec est declaree dans `lights`, a 1,56 m — sous l'ampoule, voir son commentaire."
+    },
+    {
+      "name": "billard_billes",
+      "at": [
+        -7.2,
+        0.0,
+        -1.6
+      ],
+      "yaw": 12.0,
+      "parts": [
         {
           "_": "Trois billes posées, pas rangées en triangle : une partie interrompue, pas une table de démonstration.",
           "type": "sphere",
           "material": "billard_bille",
-          "at": [-0.42, 0.791, 0.18],
+          "at": [
+            -0.42,
+            0.791,
+            0.18
+          ],
           "radius": 0.029,
           "sides": 12,
           "rings": 7
@@ -2632,7 +2606,11 @@
         {
           "type": "sphere",
           "material": "billard_bille",
-          "at": [0.31, 0.791, -0.24],
+          "at": [
+            0.31,
+            0.791,
+            -0.24
+          ],
           "radius": 0.029,
           "sides": 12,
           "rings": 7
@@ -2640,13 +2618,17 @@
         {
           "type": "sphere",
           "material": "billard_bille",
-          "at": [0.58, 0.791, 0.09],
+          "at": [
+            0.58,
+            0.791,
+            0.09
+          ],
           "radius": 0.029,
           "sides": 12,
           "rings": 7
         }
       ],
-      "_": "Le billard. Son tapis était NOYÉ dans le bâti : `geo_box` occupe Y de 0 à `size.y`, donc le corps en bois posé à 0,584 sur 0,20 de haut montait à 0,784, tandis que le drap posé à 0,716 sur 0,02 s'arrêtait à 0,736 — cinq centimètres SOUS le bois qui le recouvrait. Le feutre vert n'a jamais été visible depuis A4, et l'on ne voyait qu'une dalle noire. Mesuré en albédo : (9, 7, 6) là où la texture donne un vert franc."
+      "_": "Trois billes posees, pas rangees en triangle : une partie interrompue, pas une table de demonstration."
     },
     {
       "name": "bar_accueil",
