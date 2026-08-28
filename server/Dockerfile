@@ -4,7 +4,12 @@
 # le binaire. Pas de shell, pas de gestionnaire de paquets, donc quasiment
 # aucune surface d'attaque à l'intérieur du conteneur.
 
-FROM golang:1.24-alpine AS build
+# La version DOIT suivre celle que `go.mod` exige (`go 1.25.0`). L'image était
+# restée en 1.24 : `docker compose up --build` échouait sur « go.mod requires
+# go >= 1.25.0 », c'est-à-dire que la pile complète, celle que le README donne
+# comme LA commande pour lancer le serveur, ne se construisait plus. Rien dans
+# la CI ne bâtit cette image, donc rien ne le disait.
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 
 # Les dépendances d'abord : cette couche est réutilisée tant que go.mod et
