@@ -658,7 +658,52 @@ def assembler():
     bpy.ops.object.mode_set(mode="OBJECT")
 
     cadrer_les_flancs(ob)
+    cadrer_l_enseigne(ob)
     return ob
+
+
+def cadrer_l_enseigne(ob):
+    """L'enseigne du marquee, CADRÉE elle aussi.
+
+    Même cause et même remède que pour les flancs, sur une surface que le joueur
+    lit de plus loin encore : `smart_project` posait `nineteen_name.jpg` à une
+    échelle arbitraire, et la borne de classement affichait à la place de son nom
+    un fragment de tôle agrandi. Le marquee est le panneau qui dit à quoi on
+    joue ; c'est la dernière surface qu'on peut laisser au hasard.
+
+    Les deux axes de projection sont CHOISIS, pas écrits : on prend les deux plus
+    grandes étendues de la boîte de l'enseigne. Les écrire en dur demanderait de
+    se souvenir que ce maillage a Y en profondeur et Z en hauteur, ce qui est
+    précisément le genre de convention qu'on se rappelle mal — la première
+    version projetait sur x et y et donnait un panneau rayé.
+    """
+    me = ob.data
+    uv = me.uv_layers.active.data
+    marq = MI["marquee"]
+
+    faces = [f for f in me.polygons if f.material_index == marq]
+    if not faces:
+        raise RuntimeError("aucune enseigne a cadrer : la table des materiaux a bouge")
+
+    lo = [1e9] * 3
+    hi = [-1e9] * 3
+    for f in faces:
+        for vi in f.vertices:
+            co = me.vertices[vi].co
+            for k in range(3):
+                lo[k] = min(lo[k], co[k]); hi[k] = max(hi[k], co[k])
+    etendue = [hi[k] - lo[k] for k in range(3)]
+    axes = sorted(range(3), key=lambda k: etendue[k], reverse=True)[:2]
+    au, av = axes[0], axes[1]
+    if etendue[au] < 1e-6 or etendue[av] < 1e-6:
+        raise RuntimeError("enseigne degeneree")
+
+    for f in faces:
+        for li in f.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            u = (co[au] - lo[au]) / etendue[au]
+            v = (co[av] - lo[av]) / etendue[av]
+            uv[li].uv = (u, v)
 
 
 def cadrer_les_flancs(ob):
