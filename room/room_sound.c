@@ -1,6 +1,7 @@
 /* room_sound.c — voir room_sound.h pour le raisonnement. */
 #include "room_sound.h"
 
+#include "ns_config.h"
 #include "ns_core.h"
 
 #include <string.h>
@@ -17,26 +18,101 @@
 #define RS_CABINET_RADIUS 0.9f
 #define RS_CABINET_MAX    5.5f
 
+/* L'extracteur des toilettes et la rue au sas. Deux portées très différentes, et
+ * pour une raison : l'extracteur est un objet dans une pièce — on doit le perdre
+ * dès qu'on en sort —, la rue est un dehors, qui déborde par la baie. */
+#define RS_FAN_RADIUS     1.1f
+#define RS_FAN_MAX        6.0f
+#define RS_STREET_RADIUS  2.4f
+#define RS_STREET_MAX    16.0f
+
+/* --------------------------------------------------------------------------
+ * Les deux niveaux réglables
+ * --------------------------------------------------------------------------
+ * Au niveau du module, comme les volumes de bus dans `ns_audio.c`, et pour la
+ * même raison : le menu les bouge sans avoir à tenir l'instance de la salle.
+ * Les valeurs par défaut sont celles qu'on obtient sans `settings.cfg`.
+ */
+static float g_level[ROOM_LEVEL_COUNT] = { 0.85f, 0.70f };
+
+void room_sound_set_level(room_sound_level k, float v)
+{
+    if (k < 0 || k >= ROOM_LEVEL_COUNT) return;
+    g_level[k] = ns_clampf(v, 0.0f, 1.0f);
+}
+
+float room_sound_get_level(room_sound_level k)
+{
+    if (k < 0 || k >= ROOM_LEVEL_COUNT) return 0.0f;
+    return g_level[k];
+}
+
+/* --------------------------------------------------------------------------
+ * Les pas
+ * -------------------------------------------------------------------------- */
+
+/*
+ * Ce qui reste du réglage par matériau maintenant qu'il y a une banque.
+ *
+ * Presque rien, et c'est voulu : la différence entre la moquette et le carrelage
+ * est DANS les fichiers — 12 dB d'écart de pic et un rapport de quatre sur la
+ * brillance, mesurés à la sortie de `stepgen`. La ré-appliquer ici la compterait
+ * deux fois, et la moquette deviendrait inaudible.
+ *
+ * Il reste donc un gain quasi plat et une plage de hauteur ÉTROITE. Étroite
+ * parce qu'elle ne sert plus à distinguer les matériaux mais seulement à
+ * distinguer deux foulées : au-delà de ±6 %, on entend une bande qui accélère.
+ */
 typedef struct step_voice {
     float gain_min, gain_max;
     float pitch_min, pitch_max;
 } step_voice;
 
-/*
- * Un seul enregistrement de pas existe (`walk.wav`, 2020). Les matériaux se
- * distinguent donc par la hauteur et le gain, pas par l'échantillon — c'est une
- * approximation, elle est dite, et elle suffit à ce que la moquette et le
- * carrelage ne se confondent pas : le carrelage est plus haut et plus fort, la
- * moquette plus sourde et plus faible. Une vraie banque par matériau viendra
- * avec de vrais enregistrements.
- */
 static const step_voice g_step_voice[NS_STEP_COUNT] = {
+    /* NONE      */ { 0.00f, 0.00f, 1.00f, 1.00f },
+    /* MOQUETTE  */ { 0.94f, 1.06f, 0.95f, 1.05f },
+    /* CARRELAGE */ { 0.90f, 1.02f, 0.96f, 1.05f },
+    /* BOIS      */ { 0.94f, 1.06f, 0.95f, 1.06f },
+    /* BETON     */ { 0.92f, 1.04f, 0.96f, 1.05f },
+    /* ESTRADE   */ { 0.94f, 1.08f, 0.94f, 1.04f },
+};
+
+/*
+ * Le repli de B14, gardé mot pour mot.
+ *
+ * Il ne sert QUE si la banque manque. Ses valeurs sont celles qui distinguaient
+ * les matériaux par la hauteur, ce qui n'a plus lieu d'être quand la banque est
+ * là — mais qui vaut mieux que marcher en silence quand elle ne l'est pas.
+ */
+static const step_voice g_legacy_voice[NS_STEP_COUNT] = {
     /* NONE      */ { 0.00f, 0.00f, 1.00f, 1.00f },
     /* MOQUETTE  */ { 0.20f, 0.28f, 0.82f, 0.92f },
     /* CARRELAGE */ { 0.42f, 0.54f, 1.18f, 1.34f },
     /* BOIS      */ { 0.34f, 0.44f, 1.00f, 1.12f },
     /* BETON     */ { 0.38f, 0.48f, 1.06f, 1.20f },
     /* ESTRADE   */ { 0.44f, 0.56f, 0.92f, 1.04f },
+};
+
+/*
+ * Les quatre allures.
+ *
+ * Ce ne sont pas quatre banques : c'est la même, jouée autrement. Marcher,
+ * courir et se déplacer accroupi ne changent pas le sol, ils changent la force
+ * du contact et la façon dont le pied se pose. Un pas accroupi est posé — plus
+ * faible et plus sourd ; un pas de course est jeté — plus fort, plus clair, et
+ * la semelle ripe un peu plus haut.
+ *
+ * L'atterrissage, lui, n'est pas une allure mais un ÉVÉNEMENT : deux fois le
+ * poids d'un pas, une hauteur nettement plus basse, et une intensité qui suit la
+ * vitesse de chute (`bob.land`).
+ */
+typedef enum rs_gait { RS_GAIT_CROUCH = 0, RS_GAIT_WALK, RS_GAIT_RUN, RS_GAIT_LAND } rs_gait;
+
+static const struct { float gain, pitch; } g_gait[4] = {
+    /* ACCROUPI */ { 0.34f, 0.93f },
+    /* MARCHE   */ { 1.00f, 1.00f },
+    /* COURSE   */ { 1.42f, 1.06f },
+    /* CHUTE    */ { 1.90f, 0.87f },
 };
 
 static float rand_range(ns_rng *r, float lo, float hi)
@@ -49,17 +125,52 @@ static float rand_range(ns_rng *r, float lo, float hi)
  * Mise en place
  * -------------------------------------------------------------------------- */
 
+/* Le centre d'une zone sonore déclarée, si elle existe. C'est de là que sortent
+ * les positions de l'extracteur et de la rue : les zones portent déjà les bonnes
+ * boîtes, et en écrire une seconde description serait deux vérités à tenir
+ * d'accord. */
+static bool zone_centre(const ns_scene *scene, const char *name, ns_v3 *out, float height)
+{
+    for (uint32_t i = 0; i < scene->sound_zone_count; ++i) {
+        if (SDL_strcasecmp(scene->sound_zone[i].name, name) != 0) continue;
+        const ns_aabb b = scene->sound_zone[i].bounds;
+        out->x = (b.min.x + b.max.x) * 0.5f;
+        out->z = (b.min.z + b.max.z) * 0.5f;
+        /* En hauteur, on ne prend PAS le milieu : un extracteur est en haut d'un
+         * mur, une rue est au niveau de la rue. La cote est donnée par
+         * l'appelant, mesurée depuis le plancher de la zone. */
+        out->y = b.min.y + height;
+        return true;
+    }
+    return false;
+}
+
 void room_sound_init(room_sound *s, const ns_scene *scene)
 {
     memset(s, 0, sizeof *s);
     s->clip_walk = s->clip_ambience = NS_AUDIO_INVALID;
+    s->clip_tone = s->clip_fan = s->clip_street = NS_AUDIO_INVALID;
     s->clip_door_open = s->clip_door_close = NS_AUDIO_INVALID;
     for (int i = 0; i < 3; ++i) s->clip_cabinet[i] = NS_AUDIO_INVALID;
-    s->voice_ambience = NS_AUDIO_INVALID;
+    for (int k = 0; k < NS_STEP_COUNT; ++k) {
+        for (int v = 0; v < ROOM_STEP_VARIANTS; ++v) s->clip_step[k][v] = NS_AUDIO_INVALID;
+        s->last_variant[k] = -1;
+    }
+    s->voice_ambience = s->voice_tone = NS_AUDIO_INVALID;
+    s->voice_fan = s->voice_street = NS_AUDIO_INVALID;
     for (int i = 0; i < NS_MAX_CABINETS; ++i) s->voice_cabinet[i] = NS_AUDIO_INVALID;
     s->left_foot = true;
+    s->was_grounded = true;
 
     if (!ns_audio_ready()) return;
+
+    /* Les réglages persistants sont relus ICI et pas dans `room/main.c` : ce
+     * sont deux clés de la salle, écrites par le menu de la salle. Les faire
+     * transiter par le programme principal n'ajouterait qu'un intermédiaire. */
+    room_sound_set_level(ROOM_LEVEL_STEPS,
+                         ns_config_get_float(ROOM_CFG_VOL_STEPS, g_level[ROOM_LEVEL_STEPS]));
+    room_sound_set_level(ROOM_LEVEL_TONE,
+                         ns_config_get_float(ROOM_CFG_VOL_TONE, g_level[ROOM_LEVEL_TONE]));
 
     s->clip_walk       = ns_audio_load("sounds/walk.wav");
     s->clip_ambience   = ns_audio_load("sounds/background.wav");
@@ -69,6 +180,27 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_door_open  = ns_audio_load("sounds/SF-ouvport.wav");
     s->clip_door_close = ns_audio_load("sounds/SF-fermport.wav");
 
+    /* La banque de `tools/stepgen`. Le nom du matériau vient de
+     * `ns_footstep_label` — le MÊME que celui que `salle.room.json` écrit et que
+     * `ns_scene` relit. Un troisième jeu de chaînes ici finirait par diverger. */
+    int loaded = 0;
+    for (int k = 1; k < NS_STEP_COUNT; ++k) {
+        for (int v = 0; v < ROOM_STEP_VARIANTS; ++v) {
+            char logical[96];
+            SDL_snprintf(logical, sizeof logical, "sounds/pas_%s_%d.wav",
+                         ns_footstep_label((ns_footstep)k), v + 1);
+            s->clip_step[k][v] = ns_audio_load(logical);
+            if (s->clip_step[k][v] >= 0) loaded++;
+        }
+    }
+    /* Tout ou rien : une banque à moitié chargée ferait alterner des pas de deux
+     * origines, ce qui s'entend bien plus mal qu'un seul son répété. */
+    s->bank_ready = (loaded == (NS_STEP_COUNT - 1) * ROOM_STEP_VARIANTS);
+
+    s->clip_tone   = ns_audio_load("sounds/amb_neon.wav");
+    s->clip_fan    = ns_audio_load("sounds/amb_ventilo.wav");
+    s->clip_street = ns_audio_load("sounds/amb_rue.wav");
+
     /*
      * La nappe d'ambiance n'est PAS spatialisée : elle n'a pas de position, elle
      * est la salle. La spatialiser reviendrait à la faire venir d'un point, et à
@@ -76,6 +208,47 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
      */
     if (s->clip_ambience >= 0) {
         s->voice_ambience = ns_audio_loop(s->clip_ambience, NS_BUS_AMBIENCE, 0.34f);
+    }
+
+    /*
+     * Le fond de salle, non spatialisé pour la même raison — et c'est ce qui
+     * manquait le plus. Entre deux pas, la salle de B14 était un VIDE numérique :
+     * les bornes se taisent à cinq mètres, la nappe de 2020 est une boucle
+     * courte, et il n'y avait rien d'autre. Un hall avec dix-neuf tubes et onze
+     * luminaires a un plancher continu, et son absence s'entend même quand on ne
+     * sait pas dire ce qui manque.
+     */
+    if (s->clip_tone >= 0) {
+        s->voice_tone = ns_audio_loop(s->clip_tone, NS_BUS_AMBIENCE,
+                                      0.42f * g_level[ROOM_LEVEL_TONE]);
+    }
+
+    if (scene) {
+        /* L'extracteur, DERRIÈRE la porte des toilettes. Placé là et pas ailleurs
+         * parce que c'est la seule source d'ambiance de la salle qui soit
+         * occultée par un mur : elle rend l'occlusion du BVH audible en marchant,
+         * ce qu'une source au milieu de l'allée ne ferait jamais. 2,35 m — en
+         * haut du mur, sous un plafond à 2,90. */
+        if (s->clip_fan >= 0 && zone_centre(scene, "toilettes", &s->fan_position, 2.35f)) {
+            s->has_fan = true;
+            /* 0,44 et pas 0,30. Mesuré : à 0,30, un extracteur sous lequel on se
+             * tient ressortait à 0,21 une fois la source centrée entre les deux
+             * canaux — c'est-à-dire SOUS le fond de salle, qui vaut 0,29 et
+             * n'est nulle part. Une source qu'on a au-dessus de la tête et qui
+             * s'entend moins fort qu'un ronflement lointain est une source qu'on
+             * ne croit pas. Le maximum est resserré à six mètres en échange :
+             * plus présente dedans, mais pas plus loin dehors. */
+            s->voice_fan = ns_audio_loop_3d(s->clip_fan, NS_BUS_AMBIENCE, s->fan_position,
+                                            0.44f, 1.0f, RS_FAN_RADIUS, RS_FAN_MAX);
+        }
+        /* La rue, au sas. 1,20 m : la hauteur d'une baie, pas celle d'une tête —
+         * ce qui traverse, ce sont des roues sur du bitume. */
+        if (s->clip_street >= 0 && zone_centre(scene, "sas_entree", &s->street_position, 1.20f)) {
+            s->has_street = true;
+            s->voice_street = ns_audio_loop_3d(s->clip_street, NS_BUS_AMBIENCE,
+                                               s->street_position,
+                                               0.34f, 1.0f, RS_STREET_RADIUS, RS_STREET_MAX);
+        }
     }
 
     /*
@@ -99,14 +272,21 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     }
 
     s->ready = true;
-    NS_INFO("son : %d borne(s) sonorisée(s), ambiance %s",
-            s->cabinet_voices, s->voice_ambience >= 0 ? "en place" : "absente");
+    NS_INFO("son : %d borne(s) sonorisée(s), pas %s, fond %s, extracteur %s, rue %s",
+            s->cabinet_voices,
+            s->bank_ready ? "par banque (5 matériaux x 4)" : "sur walk.wav (banque absente)",
+            s->voice_tone >= 0 ? "en place" : "absent",
+            s->has_fan ? "aux toilettes" : "absent",
+            s->has_street ? "au sas" : "absente");
 }
 
 void room_sound_shutdown(room_sound *s)
 {
     if (!s->ready) return;
     ns_audio_stop(s->voice_ambience);
+    ns_audio_stop(s->voice_tone);
+    ns_audio_stop(s->voice_fan);
+    ns_audio_stop(s->voice_street);
     for (int i = 0; i < NS_MAX_CABINETS; ++i) ns_audio_stop(s->voice_cabinet[i]);
     memset(s, 0, sizeof *s);
 }
@@ -123,6 +303,68 @@ static ns_footstep step_under_feet(const ns_scene *scene, const room_camera *cam
     /* Un matériau sans classe déclarée n'est pas une erreur : on marche dessus
      * comme sur de la moquette, et la salle de 2020 n'en déclare aucune. */
     return (k == NS_STEP_NONE) ? NS_STEP_MOQUETTE : k;
+}
+
+/*
+ * Un pas, joué.
+ *
+ * Toute la variation est ICI, et elle porte sur trois grandeurs à la fois, parce
+ * qu'une seule ne suffit pas : changer la hauteur seule fait entendre une bande
+ * qui accélère, changer le gain seul fait entendre un curseur de volume. Il faut
+ * l'ÉCHANTILLON en plus, et c'est ce que la banque apporte.
+ */
+static void play_step(room_sound *s, const ns_scene *scene, const room_camera *cam,
+                      ns_v3 feet, rs_gait gait, float intensity)
+{
+    const ns_footstep k = step_under_feet(scene, cam);
+    if (k <= NS_STEP_NONE || k >= NS_STEP_COUNT) return;
+
+    ns_rng rng;
+    ns_rng_seed(&rng, (uint64_t)(s->last_step_distance * 1000.0f), s->rng++);
+
+    /* Le pied gauche et le pied droit ne sonnent pas pareil : deux chaussures,
+     * deux appuis. Un décalage constant de timbre suffit à ce que l'oreille
+     * entende une marche plutôt qu'une répétition. */
+    const float foot = s->left_foot ? 0.97f : 1.03f;
+
+    int clip;
+    const step_voice *v;
+    if (s->bank_ready) {
+        v = &g_step_voice[k];
+        /* La variante précédente est INTERDITE. C'est la règle qui compte : deux
+         * pas identiques consécutifs s'entendent, deux pas identiques à cinq pas
+         * d'intervalle non. */
+        int pick = (int)(ns_rng_u32(&rng) % ROOM_STEP_VARIANTS);
+        if (pick == s->last_variant[k]) pick = (pick + 1) % ROOM_STEP_VARIANTS;
+        s->last_variant[k] = pick;
+        clip = s->clip_step[k][pick];
+    } else {
+        v = &g_legacy_voice[k];
+        clip = s->clip_walk;
+    }
+    if (clip < 0) return;
+
+    const float gain = rand_range(&rng, v->gain_min, v->gain_max)
+                     * g_gait[gait].gain * intensity
+                     * g_level[ROOM_LEVEL_STEPS];
+    const float pitch = rand_range(&rng, v->pitch_min, v->pitch_max)
+                      * g_gait[gait].pitch * foot;
+
+    /* Le pas vient des PIEDS, pas des yeux : à 1,70 m au-dessus, il sonnerait
+     * comme si l'on marchait sur les mains. */
+    ns_audio_play_3d(clip, NS_BUS_SFX, feet, gain, pitch, 0.6f, 8.0f);
+}
+
+/* L'allure, déduite de la caméra. Rien n'est ajouté à `room_camera` pour ça : la
+ * hauteur d'œil dit l'accroupissement, et l'amplitude d'oscillation — qui vaut
+ * la vitesse réelle rapportée à la marche — dit la course. */
+static rs_gait gait_of(const room_camera *cam, float bob_amount)
+{
+    if (cam->eye_height < cam->eye_height_stand - 0.05f) return RS_GAIT_CROUCH;
+    /* `speed_run / speed_walk` vaut 3,3 / 1,4 = 2,36, borné à 1,6 par
+     * `bob_tick`. Le seuil est posé au-dessus de la marche rapide et bien en
+     * dessous du plafond, pour qu'il ne dépende pas de la borne. */
+    return (bob_amount > 1.25f) ? RS_GAIT_RUN : RS_GAIT_WALK;
 }
 
 void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam, float dt)
@@ -156,57 +398,93 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     s->space_decay = ns_damp(s->space_decay, want_decay, 3.0f, dt);
     ns_audio_set_space(s->space_wet, s->space_decay);
 
+    /* Le fond de salle suit son curseur, sans coupure : `ns_audio_voice_gain`
+     * change le gain d'une boucle en cours. Régler « FOND DE SALLE » pendant
+     * qu'on écoute est le seul moyen honnête de le régler. */
+    if (s->voice_tone >= 0) {
+        ns_audio_voice_gain(s->voice_tone, 0.42f * g_level[ROOM_LEVEL_TONE]);
+    }
+
     /* --- les pas ------------------------------------------------------- */
     const room_view_bob bob = room_camera_bob(cam, 1.0f);
-    if (cam->mode == ROOM_CAM_PLAYER && cam->grounded && bob.amount > 0.12f) {
-        if (bob.distance - s->last_step_distance >= RS_STEP_METRES) {
-            s->last_step_distance = bob.distance;
+    if (cam->mode == ROOM_CAM_PLAYER) {
+        /* Le pas vient des PIEDS, pas des yeux. */
+        ns_v3 feet = view.position;
+        feet.y -= cam->eye_height;
+
+        /* L'ATTERRISSAGE d'abord : c'est un front, et il doit passer avant le
+         * seuil de distance — sinon un saut vers l'avant produit un pas ordinaire
+         * au moment exact où l'on encaisse. */
+        const bool just_landed = (!s->was_grounded && cam->grounded);
+        if (just_landed) {
+            /* `bob.land` vaut la vitesse de chute rapportée à 6 m/s, bornée à 1.
+             * Une chute de vingt centimètres ne doit pas sonner comme une chute
+             * d'un étage : l'intensité SUIT la chute, avec un plancher pour que
+             * poser le pied s'entende quand même. */
+            const float intensity = 0.55f + 0.95f * ns_clampf(bob.land, 0.0f, 1.0f);
+            play_step(s, scene, cam, feet, RS_GAIT_LAND, intensity);
             s->left_foot = !s->left_foot;
-
-            const ns_footstep k = step_under_feet(scene, cam);
-            const step_voice *v = &g_step_voice[k];
-
-            ns_rng rng;
-            ns_rng_seed(&rng, (uint64_t)(bob.distance * 1000.0f), s->rng++);
-
-            /* Le pied gauche et le pied droit ne sonnent pas pareil : deux corps
-             * différents, deux chaussures différentes. Un décalage constant de
-             * timbre suffit à ce que l'oreille entende une marche plutôt qu'une
-             * répétition. */
-            const float foot = s->left_foot ? 0.97f : 1.03f;
-            const float gain  = rand_range(&rng, v->gain_min, v->gain_max)
-                              * ns_clampf(bob.amount, 0.3f, 1.0f);
-            const float pitch = rand_range(&rng, v->pitch_min, v->pitch_max) * foot;
-
-            /* Le pas vient des PIEDS, pas des yeux : à 1,70 m au-dessus, il
-             * sonnerait comme si l'on marchait sur les mains. */
-            ns_v3 feet = view.position;
-            feet.y -= cam->eye_height;
-            ns_audio_play_3d(s->clip_walk, NS_BUS_SFX, feet, gain, pitch, 0.6f, 8.0f);
+            /* On réarme : après un saut, le pas suivant doit être à une foulée
+             * entière, pas au reliquat de distance d'avant le saut. */
+            s->last_step_distance = bob.distance;
+        } else if (cam->grounded && bob.amount > 0.12f) {
+            if (bob.distance - s->last_step_distance >= RS_STEP_METRES) {
+                s->last_step_distance = bob.distance;
+                s->left_foot = !s->left_foot;
+                const rs_gait gait = gait_of(cam, bob.amount);
+                /* L'intensité suit l'amplitude réelle : plaqué contre un mur,
+                 * `bob.amount` retombe et les pas s'éteignent avec lui. */
+                play_step(s, scene, cam, feet, gait, ns_clampf(bob.amount, 0.3f, 1.0f));
+            }
+        } else if (bob.amount <= 0.12f) {
+            /* À l'arrêt, on réarme : repartir ne doit pas attendre un demi-pas. */
+            s->last_step_distance = bob.distance;
         }
-    } else if (bob.amount <= 0.12f) {
-        /* À l'arrêt, on réarme : repartir ne doit pas attendre un demi-pas. */
+        s->was_grounded = cam->grounded;
+    } else {
+        /* En vol libre ou en orbite, il n'y a pas de pieds. Sans ce réarmement,
+         * reprendre la main en mode joueur déclencherait une salve de pas pour
+         * rattraper la distance parcourue en volant. */
         s->last_step_distance = bob.distance;
+        s->was_grounded = true;
     }
 
     /* --- occlusion, une source par image -------------------------------- */
     /*
-     * `ns_bvh_occlusion_factor` lance trois rayons. Dix-neuf sources par image
-     * en feraient cinquante-sept, pour une grandeur qui ne change qu'à la vitesse
-     * où l'on marche. Un tourniquet suffit : chaque borne est réévaluée cinq fois
-     * par seconde à 60 images, et l'amortissement du mixeur lisse le reste.
+     * `ns_bvh_occlusion_factor` lance trois rayons. Vingt et une sources par
+     * image en feraient soixante-trois, pour une grandeur qui ne change qu'à la
+     * vitesse où l'on marche. Un tourniquet suffit : chaque source est réévaluée
+     * cinq fois par seconde à 60 images, et l'amortissement du mixeur lisse le
+     * reste.
+     *
+     * L'extracteur et la rue sont DANS le tourniquet, et c'est le point : ce sont
+     * les deux seules sources d'ambiance derrière un mur, donc les deux seules
+     * où l'occlusion s'entend vraiment.
      */
-    if (scene->bvh.loaded && s->cabinet_voices > 0) {
-        const uint32_t n = (scene->cabinet_count < NS_MAX_CABINETS)
-                         ? scene->cabinet_count : NS_MAX_CABINETS;
-        if (n) {
-            const uint32_t i = s->occlusion_cursor % n;
-            s->occlusion_cursor++;
-            if (s->voice_cabinet[i] >= 0) {
-                const float f = ns_bvh_occlusion_factor(&scene->bvh, view.position,
-                                                        scene->cabinets[i].screen_center);
-                ns_audio_voice_occlusion(s->voice_cabinet[i], f);
-            }
+    if (scene->bvh.loaded) {
+        const uint32_t cabinets = (scene->cabinet_count < NS_MAX_CABINETS)
+                                ? scene->cabinet_count : NS_MAX_CABINETS;
+        const uint32_t n = cabinets + 2;
+        const uint32_t i = s->occlusion_cursor % n;
+        s->occlusion_cursor++;
+
+        int   voice = NS_AUDIO_INVALID;
+        ns_v3 at = ns_v3_zero();
+        bool  live = false;
+
+        if (i < cabinets) {
+            voice = s->voice_cabinet[i];
+            at = scene->cabinets[i].screen_center;
+            live = true;
+        } else if (i == cabinets && s->has_fan) {
+            voice = s->voice_fan; at = s->fan_position; live = true;
+        } else if (i == cabinets + 1 && s->has_street) {
+            voice = s->voice_street; at = s->street_position; live = true;
+        }
+
+        if (live && voice >= 0) {
+            ns_audio_voice_occlusion(voice,
+                ns_bvh_occlusion_factor(&scene->bvh, view.position, at));
         }
     }
 

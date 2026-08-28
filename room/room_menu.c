@@ -5,6 +5,7 @@
 #include "ns_core.h"
 #include "ns_math.h"
 #include "room_hud.h"
+#include "room_sound.h"
 
 #include <SDL3/SDL.h>
 #include <math.h>
@@ -26,6 +27,12 @@ typedef enum menu_item {
     MI_VOL_MUSIC,
     MI_VOL_SFX,
     MI_VOL_AMBIENCE,
+    /* Les deux niveaux de la salle sont placés SOUS les quatre bus, et pas
+     * ailleurs : ce sont des sous-réglages de « EFFETS » et de « AMBIANCE », et
+     * l'ordre de l'écran doit dire cette dépendance. Mettre « PAS » avant
+     * « VOLUME GENERAL » laisserait croire qu'il s'y soustrait. */
+    MI_VOL_STEPS,
+    MI_VOL_TONE,
     MI_MOUSE,
     MI_RESUME,
     MI_QUIT,
@@ -41,6 +48,8 @@ static const char *const g_label[MI_COUNT] = {
     "MUSIQUE",
     "EFFETS",
     "AMBIANCE",
+    "PAS",
+    "FOND DE SALLE",
     "SOURIS",
     "REPRENDRE",
     "QUITTER LE JEU",
@@ -122,6 +131,15 @@ static void item_value(const room_menu_ctx *ctx, int i, char *out, size_t n,
         case MI_VOL_MUSIC:  pct(out, n, bus_get(NS_BUS_MUSIC)); break;
         case MI_VOL_SFX:    pct(out, n, bus_get(NS_BUS_SFX)); break;
         case MI_VOL_AMBIENCE: pct(out, n, bus_get(NS_BUS_AMBIENCE)); break;
+        /* Ces deux-là gardent leur vraie valeur même sans sortie audio, à la
+         * différence des quatre bus au-dessus. Ce ne sont pas des états du
+         * mixeur — ce sont des préférences de la salle, écrites dans
+         * `settings.cfg` et relues au prochain démarrage. Les afficher « - » sur
+         * une machine sans carte son reviendrait à dire qu'elles sont perdues,
+         * alors qu'elles sont gardées ; c'est aussi ce qui les rend vérifiables
+         * sans périphérique par `tests/test_menu.c`. */
+        case MI_VOL_STEPS:  pct(out, n, room_sound_get_level(ROOM_LEVEL_STEPS)); break;
+        case MI_VOL_TONE:   pct(out, n, room_sound_get_level(ROOM_LEVEL_TONE)); break;
         case MI_MOUSE:      SDL_snprintf(out, n, "%.2f", (double)*ctx->mouse_sensitivity); break;
         default:            out[0] = '\0'; break;
     }
@@ -169,6 +187,16 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
         case MI_VOL_MUSIC:    bus_step(NS_BUS_MUSIC, dir);    return false;
         case MI_VOL_SFX:      bus_step(NS_BUS_SFX, dir);      return false;
         case MI_VOL_AMBIENCE: bus_step(NS_BUS_AMBIENCE, dir); return false;
+        /* Même pas de 5 % que les bus : deux familles de volumes qui se règlent
+         * par crans différents rendent le menu imprévisible sous le pouce. */
+        case MI_VOL_STEPS:
+            room_sound_set_level(ROOM_LEVEL_STEPS,
+                                 room_sound_get_level(ROOM_LEVEL_STEPS) + (float)dir * 0.05f);
+            return false;
+        case MI_VOL_TONE:
+            room_sound_set_level(ROOM_LEVEL_TONE,
+                                 room_sound_get_level(ROOM_LEVEL_TONE) + (float)dir * 0.05f);
+            return false;
         case MI_MOUSE:
             *ctx->mouse_sensitivity = ns_clampf(*ctx->mouse_sensitivity + (float)dir * 0.05f,
                                                 0.20f, 3.00f);
@@ -240,6 +268,12 @@ void room_menu_persist(const room_menu_ctx *ctx)
     ns_config_set_str(NS_CFG_QUALITY, q);
     ns_config_set_float(NS_CFG_RENDER_SCALE, ctx->rs->render_scale);
     ns_config_set_float(NS_CFG_MOUSE_SENS, *ctx->mouse_sensitivity);
+    /* Hors du garde `ns_audio_ready`, délibérément : ces deux-là n'ont pas
+     * besoin du mixeur pour exister. Régler les pas sur une machine muette puis
+     * retrouver le réglage sur une machine sonore est le comportement attendu ;
+     * les mettre sous le garde les effacerait silencieusement. */
+    ns_config_set_float(ROOM_CFG_VOL_STEPS, room_sound_get_level(ROOM_LEVEL_STEPS));
+    ns_config_set_float(ROOM_CFG_VOL_TONE,  room_sound_get_level(ROOM_LEVEL_TONE));
     if (ns_audio_ready()) {
         ns_config_set_float(NS_CFG_VOL_MASTER,   ns_audio_bus_volume(NS_BUS_MASTER));
         ns_config_set_float(NS_CFG_VOL_MUSIC,    ns_audio_bus_volume(NS_BUS_MUSIC));
@@ -263,7 +297,23 @@ void room_menu_draw(ns_sprite *s, const room_menu *m, const room_menu_ctx *ctx)
     const float veil[4] = { 0.02f, 0.015f, 0.012f, 0.72f };
     ns_sprite_rect(s, 0, 0, W, H, veil);
 
-    const float panel_w = 720.0f, panel_h = 560.0f;
+    /*
+     * La hauteur du cadre est DÉDUITE du nombre d'entrées, elle n'est plus
+     * écrite en dur.
+     *
+     * Elle valait 560 pour onze lignes, ce qui laissait exactement seize pixels
+     * sous la dernière — et les deux lignes ajoutées ici passaient donc PAR
+     * DESSUS le texte d'aide. Un cadre de taille fixe est un piège qui se
+     * referme sur la personne suivante qui ajoute un réglage : la formule le
+     * désamorce une fois pour toutes, et la borne dit ce qui arrive si l'on
+     * dépasse l'écran plutôt que de le laisser déborder en silence.
+     */
+    const float row_h  = 38.0f;
+    const float head_h = 78.0f;    /* titre et respiration au-dessus des lignes */
+    const float foot_h = 74.0f;    /* les deux lignes d'aide, et leur marge */
+    const float panel_w = 720.0f;
+    float panel_h = head_h + (float)MI_COUNT * row_h + foot_h;
+    if (panel_h > H - 20.0f) panel_h = H - 20.0f;
     const float px = (W - panel_w) * 0.5f, py = (H - panel_h) * 0.5f;
 
     const float border[4] = { 0.78f, 0.42f, 0.14f, 0.95f };
@@ -280,8 +330,7 @@ void room_menu_draw(ns_sprite *s, const room_menu *m, const room_menu_ctx *ctx)
     ns_sprite_text(s, px + (panel_w - ns_sprite_text_width(title, title_scale)) * 0.5f,
                    py + 22.0f, title_scale, amber, title);
 
-    const float row_h = 38.0f;
-    const float top = py + 78.0f;
+    const float top = py + head_h;
     const float lx = px + 40.0f;          /* libellés */
     const float vx = px + panel_w - 40.0f; /* valeurs, alignées à droite */
 

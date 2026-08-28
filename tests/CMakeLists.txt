@@ -82,7 +82,16 @@ add_test(NAME ik COMMAND ns_test_ik)
 # pendant deux mois : que l'occlusion audio sur le BVH était testée. Elle ne
 # l'était pas — il n'y avait ni mixeur, ni test, ni même de lien vers miniaudio.
 # Il tourne sans carte son, donc en intégration continue.
-add_executable(ns_test_audio test_audio.c)
+#
+# `room_sound.c` et `room_camera.c` sont compilés ici depuis `room/` — comme
+# `ns_test_bvh` le fait déjà — parce que B23 ne mesure plus seulement le mixeur
+# mais la SALLE : la banque de pas, la cadence, et le niveau de l'ambiance en
+# trois points. Réécrire la logique de `room_sound` dans le test mesurerait la
+# réécriture, ce qui est le contraire de ce qu'on cherche.
+add_executable(ns_test_audio test_audio.c
+    "${CMAKE_SOURCE_DIR}/room/room_sound.c"
+    "${CMAKE_SOURCE_DIR}/room/room_camera.c")
+target_include_directories(ns_test_audio PRIVATE "${CMAKE_SOURCE_DIR}/room")
 target_link_libraries(ns_test_audio PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_audio)
 nineteen_apply_sanitizers(ns_test_audio)
@@ -267,7 +276,18 @@ set_tests_properties(render PROPERTIES
 # Le menu de réglages. Aucune fenêtre, aucun GPU : ce qu'on vérifie est le
 # comportement — les bornes, le bouclage, et surtout qu'un changement de palier
 # n'écrase pas les trois réglages qui ont leur propre ligne.
-add_executable(ns_test_menu test_menu.c "${CMAKE_SOURCE_DIR}/room/room_menu.c")
+#
+# `room_sound.c` et `room_camera.c` sont liés ici parce que les deux lignes de
+# niveau ajoutées en B23 — « PAS » et « FOND DE SALLE » — vivent au niveau du
+# module `room_sound`, comme les volumes de bus vivent au niveau de `ns_audio`.
+# Tester la ligne sans lier ce qu'elle pilote reviendrait à tester le dessin.
+# `ns_test_bvh` compile déjà `room_camera.c` de la même façon : ce sont des
+# fichiers de jeu, et les descendre dans `engine/` pour arranger un build serait
+# déplacer du code pour la mauvaise raison.
+add_executable(ns_test_menu test_menu.c
+    "${CMAKE_SOURCE_DIR}/room/room_menu.c"
+    "${CMAKE_SOURCE_DIR}/room/room_sound.c"
+    "${CMAKE_SOURCE_DIR}/room/room_camera.c")
 target_include_directories(ns_test_menu PRIVATE "${CMAKE_SOURCE_DIR}/room")
 target_link_libraries(ns_test_menu PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_menu)

@@ -448,13 +448,21 @@ add_custom_command(
 # copier**. Le mixeur pouvait bien exister, il n'aurait rien trouvé à jouer.
 file(GLOB ROOM_SOUNDS "${SRC_ROOM}/sounds/*.wav" "${SRC_LEGACY}/assets/*.wav")
 
+# `stepgen` écrit dans le MÊME répertoire, juste après la copie : la banque de
+# pas par matériau et les trois nappes d'ambiance sont synthétisées à chaque
+# build plutôt que commitées. Elles sortent ici et pas dans un répertoire à part
+# — contrairement à `sideart` — parce qu'aucun outil ne vérifie l'exhaustivité de
+# `sounds/` comme `roomgen` le fait pour les textures : il n'y a donc rien à
+# fausser en mélangeant les deux origines, et le moteur n'a qu'un chemin à
+# connaître.
 add_custom_command(
     OUTPUT "${GEN}/sounds/.stamp"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sounds"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ROOM_SOUNDS} "${GEN}/sounds/"
+    COMMAND stepgen "${GEN}/sounds"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/sounds/.stamp"
-    DEPENDS ${ROOM_SOUNDS}
-    COMMENT "Copie des sons"
+    DEPENDS ${ROOM_SOUNDS} stepgen
+    COMMENT "Copie des sons, puis synthèse des pas et des nappes d'ambiance"
     VERBATIM
 )
 

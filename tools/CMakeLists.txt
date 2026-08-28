@@ -30,6 +30,11 @@ nineteen_add_tool(texgen   texgen.c)
 nineteen_add_tool(sideart  sideart.c)
 nineteen_add_tool(panelart panelart.c)
 nineteen_add_tool(bvhbake  bvhbake.c)
+# Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de
+# pas et les nappes d'ambiance sont SYNTHÉTISÉES au lieu d'être enregistrées. Un
+# pas se décrit par un choc et deux résonateurs ; le décrire coûte moins qu'une
+# banque téléchargée, et ne pose ni question de licence ni question de poids.
+nineteen_add_tool(stepgen  stepgen.c)
 
 # La salle reconstruite. `obj2gltf` reste, mais ne sert plus qu'à produire la
 # salle de 2020 sous `salle-legacy.*` : les deux sortent du même binaire de jeu
