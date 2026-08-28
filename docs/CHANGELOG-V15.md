@@ -549,6 +549,13 @@ est probable. `ctest` : 32/32.
   vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
+- **Les bras n'atteignent pas le panneau depuis le point de vue « borne ».** Constaté en
+  remodélisant la borne, et **antérieur à ce changement** : la même capture prise avant donne
+  exactement la même pose, mains pendantes à hauteur de monnayeur. Les quatre ancres sont
+  pourtant justes — `test_ik` les atteint à 3 cm près sur des cotes synthétiques, et la hauteur
+  du manche n'a pas bougé de plus de 4 mm. Le suspect est donc l'accrochage du joueur à la borne
+  depuis un point de vue nommé, pas la géométrie. Non corrigé ici : ça touche
+  `room_viewmodel.c`, où d'autres travaillent.
 - **Le temps réel — présence et duels.** C'est tout ce qui reste côté réseau, et c'est
   délibéré : ça se conçoit avant de s'écrire. Le classement en ligne, lui, **fonctionne de
   bout en bout** (voir ci-dessus).

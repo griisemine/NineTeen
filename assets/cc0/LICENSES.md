@@ -71,6 +71,12 @@ et relisible, et le `.gltf` est un résultat de build qu'on regénère par
 
 Il est donc sous la licence du dépôt, sans tiers ni attribution.
 
+La reconstruction est **déterministe** : relancer la commande ci-dessus rend des
+fichiers octet pour octet identiques (vérifié au `shasum` sur les trois). Le
+`.gltf` versionné n'est donc pas une source qu'on retoucherait à la main, c'est
+un résultat qu'on peut jeter et refaire — et un diff sur ce fichier signale un
+vrai changement de géométrie, jamais du bruit d'export.
+
 **Pourquoi il n'est pas importé.** La référence désignée est
 [free3d 5523](https://free3d.com/fr/3d-model/arcade-cabinet-5523.html). Fait
 vérifié : ce modèle **coûte 19 $ et sa licence est « Royalty Free — Editorial
