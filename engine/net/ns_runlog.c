@@ -171,6 +171,18 @@ struct ns_runlog {
     uint32_t      input_count, input_capacity;
     uint8_t       last_held;
     bool          input_started;
+    /*
+     * Le DERNIER pas vu, qu'il ait produit une ligne ou non.
+     *
+     * Le journal n'enregistre que les CHANGEMENTS, ce qui est ce qu'il faut —
+     * mais il perdait du coup la LONGUEUR de la partie : un joueur qui ne
+     * touche plus rien pendant les dix dernières secondes laisse un journal
+     * dont la dernière ligne est dix secondes trop tôt. Rejoué, son fantôme
+     * s'arrêtait donc dix secondes avant la fin, et deux machines ne voyaient
+     * plus la même partie. `tests/test_duel.c` l'a attrapé en comparant les
+     * états au bit près après un aller-retour réseau.
+     */
+    int32_t       last_tick;
 
     int64_t duration_ms, claimed;
     bool    closed;
@@ -206,6 +218,7 @@ void ns_runlog_begin(ns_runlog *r, const char *game, const char *difficulty,
     r->input_count = 0;
     r->last_held = 0;
     r->input_started = false;
+    r->last_tick = 0;
 
     if (!r) return;
     r->count = 0; r->duration_ms = 0; r->claimed = 0; r->closed = false;
@@ -241,6 +254,8 @@ void ns_runlog_input(ns_runlog *r, int32_t tick, uint8_t held, uint8_t pressed)
     const bool changed = (held != r->last_held) || (pressed != 0) || !r->input_started;
     r->last_held = held;
     r->input_started = true;
+    /* Noté à CHAQUE pas, changement ou non : c'est la durée de la partie. */
+    if (tick > r->last_tick) r->last_tick = tick;
     if (!changed) return;
 
     if (r->input_count == r->input_capacity) {
@@ -265,29 +280,82 @@ uint32_t ns_runlog_input_count(const ns_runlog *r) { return r ? r->input_count :
 
 const ns_run_input *ns_runlog_inputs(const ns_runlog *r) { return r ? r->input : NULL; }
 
-bool ns_runlog_write_inputs(const ns_runlog *r, const char *path)
+/*
+ * Le journal d'entrées, en mémoire.
+ *
+ * Rendue publique parce qu'un fantôme s'ENVOIE : le corps d'une requête HTTP se
+ * construit en RAM, et passer par un fichier temporaire pour des données qu'on
+ * tient déjà serait un aller-retour disque gratuit. L'écriture sur disque
+ * (`ns_runlog_write_inputs`) formate désormais par ici, donc il n'existe qu'UN
+ * producteur de ce format — celui qu'un fichier `.txt` et un corps HTTP
+ * partagent au caractère près.
+ */
+size_t ns_runlog_format_inputs(const ns_runlog *r, char *out, size_t cap)
 {
-    if (!r || !path) return false;
+    if (!r) return 0;
 
-    SDL_IOStream *io = SDL_IOFromFile(path, "w");
-    if (!io) {
-        NS_WARN("journal d'entrées : écriture impossible (%s) : %s", path, SDL_GetError());
-        return false;
-    }
+    size_t total = 0;
     char line[160];
-    int n = SDL_snprintf(line, sizeof line, "v1 %s %s %lld\n",
+
+    /*
+     * Un QUATRIÈME champ dans l'en-tête : le dernier pas de la partie.
+     *
+     * Il est ajouté, et pas substitué : un journal « v1 <jeu> <difficulté>
+     * <graine> » sans lui reste lisible, et `tests/data/rejeu-demineur.txt`
+     * n'est pas à réécrire. C'est ce que le lecteur traite comme facultatif.
+     *
+     * Pourquoi il manquait, et ce que ça cassait : le journal n'écrit que les
+     * CHANGEMENTS de commandes — c'est ce qui le garde à quelques kilo-octets —
+     * mais du coup un joueur qui lâche les commandes avant de mourir laisse un
+     * journal dont la dernière ligne précède la fin de la partie. Le rejeu,
+     * qui déduisait la durée de cette dernière ligne, s'arrêtait donc trop tôt.
+     * Le score pouvait quand même coïncider ; l'ÉTAT non, et pour un duel les
+     * deux machines doivent voir la même partie et pas seulement le même
+     * nombre.
+     */
+    int n = SDL_snprintf(line, sizeof line, "v1 %s %s %lld %d\n",
                          r->game[0] ? r->game : "?",
                          r->difficulty[0] ? r->difficulty : "normal",
-                         (long long)r->seed);
-    SDL_WriteIO(io, line, (size_t)n);
+                         (long long)r->seed,
+                         r->last_tick);
+    if (n > 0) {
+        if (out && total + (size_t)n < cap) SDL_memcpy(out + total, line, (size_t)n);
+        total += (size_t)n;
+    }
+
     for (uint32_t i = 0; i < r->input_count; ++i) {
         n = SDL_snprintf(line, sizeof line, "%d %u %u\n",
                          r->input[i].tick,
                          (unsigned)r->input[i].held,
                          (unsigned)r->input[i].pressed);
-        SDL_WriteIO(io, line, (size_t)n);
+        if (n <= 0) continue;
+        if (out && total + (size_t)n < cap) SDL_memcpy(out + total, line, (size_t)n);
+        total += (size_t)n;
     }
+
+    /* Comme `snprintf` : on termine toujours, même tronqué. */
+    if (out && cap) out[(total < cap) ? total : cap - 1] = '\0';
+    return total;
+}
+
+bool ns_runlog_write_inputs(const ns_runlog *r, const char *path)
+{
+    if (!r || !path) return false;
+
+    const size_t need = ns_runlog_format_inputs(r, NULL, 0) + 1;
+    char *text = (char *)SDL_malloc(need);
+    if (!text) return false;
+    const size_t len = ns_runlog_format_inputs(r, text, need);
+
+    SDL_IOStream *io = SDL_IOFromFile(path, "w");
+    if (!io) {
+        NS_WARN("journal d'entrées : écriture impossible (%s) : %s", path, SDL_GetError());
+        SDL_free(text);
+        return false;
+    }
+    SDL_WriteIO(io, text, len);
     SDL_CloseIO(io);
+    SDL_free(text);
     NS_INFO("journal d'entrées : %u changement(s) écrits dans « %s »", r->input_count, path);
     return true;
 }
@@ -407,6 +475,145 @@ static void json_escape(const char *in, char *out, size_t cap)
 }
 
 
+/*
+ * L'analyseur du journal d'entrées, et le SEUL.
+ *
+ * Il lit maintenant deux sources qui n'ont pas le même niveau de confiance :
+ * un fichier que le joueur a sous la main, et le corps d'une réponse HTTP —
+ * c'est-à-dire le fantôme de quelqu'un d'autre, servi par un serveur qui peut
+ * mentir. Il est donc écrit pour la seconde, ce qui le rend correct pour la
+ * première par la même occasion :
+ *
+ *  - la LONGUEUR fait foi, jamais un octet nul final que rien ne garantit dans
+ *    un corps HTTP ;
+ *  - pas de `strtok`, qui écrit dans son entrée — on ne modifie pas le tampon
+ *    reçu, et deux appels concurrents ne se marchent pas dessus ;
+ *  - `%31s` sur `g[32]` et `%15s` sur `d[16]`, sur une copie de ligne bornée,
+ *    parce que `sscanf` sans largeur est la faute de NIN-09 ;
+ *  - un plafond de lignes, sans quoi un fantôme de 256 Kio n'aurait de limite
+ *    que la mémoire de la machine ;
+ *  - une ligne illisible est SAUTÉE, pas fatale : un journal tronqué rejoue ce
+ *    qu'il a. C'est le comportement voulu — on préfère un duel court à un duel
+ *    qui n'a pas lieu.
+ */
+bool ns_runlog_parse_inputs(const char *text, size_t len,
+                            char *game, size_t game_cap,
+                            char *difficulty, size_t difficulty_cap,
+                            int64_t *seed,
+                            ns_run_input **out_input, uint32_t *out_count)
+{
+    if (out_input) *out_input = NULL;
+    if (out_count) *out_count = 0;
+    if (!text || len == 0 || !out_input || !out_count) return false;
+
+    /*
+     * Une borne dure sur le nombre d'entrées. Une partie de trois minutes fait
+     * 21 600 pas et n'enregistre qu'un CHANGEMENT par ligne ; 200 000 couvre
+     * une partie de vingt-cinq minutes où l'on changerait de commande à chaque
+     * pas. Au-delà, ce n'est plus une partie, c'est un tampon qu'on nous
+     * demande d'allouer.
+     */
+    const uint32_t MAX_INPUTS = 200000u;
+
+    /* La ligne d'en-tête, copiée bornée pour être terminée proprement. */
+    size_t head = 0;
+    while (head < len && text[head] != '\n') head++;
+
+    char header[128];
+    const size_t hcopy = (head < sizeof header - 1) ? head : sizeof header - 1;
+    SDL_memcpy(header, text, hcopy);
+    header[hcopy] = '\0';
+
+    char g[32] = { 0 }, d[16] = { 0 };
+    long long sd = 0;
+    int hdr_last_tick = -1;
+    /*
+     * L'en-tête est lu AVANT tout le reste, et son échec est fatal : rejouer un
+     * journal dont on ne connaît ni le jeu ni la graine ne rejouerait rien —
+     * ça jouerait une partie neuve avec de vieux boutons.
+     *
+     * Le quatrième champ — le dernier pas de la partie — est FACULTATIF : les
+     * journaux écrits avant qu'il existe n'en ont pas, et ils doivent continuer
+     * à se relire. `sscanf` rend le nombre de champs convertis, ce qui distingue
+     * les deux sans avoir à renifler la ligne.
+     */
+    const int fields = SDL_sscanf(header, "v1 %31s %15s %lld %d", g, d, &sd, &hdr_last_tick);
+    if (fields < 3) {
+        NS_ERROR("journal d'entrées : en-tête « v1 <jeu> <difficulté> <graine> » attendu");
+        return false;
+    }
+    if (fields < 4) hdr_last_tick = -1;
+    if (game && game_cap) SDL_snprintf(game, game_cap, "%s", g);
+    if (difficulty && difficulty_cap) SDL_snprintf(difficulty, difficulty_cap, "%s", d);
+    if (seed) *seed = (int64_t)sd;
+
+    /* Une passe pour compter, une pour lire : quelques kilo-octets de texte, et
+     * deux passes valent mieux qu'un tableau qui grandit à tâtons. */
+    uint32_t lines = 0;
+    for (size_t i = head; i < len; ++i) if (text[i] == '\n') lines++;
+    /* Une dernière ligne sans retour final compte aussi : sans ce +1, le
+     * dernier changement d'un journal qui ne finit pas par « \n » était perdu. */
+    if (len > head && text[len - 1] != '\n') lines++;
+    if (lines > MAX_INPUTS) lines = MAX_INPUTS;
+
+    /* Une place de plus pour la ligne de FIN qu'on peut avoir à synthétiser. */
+    ns_run_input *arr = (ns_run_input *)SDL_calloc(lines + 1u, sizeof *arr);
+    if (!arr) return false;
+
+    uint32_t n = 0;
+    size_t i = head;
+    while (i < len && n < lines) {
+        if (text[i] == '\n') { i++; continue; }
+
+        size_t end = i;
+        while (end < len && text[end] != '\n') end++;
+
+        char line[64];
+        const size_t lcopy = ((end - i) < sizeof line - 1) ? (end - i) : sizeof line - 1;
+        SDL_memcpy(line, text + i, lcopy);
+        line[lcopy] = '\0';
+
+        int tick = 0; unsigned held = 0, pressed = 0;
+        if (SDL_sscanf(line, "%d %u %u", &tick, &held, &pressed) == 3) {
+            arr[n].tick = tick;
+            /* Les masques ne portent que NS_GAME_BUTTON_COUNT bits utiles. Un
+             * octet reçu du réseau peut en porter huit ; les tronquer ici évite
+             * qu'un bit inventé atteigne un jeu. */
+            arr[n].held    = (uint8_t)(held    & 0x1Fu);
+            arr[n].pressed = (uint8_t)(pressed & 0x1Fu);
+            n++;
+        }
+        i = end;
+    }
+
+    /*
+     * La ligne de FIN, synthétisée.
+     *
+     * Si l'en-tête dit que la partie a duré jusqu'au pas N et que le dernier
+     * changement de commandes est antérieur, on ajoute une entrée à N qui
+     * REPREND les maintiens en cours, sans aucun appui. C'est exactement ce que
+     * le joueur a fait pendant ce temps-là : rien.
+     *
+     * Elle est ajoutée ICI plutôt que dans chaque rejoueur, et c'est le point :
+     * tous les consommateurs — `--rejouer=`, le fantôme d'un duel, les tests —
+     * déduisent la durée du dernier élément du tableau. Leur donner la bonne
+     * dernière entrée corrige les trois d'un coup, sans changer une signature
+     * ni demander à personne de se souvenir d'une règle de plus.
+     */
+    if (hdr_last_tick >= 0 && n < lines + 1u
+        && (n == 0 || arr[n - 1].tick < hdr_last_tick)) {
+        arr[n].tick    = hdr_last_tick;
+        arr[n].held    = (n > 0) ? arr[n - 1].held : 0u;
+        arr[n].pressed = 0u;
+        n++;
+    }
+
+    *out_input = arr;
+    *out_count = n;
+    NS_INFO("journal d'entrées : %u changement(s) relus (%s/%s, graine %lld)", n, g, d, sd);
+    return true;
+}
+
 bool ns_runlog_read_inputs(const char *path,
                            char *game, size_t game_cap,
                            char *difficulty, size_t difficulty_cap,
@@ -415,7 +622,7 @@ bool ns_runlog_read_inputs(const char *path,
 {
     if (out_input) *out_input = NULL;
     if (out_count) *out_count = 0;
-    if (!path || !out_input || !out_count) return false;
+    if (!path) return false;
 
     size_t size = 0;
     void *file = SDL_LoadFile(path, &size);
@@ -424,54 +631,14 @@ bool ns_runlog_read_inputs(const char *path,
         SDL_free(file);
         return false;
     }
-    char *text = (char *)file;
 
-    char g[32] = { 0 }, d[16] = { 0 };
-    long long sd = 0;
-    /*
-     * L'en-tête est lu AVANT tout le reste, et son échec est fatal : rejouer un
-     * journal dont on ne connaît ni le jeu ni la graine ne rejouerait rien —
-     * ça jouerait une partie neuve avec de vieux boutons.
-     */
-    if (SDL_sscanf(text, "v1 %31s %15s %lld", g, d, &sd) != 3) {
-        NS_ERROR("« %s » : en-tête « v1 <jeu> <difficulté> <graine> » attendu", path);
-        SDL_free(file);
-        return false;
-    }
-    if (game && game_cap) SDL_snprintf(game, game_cap, "%s", g);
-    if (difficulty && difficulty_cap) SDL_snprintf(difficulty, difficulty_cap, "%s", d);
-    if (seed) *seed = (int64_t)sd;
-
-    /* Une passe pour compter, une pour lire : le fichier est du texte de
-     * quelques kilo-octets, et deux passes valent mieux qu'un tableau qui
-     * grandit à tâtons. */
-    uint32_t lines = 0;
-    for (const char *c = text; *c; ++c) if (*c == '\n') lines++;
-
-    ns_run_input *arr = (ns_run_input *)SDL_calloc(lines ? lines : 1, sizeof *arr);
-    if (!arr) { SDL_free(file); return false; }
-
-    uint32_t n = 0;
-    char *save = NULL;
-    char *line = SDL_strtok_r(text, "\n", &save);          /* l'en-tête, sautée */
-    line = SDL_strtok_r(NULL, "\n", &save);
-    while (line && n < lines) {
-        int tick = 0; unsigned held = 0, pressed = 0;
-        if (SDL_sscanf(line, "%d %u %u", &tick, &held, &pressed) == 3) {
-            arr[n].tick    = tick;
-            arr[n].held    = (uint8_t)held;
-            arr[n].pressed = (uint8_t)pressed;
-            n++;
-        }
-        line = SDL_strtok_r(NULL, "\n", &save);
-    }
+    const bool ok = ns_runlog_parse_inputs((const char *)file, size,
+                                           game, game_cap,
+                                           difficulty, difficulty_cap,
+                                           seed, out_input, out_count);
     SDL_free(file);
-
-    *out_input = arr;
-    *out_count = n;
-    NS_INFO("journal d'entrées : %u changement(s) relus de « %s » (%s/%s, graine %lld)",
-            n, path, g, d, sd);
-    return true;
+    if (!ok) NS_ERROR("« %s » : journal d'entrées illisible", path);
+    return ok;
 }
 
 bool ns_runlog_enqueue(const ns_runlog *r)
