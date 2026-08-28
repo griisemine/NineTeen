@@ -525,6 +525,12 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
         /*
          * Si les commandes sont hors d'atteinte, on le DIT.
          *
+         * Le contrôle tourne aussi sous `--pose=` : il n'y tournait pas, et
+         * c'est ce silence qui a laissé le point de vue nommé « borne » rester
+         * 25 cm derrière l'ancre déclarée pendant tout le projet. La capture
+         * montrait deux mains à hauteur de monnayeur, l'avertissement qui
+         * l'aurait expliqué était gardé pour la seule entrée en jeu.
+         *
          * `clamp_reach` ne peut pas échouer : elle pose le poignet à 57 cm dans
          * la bonne direction et rend un bras parfaitement tendu vers un point
          * qu'il ne touche pas. À l'image, ce sont deux tubes qui pointent vers
@@ -536,7 +542,7 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
          *
          * Une fois par entrée en jeu, pas une fois par image.
          */
-        if (!vm->reach_checked && vm->elapsed > 0.8f) {
+        if (!vm->reach_checked && (vm->elapsed > 0.8f || vm->forced_pose != VM_FORCE_NONE)) {
             vm->reach_checked = true;
             const float dl = ns_v3_dist(sh_l, grip), dr = ns_v3_dist(sh_r, above);
             const float worst = ns_maxf(dl, dr);

@@ -3807,13 +3807,13 @@
     {
       "name": "borne",
       "position": [
-        -2.8,
+        -2.778,
         1.7,
-        -1.525
+        -1.278
       ],
       "yaw": 90.0,
       "pitch": -34.0,
-      "_": "Planté devant `borne_arcade_1`, à l'endroit exact que la salle déclare comme `playerAnchor`. C'est le seul cadrage où `--pose=reach|insert|press` a quelque chose à viser : la séquence part vers la borne à portée, pas vers le vide."
+      "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`."
     },
     {
       "name": "orbite",
