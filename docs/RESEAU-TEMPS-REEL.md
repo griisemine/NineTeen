@@ -1,10 +1,20 @@
 # Le temps réel — ce qui est prêt, ce qui manque, et ce qu'il reste à trancher
 
 Tu as tranché en début de projet : **le classement en ligne maintenant, la présence
-temps réel et les duels plus tard, conçus ensemble.** Ce document est la moitié
-que je peux faire seul — établir les faits pour que la conception se fasse sur
-des chiffres et non sur des impressions. Il ne contient pas de code, et c'est
-voulu.
+temps réel et les duels plus tard, conçus ensemble.** Ce document a d'abord été la
+moitié que je pouvais faire seul — établir les faits pour que la conception se
+fasse sur des chiffres et non sur des impressions.
+
+**Il a maintenant deux parties, et il faut savoir laquelle on lit.** Tout ce qui
+suit jusqu'à « Les trois formes possibles » reste le constat d'origine, y compris
+l'affirmation fausse que j'y corrige. À partir de « Ce qui a été fait », c'est le
+compte rendu de ce qui est écrit, branché et mesuré : **la présence et le duel en
+différé sont livrés ; le duel en direct ne l'est pas**, et la dernière section dit
+précisément ce qu'il faudrait pour l'envisager.
+
+Là où le constat d'origine et le résultat divergent, c'est signalé sur place —
+notamment le rythme de la présence, annoncé ici à ~20 Hz et livré à 4 Hz pour une
+raison de transport.
 
 ---
 
@@ -101,10 +111,16 @@ le sceau : il n'a rien à prouver au serveur.
 Le format est du texte, une ligne par changement :
 
 ```
-v1 demineur normal 20240418
+v1 demineur normal 20240418 3599
 0 0 0
 281 4 0
 ```
+
+Le quatrième champ de l'en-tête — le dernier pas de la partie — a été ajouté
+depuis, et il est **facultatif** : les journaux à trois champs se relisent
+toujours. Il manquait, et son absence cassait le rejeu d'une manière qu'on ne
+voyait pas sur un score ; voir « Deux défauts que seul le bout en bout pouvait
+voir ».
 
 Du texte parce qu'il se lit à l'œil quand on débogue, et qu'une partie tient dans
 quelques kilo-octets — la compresser serait optimiser ce qu'on n'a pas mesuré.
@@ -122,6 +138,11 @@ Ce qui reste pour un duel, du coup, n'est plus l'enregistrement NI le rejeu mais
 le TRANSPORT : une route pour déposer et récupérer un journal, et le second jeu
 dessiné à côté du sien. C'est la partie qui demande ta décision, parce que la
 forme du transport dépend de la forme du duel.
+
+> **Depuis :** ce transport est écrit, et le format a dû changer sur un point que
+> cette section ne pouvait pas voir — l'en-tête ne portait pas la DURÉE de la
+> partie, donc un fantôme s'arrêtait avant la fin dès que le joueur lâchait les
+> commandes. Voir « Deux défauts que seul le bout en bout pouvait voir ».
 
 ---
 
@@ -175,16 +196,243 @@ les bornes.
 
 ---
 
-## Ce que je propose comme prochaine étape, quand tu voudras
+## Ce qui a été fait : la présence et le duel en différé
 
-Dans cet ordre, parce que chaque étape rend la suivante moins risquée :
+Les formes **3** (la présence) et **1** (le duel en différé) sont écrites,
+branchées et vérifiées de bout en bout. La forme **2** (le pas verrouillé) ne
+l'est pas, et la dernière section dit pourquoi.
 
-1. **Écrire les entrées dans le journal** — le format et le transport, la
-   partie qui reste. Le test qui prouve que ça marcherait est fait
-   (`tests/test_replay.c`) ; ce qui manque est de garder la trace d'une VRAIE
-   partie plutôt que d'une suite fabriquée, et de choisir comment la compresser.
-2. **Le duel en différé** (forme 1). C'est jouable, c'est sans latence, et ça
-   répond à « affronter ses amis ».
-3. Mesurer le déterminisme **entre plateformes** avant d'envisager la forme 2.
+### L'interrupteur, parce que rien de tout ça ne s'allume tout seul
 
-Rien de tout cela n'est commencé, et rien ne le sera sans que tu l'aies dit.
+Le temps réel est **inerte par défaut**, et il faut trois « oui » pour qu'il
+s'anime :
+
+1. un serveur configuré (`--server=` ou `NS_CFG_SERVER_URL`) ;
+2. l'absence de `--offline` ;
+3. une activation **explicite** : `--temps-reel`, le réglage persistant
+   `network.realtime`, ou la ligne **TEMPS RÉEL** du menu `Échap`.
+
+Les deux premiers sont ceux du classement, et le temps réel en **hérite** au
+lieu de les réimplémenter : `ns_realtime_init` demande son URL à
+`ns_online_server_url()`, qui rend `NULL` tant que `ns_online_init` n'a pas dit
+oui. La garantie « sans URL configurée, aucune socket n'est ouverte » reste donc
+écrite **à un seul endroit**. Réimplémenter un verrou, c'est se donner deux
+occasions de le poser de travers.
+
+Le troisième est nouveau, et il existe parce que les deux choses n'engagent pas
+la même chose : **consulter un classement ne diffuse rien de soi ; la présence
+publie un pseudo et une position.** Ce n'est pas à une URL de serveur d'en
+décider à la place du joueur.
+
+Ça se constate en une commande, sans lire le code :
+
+```
+$ nineteen --temps-reel                          # sans serveur
+réseau : aucun serveur configuré, le classement restera local
+temps réel : demandé, mais le réseau est inactif — rien ne sera ouvert
+
+$ nineteen --temps-reel --offline --server=…     # verrouillé
+réseau : verrouillé par --offline, aucune connexion ne sera tentée
+temps réel : demandé, mais le réseau est inactif — rien ne sera ouvert
+
+$ nineteen --server=…                            # le DÉFAUT
+réseau : actif sur « … » (lecture seule)
+temps réel : désactivé (défaut) — ni présence ni duel
+```
+
+### La présence
+
+`POST /api/v1/presence` en un aller-retour : je dis où je suis, le serveur me
+dit qui d'autre est là. Une seule requête pour les deux, parce que c'est le seul
+échange **périodique** du jeu et que le couper en deux doublerait son trafic.
+
+**Aucun compte n'est exigé** — se montrer dans une salle d'arcade n'est pas une
+action privilégiée. Le serveur ne croit donc pas le pseudo : sans jeton il
+accepte le nom déclaré et le marque `verified: false` ; avec un jeton il
+**écrase** le nom déclaré par celui du compte. Le jeu affiche la différence (les
+pseudos non vérifiés sont en ambre) plutôt que de garantir ce qu'il ne sait pas.
+C'est la règle de l'autorité serveur, appliquée à ce qu'elle peut ici réellement
+établir.
+
+**Le rythme est 4 Hz, pas les ~20 Hz que ce document envisageait plus haut**, et
+c'est le transport qui décide : `ns_http` rouvre une socket à chaque requête, et
+vingt allers-retours par seconde et par joueur coûteraient vingt poignées de main
+TCP pour décrire un bonhomme qui marche à 1,4 m/s. Quatre battements, c'est 35 cm
+entre deux positions connues, interpolées au rendu. **Mesuré : 3,7 Hz** sur une
+fenêtre de 3 002 ms contre le serveur en conteneur (`tests/test_duel.c` compte
+les battements dans une fenêtre franche plutôt que de diviser un total par une
+durée supposée — le premier jet affichait 0,2 Hz, ce qui était faux).
+
+Une présence expire en 12 s côté serveur ; le client cesse de rendre des pairs
+après 3 s sans réponse. Un joueur immobile est un bogue qu'on regarde, un joueur
+absent est une déconnexion qu'on comprend.
+
+**L'avatar est une plaque au nom du joueur**, avec sa borne et son score, plus
+une liste « DANS LA SALLE » en haut à droite. Pas un bonhomme, et c'est assumé :
+il n'existe aucun modèle de personnage dans ce dépôt — on n'a que des bras en vue
+subjective — et la scène est un tampon de géométrie **cuit au build**, sans
+chemin pour y ajouter un maillage animé à l'exécution. Une plaque répond
+exactement à la question qu'on se pose en entrant dans une salle : **qui est là,
+et à quelle borne**. Elle n'est pas occultée par les murs ; la salle est une
+pièce ouverte, et un lancer de rayon par joueur et par image pour cacher une
+étiquette coûterait plus que ça ne gêne.
+
+### Le duel en différé
+
+Le transport qui manquait, et rien de plus :
+
+| Route | Ce qu'elle fait |
+|---|---|
+| `POST /api/v1/runs/{id}/inputs` | dépose le journal d'entrées d'une partie **déjà validée** |
+| `GET /api/v1/ghosts?game=N` | liste les fantômes d'un créneau, **sans** leur journal |
+| `GET /api/v1/ghosts/{id}` | le journal lui-même, en texte brut |
+| `POST /api/v1/runs` + `{"ghost":…}` | ouvre une partie **sur la graine du fantôme** |
+
+La dernière ligne est celle qui fait qu'un duel en est un. Deux joueurs sur deux
+graines différentes ne jouent pas la même partie : ils jouent deux parties et
+comparent deux nombres, ce qui est un classement, et on en a déjà un.
+
+**Rien n'est affaibli par là.** Une graine n'est pas un secret — c'est justement
+ce qui doit être partagé. Le secret HMAC reste tiré pour la partie seule, et le
+score reste **recalculé par le serveur** depuis le journal d'événements scellé.
+Déposer un journal d'entrées ne peut donc pas créer de score : le serveur refuse
+un journal qui ne se rattache pas à une partie qu'il a lui-même ouverte, close et
+validée, et il ne le rejoue pas. Au pire on dépose des appuis qui ne
+reproduisent rien, et le seul perdant est celui qui croyait avoir enregistré son
+fantôme.
+
+En jeu : en arrivant devant une borne, le client demande la liste et télécharge
+**le meilleur** — pas de menu de sélection, à une borne d'arcade on essaie de
+battre le meilleur. Pendant la partie, le fantôme avance **d'un pas exactement
+quand le joueur avance d'un pas**, et un tableau affiche les deux scores.
+
+### Deux défauts que seul le bout en bout pouvait voir
+
+Ce sont les deux du même genre que les trois du classement : chaque moitié était
+juste, et elles étaient fausses ensemble.
+
+1. **Le journal encodé en JSON serait arrivé illisible.** `ns_json_string`
+   (engine/core/ns_json.c) ne **déséchappe pas** : il rend les octets bruts entre
+   les guillemets. Un journal de trois cents lignes serait donc arrivé comme une
+   seule ligne parsemée de « \n » littéraux, et l'analyseur, qui découpe sur les
+   retours à la ligne, en aurait tiré **zéro** entrée — un fantôme immobile, sans
+   un message d'erreur. Le serveur produisait du JSON valide ; le client lisait
+   ce qu'on lui avait dit de lire. Corrigé en supprimant l'endroit où les deux
+   peuvent diverger : le journal voyage en **texte brut** dans les deux sens, et
+   du texte brut n'a pas d'échappement.
+
+2. **Le journal ne portait pas la durée de la partie.** Il n'enregistre que les
+   **changements** de commandes — c'est ce qui le garde à quelques kilo-octets —
+   mais un joueur qui lâche les commandes avant de mourir laisse un journal dont
+   la dernière ligne précède la fin. Le rejeu, qui déduisait la durée de cette
+   dernière ligne, **s'arrêtait trop tôt**. Le score pouvait coïncider quand
+   même ; l'état non. L'en-tête porte maintenant un quatrième champ facultatif —
+   le dernier pas — et l'analyseur **synthétise** l'entrée finale manquante, ce
+   qui corrige d'un coup `--rejouer=`, le fantôme et les tests sans changer une
+   seule signature. Les journaux au format à trois champs se relisent toujours.
+
+Ce second défaut a été attrapé par une seule assertion : comparer l'**état
+complet au bit près** après un aller-retour réseau, et pas seulement le score.
+
+### Comment c'est prouvé
+
+`tests/test_duel.c`, sur le modèle de `test_online.c` et pour la même raison.
+
+```sh
+ns_test_duel                       # les verrous, l'analyseur, le serveur mort
+ns_test_duel <url>                 # + la présence ANONYME
+ns_test_duel <url> <jeton>         # + la chaîne entière du duel
+```
+
+Sans argument — ce que fait la CI — il vérifie les **deux verrous**, l'analyseur
+de journal face à ce qu'un serveur peut envoyer (corps sans octet nul terminal,
+sans retour à la ligne final, lignes illisibles, masques hors bornes), et le
+serveur mort. Rien n'ouvre de socket vers quoi que ce soit d'écoutant.
+
+Avec un serveur et un jeton, il déroule : billet → **partie de Pac-Man réellement
+jouée par le chemin des boutons** → envoi → dépôt du fantôme → liste →
+téléchargement → **rejeu** → billet de duel. Résultats mesurés contre
+`docker compose up` :
+
+| Régime | Vérifications |
+|---|---|
+| hors ligne (CI) | **33**, 0 échec |
+| + présence anonyme | **44**, 0 échec |
+| + chaîne complète du duel | **54**, 0 échec |
+| `ns_test_online` (non régressé) | **31**, 0 échec |
+
+Les assertions qui portent le reste :
+
+- le journal redescendu est **octet pour octet** celui qu'on a déposé ;
+- rejoué sur la graine du serveur, il **refait le même score** ;
+- **et le même état au bit près, après un aller-retour réseau** ;
+- le billet de duel porte **la même graine** que le fantôme, tout en étant une
+  partie distincte avec son propre secret ;
+- la graine survit sur ses **63 bits** (une relecture en flottant n'en garderait
+  que 24 — c'est le défaut n° 2 du classement, qui se serait reproduit mot pour
+  mot).
+
+Le cas « le serveur tombe au milieu » est vérifié aussi : publier une position
+**ne bloque jamais** (mesuré : < 100 ms pour 200 appels vers un serveur mort),
+aucun joueur fantôme n'apparaît, et la partie continue.
+
+---
+
+## Le déterminisme entre machines : une première mesure
+
+Ce document demandait de mesurer ça avant d'envisager le pas verrouillé. C'est
+fait, partiellement, et voici exactement ce que ça vaut.
+
+Le binaire `macos-universal` contient les deux jeux d'instructions. On peut donc
+faire tourner **le même exécutable** sur deux architectures :
+
+```sh
+arch -arm64  ./build/macos-universal/bin/ns_test_replay
+arch -x86_64 ./build/macos-universal/bin/ns_test_replay
+```
+
+**Résultat : sorties identiques pour les huit jeux** — mêmes scores, mêmes gains
+cumulés, 49/49 vérifications de part et d'autre.
+
+Ce que ça établit : sur ce compilateur et ce système, l'arithmétique flottante
+des huit jeux donne le même résultat sur ARM et sur x86. C'est encourageant, et
+c'est plus que ce qu'on avait, qui était rien.
+
+**Ce que ça n'établit pas**, et il faut le dire aussi net : la comparaison porte
+sur les scores et les gains **imprimés**, pas sur l'état complet octet par octet
+entre les deux architectures — le test compare les états au bit près à
+l'intérieur d'une exécution, pas d'une architecture à l'autre. Et tout tourne ici
+avec **le même compilateur** et la même bibliothèque mathématique. Un autre
+compilateur, une autre libm, ou `-ffast-math` quelque part peuvent tout changer.
+Ce n'est donc pas un feu vert pour le pas verrouillé : c'est un premier point
+mesuré sur une droite qui en demande plusieurs.
+
+---
+
+## Ce qui reste : le duel EN DIRECT
+
+La forme 2 — le pas verrouillé — **n'est pas livrée**, et c'est un choix, pas un
+oubli.
+
+Ce qu'il faudrait, dans l'ordre :
+
+1. **Une somme de contrôle d'état échangée périodiquement.** Sans elle, deux
+   parties qui divergent continuent chacune de leur côté jusqu'à ce que les
+   scores se contredisent, et le bug est indébogable. C'est la première brique,
+   avant même le réseau : `test_replay.c` compare déjà des états entiers, il
+   suffirait d'en publier une empreinte.
+2. **Le déterminisme entre plateformes, pour de vrai** — trois OS, trois
+   compilateurs, états comparés au bit près et pas seulement les scores. La
+   mesure ci-dessus est un début, pas une conclusion.
+3. **Un transport qui tienne le tic.** `ns_http` ouvre une socket par requête :
+   c'est parfait pour un score toutes les trois minutes et une présence à 4 Hz,
+   c'est disqualifiant à 120 Hz. Le pas verrouillé demande une socket
+   persistante — donc un vrai protocole, un tampon d'entrées, et une politique
+   quand le paquet est en retard.
+4. **Et alors seulement** la logique de pas verrouillé.
+
+Livrer un duel en direct qui diverge en silence serait pire que de ne pas en
+livrer : le joueur perdrait des parties sans savoir pourquoi. Le duel en différé,
+lui, repose sur une propriété **mesurée** (`test_replay.c`, 8/8, état au bit
+près), il marche quand l'autre est déconnecté, et il répond à « affronter ses
+amis comme en enfance » — qui ne demande pas qu'ils soient là à la même seconde.

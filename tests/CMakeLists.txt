@@ -293,6 +293,30 @@ nineteen_apply_sanitizers(ns_test_online)
 add_test(NAME online COMMAND ns_test_online)
 set_tests_properties(online PROPERTIES TIMEOUT 60)
 
+# La présence et le duel en différé, sur le même principe que `ns_test_online`
+# et pour la même raison : c'est ENTRE le C et le Go que vivent les défauts que
+# personne ne voit d'un seul côté.
+#
+# Sans argument — ce que fait la CI — il vérifie les DEUX VERROUS (pas d'URL,
+# `--offline`, et le temps réel inerte par défaut), l'analyseur de journal
+# d'entrées face à ce qu'un serveur peut envoyer, et le serveur mort. Rien de
+# tout ça n'ouvre de socket vers quoi que ce soit d'écoutant.
+#
+# Avec une URL, il ajoute la présence ANONYME ; avec une URL et un jeton, la
+# chaîne entière du duel — billet, partie jouée, envoi, dépôt, téléchargement,
+# rejeu comparé au bit près. Ça demande PostgreSQL, donc ça ne s'ajoute pas
+# ici : la marche à suivre est en tête de `test_duel.c`.
+#
+# Il est lié à `nineteen::games` — contrairement à `ns_test_online` — parce
+# qu'il JOUE réellement une partie : un duel qu'on vérifie sur des événements
+# fabriqués à la main ne vérifie pas un duel.
+add_executable(ns_test_duel test_duel.c)
+target_link_libraries(ns_test_duel PRIVATE nineteen::engine nineteen::games)
+nineteen_set_warnings(ns_test_duel)
+nineteen_apply_sanitizers(ns_test_duel)
+add_test(NAME duel COMMAND ns_test_duel)
+set_tests_properties(duel PROPERTIES TIMEOUT 60)
+
 # Le plafond des cartes se vérifie sur les FICHIERS PRODUITS, pas sur l'intention.
 #
 # `texgen --max-map=` est un drapeau qu'on peut oublier de passer à l'un des
