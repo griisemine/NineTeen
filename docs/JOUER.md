@@ -452,35 +452,76 @@ se lance, mais macOS le met en quarantaine et Windows affiche SmartScreen.
 
 Mesurés avec `--bench`, qui **attend réellement le GPU** — sans cette attente on
 chronomètre l'enregistrement des commandes, pas leur exécution, et c'est ainsi
-qu'un rendu à une image par seconde avait pu être annoncé à 1 793. 1280 × 720,
-point de vue `allee`, sur lavapipe (le rasteriseur logiciel de ce conteneur) :
+qu'un rendu à une image par seconde avait pu être annoncé à 1 793.
 
-| Palier | ms/image | rapport | ce qu'il coupe |
-|---|---:|---:|---|
-| `potato` | 114 | ×1,0 | volumétrique, occlusion ambiante, rendu à 60 % |
-| `low` | 281 | ×2,5 | volumétrique, rendu à 75 % |
-| `medium` | 675 | ×5,9 | lancer de rayons — **le défaut** |
-| `high` | 1056 | ×9,3 | rien ; ombres lancées |
-| `ultra` | 2647 | ×23,2 | rien ; + réflexions et illumination globale |
+Deux tableaux, et l'écart entre les deux est la leçon.
 
-**Les valeurs absolues ne disent rien d'un vrai GPU** — lavapipe calcule sur le
-processeur. Ce sont les rapports qui se transposent.
+**Sur un vrai GPU** — Apple M1, Metal, cible de rendu 1600 × 900, minimum de
+trois exécutions de 40 images, points de vue `allee` et `bar` :
+
+| Palier | ms/image | rapport | images/s | ce qu'il coupe |
+|---|---:|---:|---:|---|
+| `potato` | 6,0 | ×0,30 | 164 | volumétrique, occlusion ambiante, rendu à 60 % |
+| `low` | 6,1 | ×0,31 | 164 | volumétrique, rendu à 75 % |
+| `medium` | 20,5 | ×1,00 | 48 | lancer de rayons — **le défaut** |
+| `high` | 36,0 | ×1,71 | 28 | rien ; ombres lancées |
+| `ultra` | 119,8 | ×6,20 | 8 | rien ; + réflexions et illumination globale |
+
+**Sur lavapipe**, le rastériseur logiciel du conteneur de développement, à
+1280 × 720 :
+
+| Palier | ms/image | rapport |
+|---|---:|---:|
+| `potato` | 114 | ×1,0 |
+| `low` | 281 | ×2,5 |
+| `medium` | 675 | ×5,9 |
+| `high` | 1056 | ×9,3 |
+| `ultra` | 2647 | ×23,2 |
+
+Cette page affirmait que « les valeurs absolues ne disent rien d'un vrai GPU,
+mais les rapports se transposent ». **C'est faux, et c'est mesuré.** Rapportés
+à `medium`, les deux colonnes ne se ressemblent pas :
+
+| Palier | rapport lavapipe | rapport M1 |
+|---|---:|---:|
+| `potato` | ×0,17 | ×0,30 |
+| `low` | ×0,42 | ×0,31 |
+| `high` | ×1,56 | ×1,71 |
+| `ultra` | ×3,92 | ×6,20 |
+
+L'écart le plus utile n'est pas celui de l'`ultra` : c'est que **`potato` et
+`low` coûtent la même chose sur du vrai matériel**, là où le logiciel les
+séparait d'un facteur 2,5. Ce qui les distingue — brouillard volumétrique,
+occlusion ambiante, poussière — ne pèse presque rien à côté de ce qui leur reste
+commun : l'écriture du G-buffer et une passe d'éclairage à quarante-sept sources
+sur chaque pixel. Personne ne devrait donc choisir `potato` : il coûte autant
+que `low` et rend moins.
+
+La raison de fond est simple : un rastériseur logiciel et un GPU n'ont pas le
+même goulot. L'un compte les instructions, l'autre la bande passante. Un palier
+qui économise du calcul par pixel se voit beaucoup sur le premier et peu sur le
+second.
 
 L'échelle de rendu est le second levier, et le moins visible, parce que le tone
-mapping, le halo et la couche 2D travaillent après. Au palier `medium` :
+mapping, le halo et la couche 2D travaillent après. Au palier `medium`, sur M1,
+fenêtre par défaut (cible 3200 × 1800 sur un écran Retina) :
 
 | Échelle | ms/image | gain |
 |---|---:|---:|
-| 1,0 | 649 | — |
-| 0,8 | 427 | −34 % |
-| 0,6 | 248 | −62 % |
+| 1,0 | 81,3 | — |
+| 0,75 | 48,4 | −40 % |
+| 0,5 | 22,5 | −72 % |
+
+**`--scale` n'a pas de valeur par défaut à elle** : sans l'option, c'est le
+PALIER qui la fixe — 0,50 à `medium`. C'est ce qui explique qu'une même machine
+rende 48 images/s au défaut et 12 en passant `--scale=1.0`.
 
 En dessous de 0,5, le texte des écrans de bornes cesse d'être lisible.
 
 ### En jeu
 
 `Échap` ouvre le **menu de réglages** : palier de qualité (avec son coût relatif
-mesuré, de `x0.17` à `x3.92`), échelle de rendu (avec le pourcentage de pixels
+mesuré sur M1, de `x0.30` à `x6.20`), échelle de rendu (avec le pourcentage de pixels
 économisé), densité de poussière, luminosité, les quatre volumes et la
 sensibilité de la souris. Les flèches choisissent et règlent, `Entrée` valide,
 `Échap` referme.

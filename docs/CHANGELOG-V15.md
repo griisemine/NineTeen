@@ -7,6 +7,64 @@ que le chantier est terminé.
 
 ## Ce qui tourne
 
+### La séance de refonte : sept défauts que personne ne cherchait
+
+Cette section est en tête parce que tout ce qui suit a été écrit AVANT elle, et
+qu'elle en corrige plusieurs affirmations. Chaque point a été trouvé en
+REGARDANT la salle sur un vrai GPU (Apple M1, Metal), pas en relisant le code.
+
+1. **Le flash noir : un pixel NaN, un quart d'écran perdu.** La vue `bar`
+   portait un rectangle noir parfaitement axé sur 36,3 % de ses pixels, stable
+   d'une image à l'autre et présent aux cinq paliers. Remonté cible par cible :
+   `debug=normal` porte UN pixel NaN, l'éclairage le lit, le seuil de halo
+   l'accepte, et les CINQ niveaux de flou séparable l'étalent — le plus petit
+   fait 48 × 27 pour 2560 × 1440, donc un texel y vaut 53 pixels. Le filet de
+   sécurité du tone mapping a alors fait exactement son travail : noircir. La
+   cause est `normalize(v_tangent - N·dot(N,v_tangent))` dans `gbuffer.frag`,
+   qui rend le vecteur NUL dès que la tangente du modèle est parallèle à la
+   normale — le cas NORMAL sur une couture d'UV, donc sur tout modèle importé.
+   Corrigé par une base orthonormée sans cas dégénéré (Duff et al.), et le
+   seuil de halo écarte désormais un pixel non fini au lieu de le propager.
+2. **Le tapis néon de 2020 avait été jeté sur un calcul faux.** La salle
+   d'origine avait sous les pieds `floor.jpg`, une moquette noire semée de
+   motifs au néon — l'objet le plus reconnaissable du lieu. Il avait été
+   remplacé par une boucle bordeaux au motif que « moquette.jpg a un albédo
+   moyen de 47/255 contre 30 pour floor.jpg ». Ce sont des moyennes d'OCTETS
+   sRGB, c'est-à-dire une échelle perceptuelle, quand une réflectance est
+   LINÉAIRE — l'erreur exacte contre laquelle `texgen.c` met en garde trois
+   fichiers plus loin. Mesuré en linéaire : **floor.jpg 0,0392, moquette.jpg
+   0,0292**. Le tapis néon était 34 % PLUS clair. Il est remis, avec un
+   émissif de 0,25 que `gbuffer.frag` module par l'albédo texel par texel :
+   le tissage noir ne luit pas, les motifs si.
+3. **Six lumières sur seize sortaient en BLANC PUR.** `roomgen` lit `"color"` ;
+   six déclarations écrivaient `"colour"`. Elles tombaient donc sur le défaut du
+   lecteur — (1,1,1) — au lieu du tungstène chaud qu'elles annonçaient, dont les
+   deux plus fortes de la salle. `tool_json_reject_unknown_keys` fait désormais
+   d'une clé inconnue une erreur de build.
+4. **Le flanc et le marquee des dix-neuf bornes avaient perdu leur
+   sérigraphie.** Le maillage Blender déroule tout au `smart_project`, qui range
+   des îlots et ne sait pas qu'une planche dessinée a un haut, un bas et des
+   bords. Le flanc prenait sa couleur au bas du dégradé (0,16) au lieu de le
+   parcourir, et la borne de classement affichait à la place de son nom un
+   fragment de tôle agrandi. Les deux sont maintenant CADRÉS, de (0,0) à (1,1).
+5. **Régénérer la borne ne refaisait pas la salle.** `assets/models/` n'était
+   déclaré nulle part comme dépendance de `roomgen` : on modifiait le modèle,
+   on relançait le build, et il répondait « rien à faire ».
+6. **La suspension du billard s'éteignait dans sa propre ampoule.** La lumière
+   était déclarée à 1,68 m ; l'ampoule est une sphère qui occupe de 1,615 à
+   1,705. Le lancer de rayons ne connaît pas les matériaux émissifs : chaque
+   rayon d'ombre traversait le verre de la lampe. Ce qui a mis sur la piste,
+   c'est que multiplier l'intensité par 2,6 ne changeait RIEN.
+7. **Une moulure de 6,09 × 4,44 m posée en travers de la moquette, autour de
+   rien.** `nez_estrade` et l'estrade qu'il borde avaient des emprises
+   DISJOINTES.
+
+Et deux affirmations de ce journal, corrigées : les rapports de coût entre
+paliers **ne se transposent pas** du rastériseur logiciel au vrai GPU (`potato`
+et `low` y coûtent la même chose, là où le logiciel les séparait d'un facteur
+2,5), et la limite de 160 000 sommets était celle du conteneur, pas du moteur.
+
+
 ### Build et portabilité
 - **Les cartes sont compressées par blocs.** BC5 pour les normales, BC1 pour l'ORM, mips
   comprises, dans `engine/core/nstex.h` — vingt octets d'en-tête, lu sans dépendance. Pas du
@@ -549,20 +607,31 @@ est probable. `ctest` : 32/32.
   vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
+- **Le temps réel : la présence et le duel fantôme tournent** ; le duel EN DIRECT non.
+  `docs/RESEAU-TEMPS-REEL.md` dit ce qui manque pour lui : une somme de contrôle d'état, le
+  déterminisme inter-plateformes mesuré pour de bon, et un transport qui tienne le tic —
+  `ns_http` ouvre une socket par requête. Une première mesure est faite : arm64 et x86_64
+  donnent des sorties identiques (49/49), mais sur les scores imprimés seulement et avec le
+  même compilateur. Ce n'est pas assez pour un lockstep, et le dire vaut mieux que de le
+  livrer à moitié.
 - **Les bras n'atteignent pas le panneau depuis le point de vue « borne ».** Constaté en
   remodélisant la borne, et **antérieur à ce changement** : la même capture prise avant donne
   exactement la même pose, mains pendantes à hauteur de monnayeur. Les quatre ancres sont
   pourtant justes — `test_ik` les atteint à 3 cm près sur des cotes synthétiques, et la hauteur
-  du manche n'a pas bougé de plus de 4 mm. Le suspect est donc l'accrochage du joueur à la borne
-  depuis un point de vue nommé, pas la géométrie. Non corrigé ici : ça touche
-  `room_viewmodel.c`, où d'autres travaillent.
-- **Le temps réel — présence et duels.** C'est tout ce qui reste côté réseau, et c'est
-  délibéré : ça se conçoit avant de s'écrire. Le classement en ligne, lui, **fonctionne de
-  bout en bout** (voir ci-dessus).
-- **Un décimateur de maillage.** Les modèles CC0 sont taillés pour le cinéma — 14 000 triangles
-  pour un tabouret. C'est ce qui limite aujourd'hui le mobilier importé à trois modèles :
-  au-delà d'environ 160 000 sommets, le rasteriseur logiciel du conteneur de développement cesse
-  de composer l'image finale, et je ne livre pas ce que je ne peux pas regarder.
+  du manche n'a pas bougé de plus de 4 mm. Le suspect est l'accrochage du joueur à la borne
+  depuis un point de vue nommé, pas la géométrie.
+- **La table de billard est le pire modèle de la salle.** Onze boîtes empilées, sans poche, avec
+  un placage de bois étiré en bandes sur les bandes. Elle mériterait le même traitement que la
+  borne : un script Blender dans `assets/blender/`.
+- **Huit bornes portent « votre publicité ici ? » en marquee.** C'est un remplissage de 2020 ;
+  chacune devrait porter l'enseigne de son jeu.
+- **Une lumière déclarée à l'intérieur d'un solide fermé s'éteint elle-même**, et rien ne le
+  dit au build. `roomgen` fait déjà ce contrôle pour les POINTS DE VUE (« il rendrait un cadre
+  noir ») ; il lui faudrait, pour les lumières, une emprise par MORCEAU et non par objet — un
+  luminaire ayant toujours sa source dans la boîte englobante de son propre abat-jour. La
+  suspension du billard a passé plusieurs versions ainsi (voir plus haut).
+- **Quatre constats `gosec` préexistants** font échouer l'étape correspondante de la CI : trois
+  G124 sur des cookies au `Secure` conditionnel documenté, un G115 dans `password.go`.
 - **La signature des paquets.** Les paquets eux-mêmes sont faits (`cpack`, une archive autonome
   par plateforme, et `.github/workflows/release.yml` qui les attache à une balise) et vérifiés en
   déballant puis en lançant le jeu **avec les assets du build masqués**. Ce qui manque est le
@@ -570,18 +639,11 @@ est probable. `ctest` : 32/32.
   Authenticode. Le workflow signe si les secrets existent et produit des paquets non signés
   sinon, en le disant plutôt qu'en échouant. C'est au propriétaire du dépôt de fournir les
   certificats, pas au dépôt de les contenir.
-- **Le temps réel — présence et duels.** C'est tout ce qui reste, et c'est délibéré : ça se
-  conçoit avant de s'écrire. `docs/RESEAU-TEMPS-REEL.md` établit les faits pour cette
-  conception, et corrige au passage une affirmation fausse que je répétais : le journal de
-  partie n'est PAS un format de rejeu. Il enregistre des conséquences (`pipe`, `score`,
-  `death`), pas des appuis sur des boutons — il authentifie un score, il ne rejoue pas une
-  partie. Ce qui est acquis, en revanche, et c'est la partie difficile : les **huit** jeux ont
-  un test de déterminisme, sans quoi aucun duel n'est possible quel que soit le réseau — et
-  `tests/test_replay.c` mesure désormais la propriété exacte dont un duel dépendrait, qu'aucun
-  test ne couvrait : **une suite de masques de boutons, un par pas fixe, suffit-elle à
-  reproduire une partie ?** Oui, 8/8, état comparé au bit près et pas seulement le score. Utile
-  sans aucun duel : un jeu qui lirait une horloge, un `rand()` non semé ou un état résiduel
-  entre deux parties serait signalé là.
+- **Un décimateur de maillage n'est plus nécessaire au sens où il l'était.** La limite de
+  160 000 sommets était celle du rastériseur LOGICIEL du conteneur de développement, pas du
+  jeu : sur un M1, la salle en porte 145 979 et rend en 6,1 ms au palier `low`. Blender
+  décime d'ailleurs à l'export, ce qui règle la question à la source. Ce qui reste vrai, c'est
+  qu'un modèle CC0 brut est taillé pour le cinéma et doit être dégrossi avant d'entrer.
 
 ---
 
