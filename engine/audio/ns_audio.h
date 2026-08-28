@@ -107,6 +107,21 @@ void ns_audio_stop(int voice);
 void ns_audio_voice_position(int voice, ns_v3 position);
 
 /*
+ * Change le gain d'une voix DÉJÀ lancée.
+ *
+ * Il n'existait pas, et une boucle lancée était donc figée à son niveau de
+ * départ pour toute la partie. C'est ce qui empêchait de régler le fond de
+ * salle depuis le menu : la seule façon d'en changer était de l'arrêter et de
+ * la relancer, ce qui s'entend comme une coupure.
+ *
+ * Le gain passé est le gain DE BASE : l'occlusion continue de s'appliquer
+ * par-dessus, et la valeur amortie en cours n'est pas remise à zéro. Baisser le
+ * volume d'une source derrière un mur ne doit pas la faire réapparaître le temps
+ * que l'amortissement reparte.
+ */
+void ns_audio_voice_gain(int voice, float gain);
+
+/*
  * Occlusion d'une voix, de 0 (totalement bouchée) à 1 (dégagée). La valeur est
  * **amortie à l'intérieur** : l'appelant passe la mesure brute du BVH à chaque
  * image, le mixeur se charge de ne pas la faire entendre par paliers.
@@ -150,5 +165,24 @@ void ns_audio_update(float dt);
  * fait pas taire une radio.
  */
 bool ns_audio_render(const char *wav_path, float seconds);
+
+/*
+ * Le même rendu, mais en LAISSANT LE MONDE AVANCER pendant.
+ *
+ * Sans périphérique, l'horloge du mixeur n'avance que lorsqu'on lui lit des
+ * trames : appeler `room_sound_update` cent fois avant `ns_audio_render`
+ * démarrerait les cent sons à l'instant zéro, tous empilés. On n'entendrait pas
+ * une marche, on entendrait un accord.
+ *
+ * `step` est donc rappelé tous les `slice` secondes de son rendu, avec le `dt`
+ * correspondant. C'est ce qui permet de rendre une VRAIE traversée de la salle
+ * hors ligne — le joueur avance, `room_sound` déclenche ses pas à la distance
+ * voulue, le mixeur les place au bon endroit du fichier — et donc de mesurer la
+ * cadence et la variation plutôt que de les affirmer.
+ *
+ * `ns_audio_render` est exactement cet appel avec `step` à NULL.
+ */
+bool ns_audio_render_driven(const char *wav_path, float seconds, float slice,
+                            void (*step)(float dt, void *user), void *user);
 
 #endif /* NS_AUDIO_H */

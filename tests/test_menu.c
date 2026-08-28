@@ -16,6 +16,7 @@
 #include "ns_core.h"
 #include "ns_render.h"
 #include "room_menu.h"
+#include "room_sound.h"
 
 #include <SDL3/SDL.h>
 
@@ -193,12 +194,104 @@ static void test_buttons(void)
     CHECK(m.close_request, "Échap ferme");
 }
 
+/*
+ * Les deux niveaux de la salle : « PAS » et « FOND DE SALLE ».
+ *
+ * Ils sont les seuls réglages sonores que ce test PEUT exercer, et ce n'est pas
+ * une commodité : c'est une conséquence de leur nature. Les quatre volumes de
+ * bus vivent dans le mixeur, qui n'existe pas sur une machine d'intégration
+ * continue sans carte son — `bus_step` y est un no-op, et les vérifier
+ * reviendrait à vérifier que rien ne se passe. Ces deux-là sont des préférences
+ * de la salle, tenues par `room_sound` et écrites dans `settings.cfg` que le
+ * mixeur ait démarré ou non. Ils se règlent, se bornent et se persistent sans
+ * périphérique — donc ils se testent.
+ */
+static void test_room_levels(void)
+{
+    room_menu m; memset(&m, 0, sizeof m);
+    ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
+    float sens = 1.0f;
+    const room_menu_ctx ctx = { &rs, &sens };
+    const int n = menu_item_count();
+    room_menu_open(&m);
+
+    /* Les deux lignes sont juste avant SOURIS, qui précède les deux boutons. */
+    const int row_steps = n - 5;
+    const int row_tone  = n - 4;
+
+    room_sound_set_level(ROOM_LEVEL_STEPS, 0.50f);
+    go_to(&m, &ctx, row_steps);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_STEPS) > 0.59f
+          && room_sound_get_level(ROOM_LEVEL_STEPS) < 0.61f,
+          "« PAS » monte par crans de 5 %% (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_STEPS));
+    /* Un réglage sonore ne demande PAS de réappliquer le rendu. C'est ce qui
+     * évite de reconstruire les cibles GPU chaque fois qu'on bouge un volume. */
+    CHECK(!m.render_dirty, "…sans redemander une application du rendu");
+
+    for (int i = 0; i < 40; ++i) room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_STEPS) == 0.0f,
+          "« PAS » se coupe et ne passe pas sous zéro (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_STEPS));
+    for (int i = 0; i < 60; ++i) room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_STEPS) == 1.0f,
+          "…et ne monte pas au-dessus de 100 %% (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_STEPS));
+
+    /* Et l'autre ligne n'a pas bougé : c'est LE défaut qu'un menu à table
+     * partagée produit — deux entrées qui écrivent la même case. */
+    room_sound_set_level(ROOM_LEVEL_TONE, 0.70f);
+    go_to(&m, &ctx, row_steps);
+    for (int i = 0; i < 5; ++i) room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_TONE) > 0.69f
+          && room_sound_get_level(ROOM_LEVEL_TONE) < 0.71f,
+          "régler « PAS » ne touche pas « FOND DE SALLE » (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_TONE));
+
+    go_to(&m, &ctx, row_tone);
+    for (int i = 0; i < 40; ++i) room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_TONE) == 0.0f,
+          "« FOND DE SALLE » se coupe entièrement (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_TONE));
+
+    /* Changer de palier de qualité ne doit rien effacer ici non plus : c'est
+     * exactement le piège que ce fichier existe pour tenir. */
+    room_sound_set_level(ROOM_LEVEL_STEPS, 0.35f);
+    room_sound_set_level(ROOM_LEVEL_TONE, 0.15f);
+    go_to(&m, &ctx, 0);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_STEPS) > 0.34f
+          && room_sound_get_level(ROOM_LEVEL_STEPS) < 0.36f,
+          "changer de palier n'efface pas « PAS » (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_STEPS));
+    CHECK(room_sound_get_level(ROOM_LEVEL_TONE) > 0.14f
+          && room_sound_get_level(ROOM_LEVEL_TONE) < 0.16f,
+          "…ni « FOND DE SALLE » (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_TONE));
+
+    /* Les flèches sur un bouton restent inertes maintenant que deux lignes se
+     * sont insérées : la garde porte sur l'INDICE des boutons, et un décalage
+     * d'entrée est exactement ce qui la casserait sans bruit. */
+    go_to(&m, &ctx, n - 1);
+    const float keep = room_sound_get_level(ROOM_LEVEL_TONE);
+    room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(room_sound_get_level(ROOM_LEVEL_TONE) == keep,
+          "« QUITTER » ne règle pas le voisin (%.3f)",
+          (double)room_sound_get_level(ROOM_LEVEL_TONE));
+}
+
 static void test_persist(const char *dir)
 {
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_HIGH);
     rs.render_scale = 0.75f;
     float sens = 1.85f;
     const room_menu_ctx ctx = { &rs, &sens };
+
+    room_sound_set_level(ROOM_LEVEL_STEPS, 0.45f);
+    room_sound_set_level(ROOM_LEVEL_TONE, 0.20f);
 
     ns_config_init("menu-test.cfg");
     room_menu_persist(&ctx);
@@ -214,6 +307,25 @@ static void test_persist(const char *dir)
     CHECK(ns_config_get_float(NS_CFG_MOUSE_SENS, 0.0f) > 1.84f
           && ns_config_get_float(NS_CFG_MOUSE_SENS, 0.0f) < 1.86f,
           "la sensibilité est écrite (%.3f)", (double)ns_config_get_float(NS_CFG_MOUSE_SENS, 0.0f));
+
+    /*
+     * Les deux niveaux de la salle, écrits SANS mixeur.
+     *
+     * C'est la vérification qui compte pour eux : ils sont volontairement hors
+     * du garde `ns_audio_ready` dans `room_menu_persist`, pour qu'un réglage
+     * fait sur une machine muette ne soit pas effacé en silence. Ce test tourne
+     * précisément sur une telle machine — il n'appelle jamais `ns_audio_init` —
+     * donc il mesure exactement ce cas.
+     */
+    CHECK(ns_config_get_float(ROOM_CFG_VOL_STEPS, -1.0f) > 0.44f
+          && ns_config_get_float(ROOM_CFG_VOL_STEPS, -1.0f) < 0.46f,
+          "« PAS » est écrit même sans sortie audio (%.3f)",
+          (double)ns_config_get_float(ROOM_CFG_VOL_STEPS, -1.0f));
+    CHECK(ns_config_get_float(ROOM_CFG_VOL_TONE, -1.0f) > 0.19f
+          && ns_config_get_float(ROOM_CFG_VOL_TONE, -1.0f) < 0.21f,
+          "« FOND DE SALLE » aussi (%.3f)",
+          (double)ns_config_get_float(ROOM_CFG_VOL_TONE, -1.0f));
+
     ns_config_shutdown();
     (void)dir;
 }
@@ -225,6 +337,7 @@ int main(int argc, char **argv)
     test_quality_preserves_the_other_rows();
     test_bounds();
     test_buttons();
+    test_room_levels();
     test_persist(argc > 1 ? argv[1] : ".");
     ns_paths_shutdown();
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

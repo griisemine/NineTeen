@@ -13,10 +13,16 @@
  * Ce qu'il règle, et ce qu'il ne règle pas
  * ----------------------------------------
  * Uniquement ce qui a déjà un lecteur : le palier, l'échelle de rendu, la
- * densité de poussière, l'exposition, les quatre volumes, la sensibilité de la
- * souris. Aucune entrée n'est ajoutée « pour plus tard » — c'est exactement la
- * faute que `ns_config.h` documente à propos des deux clés réservées qui n'ont
- * jamais rien piloté.
+ * densité de poussière, l'exposition, les quatre volumes, les DEUX niveaux de la
+ * salle (les pas, le fond continu), la sensibilité de la souris. Aucune entrée
+ * n'est ajoutée « pour plus tard » — c'est exactement la faute que `ns_config.h`
+ * documente à propos des deux clés réservées qui n'ont jamais rien piloté.
+ *
+ * Les deux niveaux de la salle passent par `room_sound_set_level` et non par le
+ * contexte : ils vivent au niveau du MODULE `room_sound`, comme les volumes de
+ * bus vivent au niveau de `ns_audio`. Un curseur de volume n'a pas besoin de
+ * l'instance qui joue les sons — et cette instance n'existe pas encore quand le
+ * menu se construit.
  *
  * Il ne connaît ni SDL, ni le RHI. L'appelant lui envoie des ACTIONS et relit
  * ensuite les drapeaux `*_dirty` pour appliquer ce qui a changé — c'est ce qui

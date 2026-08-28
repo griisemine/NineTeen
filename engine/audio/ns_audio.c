@@ -435,6 +435,25 @@ void ns_audio_voice_position(int handle, ns_v3 position)
     ma_sound_set_position(&v->sound, position.x, position.y, position.z);
 }
 
+/* Le facteur d'occlusion effectivement appliqué au gain, pour une visibilité
+ * amortie donnée. Écrit une fois, employé par `ns_audio_update` et par
+ * `ns_audio_voice_gain` — les deux endroits qui touchent au volume d'une voix.
+ * Les avoir laissés diverger aurait produit un saut de niveau au moment précis
+ * où l'on bouge un curseur du menu. */
+static float occlusion_gain(const ns_voice *v)
+{
+    const float floor = NS_AUDIO_OCCLUSION_FLOOR;
+    return floor + (1.0f - floor) * ns_clampf(v->occlusion, 0.0f, 1.0f);
+}
+
+void ns_audio_voice_gain(int handle, float gain)
+{
+    ns_voice *v = voice_from_handle(handle);
+    if (!v) return;
+    v->base_gain = (gain < 0.0f) ? 0.0f : gain;
+    ma_sound_set_volume(&v->sound, v->base_gain * occlusion_gain(v));
+}
+
 void ns_audio_voice_occlusion(int handle, float visibility)
 {
     ns_voice *v = voice_from_handle(handle);
@@ -486,9 +505,7 @@ void ns_audio_update(float dt)
         if (v->occlusion != v->occlusion_target) {
             v->occlusion = ns_damp(v->occlusion, v->occlusion_target,
                                    NS_AUDIO_OCCLUSION_RATE, dt);
-            const float floor = NS_AUDIO_OCCLUSION_FLOOR;
-            const float k = floor + (1.0f - floor) * ns_clampf(v->occlusion, 0.0f, 1.0f);
-            ma_sound_set_volume(&v->sound, v->base_gain * k);
+            ma_sound_set_volume(&v->sound, v->base_gain * occlusion_gain(v));
         }
     }
 }
@@ -505,6 +522,12 @@ static void wav_u32(uint8_t *p, uint32_t v)
 
 bool ns_audio_render(const char *wav_path, float seconds)
 {
+    return ns_audio_render_driven(wav_path, seconds, 0.0f, NULL, NULL);
+}
+
+bool ns_audio_render_driven(const char *wav_path, float seconds, float slice,
+                            void (*step)(float dt, void *user), void *user)
+{
     if (!g.ready || !g.offline || !wav_path || seconds <= 0.0f) return false;
 
     const uint32_t rate = ma_engine_get_sample_rate(&g.engine);
@@ -514,18 +537,31 @@ bool ns_audio_render(const char *wav_path, float seconds)
     int16_t *pcm = (int16_t *)SDL_malloc((size_t)total * channels * sizeof(int16_t));
     if (!pcm) return false;
 
-    float block[512 * 2];
+    /* La taille du bloc EST le pas de simulation quand on en a un. Lire par 512
+     * trames et rappeler l'appelant tous les `slice` désaccorderait les deux, et
+     * un pas de temps qui glisse est exactement ce qu'on cherche à éviter en
+     * mesurant une cadence. */
+    ma_uint64 block_frames = 512;
+    if (step && slice > 0.0f) {
+        const ma_uint64 want = (ma_uint64)(slice * (float)rate);
+        block_frames = (want < 1) ? 1 : ((want > 4096) ? 4096 : want);
+    }
+
+    float block[4096 * 2];
     uint64_t done = 0;
     while (done < total) {
-        const ma_uint64 want = (total - done > 512) ? 512 : (total - done);
+        const ma_uint64 want = (total - done > block_frames) ? block_frames : (total - done);
         ma_uint64 got = 0;
         if (ma_engine_read_pcm_frames(&g.engine, block, want, &got) != MA_SUCCESS) break;
         if (got == 0) break;
 
+        const float dt = (float)got / (float)rate;
+
         /* L'amortissement de l'occlusion doit avancer avec le temps rendu, pas
          * avec l'horloge murale — sinon un rendu hors ligne n'entendrait jamais
          * une transition. */
-        ns_audio_update((float)got / (float)rate);
+        if (step) step(dt, user);   /* l'appelant fait déjà avancer le mixeur */
+        else      ns_audio_update(dt);
 
         for (ma_uint64 f = 0; f < got * channels; ++f) {
             const float s = ns_clampf(block[f], -1.0f, 1.0f);
