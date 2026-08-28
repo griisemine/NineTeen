@@ -656,7 +656,54 @@ def assembler():
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.uv.smart_project(angle_limit=math.radians(66.0), island_margin=0.02)
     bpy.ops.object.mode_set(mode="OBJECT")
+
+    cadrer_les_flancs(ob)
     return ob
+
+
+def cadrer_les_flancs(ob):
+    """Les UV des deux flancs, CADRÉES sur la silhouette de la borne.
+
+    `smart_project` range des îlots ; il ne sait pas qu'une planche dessinée a
+    un haut, un bas et des bords. Employé sur les flancs, il y pose la
+    sérigraphie à une échelle et à un endroit arbitraires : mesuré sur la
+    capture d'albédo de la vue `allee`, le flanc de la borne Flappy ne montrait
+    plus la trame de losanges mais deux grandes diagonales, et prenait sa
+    couleur au BAS du dégradé de `flanc_borne.png` (0,16) au lieu de la
+    parcourir — d'où un flanc presque noir là où le matériau annonce
+    (0,43 ; 0,74 ; 0,51).
+
+    C'est le même cadrage que faisait `geo_profile_extrude_capped` avant que la
+    carrosserie ne passe sous Blender, et c'est ce qui permet à UNE planche de
+    servir des bornes de tailles différentes : une projection plane sur la boîte
+    englobante du profil, de (0,0) à (1,1). Les faces du jonc de chant sont
+    exclues — elles portent leur propre matériau et n'ont rien à cadrer.
+    """
+    me = ob.data
+    uv = me.uv_layers.active.data
+    flanc = MI["flanc"]
+
+    lo_y = lo_z = 1e9
+    hi_y = hi_z = -1e9
+    faces = [f for f in me.polygons if f.material_index == flanc]
+    for f in faces:
+        for vi in f.vertices:
+            co = me.vertices[vi].co
+            lo_y = min(lo_y, co.y); hi_y = max(hi_y, co.y)
+            lo_z = min(lo_z, co.z); hi_z = max(hi_z, co.z)
+    if not faces or hi_y - lo_y < 1e-6 or hi_z - lo_z < 1e-6:
+        raise RuntimeError("aucun flanc a cadrer : la table des materiaux a bouge")
+
+    # Y est la profondeur de la borne, Z sa hauteur — la planche est en
+    # portrait, comme le flanc. Le flanc de droite est retourné en U pour que la
+    # sérigraphie ne se lise pas en miroir d'un côté de la borne.
+    for f in faces:
+        droite = me.vertices[f.vertices[0]].co.x > 0.0
+        for li in f.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            u = (co.y - lo_y) / (hi_y - lo_y)
+            v = (co.z - lo_z) / (hi_z - lo_z)
+            uv[li].uv = (1.0 - u if droite else u, v)
 
 
 def main():

@@ -69,6 +69,16 @@ file(MAKE_DIRECTORY "${GEN}/scene" "${GEN}/textures" "${GEN}/materials")
 file(GLOB CC0_MODELS CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.gltf"
      "${CMAKE_CURRENT_SOURCE_DIR}/cc0/models/*/*.bin")
+# Les modèles construits sous Blender par les scripts d'`assets/blender/` — la
+# borne, aujourd'hui. Ils n'étaient PAS dans cette liste : régénérer la borne ne
+# refaisait donc pas la salle, et le jeu continuait de montrer l'ancien maillage
+# en affichant « rien à faire ». Un modèle qu'on modifie sans que le décor bouge
+# est exactement le genre de silence que ce dépôt refuse. Les ancres sont là
+# aussi : `roomgen` les LIT, elles font donc partie de la description.
+file(GLOB BLENDER_MODELS CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.gltf"
+     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.bin"
+     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.json")
 
 #
 # L'art latéral d'une borne, DESSINÉ plutôt que téléchargé.
@@ -173,7 +183,7 @@ add_custom_command(
                     # Racine des modèles CC0 instanciés dans la salle.
                     "--assets=${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
-            ${CC0_MODELS} "${SIDEART}" "${PANELART}"
+            ${CC0_MODELS} ${BLENDER_MODELS} "${SIDEART}" "${PANELART}"
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
