@@ -1383,18 +1383,16 @@
     },
     {
       "_": "La suspension du billard. Le coin ouest recevait 9 d'éclairement du plafonnier d'allée le plus proche, à 3,2 m : la table, les tabourets et le mur y étaient illisibles. Une table de billard a sa propre lampe, basse et chaude — c'est aussi ce qui la désigne comme un endroit où l'on va.",
+      "_ampoule": "1,56 m et non 1,68, et c'est un CORRECTIF, pas un réglage. L'ampoule du luminaire est une sphère de rayon 4,5 cm centrée à 1,66 m : elle occupe donc de 1,615 à 1,705, et la lumière était déclarée à 1,68 — À L'INTÉRIEUR. Le lancer de rayons ne connaît pas les matériaux émissifs : chaque rayon d'ombre partant d'un point de la table devait traverser le verre de sa propre ampoule, et la suspension s'éteignait elle-même. Mesuré : à intensité identique, descendre la source de 12 cm sous la sphère fait passer la vue de 11 à 17 de médiane et de 66 % à 47 % de pixels sous 16. La preuve que c'était bien l'occultation et non la puissance : à 1,68 m, multiplier l'intensité par 2,6 ne changeait RIEN (médiane 11 puis 12), alors qu'au palier medium, sans ombres lancées, la même intensité éclairait la pièce.",
+      "_intensite": "150 et non 76. La valeur de 76 avait été réglée à l'œil pendant que la lampe était occultée par sa propre ampoule : elle compensait un défaut qui n'existe plus. À 150 la table reçoit une vraie nappe de lumière, les billes portent une ombre, et seuls 0,3 % des pixels de la vue saturent.",
       "name": "suspension_billard",
-      "at": [
-        -7.2,
-        1.68,
-        -1.6
-      ],
+      "at": [-7.2, 1.56, -1.6],
       "color": [
         1.0,
         0.76,
         0.48
       ],
-      "intensity": 76.0,
+      "intensity": 150.0,
       "range": 4.2
     },
     {
