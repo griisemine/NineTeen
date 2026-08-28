@@ -890,8 +890,8 @@
       "fit": true
     },
     {
-      "name": "marquee_pub",
-      "texture": "pub.jpg",
+      "name": "marquee_shooter",
+      "texture": "marquee_shooter.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -899,7 +899,47 @@
         0.9
       ],
       "emissiveStrength": 1.52,
-      "fit": true
+      "fit": true,
+      "_": "L'enseigne de « SHOOTER », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
+    },
+    {
+      "name": "marquee_demineur",
+      "texture": "marquee_demineur.png",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.52,
+      "fit": true,
+      "_": "L'enseigne de « DEMINEUR », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
+    },
+    {
+      "name": "marquee_pacman",
+      "texture": "marquee_pacman.png",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.52,
+      "fit": true,
+      "_": "L'enseigne de « PAC-MAN », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
+    },
+    {
+      "name": "marquee_piano",
+      "texture": "marquee_piano.png",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        0.97,
+        0.9
+      ],
+      "emissiveStrength": 1.52,
+      "fit": true,
+      "_": "L'enseigne de « PIANO », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
     {
       "name": "billard_tapis",
@@ -1186,6 +1226,10 @@
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
   "retiredTextures": [
+    {
+      "file": "pub.jpg",
+      "why": "« votre publicite ici ? contactez-nous », un remplissage de 2020 que huit bornes sur dix-neuf portaient au-dessus de leur ecran. Ce n'etait pas un choix : quatre jeux n'avaient pas d'enseigne dessinee. Ils en ont une maintenant, tracee par `tools/marqueeart` avec la fonte du jeu."
+    },
     {
       "file": "pilonne_rouge.jpg",
       "why": "posée sur les piliers par la reconstruction, sous un commentaire affirmant que les PILONNE de 2020 portaient « un matériau gris uni ». C'est faux : salle.mtl les habille de bordeaux.jpg, sur treize objets. La texture rapportée mesure en linéaire (0,500 ; 0,006 ; 0,020), soit un rapport rouge/vert de 78 — un rouge de signalisation, pas le bordeaux d'une salle d'arcade. Les piliers reprennent leur texture d'origine."
@@ -2025,7 +2069,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_shooter"
     },
     {
       "name": "borne_arcade_4",
@@ -2079,7 +2123,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_demineur"
     },
     {
       "name": "borne_arcade_7",
@@ -2097,7 +2141,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_pacman"
     },
     {
       "name": "borne_arcade_8",
@@ -2115,7 +2159,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_piano"
     },
     {
       "name": "borne_arcade_9",
@@ -2205,7 +2249,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_shooter"
     },
     {
       "name": "borne_arcade_14",
@@ -2223,7 +2267,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_demineur"
     },
     {
       "name": "borne_arcade_15",
@@ -2241,7 +2285,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_chargement",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_piano"
     },
     {
       "name": "borne_arcade_16",
@@ -2295,7 +2339,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_bientot",
-      "marquee": "marquee_pub"
+      "marquee": "marquee_pacman"
     },
     {
       "name": "borne_classement",

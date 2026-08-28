@@ -29,6 +29,10 @@ nineteen_add_tool(obj2gltf obj2gltf.c gltf_write.c)
 nineteen_add_tool(texgen   texgen.c)
 nineteen_add_tool(sideart  sideart.c)
 nineteen_add_tool(panelart panelart.c)
+nineteen_add_tool(marqueeart marqueeart.c)
+# `marqueeart` dessine avec la fonte DU JEU : une enseigne tracee dans une
+# autre fonte que les scores de la meme borne se remarque tout de suite.
+target_include_directories(marqueeart PRIVATE "${CMAKE_SOURCE_DIR}/engine/sprite")
 nineteen_add_tool(bvhbake  bvhbake.c)
 # Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de
 # pas et les nappes d'ambiance sont SYNTHÉTISÉES au lieu d'être enregistrées. Un

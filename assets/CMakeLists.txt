@@ -163,13 +163,66 @@ add_custom_command(
 )
 
 
+# Les enseignes manquantes, dessinées.
+#
+# Huit des dix-neuf bornes affichaient « votre publicité ici ? » au-dessus de
+# leur écran. La raison était simple : quatre jeux — Shooter, Démineur,
+# Pac-Man, Piano — n'ont jamais eu d'enseigne dessinée, et les bornes qui les
+# portent tombaient donc sur la pancarte du régisseur. Une salle d'arcade se lit
+# d'abord par ses enseignes : on traverse l'allée en lisant les noms, et c'est
+# comme ça qu'on choisit sa borne.
+#
+# `marqueeart` les dessine avec la fonte DU JEU (`engine/sprite/ns_font5x7.h`).
+# Chaque teinte est celle de la laque du caisson correspondant, pour qu'une
+# borne se reconnaisse d'aussi loin par son enseigne que par sa couleur.
+set(MARQUEE_shooter  "SHOOTER"  "1.0,0.36,0.14")
+set(MARQUEE_demineur "DEMINEUR" "1.0,0.74,0.20")
+set(MARQUEE_pacman   "PAC-MAN"  "1.0,0.84,0.16")
+set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
+set(MARQUEE_ART "")
+foreach(jeu shooter demineur pacman piano)
+    list(GET MARQUEE_${jeu} 0 _titre)
+    list(GET MARQUEE_${jeu} 1 _teinte)
+    set(_png "${GEN}/sideart/marquee_${jeu}.png")
+    add_custom_command(
+        OUTPUT  "${_png}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+        COMMAND marqueeart "--titre=${_titre}" "--teinte=${_teinte}" "${_png}"
+        DEPENDS marqueeart
+        COMMENT "Enseigne de borne : marquee_${jeu}.png"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/textures/marquee_${jeu}.png"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_png}" "${GEN}/scene/textures/marquee_${jeu}.png"
+        DEPENDS "${_png}"
+        VERBATIM
+    )
+    # `--strength=0.5` : une enseigne est une plaque de PLEXIGLAS. Le relief
+    # deduit du contraste y graverait les lettres, or elles sont imprimees
+    # dessous et la surface est lisse.
+    add_custom_command(
+        OUTPUT  "${GEN}/materials/marquee_${jeu}${_map_n}" "${GEN}/materials/marquee_${jeu}${_map_orm}"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.5 "${_png}" "${GEN}/materials"
+        DEPENDS texgen "${_png}"
+        COMMENT "Materiau PBR : marquee_${jeu}"
+        VERBATIM
+    )
+    list(APPEND MARQUEE_ART "${_png}" "${GEN}/scene/textures/marquee_${jeu}.png"
+                            "${GEN}/materials/marquee_${jeu}${_map_n}"
+                            "${GEN}/materials/marquee_${jeu}${_map_orm}")
+endforeach()
+
+
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-# +2 : l'art latéral et la sérigraphie de panneau, dessinés juste au-dessus.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 2")
+# +6 : l'art latéral, la sérigraphie de panneau et les quatre enseignes de
+# borne, dessinés juste au-dessus.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 6")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -184,6 +237,7 @@ add_custom_command(
                     "--assets=${CMAKE_CURRENT_SOURCE_DIR}"
     DEPENDS roomgen "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
             ${CC0_MODELS} ${BLENDER_MODELS} "${SIDEART}" "${PANELART}"
+            ${MARQUEE_ART}
     COMMENT "Salle : description -> glTF 2.0 (objets nommés, lumières déclarées)"
     VERBATIM
 )
@@ -372,7 +426,8 @@ set(GENERATED_MAPS "${SIDEART}" "${SIDEART_RUNTIME}"
                    "${GEN}/materials/flanc_borne${_map_orm}"
                    "${PANELART}" "${PANELART_RUNTIME}"
                    "${GEN}/materials/panneau_borne${_map_n}"
-                   "${GEN}/materials/panneau_borne${_map_orm}")
+                   "${GEN}/materials/panneau_borne${_map_orm}"
+                   ${MARQUEE_ART})
 foreach(tex IN LISTS ROOM_TEXTURES)
     get_filename_component(tex_name "${tex}" NAME_WE)
 
