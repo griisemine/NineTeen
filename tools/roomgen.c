@@ -1089,12 +1089,113 @@ static int clone_screen_material(rg_builder *b, int src, const char *cabinet)
     return (int)slot;
 }
 
+/* ======================================================================
+ * La borne : un modèle importé, et quatre ancres qui lui survivent
+ * ======================================================================
+ * La borne était une extrusion de profil à neuf gradins, montée ici même. Elle
+ * avait deux défauts que les vues de référence disent sans ambiguïté :
+ *
+ *   - **aucun jonc de chant.** Le T-molding — le bourrelet vif qui court sur
+ *     tous les chants du caisson, l'arête avant, l'arête arrière, le pourtour
+ *     du marquee — est le détail auquel on reconnaît une borne d'arcade avant
+ *     même d'en lire la couleur. Il manquait entièrement.
+ *   - **un décrochement droit sous le panneau de commande**, là où la
+ *     référence descend en doucine : une gorge concave qui se redresse.
+ *
+ * Le reste — deux postes de jeu au lieu d'un, la porte à monnaie en saillie,
+ * les grilles de haut-parleur en cercles concentriques — demandait des
+ * primitives que `geo_shapes` n'a pas et n'a aucune raison d'avoir.
+ *
+ * La carrosserie vient donc de `assets/blender/borne.py`, exportée en glTF.
+ * `roomgen` garde ce qui ne peut pas venir d'un modèle :
+ *
+ *   - **la DALLE**, parce qu'elle reçoit la texture de la partie au runtime et
+ *     que son matériau est CLONÉ par borne — dix-neuf bornes, dix-neuf écrans ;
+ *   - **les quatre ANCRES** (centre d'écran, grappe de boutons, fente à jetons,
+ *     sommet du manche), dont dépendent l'IK des bras et le placement des
+ *     mini-jeux ;
+ *   - **la table des matériaux**, pour que les dix-neuf bornes gardent leur
+ *     teinte par jeu avec un seul maillage.
+ *
+ * Ancres et dalle sont LUES dans `borne.ancres.json`, écrit par le même script
+ * qui produit le glTF, depuis les mêmes cotes. Les recopier ici les ferait
+ * dériver de la géométrie à la première retouche du modèle — c'est exactement
+ * ce qui avait laissé un second monnayeur flotter 13 cm devant la borne.
+ */
+#define RG_BORNE_MODELE "models/borne/borne.gltf"
+#define RG_BORNE_ANCRES "models/borne/borne.ancres.json"
+#define RG_BORNE_MAT_MAX 16
+
+typedef struct rg_borne_modele {
+    bool  charge;
+    int   material_count;
+    char  material[RG_BORNE_MAT_MAX][64];
+    float screen[3], screen_size[2], screen_tilt;
+    float panel[3], coin[3], stick[3];
+} rg_borne_modele;
+
+/* Le modèle est le même pour les dix-neuf bornes : on le lit une fois. */
+static const rg_borne_modele *borne_modele(const rg_builder *b, const char *owner)
+{
+    static rg_borne_modele m;
+    if (m.charge) return &m;
+
+    if (!b->asset_root[0]) {
+        tool_fatalf("« %s » : la borne est un modèle importé et --assets= n'a "
+                    "pas été donné — « %s » ne peut pas être résolu",
+                    owner, RG_BORNE_ANCRES);
+    }
+
+    char path[768];
+    snprintf(path, sizeof path, "%s/%s", b->asset_root, RG_BORNE_ANCRES);
+
+    size_t size = 0;
+    char *text = tool_read_file(path, &size);
+    if (!text) {
+        tool_fatalf("« %s » : %s introuvable. Le modèle se reconstruit par "
+                    "« Blender --background --python assets/blender/borne.py "
+                    "-- --out assets/models/borne/borne.gltf »", owner, path);
+    }
+
+    tool_json doc;
+    tool_json_parse(&doc, text, size, path);
+    const tool_json_value *root = tool_json_root(&doc);
+    if (!root) tool_fatalf("%s : document vide", path);
+
+    tool_json_get_vec3(&doc, root, "screen", m.screen, 0.0f);
+    tool_json_get_vec2(&doc, root, "screenSize", m.screen_size, 0.0f);
+    m.screen_tilt = tool_json_get_float(&doc, root, "screenTilt", 0.0f);
+    tool_json_get_vec3(&doc, root, "panel", m.panel, 0.0f);
+    tool_json_get_vec3(&doc, root, "coin", m.coin, 0.0f);
+    tool_json_get_vec3(&doc, root, "stick", m.stick, 0.0f);
+
+    if (m.screen_size[0] <= 0.0f || m.screen_size[1] <= 0.0f) {
+        tool_fatalf("%s : dalle de %.3f x %.3f m — le modèle n'a pas déclaré "
+                    "sa taille d'écran", path,
+                    (double)m.screen_size[0], (double)m.screen_size[1]);
+    }
+
+    const tool_json_value *mats = tool_json_get(&doc, root, "materials");
+    m.material_count = tool_json_array_count(&doc, mats);
+    if (m.material_count <= 0 || m.material_count > RG_BORNE_MAT_MAX) {
+        tool_fatalf("%s : %d matériaux déclarés, entre 1 et %d attendus",
+                    path, m.material_count, RG_BORNE_MAT_MAX);
+    }
+    for (int i = 0; i < m.material_count; ++i) {
+        tool_json_string_at(&doc, mats, i, m.material[i], sizeof m.material[i]);
+    }
+
+    tool_json_free(&doc);
+    free(text);
+    m.charge = true;
+    return &m;
+}
+
 static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
                           const tool_json_value *e, const char *owner,
                           rg_cab_anchors *anchors)
 {
-    float *const screen_local = anchors->screen;
-    float *const screen_size  = anchors->screen_size;
+    const rg_borne_modele *mod = borne_modele(b, owner);
 
     char m_body[64], m_screen[64], m_marquee[64], m_panel[64], m_trim[64], m_side[64];
     tool_json_get_string(doc, e, "materialBody", m_body, sizeof m_body);
@@ -1111,645 +1212,133 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
     const int panel  = material_index(b, m_panel[0] ? m_panel : m_body, owner);
     const int trim   = material_index(b, m_trim[0] ? m_trim : m_body, owner);
     /*
-     * Le flanc. Les deux bouchons de l'extrusion SONT les deux flancs de la
-     * borne, et un flanc de borne d'arcade porte une sérigraphie — le dégradé et
-     * la trame en losanges des vues de référence — que le caisson n'a pas.
-     *
-     * Facultatif : sans `materialSide`, le flanc reprend la peinture du caisson
-     * et la borne est exactement celle d'avant. C'est ce qui permet de l'ajouter
-     * borne par borne sans casser une salle qui ne le déclare pas.
+     * Le flanc porte la sérigraphie — le dégradé et la trame en losanges des
+     * vues de référence — que le caisson n'a pas. Facultatif : sans
+     * `materialSide`, il reprend la peinture du caisson.
      */
     const int flank  = material_index(b, m_side[0] ? m_side : m_body, owner);
+
     /*
-     * Le noir des bandeaux. Facultatif : une salle qui ne le déclare pas retombe
-     * sur le cadre clair et reste correcte — c'était l'état d'avant.
+     * Les matériaux facultatifs. Chacun retombe sur un voisin plausible : une
+     * salle qui n'en déclare aucun donne une borne d'une seule teinte, laide
+     * mais juste. C'est ce qui permet de les ajouter un par un sans casser une
+     * description qui ne les connaît pas.
      */
-    const int dark_i = material_index_opt(b, "borne_noir");
-    const int dark   = (dark_i >= 0) ? dark_i : trim;
-    /*
-     * La grille de haut-parleur, et pourquoi elle mérite son propre matériau.
-     *
-     * Les deux couronnes étaient dessinées dans le NOIR du bandeau — noir sur
-     * noir, donc invisibles. Résultat : entre l'écran et le marquee, la borne
-     * n'avait qu'une plaque morte d'un seul tenant, qui occupe le quart de sa
-     * face vue d'en haut. Sur les images de référence c'est exactement le
-     * contraire : les deux grilles rondes sont ce qui donne un visage à la
-     * machine.
-     *
-     * Une grille se lit parce qu'elle est MÉTALLIQUE : elle accroche une
-     * lumière que la plaque mate absorbe. C'est le seul écart nécessaire —
-     * même noir, même place, même géométrie.
-     *
-     * Facultative comme `borne_noir` : sans elle, on retombe sur le bandeau et
-     * la borne est celle d'avant.
-     */
+    const int dark_i   = material_index_opt(b, "borne_noir");
+    const int dark     = (dark_i >= 0) ? dark_i : trim;
     const int grille_i = material_index_opt(b, "borne_grille");
     const int grille   = (grille_i >= 0) ? grille_i : dark;
-
-    const geo_uv uv_body = material_uv(b, body);
-    const geo_uv uv_trim = material_uv(b, trim);
-    const geo_uv uv_dark = material_uv(b, dark);
-    const float hw = RG_CAB_W * 0.5f, hd = RG_CAB_D * 0.5f;
-
-    /* ======================================================================
-     * Le caisson : une EXTRUSION DE PROFIL, plus une boîte
-     * ======================================================================
-     * Ce qui fait qu'on reconnaît une borne d'arcade au premier coup d'œil n'est
-     * ni sa couleur ni son marquee : c'est son PROFIL LATÉRAL EN GRADINS. Le
-     * caisson était un seul `geo_box` — un parallélépipède avec des
-     * décalcomanies posées dessus. Aucun des neuf gradins ci-dessous n'existait,
-     * et c'est toute la raison pour laquelle la borne se lisait comme une armoire.
-     *
-     * Le profil se lit sur l'arête AVANT, du sol vers le haut ; le dos, lui, est
-     * vertical du sol au plafond. Les cotes viennent des vues de référence.
-     *
-     * Repère : `geo_profile_extrude` dessine le profil perpendiculairement au
-     * chemin, `x` du profil vers `cross(+Y, tangente)`. Avec un chemin le long
-     * de +X, ça donne −Z : un point AVANT (z positif) a donc un `x` de profil
-     * NÉGATIF, d'où le `-z` à la conversion. C'est écrit une fois ici plutôt
-     * que quinze fois dans la table.
-     */
-    struct { float z, y; } silhouette[] = {
-        /* Le caisson commence à 10 cm : il REPOSE sur son socle, et c'est le
-         * socle seul qui touche le sol. Descendre le profil jusqu'à zéro faisait
-         * mordre la borne dans le tapis technique de 8 mm — le contrôle de
-         * chevauchement de `roomgen` l'a dit tout de suite, ce pour quoi il
-         * existe. */
-        { 0.30f, 0.10f },   /* pied avant, sur le socle en retrait     */
-        { 0.30f, 0.86f },   /* face avant verticale — porte à monnayeur */
-        { 0.42f, 0.90f },   /* le panneau de commande JAILLIT           */
-        { 0.42f, 0.96f },   /* son nez                                 */
-        { 0.34f, 1.02f },  /* sa tôle, inclinée vers le joueur        */
-        { 0.18f, 1.10f },   /* on recule franchement sous l'écran      */
-        { 0.14f, 1.15f },   /* pied du cadre d'écran                   */
-        { 0.10f, 1.61f },   /* l'écran, incliné vers l'arrière         */
-        { 0.04f, 1.67f },   /* pied du panneau haut-parleurs           */
-        {-0.04f, 1.72f },   /* le panneau HP, incliné                  */
-        {-0.04f, 1.88f },   /* montant jusqu'au sommet                 */
-        {-hd,    1.88f },   /* le dessus, vers l'arrière               */
-        {-hd,    0.10f },   /* le dos, vertical                        */
-    };
-    const size_t sil_count = sizeof silhouette / sizeof silhouette[0];
-
-    ns_v2 profile[sizeof silhouette / sizeof silhouette[0]];
-    for (size_t i = 0; i < sil_count; ++i) {
-        profile[i] = ns_v2_make(-silhouette[i].z, silhouette[i].y);
-    }
-
-    /* Le chemin traverse la largeur. Un profil FERMÉ sur un chemin OUVERT reçoit
-     * deux bouchons en éventail : ce sont les deux flancs, et ce sont eux qui
-     * portent l'art latéral. */
-    const ns_v3 sweep[2] = { ns_v3_make(-hw, 0.0f, 0.0f), ns_v3_make(hw, 0.0f, 0.0f) };
-
-    geo_mesh part; geo_mesh_init(&part);
-    /* `cap_uv_fit` : la planche du flanc se pose ENTIÈRE sur la silhouette, de
-     * (0,0) à (1,1). Sans lui les UV du bouchon seraient en mètres par
-     * répétition comme pour une moulure, et la sérigraphie arriverait coupée. */
-    geo_profile_extrude_capped(&part, profile, sil_count, true, sweep, 2, false,
-                               &uv_body, body, flank, true);
-    geo_xform x = GEO_XFORM_IDENTITY;
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* Le socle noir. Il est en retrait de 3 cm : c'est l'ombre de ce retrait qui
-     * fait qu'une borne « pose » sur le sol au lieu d'y être posée. */
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(RG_CAB_W - 0.06f, 0.10f, RG_CAB_D - 0.06f), 0.006f,
-            GEO_FACE_SIDES, &uv_dark, dark);
-    x = GEO_XFORM_IDENTITY;
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* --- le panneau haut-parleurs ----------------------------------------- */
     /*
-     * Le plan noir incliné entre l'écran et le marquee, et ses DEUX grilles
-     * rondes. C'est un détail qu'on ne remarque que quand il manque : sans lui
-     * la borne a un trou entre son écran et son enseigne.
-     *
-     * Il suit EXACTEMENT le gradin du profil, entre (0,04 ; 1,56) et
-     * (−0,04 ; 1,68). Le premier jet posait une boîte à une hauteur devinée et
-     * elle ne couvrait rien : la face rouge du caisson restait visible en
-     * dessous, et le panneau se lisait comme une marche flottante. Une plaque
-     * calée sur le segment ne peut pas rater sa cible.
+     * Le jonc de chant. Il retombe sur le CADRE et non sur le caisson : un
+     * T-molding de la couleur du meuble n'est pas un T-molding, c'est une arête
+     * — et l'arête est précisément ce qu'on cherchait à supprimer.
      */
-    /* La plaque couvre les DEUX gradins, du haut du cadre d'écran au marquee.
-     * Limitée au seul gradin supérieur, elle laissait une bande rouge de
-     * caisson entre l'écran et les haut-parleurs — sur les vues de référence
-     * tout ce bandeau est noir d'un seul tenant. */
-    const float hp_z0 = 0.10f, hp_y0 = 1.61f, hp_z1 = -0.04f, hp_y1 = 1.72f;
-    const float hp_dz = hp_z1 - hp_z0, hp_dy = hp_y1 - hp_y0;
-    const float hp_len = sqrtf(hp_dz * hp_dz + hp_dy * hp_dy);
-    /* Normale du gradin, tournée vers l'avant et le haut : (dy, −dz) normalisé
-     * dans le plan (z, y). */
-    const ns_v3 hp_n = ns_v3_make(0.0f, hp_dy / hp_len, -hp_dz / hp_len);
-    /* `pitch` envoie +Y sur (0, cos p, sin p) : c'est la même convention que le
-     * panneau de commande et le cadre d'écran. */
-    const float hp_pitch = atan2f(hp_n.z, hp_n.y);
-    const ns_v3 hp_mid = ns_v3_make(0.0f, (hp_y0 + hp_y1) * 0.5f + hp_n.y * 0.006f,
-                                    (hp_z0 + hp_z1) * 0.5f + hp_n.z * 0.006f);
-
-    geo_panel(out, hp_mid, hp_n, ns_v3_make(1, 0, 0),
-              RG_CAB_W - 0.03f, hp_len, 0.0f, 0.0f, 1.0f, 1.0f, dark);
-
-    for (int side = -1; side <= 1; side += 2) {
-        /*
-         * UNE couronne de 12 côtés, et non deux de 20 et 16.
-         *
-         * Le premier jet en mettait deux par grille, soit ~360 sommets de plus
-         * par borne et 6 800 sur les dix-neuf. Multiplié par les autres détails
-         * ajoutés ici, la salle est passée de 144 941 à 155 239 sommets — et
-         * au-delà d'environ 150 000, le rasteriseur logiciel du conteneur cesse
-         * de composer l'image : la même vue en « ultra » est devenue noire à
-         * 95 %. Sur un vrai GPU ce serait invisible ; ici ça m'empêche de
-         * VÉRIFIER, et un détail qu'on ne peut pas regarder ne vaut rien.
-         *
-         * Une couronne à 12 côtés à deux mètres se lit exactement pareil.
-         */
-        geo_mesh_init(&part);
-        geo_cylinder(&part, 0.050f, 0.040f, 0.009f, 12, false, true, &uv_dark, grille);
-        x = GEO_XFORM_IDENTITY;
-        x.origin = ns_v3_make((float)side * 0.185f,
-                              hp_mid.y + 0.045f + hp_n.y * 0.002f,
-                              hp_mid.z - 0.033f + hp_n.z * 0.002f);
-        x.pitch = hp_pitch;
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-    }
-
-    /* --- le marquee, caisson lumineux en SURPLOMB -------------------------- */
+    const int tmold_i  = material_index_opt(b, "borne_tmolding");
+    const int tmold    = (tmold_i >= 0) ? tmold_i : trim;
+    const int bleu_i   = material_index_opt(b, "borne_manche_bleu");
+    const int rouge_i  = material_index_opt(b, "borne_manche_rouge");
     /*
-     * Un marquee est une boîte lumineuse rapportée qui DÉBORDE, pas une
-     * décalcomanie sur la face — c'est ce surplomb qui donne à la borne sa
-     * silhouette de haut.
-     *
-     * 16 cm de haut, et c'est une correction : il en faisait 26, ce qui n'est
-     * plus une enseigne mais un panneau publicitaire. Les marquees réels sont
-     * entre 15 et 18 cm, et le nôtre couvre EXACTEMENT la tête du caisson
-     * (1,72 -> 1,88) au lieu de flotter par-dessus.
+     * Le CHROME, distinct du métal des grilles, et pour une raison mesurée :
+     * une grille de haut-parleur est un métal SOMBRE — c'est ce qui la fait
+     * lire comme une trame — et la tige du manche prenait ce même noir. Dans la
+     * pénombre de l'allée elle disparaissait sous sa boule. Une tige de manche
+     * est un tube d'acier poli ; elle doit accrocher la lumière.
      */
-    /*
-     * `mq_y` est le BAS du caisson, pas son centre : `geo_box` est posée sur
-     * Y = 0 (cf. `geo_shapes.h`). La tête du profil va de 1,72 à 1,88, le
-     * marquee la couvre donc exactement — il ne dépasse plus le sommet du
-     * caisson, ce qu'aucune borne réelle ne fait.
-     */
-    const float mq_y = 1.72f, mq_h = 0.16f;
-    /* Le surplomb mesuré sur les vues : ~16 cm. Un marquee trop profond cesse
-     * d'être une enseigne et devient un auvent — c'est ce que donnait le premier
-     * jet, et ça se voyait tout de suite dans l'allée. La face avant tombe à
-     * z = 0,20, soit 2,5 cm devant le verre de la dalle : sur une vraie borne
-     * l'enseigne affleure la vitre, elle ne la surplombe pas. */
-    const float mq_depth = 0.16f, mq_front = 0.20f;
-
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(RG_CAB_W + 0.02f, mq_h, mq_depth), 0.008f,
-            GEO_FACE_ALL & ~GEO_FACE_PZ, &uv_dark, dark);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, mq_y, mq_front - mq_depth * 0.5f);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* L'enseigne elle-même, en saillie de 8 mm sur la face du caisson lumineux,
-     * centrée à mi-hauteur — d'où le `+ mq_h/2` : `mq_y` est le bas de la
-     * boîte, `geo_panel` prend un centre. */
-    geo_panel(out, ns_v3_make(0.0f, mq_y + mq_h * 0.5f, mq_front + 0.008f),
-              ns_v3_make(0.0f, 0.0f, 1.0f), ns_v3_make(1, 0, 0),
-              RG_CAB_W - 0.04f, mq_h - 0.05f, 0.0f, 0.0f, 1.0f, 1.0f, marq);
-
-    /* --- la porte à monnayeur ---------------------------------------------- */
-    /*
-     * LE détail qui dit « borne » plus fort que tout le reste — et le premier
-     * jet ne le disait pas. Vu de près il donnait un caisson noir en relief,
-     * une trappe noire posée dessus, et deux pastilles rouges de 3 cm perdues
-     * au milieu : de loin un boîtier aux lettres vissé sur le meuble, de près
-     * un aplat noir sur un aplat noir.
-     *
-     * Ce qui fait lire une porte à monnayeur n'est pas sa forme, c'est son
-     * CHROME. Une vraie porte est en tôle noire avec trois pièces brillantes —
-     * les deux plaques de fente et la lèvre du sébile — et ce sont elles qu'on
-     * voit à deux mètres, parce qu'elles accrochent la lumière quand le noir
-     * l'absorbe. C'est exactement le raisonnement de `borne_grille` pour les
-     * haut-parleurs, et il vaut ici pour la même raison.
-     *
-     * Le relief passe aussi de 30 à 18 mm : une porte de monnayeur affleure
-     * presque la face, elle ne s'y boulonne pas.
-     */
-    const float door_z = 0.30f;
-    const int chrome_i = material_index_opt(b, "borne_grille");
-    const int chrome   = (chrome_i >= 0) ? chrome_i : trim;
-    const geo_uv uv_chrome = material_uv(b, chrome);
-
-    /* La tôle de la porte. `geo_box` est posée sur Y = 0 : `origin.y` est donc
-     * le BAS de la porte, pas son centre. */
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.20f, 0.46f, 0.018f), 0.004f,
-            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_dark, dark);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.30f, door_z);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* Les deux plaques de fente, en chrome, et la fente noire dedans. */
-    for (int side = -1; side <= 1; side += 2) {
-        const float sx = (float)side * 0.048f;
-
-        geo_mesh_init(&part);
-        geo_box(&part, ns_v3_make(0.052f, 0.090f, 0.008f), 0.002f,
-                GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_chrome, chrome);
-        x = GEO_XFORM_IDENTITY;
-        x.origin = ns_v3_make(sx, 0.615f, door_z + 0.018f);
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-
-        /* La fente elle-même : une rainure sombre dans la plaque. Sans elle la
-         * plaque est un rectangle brillant qui ne dit rien. */
-        geo_mesh_init(&part);
-        geo_box(&part, ns_v3_make(0.006f, 0.038f, 0.004f), 0.0f,
-                GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_dark, dark);
-        x = GEO_XFORM_IDENTITY;
-        x.origin = ns_v3_make(sx, 0.640f, door_z + 0.026f);
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-    }
+    const int chrome_i = material_index_opt(b, "borne_chrome");
+    const int chrome   = (chrome_i >= 0) ? chrome_i : grille;
 
     /*
-     * Le sébile de rendu : un creux noir, et sa LÈVRE chromée par-dessous.
-     * C'est la lèvre qui se voit — le creux, par définition, est une ombre.
+     * Les boutons sont VIFS, et pas du matériau du panneau. Ils l'étaient :
+     * quatre pastilles bordeaux sur un panneau bordeaux, donc invisibles. Un
+     * bouton d'arcade est en plastique brillant, et c'est exactement sa
+     * fonction : se trouver sans être cherché.
      */
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.11f, 0.055f, 0.010f), 0.003f,
-            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_dark, dark);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.395f, door_z + 0.018f);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.13f, 0.014f, 0.022f), 0.003f,
-            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_chrome, chrome);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.381f, door_z + 0.018f);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* La trappe de caisse, sous le sébile : un panneau à peine en relief, avec
-     * sa serrure. Elle était aussi haute que la moitié de la porte et posée en
-     * plein milieu, ce qui la faisait lire comme un trou. */
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.15f, 0.055f, 0.006f), 0.003f,
-            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_dark, dark);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.315f, door_z + 0.018f);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    geo_mesh_init(&part);
-    geo_box(&part, ns_v3_make(0.016f, 0.016f, 0.006f), 0.002f,
-            GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_chrome, chrome);
-    x = GEO_XFORM_IDENTITY;
-    x.origin = ns_v3_make(0.0f, 0.334f, door_z + 0.024f);
-    geo_mesh_append(out, &part, &x, -1);
-    geo_mesh_free(&part);
-
-    /* --- écran ------------------------------------------------------------ */
-    /*
-     * **La seule surface dont la géométrie doit être juste.** Elle est déclarée
-     * au moteur, coordonnées comprises, et c'est ce qui remplace les fractions
-     * inventées de `load_cabinet_assignment` — lesquelles plaçaient le centre de
-     * l'écran 31 cm trop bas et large de 1,1 unité.
-     *
-     * Inclinée de 10° vers l'arrière, comme une vraie dalle d'arcade, et à
-     * 1,26 m : la hauteur d'yeux d'un joueur debout de 1,70 m qui regarde
-     * légèrement vers le bas.
-     *
-     * **16:9, et ce n'est pas un choix esthétique : c'est ce que les images
-     * disent.** Les onze écrans peints de 2020 — `flappy_easy_font.jpg`,
-     * `snake_font.jpg`, `tetris_font.jpg`… — font tous 1920 x 1080, et le jeu
-     * de 2020 tourne lui-même en 1920 x 1080 (`WINDOW_L` / `WINDOW_H`,
-     * `legacy/games/3_flappy_bird/flappy_bird.c:22`). La dalle était en 4:3
-     * (0,56 x 0,42) : chaque image d'écran de la salle y était donc rognée ou
-     * déformée, et la partie en cours s'y affichait en boîte aux lettres, moitié
-     * moins haute que le marquee juste au-dessus.
-     *
-     * La largeur est ce qui contraint : 0,72 m de caisson moins deux plats de
-     * 35 mm et deux jeux de 10 mm laissent 0,62 m, d'où 0,349 m de haut. La
-     * cible de rendu de la partie fait 512 x 288 — le même rapport, donc l'image
-     * remplit la dalle exactement, sans bande ni étirement.
-     */
-    const float sw = 0.62f, sh = 0.349f;
-    /*
-     * La dalle est légèrement EN SAILLIE du caisson, pas enfoncée dedans.
-     *
-     * Elle était à `hd − 0,055`, soit **5,5 cm à l'intérieur** d'une boîte
-     * pleine dont la face avant est à `hd` : le caisson, plus proche de l'œil,
-     * gagnait le test de profondeur et l'écran n'a jamais été visible depuis A4.
-     * Ce qu'on prenait pour l'écran sur les captures était le marquee.
-     *
-     * Le vrai remède serait une découpe dans la face avant — `geo_box` ne sait
-     * pas la faire, et écrire un générateur de caisson à quatre panneaux pour
-     * cette seule ouverture coûterait plus que ça ne vaut. Une dalle proéminente
-     * de 8 mm, encadrée par ses plats eux-mêmes proéminents, donne exactement la
-     * même lecture : une vitre sertie dans un cadre.
-     */
-    /*
-     * 4 cm de saillie, et non 8 mm — parce que la dalle est INCLINÉE.
-     *
-     * Elle bascule de 10° vers l'arrière autour de son centre : son bord
-     * supérieur recule donc de `sin(10°) x sh/2` = 3,0 cm. À 8 mm de saillie, ce
-     * bord se retrouvait 2,2 cm DANS le caisson, et la moitié haute de l'image
-     * était mangée par le meuble — le titre du classement et sa première ligne
-     * n'étaient pas visibles. Même défaut qu'en A4, où la dalle entière était
-     * enfoncée de 5,5 cm ; cette fois c'est l'inclinaison qui l'y remettait, et
-     * il a fallu un tableau de scores pour s'en apercevoir : sur un jeu qui
-     * remplit l'écran, perdre le haut de l'image ne se remarque pas.
-     *
-     * 4 cm laissent 1 cm de dégagement au bord haut. Les plats du cadre suivent
-     * la même inclinaison et restent solidaires.
-     */
-    /*
-     * `sz` n'est plus `hd + marge` : le caisson n'est plus une boîte, sa face
-     * RECULE en montant. La dalle se pose donc sur la face du profil à sa
-     * hauteur, plus la saillie.
-     *
-     * À y = 1,26 la face court entre (0,14 ; 1,10) et (0,10 ; 1,49), soit
-     * z = 0,124. Les 4 cm de saillie restent nécessaires pour la même raison
-     * qu'avant : la dalle bascule de 10°, son bord haut recule donc de
-     * sin(10°) x sh/2 = 3,0 cm, et sans marge ce bord repasserait dans le
-     * meuble — c'est ce qui avait mangé le tiers haut de l'image en B6c.
-     */
-    const float sy = 1.38f;
-    /*
-     * 15° et non 10°. Un moniteur de borne d'arcade est monté entre 10 et 20°
-     * de la verticale ; 10° était le bas de la fourchette, choisi quand la
-     * dalle était encore à 1,26 m et qu'on la regardait 23° hors axe de toute
-     * façon. Avec 25° de plongée, 15° d'inclinaison ramènent l'écart à 10° —
-     * l'image cesse d'être fuyante.
-     *
-     * La marge devant la face suit : le bord HAUT de la dalle recule de
-     * sin(15°) x sh/2 = 4,5 cm, contre 3,0 cm à 10°. Les 40 mm d'avant le
-     * feraient repasser dans le meuble — c'est exactement ce qui avait mangé
-     * le tiers haut de l'image en B6c, et la marge est calculée ici plutôt que
-     * réécrite à la main pour que ça ne puisse plus arriver.
-     */
-    const float tilt = 15.0f * NS_DEG2RAD;
-    /*
-     * La face du profil à la hauteur de la dalle : elle court de (0,14 ; 1,15)
-     * à (0,10 ; 1,61), donc z = 0,12 à y = 1,38. La marge est CALCULÉE depuis
-     * l'inclinaison et la hauteur d'image, plus posée à la main : c'est la
-     * seule forme qui reste juste quand on retouche l'une ou l'autre.
-     */
-    const float sz = 0.12f + sinf(tilt) * sh * 0.5f + 0.010f;
-    const ns_v3 snormal = ns_v3_make(0.0f, sinf(tilt), cosf(tilt));
-
-    geo_panel(out, ns_v3_make(0.0f, sy, sz), snormal, ns_v3_make(1, 0, 0),
-              sw, sh, 0.0f, 0.0f, 1.0f, 1.0f, screen);
-
-    anchors->screen_tilt = tilt;
-    screen_local[0] = 0.0f; screen_local[1] = sy; screen_local[2] = sz;
-    screen_size[0] = sw; screen_size[1] = sh;
-
-    /* Cadre de la dalle : quatre plats qui enferment l'écran. Sans eux l'image
-     * flotte sur le caisson et la borne perd son épaisseur. */
-    const float bez = 0.035f;
-    const struct { float cx, cy, w, h; } bezel[4] = {
-        {  0.0f, sy + sh * 0.5f + bez * 0.5f, sw + bez * 2.0f, bez },
-        {  0.0f, sy - sh * 0.5f - bez * 0.5f, sw + bez * 2.0f, bez },
-        { -(sw * 0.5f + bez * 0.5f), sy, bez, sh },
-        {  (sw * 0.5f + bez * 0.5f), sy, bez, sh },
-    };
-    for (int i = 0; i < 4; ++i) {
-        geo_mesh_init(&part);
-        geo_box(&part, ns_v3_make(bezel[i].w, bezel[i].h, 0.05f), 0.004f,
-                GEO_FACE_ALL & ~GEO_FACE_NZ, &uv_dark, dark);
-        x = GEO_XFORM_IDENTITY;
-        /* Les plats suivent l'inclinaison de la dalle. */
-        /* Les plats débordent la dalle de 12 mm vers l'avant : c'est ce qui fait
-         * un cadre, et c'est ce qui donne l'ombre portée sur le verre. */
-        x.origin = ns_v3_make(bezel[i].cx,
-                              bezel[i].cy - bezel[i].h * 0.5f,
-                              sz + 0.012f + (bezel[i].cy - sy) * tanf(tilt));
-        x.pitch = -tilt;
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-    }
-
-    /* --- panneau de commande, joystick, boutons --------------------------- */
-    /*
-     * Le panneau est INCLINÉ, et tout ce qui se pose dessus doit suivre.
-     *
-     * Le premier jet posait le manche et les boutons à des hauteurs fixes, en
-     * ignorant les 9° du panneau. Résultat mesuré : l'embase du manche flottait
-     * 1,9 cm au-dessus de la tôle, la rangée de boutons la plus proche
-     * dépassait de 1,2 mm — donc invisible — et la rangée du fond flottait de
-     * 8 mm. Personne ne l'avait vu parce que jusqu'à ce que les mains se posent
-     * dessus, on ne regardait jamais un panneau de commande d'aussi près.
-     *
-     * `panel_surface(dz)` rend la hauteur de la face supérieure à `dz` du centre
-     * du panneau, en tenant compte de l'inclinaison. Une rotation de +θ autour
-     * de X envoie (y, z) sur (y cos θ − z sin θ, ...), d'où le signe.
-     */
-    /*
-     * Attention au repère de `geo_box` : elle occupe Y de 0 à `size.y`, pas
-     * −size.y/2 à +size.y/2. C'est écrit dans son en-tête, et l'oublier ici a
-     * coûté une passe complète — la première version de ce calcul employait la
-     * DEMI-hauteur et plaçait donc toute la quincaillerie 2,8 cm trop bas,
-     * c'est-à-dire dans la tôle.
-     */
-    /*
-     * Le panneau de commande est maintenant DANS le profil : c'est le gradin
-     * entre (0,42 ; 0,93) et (0,34 ; 0,985). Il n'y a donc plus de caisse
-     * rapportée à poser dessus — elle ferait double emploi et se verrait comme
-     * une marche en trop.
-     *
-     * `panel_surface(dz)` rend la hauteur de cette face à `dz` du repère du
-     * panneau. `PANEL_H` vaut zéro : la surface EST la ligne du profil, il n'y a
-     * plus de tôle d'épaisseur à franchir.
-     */
-    const float PANEL_Y = 0.96f, PANEL_H = 0.0f, PANEL_Z = 0.38f;
-    /* La pente du gradin : 0,055 de haut pour 0,08 de profondeur. */
-    const float PANEL_PITCH = atanf(0.055f / 0.08f);
-    #define panel_surface(dz) \
-        (PANEL_Y + (0.42f - (PANEL_Z + (dz))) * (0.055f / 0.08f))
-
-    /* La tôle du panneau : une plaque MINCE posée sur le gradin, pour lui donner
-     * sa matière propre (le stratifié coloré des vues de référence) sans
-     * rajouter de volume. */
-    geo_panel(out,
-              ns_v3_make(0.0f, panel_surface(0.0f) + 0.004f, PANEL_Z),
-              ns_v3_make(0.0f, cosf(PANEL_PITCH), sinf(PANEL_PITCH)),
-              ns_v3_make(1, 0, 0),
-              RG_CAB_W - 0.03f, 0.135f, 0.0f, 0.0f, 1.0f, 1.0f, panel);
-    (void)PANEL_H;
+    const int btn_a = material_index(b, "bouton_rouge", owner);
+    const int btn_b = material_index(b, "bouton_jaune", owner);
 
     /*
-     * Le manche : une rondelle, une tige, et une VRAIE BOULE.
+     * La correspondance modèle -> salle, PAR NOM et non par rang.
      *
-     * Généalogie de cette pièce, parce qu'elle a été fausse deux fois. Le
-     * premier jet était une boîte de 5 cm chanfreinée : posée sous les mains du
-     * joueur, elle se lisait pour ce qu'elle était, un cube. Le second empilait
-     * trois troncs de cône à dix côtés — raccord, ventre, calotte — et donnait
-     * un ÉCROU : les deux arêtes horizontales entre les tronçons sont vives,
-     * elles accrochent chacune un liseré, et l'œil compte trois anneaux au lieu
-     * de voir une sphère.
-     *
-     * C'est l'objet que le joueur a le plus près des yeux pendant toute une
-     * partie, et le seul qu'il touche. Il méritait la primitive qui lui manquait
-     * plutôt qu'un troisième contournement : `geo_revolve` fait tourner un profil
-     * CONTINU, donc les normales se lissent par le seuil d'angle de `geo_mesh`
-     * et il n'y a plus une seule arête à accrocher.
-     *
-     * Le coût est nul, et c'est ce qui rend l'arbitrage facile : douze méridiens
-     * sur six parallèles font 132 triangles là où les trois troncs en faisaient
-     * une centaine, pour une silhouette ronde à toutes les distances.
+     * `geo_import_gltf` associe les primitives par indice, et le script Blender
+     * vérifie à l'export que l'ordre du fichier est bien celui qu'il annonce.
+     * Ici on relit quand même les noms : un tableau d'indices muet se décale en
+     * silence, et un jonc de chant couleur bouton ne casse aucun build — il
+     * rend juste la salle fausse. Un nom inconnu, lui, arrête l'outil.
      */
-    const int stick_mat = material_index(b, m_trim[0] ? m_trim : m_body, owner);
-    /* Posé SUR la tôle, rondelle à demi enfoncée : 6 mm sous la surface, ce qui
-     * la fait tenir au lieu de flotter. */
-    const ns_v3 stick_at = ns_v3_make(-0.20f, panel_surface(0.0f) - 0.006f, PANEL_Z);
-
-    /* La rondelle anti-poussière et la tige restent des cylindres : ce sont
-     * vraiment des cylindres. Douze côtés au lieu de dix — une tige de 20 mm
-     * regardée à cinquante centimètres montrait ses facettes. */
-    struct { float r0, r1, h, dy; bool cap_lo, cap_hi; float roll; } stick[2] = {
-        { 0.036f, 0.032f, 0.010f, 0.000f, false, true,  0.0f  },  /* rondelle */
-        { 0.010f, 0.009f, 0.062f, 0.008f, false, false, 0.16f },  /* tige     */
-    };
-    for (int i = 0; i < 2; ++i) {
-        geo_mesh_init(&part);
-        geo_cylinder(&part, stick[i].r0, stick[i].r1, stick[i].h, 12,
-                     stick[i].cap_lo, stick[i].cap_hi, &uv_trim, stick_mat);
-        x = GEO_XFORM_IDENTITY;
-        x.origin = ns_v3_make(stick_at.x, stick_at.y + stick[i].dy, stick_at.z);
-        x.roll = stick[i].roll;   /* la rondelle reste à plat, le manche penche */
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-    }
-
-    /*
-     * La boule : un demi-cercle de rayon 21 mm, du pôle sud au pôle nord, très
-     * légèrement aplati en bas (0,86) là où elle coiffe la tige — une boule
-     * d'arcade est moulée sur son insert, elle n'est pas parfaitement ronde.
-     */
-    {
-        const float R = 0.021f;
-        float ball[7 * 2];
-        for (int k = 0; k < 7; ++k) {
-            const float t = (float)k / 6.0f;            /* 0 = bas, 1 = haut */
-            const float a = -NS_PI * 0.5f + t * NS_PI;
-            ball[k * 2]     = cosf(a) * R;
-            ball[k * 2 + 1] = sinf(a) * R * (sinf(a) < 0.0f ? 0.86f : 1.0f);
+    int32_t by_index[RG_BORNE_MAT_MAX];
+    for (int i = 0; i < mod->material_count; ++i) {
+        const char *n = mod->material[i];
+        int32_t mi;
+        if      (!strcmp(n, "caisson"))      mi = body;
+        else if (!strcmp(n, "flanc"))        mi = flank;
+        else if (!strcmp(n, "tmolding"))     mi = tmold;
+        else if (!strcmp(n, "noir"))         mi = dark;
+        else if (!strcmp(n, "grille"))       mi = grille;
+        else if (!strcmp(n, "panneau"))      mi = panel;
+        else if (!strcmp(n, "marquee"))      mi = marq;
+        else if (!strcmp(n, "monnayeur"))    mi = dark;
+        else if (!strcmp(n, "bouton_a"))     mi = btn_a;
+        else if (!strcmp(n, "bouton_b"))     mi = btn_b;
+        else if (!strcmp(n, "manche_bleu"))  mi = (bleu_i  >= 0) ? bleu_i  : btn_b;
+        else if (!strcmp(n, "manche_rouge")) mi = (rouge_i >= 0) ? rouge_i : btn_a;
+        else if (!strcmp(n, "chrome"))       mi = chrome;
+        else {
+            tool_fatalf("« %s » : le modèle de borne déclare le matériau « %s », "
+                        "que roomgen ne sait pas placer. Les deux listes sont "
+                        "dans assets/blender/borne.py et ici même.", owner, n);
+            return;
         }
-        geo_mesh_init(&part);
-        geo_revolve(&part, ball, 7, 12, &uv_trim, stick_mat);
-        x = GEO_XFORM_IDENTITY;
-        /* Le centre de la boule est à R au-dessus du sommet de la tige, moins le
-         * chevauchement qui l'empêche de flotter. */
-        x.origin = ns_v3_make(stick_at.x, stick_at.y + 0.070f + R * 0.86f, stick_at.z);
-        x.roll = 0.16f;
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
+        by_index[i] = mi;
     }
 
-    /*
-     * Le SOMMET DE LA BOULE — un point qu'on touche, exactement comme
-     * `panel` désigne le dessus des pastilles et `coin` la fente. Les trois
-     * ancres d'une borne ont la même sémantique, et il a fallu qu'elles ne
-     * l'aient pas pour qu'on s'en aperçoive : la première version donnait ici le
-     * point où se pose le POIGNET, une paume plus haut, et la main gauche
-     * refermait ses doigts à trois centimètres au-dessus du manche.
+    char path[768];
+    snprintf(path, sizeof path, "%s/%s", b->asset_root, RG_BORNE_MODELE);
+
+    geo_xform mx = GEO_XFORM_IDENTITY;
+    const size_t tri = geo_import_gltf(out, path, &mx, body, by_index,
+                                       (size_t)mod->material_count, owner);
+    b->imported_triangles += tri;
+
+    /* --- la dalle ---------------------------------------------------------
      *
-     * C'est la pose qui ajoute la paume, parce que c'est elle qui sait de quelle
-     * longueur est une main. La cote sort d'ici pour la même raison que les deux
-     * autres : elle est écrite à dix lignes de la géométrie qu'elle désigne.
+     * **La seule surface dont la géométrie doit être juste.** Elle est déclarée
+     * au moteur, coordonnées comprises, et c'est elle qui reçoit l'image de la
+     * partie en cours. Elle reste ICI, et non dans le glTF, pour deux raisons
+     * qui n'ont rien d'esthétique : son matériau est cloné par borne — sans
+     * quoi les dix-neuf écrans afficheraient la même chose — et sa position
+     * doit être annoncée au moteur, ce qu'un maillage importé ne fait pas.
      *
-     * 0,106 = la rondelle 0,010 (dont 0,006 enfoncés) + la tige 0,062 posée à
-     * 0,008, soit un sommet de tige à 0,070, plus le diamètre utile de la boule
-     * (0,021 x 0,86 sous son centre, 0,021 au-dessus) = 0,070 + 0,018 + 0,021.
-     * Le chiffre est écrit ici parce qu'il se relit dix lignes au-dessus.
+     * 16:9, comme la cible de rendu 512 x 288 : l'image remplit la dalle
+     * exactement, sans bande ni étirement.
+     *
+     * Les cotes viennent du modèle, pas d'ici : le script Blender les calcule
+     * sur la face du cadre qu'il vient de construire, marge d'inclinaison
+     * comprise. Écrites deux fois, elles finiraient par ne plus désigner le
+     * même endroit.
      */
-    anchors->stick[0] = stick_at.x;
-    anchors->stick[1] = stick_at.y + 0.109f;
-    anchors->stick[2] = stick_at.z;
+    const ns_v3 snormal = ns_v3_make(0.0f, sinf(mod->screen_tilt),
+                                     cosf(mod->screen_tilt));
+    geo_panel(out, ns_v3_make(mod->screen[0], mod->screen[1], mod->screen[2]),
+              snormal, ns_v3_make(1, 0, 0),
+              mod->screen_size[0], mod->screen_size[1],
+              0.0f, 0.0f, 1.0f, 1.0f, screen);
 
-    /*
-     * Les boutons sont VIFS, et pas du matériau du panneau.
+    /* --- les ancres -------------------------------------------------------
      *
-     * Ils l'étaient : quatre pastilles bordeaux sur un panneau bordeaux, donc
-     * invisibles — et le défaut ne se voyait qu'une fois les mains posées
-     * dessus, parce qu'avant ça on ne regardait jamais un panneau de commande de
-     * si près. Un bouton d'arcade est en plastique vif et brillant, et c'est
-     * exactement sa fonction : se trouver sans être cherché.
+     * Quatre points qu'on TOUCHE, et qui ont tous la même sémantique : le
+     * sommet de la boule, le dessus des pastilles, la fente, le centre de la
+     * dalle. La pose des bras y ajoute la paume — c'est elle qui sait de quelle
+     * longueur est une main. Il a fallu qu'ils n'aient pas cette sémantique
+     * pour qu'on s'en aperçoive : une version donnait ici le point où se pose
+     * le POIGNET, et la main gauche refermait ses doigts trois centimètres
+     * au-dessus du manche.
      */
-    const int btn_mat[2] = { material_index(b, "bouton_rouge", owner),
-                             material_index(b, "bouton_jaune", owner) };
-    const geo_uv uv_btn = material_uv(b, btn_mat[0]);
-
-    float btn_x = 0.0f, btn_y = 0.0f, btn_z = 0.0f;
-    for (int i = 0; i < 4; ++i) {
-        /* La pastille dépasse de 5 mm de la tôle, à la hauteur que l'inclinaison
-         * lui donne — et non à une hauteur fixe, qui noyait une rangée dans le
-         * panneau et faisait flotter l'autre. */
-        /*
-         * `bz` était `hd + 0,045`, c'est-à-dire calé sur la face avant de
-         * l'ANCIEN caisson-boîte. Le caisson est devenu un profil et son
-         * panneau de commande est un gradin entre z = 0,34 et z = 0,42 : les
-         * boutons se retrouvaient donc 6 cm DEVANT le panneau et 7 cm en
-         * dessous, suspendus dans le vide au-dessus de la porte à monnayeur.
-         * Ils sont maintenant repérés PAR RAPPORT au panneau, ce qui les tient
-         * quoi qu'il arrive au profil.
-         */
-        const float bz = PANEL_Z - 0.028f + (float)(i / 2) * 0.056f;
-        const ns_v3 at = ns_v3_make(0.02f + (float)(i % 2) * 0.075f,
-                                    panel_surface(bz - PANEL_Z) - 0.003f,
-                                    bz);
-        btn_x += at.x * 0.25f; btn_y += at.y * 0.25f; btn_z += at.z * 0.25f;
-
-        /* Rond et bombé : 19 mm de rayon en bas, 16 en haut. Un bouton d'arcade
-         * est une pastille convexe, et c'est le bombé qui accroche la lumière
-         * du plafonnier — un palet plat reste éteint quel que soit l'éclairage. */
-        geo_mesh_init(&part);
-        geo_cylinder(&part, 0.019f, 0.016f, 0.014f, 12, false, true, &uv_btn,
-                     btn_mat[i % 2]);
-        x = GEO_XFORM_IDENTITY;
-        x.origin = at;
-        x.pitch = PANEL_PITCH;   /* la pastille suit la pente du gradin */
-        geo_mesh_append(out, &part, &x, -1);
-        geo_mesh_free(&part);
-    }
-
-    /* Le doigt touche le **dessus** des boutons, pas leur centre : demi-hauteur
-     * de la boîte (8 mm) plus l'épaisseur d'une pulpe (5 mm). Sans ça la main
-     * s'enfonce dans le panneau — le genre de détail qui ne se voit qu'une fois
-     * les bras à l'écran, et qui coûte alors une heure à retrouver. */
-    anchors->panel[0] = btn_x;
-    anchors->panel[1] = btn_y + 0.014f;   /* hauteur de pastille, moins l'enfoncement */
-    anchors->panel[2] = btn_z;
-
-    /* --- la fente à jetons, et une boîte qui flottait -----------------------
-     *
-     * Il y avait ICI un second monnayeur : une boîte de 20 x 24 cm plaquée en
-     * `z = hd − 5 mm`, c'est-à-dire sur la face avant du caisson **du temps où
-     * le caisson était une boîte**. Depuis que c'est un profil en gradins, la
-     * face avant à cette hauteur est retombée à z = 0,30 : la boîte est restée
-     * où elle était et s'est mise à FLOTTER 13 cm devant la borne, en gris
-     * clair (`borne_cadre`), au beau milieu de la face.
-     *
-     * C'était visible sur chacune des dix-neuf bornes, et c'est très
-     * probablement le premier morceau de ce que tu voyais en disant « les
-     * bornes ne ressemblent pas du tout » — une machine à affranchir vissée sur
-     * une borne d'arcade. Aucune capture ne l'avait montré parce que toutes
-     * étaient prises de trois quarts ou depuis l'allée, jamais de face à
-     * hauteur de hanche.
-     *
-     * Elle disparaît, et l'ancre part sur la VRAIE fente : la plaque chromée de
-     * gauche de la porte à monnayeur, celle qui existe déjà à 15 cm au-dessus.
-     * Une borne a un monnayeur, pas deux.
-     */
-    anchors->coin[0] = -0.048f;
-    anchors->coin[1] = 0.640f;
-    anchors->coin[2] = door_z + 0.030f;
-
-    (void)hw;
+    anchors->screen_tilt = mod->screen_tilt;
+    memcpy(anchors->screen,      mod->screen,      sizeof anchors->screen);
+    memcpy(anchors->screen_size, mod->screen_size, sizeof anchors->screen_size);
+    memcpy(anchors->panel,       mod->panel,       sizeof anchors->panel);
+    memcpy(anchors->coin,        mod->coin,        sizeof anchors->coin);
+    memcpy(anchors->stick,       mod->stick,       sizeof anchors->stick);
 }
 
 static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_value *root)

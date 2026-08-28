@@ -58,6 +58,37 @@ versionné, la normale et l'ORM sont dérivées au build par `texgen`.
 | `sofa_03` | [Poly Haven](https://polyhaven.com/a/sofa_03) | CC0 1.0 | Le canapé du coin salon |
 | `korean_fire_extinguisher_01` | [Poly Haven](https://polyhaven.com/a/korean_fire_extinguisher_01) | CC0 1.0 | L'extincteur du mur est |
 
+### La borne, qui n'est PAS dans ce tableau
+
+`assets/models/borne/borne.gltf` est le seul modèle du dépôt qui ne vienne de
+nulle part : il est **construit par `assets/blender/borne.py`**, un script versionné
+et relisible, et le `.gltf` est un résultat de build qu'on regénère par
+
+```sh
+/Applications/Blender.app/Contents/MacOS/Blender --background \
+    --python assets/blender/borne.py -- --out assets/models/borne/borne.gltf
+```
+
+Il est donc sous la licence du dépôt, sans tiers ni attribution.
+
+La reconstruction est **déterministe** : relancer la commande ci-dessus rend des
+fichiers octet pour octet identiques (vérifié au `shasum` sur les trois). Le
+`.gltf` versionné n'est donc pas une source qu'on retoucherait à la main, c'est
+un résultat qu'on peut jeter et refaire — et un diff sur ce fichier signale un
+vrai changement de géométrie, jamais du bruit d'export.
+
+**Pourquoi il n'est pas importé.** La référence désignée est
+[free3d 5523](https://free3d.com/fr/3d-model/arcade-cabinet-5523.html). Fait
+vérifié : ce modèle **coûte 19 $ et sa licence est « Royalty Free — Editorial
+only »**. « Editorial only » interdit l'usage dans un produit : il n'est pas
+distribuable dans un jeu, **même acheté**. Ce n'est pas une préférence, c'est la
+licence. La borne est donc **reproduite d'après ses images publiques**, mesurées
+au pixel ; aucun octet du modèle payant n'entre dans ce dépôt, et les douze vues
+de référence n'y sont pas copiées non plus — elles sont sous droits.
+
+Coût : **4 992 triangles** par borne, contre 18 330 pour la référence. Elle est
+faite pour un rendu de catalogue ; on en met dix-neuf dans une salle temps réel.
+
 ### Pourquoi si peu, alors que le mécanisme en accepte autant qu'on veut
 
 Ce n'est pas un choix esthétique, c'est une limite de ce que je peux VÉRIFIER

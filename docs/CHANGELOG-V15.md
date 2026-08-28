@@ -225,7 +225,7 @@ sans avoir rien vérifié de la seconde. Voici les faits, mesurés :
 
 | Source | Résultat |
 |---|---|
-| la page free3d de la référence | **HTTP 403** depuis ce conteneur — inatteignable, licence mise à part |
+| la page free3d de la référence | **HTTP 403** depuis ce conteneur — inatteignable, licence mise à part. *Vérifié depuis :* le modèle **coûte 19 $** et sa licence est **« Royalty Free — Editorial only »**. « Editorial only » interdit l'usage dans un produit : il n'est pas distribuable dans un jeu, **même acheté**. L'objection de licence, longtemps avancée sans preuve, se trouve être exacte — mais elle ne l'était pas encore quand elle a été faite |
 | Poly Haven, 521 modèles CC0 | **aucune borne d'arcade**. Les résultats sur « cabinet » sont des meubles : gothique, chinois, à tiroirs, en bois peint |
 | glTF-Sample-Assets de Khronos, 148 modèles | **aucune** |
 
@@ -259,6 +259,79 @@ importé ne déclarerait pas.
   l'écran comme un écran.
 - Coût mesuré : **+2 014 sommets** sur toute la salle (144 941 → 146 955) et **611 ms/image** au
   palier medium, contre 675 ms avant. Aucune régression.
+
+### Les bornes, remodélisées sous Blender
+
+L'extrusion à neuf gradins ci-dessus a été **remplacée par un modèle construit
+sous Blender**, `assets/blender/borne.py`, exporté en glTF et instancié par
+`roomgen`. Le profil paramétrique avait progressé de version en version, mais il
+lui manquait trois choses que les vues de référence disent sans ambiguïté, et
+que `geo_shapes` n'avait aucun moyen de produire.
+
+- **Le T-molding.** Le jonc de chant — le bourrelet vif qui court sur TOUS les
+  chants du caisson : l'arête avant, l'arête arrière, le pourtour du marquee — est
+  ce à quoi on reconnaît une borne d'arcade avant d'en lire la couleur. Il était
+  **totalement absent** : la borne présentait des arêtes vives de caisson peint,
+  c'est-à-dire une armoire. C'est le changement qui se voit de plus loin ; dans
+  l'allée, c'est lui qui dessine la silhouette des dix-neuf bornes.
+  Techniquement : un modificateur *Bevel* en mode POIDS sur le pourtour des deux
+  flancs, 9,5 mm (un T-molding réel fait 3/4"), avec son propre matériau. Il
+  reste DANS l'emprise de la borne — un bourrelet en saillie aurait élargi le
+  caisson de 2 cm et fait mentir le contrôle de chevauchement de la salle.
+- **La doucine.** Sous le panneau de commande, la face avant ne fait pas un
+  décrochement droit : elle remonte en courbe **concave puis convexe**. Mesuré
+  sur la vue de profil, hauteur → avancée : 0,719 → 0,300 ; 0,760 → 0,310 ;
+  0,801 → 0,349 ; 0,842 → 0,406 ; 0,883 → 0,428. Rapportée à *t* ∈ [0,1] la suite
+  vaut 0,016 0,078 0,234 0,383 0,633 0,828 0,945 — c'est un *smootherstep*
+  (6t⁵−15t⁴+10t³) à quelques centièmes près, et non une droite.
+- **La casquette penchait à l'envers.** Le profil faisait reculer le haut de la
+  borne (z de 0,04 à −0,04) là où la référence le fait **avancer** (0,054 → 0,207
+  entre y = 1,457 et 1,579) : le panneau haut-parleurs SURPLOMBE l'écran. C'est
+  la différence entre une casquette et un pupitre, et c'est une des raisons pour
+  lesquelles la borne se lisait comme un meuble de bureau.
+- **Deux postes de jeu** : deux manches à boule (bleu et rouge, sur tige
+  chromée) et **deux blocs de six boutons** (2 × 3), au lieu d'un manche et de
+  quatre pastilles. Les deux blocs partent à DROITE de leur manche, pas en
+  miroir : c'est la main droite qui appuie, dans les deux cas.
+- La **porte à monnaie** est un cadre de 0,25 × 0,55 en saillie de 2 cm, avec
+  deux fentes à insert rouge, deux trappes de renvoi, la porte de caisse et ses
+  deux serrures chromées. Les **grilles de haut-parleur** sont quatre anneaux
+  concentriques en relief — des bandes ouvertes, et non des disques : quatre
+  disques empilés ne montrent que le plus grand, ce qui redonnait la plaque
+  morte qu'on cherchait à supprimer.
+- Un matériau **`borne_chrome`**, distinct de `borne_grille`. Une grille de
+  haut-parleur est un métal SOMBRE — c'est ce qui la fait lire comme une trame —
+  et la tige du manche prenait ce même noir : dans la pénombre de l'allée elle
+  disparaissait sous sa boule.
+
+**Ce que `roomgen` garde**, et pourquoi ce n'est pas négociable : la **dalle**
+(son matériau est cloné par borne — sinon les dix-neuf écrans afficheraient la
+même chose — et sa position doit être annoncée au moteur), les **quatre ancres**
+(centre d'écran, grappe de boutons, fente à jetons, sommet du manche), et la
+**table des matériaux**, pour que les dix-neuf bornes gardent leur teinte par
+jeu avec un seul maillage. Ancres et dalle sont **lues** dans
+`borne.ancres.json`, écrit par le script qui produit le glTF, depuis les mêmes
+cotes : les recopier dans `roomgen` les ferait dériver de la géométrie à la
+première retouche — c'est exactement ce qui avait laissé un second monnayeur
+flotter 13 cm devant la borne.
+
+**Ce qui a été contraint, et non mesuré.** La largeur (0,72), la profondeur
+(0,88) et la hauteur (1,88) sont celles que la salle occupe déjà : les changer
+déplacerait les dix-neuf bornes. La référence est proportionnellement plus
+élancée — rapport hauteur/profondeur **3,05 contre 2,54 ici** — donc c'est la
+FORME qui est reprise, pas l'élancement. De même, la référence place le panneau
+de commande à 1,02 m ; il est tenu ici à moins d'un centimètre de sa hauteur
+d'avant, pour ne pas défaire le réglage de B14b ni déplacer la pose des bras.
+Enfin la référence fait redescendre le dessus de 25° vers l'arrière ; sur une
+profondeur de 0,88 cela mettrait le dos à 1,61 m, donc **12,7°** (dos à 1,70 m).
+
+**Coût mesuré.** Salle entière : **69 029 → 145 979 triangles** (+111 %), soit
+**4 992 triangles par borne** — la référence en fait 18 330, pour un rendu de
+catalogue ; on en met dix-neuf dans une salle temps réel. Temps d'image sur le
+rasteriseur logiciel du conteneur, vue « allee », 120 images : **97,6 → 114,8 ms
+en moyenne** (+18 %), minimum inchangé à 87,5 ms. Sur un vrai GPU l'écart serait
+invisible ; il est écrit ici parce que c'est ce qui a été mesuré, pas ce qui
+est probable. `ctest` : 32/32.
 
 ### La borne
 - **Le flanc porte sa sérigraphie** : le dégradé qui s'éclaircit vers le marquee
@@ -476,6 +549,13 @@ importé ne déclarerait pas.
   vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
+- **Les bras n'atteignent pas le panneau depuis le point de vue « borne ».** Constaté en
+  remodélisant la borne, et **antérieur à ce changement** : la même capture prise avant donne
+  exactement la même pose, mains pendantes à hauteur de monnayeur. Les quatre ancres sont
+  pourtant justes — `test_ik` les atteint à 3 cm près sur des cotes synthétiques, et la hauteur
+  du manche n'a pas bougé de plus de 4 mm. Le suspect est donc l'accrochage du joueur à la borne
+  depuis un point de vue nommé, pas la géométrie. Non corrigé ici : ça touche
+  `room_viewmodel.c`, où d'autres travaillent.
 - **Le temps réel — présence et duels.** C'est tout ce qui reste côté réseau, et c'est
   délibéré : ça se conçoit avant de s'écrire. Le classement en ligne, lui, **fonctionne de
   bout en bout** (voir ci-dessus).

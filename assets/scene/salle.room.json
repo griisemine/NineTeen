@@ -624,6 +624,61 @@
       "uvMetres": 0.12
     },
     {
+      "_": "Le JONC DE CHANT, et c'est le détail qui manquait le plus. Un T-molding est un bourrelet de plastique vif qui court sur tous les chants du caisson — l'arête avant, l'arête arrière, le pourtour du marquee, le tour du panneau de commande — et c'est à lui qu'on reconnaît une borne d'arcade avant d'en lire la couleur. La borne n'en avait aucun : elle présentait des arêtes vives de caisson peint, c'est-à-dire une armoire. Magenta comme sur la référence, très peu rugueux : le jonc est du plastique moulé brillant, et c'est son liseré de lumière qui dessine la silhouette de la borne à travers toute l'allée.",
+      "name": "borne_tmolding",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.78,
+        0.06,
+        0.55,
+        1.0
+      ],
+      "roughness": 0.22,
+      "metallic": 0.0,
+      "uvMetres": 0.1
+    },
+    {
+      "_": "Les deux boules de manche. La référence en montre une bleue et une rouge : ce sont les deux POSTES de jeu, et c'est ce qui dit qu'on joue à deux sur une borne d'arcade. La borne d'avant n'avait qu'un manche. La tige, elle, est chromée — elle prend « borne_grille » comme les autres pièces brillantes.",
+      "name": "borne_manche_bleu",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.06,
+        0.18,
+        0.72,
+        1.0
+      ],
+      "roughness": 0.28,
+      "metallic": 0.0,
+      "uvMetres": 0.12
+    },
+    {
+      "name": "borne_manche_rouge",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.74,
+        0.06,
+        0.08,
+        1.0
+      ],
+      "roughness": 0.28,
+      "metallic": 0.0,
+      "uvMetres": 0.12
+    },
+    {
+      "_": "Le CHROME : tige de manche, rondelle anti-poussière, serrures de la porte à monnaie. Distinct de « borne_grille », qui est un métal SOMBRE — c'est ce qui fait lire une grille comme une trame, et c'était exactement le mauvais choix pour une tige de manche : dans la pénombre de l'allée elle disparaissait sous sa boule. Un tube d'acier poli doit accrocher la lumière ; c'est aussi lui qu'on voit d'une porte à monnaie à deux mètres, quand le noir de la tôle l'absorbe.",
+      "name": "borne_chrome",
+      "texture": "metal_plate_02.jpg",
+      "baseColor": [
+        0.62,
+        0.63,
+        0.65,
+        1.0
+      ],
+      "roughness": 0.24,
+      "metallic": 1.0,
+      "uvMetres": 0.15
+    },
+    {
       "name": "ecran_flappy_facile",
       "texture": "flappy_easy_font.jpg",
       "roughness": 0.12,
