@@ -125,4 +125,56 @@ void ns_online_flush_queue(void);
  * et pour les tests, parce qu'un envoi « au mieux » doit quand même se compter. */
 void ns_online_stats(uint32_t *sent, uint32_t *failed);
 
+/* ==========================================================================
+ * Ce que le TEMPS RÉEL emprunte ici
+ *
+ * `ns_realtime` (présence et duels) parle au même serveur que le classement, et
+ * ne doit surtout pas redécider tout seul s'il a le droit de parler. Ces trois
+ * accesseurs sont le moyen d'hériter du verrou au lieu de le réimplémenter :
+ * ils rendent NULL / -1 tant que `ns_online_init` n'a pas dit oui.
+ * ========================================================================== */
+
+/*
+ * L'URL et le jeton effectivement retenus, ou NULL si le réseau est INACTIF —
+ * pas d'URL, ou `--offline`. Un appelant qui n'obtient pas d'URL n'a rien à
+ * ouvrir : c'est ainsi que la garantie « sans URL, aucune socket » reste écrite
+ * à un seul endroit.
+ */
+const char *ns_online_server_url(void);
+const char *ns_online_session_token(void);
+
+/*
+ * Le NUMÉRO que le serveur donne au créneau « flappy » + « hard ».
+ *
+ * Le classement et les fantômes s'interrogent par numéro ; le moteur ne connaît
+ * que des noms, et les deux ne parlent pas la même langue — c'est le premier des
+ * trois défauts que le test de bout en bout avait attrapés. La traduction est
+ * faite ici, contre la liste que le serveur a RÉELLEMENT renvoyée, et elle sert
+ * maintenant aux deux.
+ *
+ * Renvoie -1 si le réseau est inactif, si la liste n'est pas encore arrivée, ou
+ * si le serveur ne connaît pas ce jeu. Un jeu inconnu reste inconnu : on
+ * n'invente pas d'identifiant.
+ */
+int ns_online_game_id(const char *game, const char *difficulty);
+
+/*
+ * Le FANTÔME que le prochain billet doit affronter, ou NULL pour aucun.
+ *
+ * C'est ce qui fait qu'un duel en est un. Le serveur, quand il ouvre une partie
+ * avec ce champ, ne tire PAS une graine neuve : il reprend celle de la partie du
+ * fantôme. Sans ça, les deux joueurs ne jouent pas la même partie — ils jouent
+ * deux parties et comparent deux nombres, ce qui est un classement, et on en a
+ * déjà un.
+ *
+ * Rien n'est affaibli : une graine n'est pas un secret, c'est ce qui doit être
+ * partagé. Le secret HMAC reste tiré pour la partie seule, et le score reste
+ * recalculé par le serveur depuis le journal d'événements scellé.
+ *
+ * Le réglage vaut pour les billets SUIVANTS. Un billet déjà en main garde la
+ * graine avec laquelle il a été délivré, ce qui est la seule chose correcte à
+ * faire — sa partie est peut-être déjà commencée.
+ */
+void ns_online_set_duel(const char *ghost_run_id);
+
 #endif /* NS_ONLINE_H */
