@@ -249,6 +249,21 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
      * semblerait respirer à chaque changement. */
     const float page_shift = w * (float)(cols - shown) / (2.0f * (float)cols);
 
+    /*
+     * Un FILET entre les colonnes.
+     *
+     * Le tableau se lisait « 1 2 1 1 --- 1 37 » : quatre colonnes de rang et de
+     * score posées côte à côte, sans rien pour dire où l'une finit. L'œil
+     * appariait alors le score d'une colonne avec le rang de la suivante, et
+     * une ligne juste devenait une ligne fausse. Le pas des colonnes est le
+     * même partout, donc un trait vertical suffit — deux points de large,
+     * assez sombre pour ne pas concurrencer les chiffres.
+     */
+    for (int c = 1; c < shown; ++c) {
+        const float x = page_shift + w * (float)c / (float)cols;
+        ns_sprite_rect(s, x - 1.0f * u, 48.0f * u, 2.0f * u, 196.0f * u, dim);
+    }
+
     for (int c = 0; c < shown; ++c) {
         /* Réparties régulièrement : à deux colonnes on pouvait les poser à la
          * main, à quatre il faut compter. */
@@ -260,12 +275,49 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
 
         const ns_score_board *b = ns_scores_board(col[c].game, col[c].diff);
         const uint32_t count = b ? b->count : 0u;
+
+        /*
+         * Le nom n'occupe sa colonne que si QUELQU'UN en a un.
+         *
+         * Le format était `"%u %-3.3s %5u"` en toutes circonstances. Or le jeu
+         * ne demande jamais de nom — `--nom=` existe, personne ne le passe — et
+         * un nom vide y laissait SEPT blancs entre le rang et le score, c'est-à-
+         * dire plus large que l'espace qui sépare deux colonnes du tableau.
+         * L'œil appariait alors le score d'une colonne avec le rang de la
+         * suivante : la ligne « 1  2  1  1 » se lit aussi bien 1-2 / 1-1 que
+         * 1 / 2-1 / 1. Un tableau dont on ne sait pas à quelle colonne appartient
+         * un chiffre ne dit rien.
+         *
+         * La décision se prend par TABLEAU et non par ligne : si un seul joueur
+         * s'est nommé, la colonne du nom reste pour tous, sinon les quatre lignes
+         * ne s'aligneraient plus entre elles.
+         */
+        bool has_name = false;
+        for (uint32_t i = 0; i < count && i < 4; ++i) {
+            if (b->entry[i].name[0]) { has_name = true; break; }
+        }
+
         if (count == 0) {
-            /* Deux mots courts plutôt qu'une phrase : à quatre colonnes, une
-             * colonne fait 128 points de large et « A TOI DE JOUER » en demande
-             * 151. Le texte qui déborde sur le voisin ne se lit plus du tout. */
-            centred(s, cx, y, 1.5f * u, dim, "AUCUN");
-            centred(s, cx, y + 26.0f * u, 1.5f * u, dim, "SCORE");
+            /*
+             * Un tableau vide se dessine comme un tableau, pas comme un message.
+             *
+             * Il portait « AUCUN » puis « SCORE », sur deux lignes posées au `y`
+             * exact de la première ligne de résultat et espacées de 26 u quand
+             * les lignes le sont de 32. Résultat : à côté d'une colonne pleine,
+             * on lisait « rang 1 : AUCUN, rang 2 : SCORE ». Le message d'absence
+             * se faisait passer pour deux résultats.
+             *
+             * Quatre rangs et des tirets disent la même chose sans pouvoir être
+             * pris pour autre chose, et ils s'alignent exactement sur les
+             * colonnes voisines — ce qui est justement ce qu'on leur demande.
+             */
+            for (uint32_t i = 0; i < 4; ++i) {
+                char line[48];
+                if (has_name) SDL_snprintf(line, sizeof line, "%u %-3.3s %5s", i + 1u, "", "---");
+                else          SDL_snprintf(line, sizeof line, "%u %5s", i + 1u, "---");
+                centred(s, cx, y, 1.6f * u, dim, line);
+                y += 32.0f * u;
+            }
             continue;
         }
 
@@ -285,8 +337,12 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
              * Un nom vide reste vide plutôt que de devenir « ANONYME » : le jeu
              * n'a jamais demandé de nom, il n'a pas à en inventer un.
              */
-            SDL_snprintf(line, sizeof line, "%u %-3.3s %5u",
-                         i + 1u, e->name[0] ? e->name : "", e->score);
+            if (has_name) {
+                SDL_snprintf(line, sizeof line, "%u %-3.3s %5u",
+                             i + 1u, e->name[0] ? e->name : "", e->score);
+            } else {
+                SDL_snprintf(line, sizeof line, "%u %5u", i + 1u, e->score);
+            }
 
             /* La première ligne respire lentement : c'est le record à battre. */
             const float pulse = (i == 0)
