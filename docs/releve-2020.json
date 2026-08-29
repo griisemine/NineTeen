@@ -1,0 +1,4736 @@
+{
+ "_": "Relevé de la salle de 2020, mesuré sur legacy/room/textures/salle.obj, salle.mtl et legacy/room/room.c. Aucune valeur n'est reprise d'un document : chaque ligne vient d'une mesure.",
+ "_repere": "Coordonnées en mètres, dans le repère de assets/scene/salle.room.json. Conversion depuis les unités Blender de 2020 : x_m = x_u / 2,06 ; y_m = (y_u − 0,100) / 2,06 ; z_m = z_u / 2,06 − 4,68. L'échelle 2,06 vient de HAUTEUR_CAMERA_DEBOUT = 3.5F (legacy/room/room.c:90). Le terme −0,100 en y amène le dessus du sol de 2020 sur y = 0 ; il se vérifie sur la valeur head = 2,879 des deux baies du fichier actuel, qui vaut exactement (6,030 − 0,100) / 2,06.",
+ "_axes": "x croît vers l'est, z vers le nord, y vers le haut. En 2020 le comptoir est au nord, le billard au sud-ouest, les toilettes à l'est, le sas au nord-est.",
+ "_sources": {
+  "obj": "legacy/room/textures/salle.obj",
+  "mtl": "legacy/room/textures/salle.mtl",
+  "code": "legacy/room/room.c",
+  "compare_a": "assets/scene/salle.room.json, commit be19850"
+ },
+ "objets": [
+  {
+   "nom": "CENTRE_MACHINE_SOL_Cube",
+   "ordre": 1,
+   "ligne_obj": 4,
+   "role": "Estrade (podium) moquettée de la borne centrale",
+   "materiaux": [
+    "Material"
+   ],
+   "texture": [
+    "moquette.jpg"
+   ],
+   "min_u": [
+    -2.5,
+    -0.43,
+    -3.5
+   ],
+   "max_u": [
+    2.5,
+    0.57,
+    3.5
+   ],
+   "min_m": [
+    -1.214,
+    -0.257,
+    -6.379
+   ],
+   "max_m": [
+    1.214,
+    0.228,
+    -2.981
+   ]
+  },
+  {
+   "nom": "MUR_SAL_Cube.002",
+   "ordre": 2,
+   "ligne_obj": 49,
+   "role": "COQUILLE COMPLÈTE : sols, murs du hall, bloc sanitaire et ses cloisons, jambages du sas. Objet unique",
+   "materiaux": [
+    "sol_moquette",
+    "sol_toilette",
+    "mur_toilette",
+    "marbre_toilette",
+    "haut_mur",
+    "moquette_noir"
+   ],
+   "texture": [
+    "bordeau_uni.jpg",
+    "carllage_mur_toilette.jpg",
+    "carllage_toilette.jpg",
+    "floor.jpg",
+    "marbre_toilettes.jpg",
+    "moquette_noire.jpg"
+   ],
+   "min_u": [
+    -15.0,
+    -0.1,
+    -5.2
+   ],
+   "max_u": [
+    24.767,
+    6.007,
+    24.469
+   ],
+   "min_m": [
+    -7.282,
+    -0.097,
+    -7.204
+   ],
+   "max_m": [
+    12.023,
+    2.867,
+    7.198
+   ]
+  },
+  {
+   "nom": "PILONNE.007_Cube.027",
+   "ordre": 3,
+   "ligne_obj": 738,
+   "role": "Pilier engagé, mur est, travée nord",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    14.474,
+    0.007,
+    14.261
+   ],
+   "max_u": [
+    15.474,
+    6.007,
+    15.262
+   ],
+   "min_m": [
+    7.026,
+    -0.045,
+    2.243
+   ],
+   "max_m": [
+    7.512,
+    2.868,
+    2.729
+   ]
+  },
+  {
+   "nom": "sconce_02",
+   "ordre": 4,
+   "ligne_obj": 775,
+   "role": "Applique murale (pied + ampoule), mur sud",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    3.165,
+    4.318,
+    -4.804
+   ],
+   "max_u": [
+    3.643,
+    5.125,
+    -4.235
+   ],
+   "min_m": [
+    1.536,
+    2.048,
+    -7.012
+   ],
+   "max_m": [
+    1.768,
+    2.439,
+    -6.736
+   ]
+  },
+  {
+   "nom": "sconce_02.001",
+   "ordre": 5,
+   "ligne_obj": 14700,
+   "role": "Applique murale, mur sud",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    -3.644,
+    4.318,
+    -4.804
+   ],
+   "max_u": [
+    -3.166,
+    5.125,
+    -4.235
+   ],
+   "min_m": [
+    -1.769,
+    2.048,
+    -7.012
+   ],
+   "max_m": [
+    -1.537,
+    2.439,
+    -6.736
+   ]
+  },
+  {
+   "nom": "sconce_02.002",
+   "ordre": 6,
+   "ligne_obj": 28636,
+   "role": "Applique murale, mur sud",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    -10.091,
+    4.318,
+    -4.804
+   ],
+   "max_u": [
+    -9.613,
+    5.125,
+    -4.235
+   ],
+   "min_m": [
+    -4.899,
+    2.048,
+    -7.012
+   ],
+   "max_m": [
+    -4.667,
+    2.439,
+    -6.736
+   ]
+  },
+  {
+   "nom": "sconce_02.003",
+   "ordre": 7,
+   "ligne_obj": 42590,
+   "role": "Applique murale, mur sud",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    9.669,
+    4.318,
+    -4.804
+   ],
+   "max_u": [
+    10.147,
+    5.125,
+    -4.235
+   ],
+   "min_m": [
+    4.693,
+    2.048,
+    -7.012
+   ],
+   "max_m": [
+    4.926,
+    2.439,
+    -6.736
+   ]
+  },
+  {
+   "nom": "Cube.033_Cube.042",
+   "ordre": 8,
+   "ligne_obj": 56539,
+   "role": "Fond sombre d'habillage de haut de mur, mur sud",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    3.628,
+    2.0,
+    -5.379
+   ],
+   "max_u": [
+    9.628,
+    6.0,
+    -5.179
+   ],
+   "min_m": [
+    1.761,
+    0.922,
+    -7.291
+   ],
+   "max_m": [
+    4.674,
+    2.864,
+    -7.194
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.002_Cube.040",
+   "ordre": 9,
+   "ligne_obj": 56576,
+   "role": "Lattes de bois noir, mur sud",
+   "materiaux": [
+    "planche_mur"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    4.065,
+    1.579,
+    -5.695
+   ],
+   "max_u": [
+    9.205,
+    5.579,
+    -5.095
+   ],
+   "min_m": [
+    1.973,
+    0.718,
+    -7.444
+   ],
+   "max_m": [
+    4.469,
+    2.66,
+    -7.153
+   ]
+  },
+  {
+   "nom": "Texte.002",
+   "ordre": 10,
+   "ligne_obj": 56781,
+   "role": "Texte 3D de signalétique, cloison des toilettes (face ouest)",
+   "materiaux": [
+    "(null)"
+   ],
+   "texture": [
+    "(sans texture) (null)"
+   ],
+   "min_u": [
+    18.337,
+    3.227,
+    4.072
+   ],
+   "max_u": [
+    18.477,
+    3.703,
+    5.526
+   ],
+   "min_m": [
+    8.901,
+    1.518,
+    -2.703
+   ],
+   "max_m": [
+    8.969,
+    1.749,
+    -1.997
+   ]
+  },
+  {
+   "nom": "toit_Cube.033",
+   "ordre": 11,
+   "ligne_obj": 59275,
+   "role": "Dalle de plafond unique (déborde très largement le bâtiment)",
+   "materiaux": [
+    "Matériau.078"
+   ],
+   "texture": [
+    "plafond.jpg"
+   ],
+   "min_u": [
+    -21.398,
+    6.03,
+    -17.813
+   ],
+   "max_u": [
+    34.052,
+    6.252,
+    26.548
+   ],
+   "min_m": [
+    -10.388,
+    2.879,
+    -13.327
+   ],
+   "max_m": [
+    16.53,
+    2.986,
+    8.207
+   ]
+  },
+  {
+   "nom": "PANNEAU_EASY/HARD_Cube.035",
+   "ordre": 12,
+   "ligne_obj": 59314,
+   "role": "Panneau suspendu au-dessus de l'allée : fond BLEU côté x<0 (HARD) et fond ROUGE côté x>0 (EASY) — les lettres font l'inverse",
+   "materiaux": [
+    "rouge",
+    "bleu"
+   ],
+   "texture": [
+    "bleu.jpg",
+    "rouge.jpg"
+   ],
+   "min_u": [
+    -0.967,
+    4.4,
+    10.941
+   ],
+   "max_u": [
+    1.033,
+    5.2,
+    11.101
+   ],
+   "min_m": [
+    -0.47,
+    2.088,
+    0.631
+   ],
+   "max_m": [
+    0.501,
+    2.476,
+    0.709
+   ]
+  },
+  {
+   "nom": "Texte.004",
+   "ordre": 13,
+   "ligne_obj": 59389,
+   "role": "Texte bleu (côté EASY, x>0), face nord du panneau",
+   "materiaux": [
+    "bleu"
+   ],
+   "texture": [
+    "bleu.jpg"
+   ],
+   "min_u": [
+    0.166,
+    4.706,
+    11.072
+   ],
+   "max_u": [
+    0.865,
+    4.917,
+    11.152
+   ],
+   "min_m": [
+    0.081,
+    2.236,
+    0.695
+   ],
+   "max_m": [
+    0.42,
+    2.338,
+    0.733
+   ]
+  },
+  {
+   "nom": "Texte.005",
+   "ordre": 14,
+   "ligne_obj": 67456,
+   "role": "Texte rouge (côté HARD, x<0), face nord du panneau",
+   "materiaux": [
+    "rouge"
+   ],
+   "texture": [
+    "rouge.jpg"
+   ],
+   "min_u": [
+    -0.803,
+    4.706,
+    11.072
+   ],
+   "max_u": [
+    -0.097,
+    4.917,
+    11.152
+   ],
+   "min_m": [
+    -0.39,
+    2.236,
+    0.695
+   ],
+   "max_m": [
+    -0.047,
+    2.338,
+    0.733
+   ]
+  },
+  {
+   "nom": "Texte.007",
+   "ordre": 15,
+   "ligne_obj": 72439,
+   "role": "Texte bleu (côté EASY, x>0), face sud du panneau",
+   "materiaux": [
+    "bleu"
+   ],
+   "texture": [
+    "bleu.jpg"
+   ],
+   "min_u": [
+    0.182,
+    4.706,
+    10.881
+   ],
+   "max_u": [
+    0.881,
+    4.917,
+    10.961
+   ],
+   "min_m": [
+    0.088,
+    2.236,
+    0.602
+   ],
+   "max_m": [
+    0.428,
+    2.338,
+    0.641
+   ]
+  },
+  {
+   "nom": "Texte.006",
+   "ordre": 16,
+   "ligne_obj": 80503,
+   "role": "Texte rouge (côté HARD, x<0), face sud du panneau",
+   "materiaux": [
+    "rouge"
+   ],
+   "texture": [
+    "rouge.jpg"
+   ],
+   "min_u": [
+    -0.813,
+    4.706,
+    10.881
+   ],
+   "max_u": [
+    -0.107,
+    4.917,
+    10.961
+   ],
+   "min_m": [
+    -0.395,
+    2.236,
+    0.602
+   ],
+   "max_m": [
+    -0.052,
+    2.338,
+    0.641
+   ]
+  },
+  {
+   "nom": "Cylindre.005",
+   "ordre": 17,
+   "ligne_obj": 85481,
+   "role": "Tige de suspension du panneau HARD/EASY",
+   "materiaux": [
+    "Matériau.070"
+   ],
+   "texture": [
+    "(sans texture) Matériau.070"
+   ],
+   "min_u": [
+    -0.003,
+    5.183,
+    10.966
+   ],
+   "max_u": [
+    0.097,
+    6.183,
+    11.066
+   ],
+   "min_m": [
+    -0.002,
+    2.467,
+    0.643
+   ],
+   "max_m": [
+    0.047,
+    2.953,
+    0.692
+   ]
+  },
+  {
+   "nom": "Cube.165_Cube.011",
+   "ordre": 18,
+   "ligne_obj": 85746,
+   "role": "Appareil sanitaire (cuvette + réservoir), cabine côté FEMMES — identification probable, modèle blanc sans texture",
+   "materiaux": [
+    "Material.001"
+   ],
+   "texture": [
+    "(sans texture) Material.001"
+   ],
+   "min_u": [
+    19.334,
+    0.121,
+    5.113
+   ],
+   "max_u": [
+    20.892,
+    3.026,
+    6.8
+   ],
+   "min_m": [
+    9.385,
+    0.01,
+    -2.198
+   ],
+   "max_m": [
+    10.142,
+    1.42,
+    -1.379
+   ]
+  },
+  {
+   "nom": "Cube.129_Cube.039",
+   "ordre": 19,
+   "ligne_obj": 87859,
+   "role": "Appareil sanitaire (cuvette + réservoir), cabine côté HOMMES — identification probable",
+   "materiaux": [
+    "Material.004"
+   ],
+   "texture": [
+    "(sans texture) Material.004"
+   ],
+   "min_u": [
+    19.345,
+    0.121,
+    2.976
+   ],
+   "max_u": [
+    20.902,
+    3.026,
+    4.663
+   ],
+   "min_m": [
+    9.391,
+    0.01,
+    -3.235
+   ],
+   "max_m": [
+    10.147,
+    1.42,
+    -2.416
+   ]
+  },
+  {
+   "nom": "Billiard_Table",
+   "ordre": 20,
+   "ligne_obj": 89972,
+   "role": "Table de billard, ses queues, ses billes, sa craie et son luminaire",
+   "materiaux": [
+    "pied_billard",
+    "Table_de_billard",
+    "vise_table_billard",
+    "de_qui_billard",
+    "lampe_billard",
+    "support_lampe_billard",
+    "contour_billard",
+    "canne",
+    "bleu.001"
+   ],
+   "texture": [
+    "billard_table.jpg",
+    "bois.jpg",
+    "gris_foncer.jpg",
+    "jaune.jpg"
+   ],
+   "min_u": [
+    -12.967,
+    0.098,
+    -2.049
+   ],
+   "max_u": [
+    -5.502,
+    9.344,
+    2.657
+   ],
+   "min_m": [
+    -6.295,
+    -0.001,
+    -5.675
+   ],
+   "max_m": [
+    -2.671,
+    4.488,
+    -3.39
+   ]
+  },
+  {
+   "nom": "Cube_Cube.074",
+   "ordre": 21,
+   "ligne_obj": 153623,
+   "role": "Pictogramme toilettes, cloison des toilettes",
+   "materiaux": [
+    "toilet_image_entree"
+   ],
+   "texture": [
+    "toilet.jpg"
+   ],
+   "min_u": [
+    18.338,
+    2.0,
+    4.177
+   ],
+   "max_u": [
+    18.438,
+    3.0,
+    5.377
+   ],
+   "min_m": [
+    8.902,
+    0.922,
+    -2.652
+   ],
+   "max_m": [
+    8.95,
+    1.408,
+    -2.07
+   ]
+  },
+  {
+   "nom": "Cube.001_Cube.075",
+   "ordre": 22,
+   "ligne_obj": 153664,
+   "role": "Cadre d'affiche, mur sud (poster_8)",
+   "materiaux": [
+    "poutre",
+    "poster_1"
+   ],
+   "texture": [
+    "poster_8.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    11.58,
+    2.515,
+    -5.194
+   ],
+   "max_u": [
+    13.18,
+    4.515,
+    -4.994
+   ],
+   "min_m": [
+    5.621,
+    1.172,
+    -7.201
+   ],
+   "max_m": [
+    6.398,
+    2.143,
+    -7.104
+   ]
+  },
+  {
+   "nom": "Cube.002_Cube.076",
+   "ordre": 23,
+   "ligne_obj": 153734,
+   "role": "Cadre d'affiche, mur sud (poster_3)",
+   "materiaux": [
+    "poutre.011",
+    "poster_3"
+   ],
+   "texture": [
+    "poster_3.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    -0.912,
+    2.515,
+    -5.194
+   ],
+   "max_u": [
+    0.688,
+    4.515,
+    -4.994
+   ],
+   "min_m": [
+    -0.443,
+    1.172,
+    -7.201
+   ],
+   "max_m": [
+    0.334,
+    2.143,
+    -7.104
+   ]
+  },
+  {
+   "nom": "Cube.003_Cube.077",
+   "ordre": 24,
+   "ligne_obj": 153804,
+   "role": "Cadre d'affiche, mur sud (poster_1)",
+   "materiaux": [
+    "poutre.012",
+    "poster_1.002"
+   ],
+   "texture": [
+    "poster_1.png",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    -7.782,
+    2.515,
+    -5.194
+   ],
+   "max_u": [
+    -6.182,
+    4.515,
+    -4.994
+   ],
+   "min_m": [
+    -3.778,
+    1.172,
+    -7.201
+   ],
+   "max_m": [
+    -3.001,
+    2.143,
+    -7.104
+   ]
+  },
+  {
+   "nom": "Cube.004_Cube.078",
+   "ordre": 25,
+   "ligne_obj": 153874,
+   "role": "Cadre d'affiche, mur sud (poster_2)",
+   "materiaux": [
+    "poutre",
+    "poster_2.001"
+   ],
+   "texture": [
+    "poster_2.png",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    5.992,
+    2.515,
+    -5.194
+   ],
+   "max_u": [
+    7.592,
+    4.515,
+    -4.994
+   ],
+   "min_m": [
+    2.909,
+    1.172,
+    -7.201
+   ],
+   "max_m": [
+    3.685,
+    2.143,
+    -7.104
+   ]
+  },
+  {
+   "nom": "Cube.005_Cube.079",
+   "ordre": 26,
+   "ligne_obj": 153944,
+   "role": "Cadre d'affiche, mur sud (poster_6)",
+   "materiaux": [
+    "poutre.014",
+    "poster_2"
+   ],
+   "texture": [
+    "poster_6.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    -13.277,
+    2.515,
+    -5.194
+   ],
+   "max_u": [
+    -11.677,
+    4.515,
+    -4.994
+   ],
+   "min_m": [
+    -6.445,
+    1.172,
+    -7.201
+   ],
+   "max_m": [
+    -5.669,
+    2.143,
+    -7.104
+   ]
+  },
+  {
+   "nom": "Cube.014_Cube.086",
+   "ordre": 27,
+   "ligne_obj": 154014,
+   "role": "Bandeau bordeaux de haut de mur, mur ouest (travée nord)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -15.491,
+    4.006,
+    8.504
+   ],
+   "max_u": [
+    -14.691,
+    6.006,
+    14.504
+   ],
+   "min_m": [
+    -7.52,
+    1.896,
+    -0.552
+   ],
+   "max_m": [
+    -7.132,
+    2.867,
+    2.361
+   ]
+  },
+  {
+   "nom": "Cube.012_Cube.005",
+   "ordre": 28,
+   "ligne_obj": 154287,
+   "role": "Joue de coffre de la porte coulissante FEMMES (côté sud)",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    -0.099,
+    8.487
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    8.587
+   ],
+   "min_m": [
+    10.523,
+    -0.096,
+    -0.56
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -0.512
+   ]
+  },
+  {
+   "nom": "Cube.015_Cube.009",
+   "ordre": 29,
+   "ligne_obj": 154326,
+   "role": "Joue de coffre de la porte coulissante FEMMES (côté nord)",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    -0.099,
+    8.705
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    8.755
+   ],
+   "min_m": [
+    10.523,
+    -0.096,
+    -0.454
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -0.43
+   ]
+  },
+  {
+   "nom": "Cube.016_Cube.022",
+   "ordre": 30,
+   "ligne_obj": 154365,
+   "role": "Linteau du coffre de la porte coulissante FEMMES",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    3.891,
+    8.52
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    8.72
+   ],
+   "min_m": [
+    10.523,
+    1.84,
+    -0.544
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -0.447
+   ]
+  },
+  {
+   "nom": "Cube.019_Cube.025",
+   "ordre": 31,
+   "ligne_obj": 154402,
+   "role": "Joue de coffre de la porte coulissante HOMMES (côté nord)",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    -0.099,
+    1.103
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    1.203
+   ],
+   "min_m": [
+    10.523,
+    -0.096,
+    -4.144
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -4.096
+   ]
+  },
+  {
+   "nom": "Cube.018_Cube.024",
+   "ordre": 32,
+   "ligne_obj": 154441,
+   "role": "Joue de coffre de la porte coulissante HOMMES (côté sud)",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    -0.099,
+    0.935
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    0.985
+   ],
+   "min_m": [
+    10.523,
+    -0.096,
+    -4.226
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -4.202
+   ]
+  },
+  {
+   "nom": "Cube.017_Cube.023",
+   "ordre": 33,
+   "ligne_obj": 154480,
+   "role": "Linteau du coffre de la porte coulissante HOMMES",
+   "materiaux": [
+    "marbre_toilette"
+   ],
+   "texture": [
+    "marbre_toilettes.jpg"
+   ],
+   "min_u": [
+    21.677,
+    3.891,
+    0.971
+   ],
+   "max_u": [
+    24.677,
+    3.901,
+    1.171
+   ],
+   "min_m": [
+    10.523,
+    1.84,
+    -4.209
+   ],
+   "max_m": [
+    11.979,
+    1.845,
+    -4.112
+   ]
+  },
+  {
+   "nom": "Cube.020_Cube.008",
+   "ordre": 34,
+   "ligne_obj": 154517,
+   "role": "Bouton poussoir d'ouverture, porte FEMMES",
+   "materiaux": [
+    "Matériau.002"
+   ],
+   "texture": [
+    "toilette_push.jpg"
+   ],
+   "min_u": [
+    18.523,
+    2.946,
+    9.163
+   ],
+   "max_u": [
+    18.773,
+    3.446,
+    9.663
+   ],
+   "min_m": [
+    8.992,
+    1.382,
+    -0.232
+   ],
+   "max_m": [
+    9.113,
+    1.624,
+    0.011
+   ]
+  },
+  {
+   "nom": "Cube.021_Cube.001",
+   "ordre": 35,
+   "ligne_obj": 154746,
+   "role": "Bouton poussoir d'ouverture, porte HOMMES",
+   "materiaux": [
+    "Matériau.004"
+   ],
+   "texture": [
+    "toilette_push.jpg"
+   ],
+   "min_u": [
+    18.523,
+    2.946,
+    0.07
+   ],
+   "max_u": [
+    18.773,
+    3.446,
+    0.57
+   ],
+   "min_m": [
+    8.992,
+    1.382,
+    -4.646
+   ],
+   "max_m": [
+    9.113,
+    1.624,
+    -4.403
+   ]
+  },
+  {
+   "nom": "Cube.022_Cube.012",
+   "ordre": 36,
+   "ligne_obj": 154976,
+   "role": "Plan de lavabo (marbre), toilettes HOMMES",
+   "materiaux": [
+    "marbre"
+   ],
+   "texture": [
+    "lavabo.jpg"
+   ],
+   "min_u": [
+    23.06,
+    1.778,
+    -3.029
+   ],
+   "max_u": [
+    24.66,
+    2.328,
+    0.971
+   ],
+   "min_m": [
+    11.194,
+    0.815,
+    -6.15
+   ],
+   "max_m": [
+    11.971,
+    1.082,
+    -4.208
+   ]
+  },
+  {
+   "nom": "Cube.023_Cube.026",
+   "ordre": 37,
+   "ligne_obj": 155079,
+   "role": "Robinetterie ou distributeur au-dessus du lavabo HOMMES (sud)",
+   "materiaux": [
+    "None"
+   ],
+   "texture": [
+    "(sans texture) None"
+   ],
+   "min_u": [
+    24.032,
+    2.751,
+    -2.213
+   ],
+   "max_u": [
+    24.673,
+    3.042,
+    -2.093
+   ],
+   "min_m": [
+    11.666,
+    1.287,
+    -5.754
+   ],
+   "max_m": [
+    11.977,
+    1.428,
+    -5.696
+   ]
+  },
+  {
+   "nom": "Cube.024_Cube.028",
+   "ordre": 38,
+   "ligne_obj": 155162,
+   "role": "Robinetterie ou distributeur au-dessus du lavabo HOMMES (nord)",
+   "materiaux": [
+    "None"
+   ],
+   "texture": [
+    "(sans texture) None"
+   ],
+   "min_u": [
+    24.032,
+    2.751,
+    -0.032
+   ],
+   "max_u": [
+    24.673,
+    3.042,
+    0.088
+   ],
+   "min_m": [
+    11.666,
+    1.287,
+    -4.696
+   ],
+   "max_m": [
+    11.977,
+    1.428,
+    -4.637
+   ]
+  },
+  {
+   "nom": "Cube.027_Cube.052",
+   "ordre": 39,
+   "ligne_obj": 155245,
+   "role": "Plan de lavabo (marbre), toilettes FEMMES",
+   "materiaux": [
+    "lavabo"
+   ],
+   "texture": [
+    "lavabo.jpg"
+   ],
+   "min_u": [
+    23.06,
+    1.778,
+    8.79
+   ],
+   "max_u": [
+    24.66,
+    2.328,
+    12.79
+   ],
+   "min_m": [
+    11.194,
+    0.815,
+    -0.413
+   ],
+   "max_m": [
+    11.971,
+    1.082,
+    1.529
+   ]
+  },
+  {
+   "nom": "Cube.026_Cube.050",
+   "ordre": 40,
+   "ligne_obj": 155348,
+   "role": "Robinetterie ou distributeur au-dessus du lavabo FEMMES (sud)",
+   "materiaux": [
+    "None"
+   ],
+   "texture": [
+    "(sans texture) None"
+   ],
+   "min_u": [
+    24.032,
+    2.751,
+    9.606
+   ],
+   "max_u": [
+    24.673,
+    3.042,
+    9.726
+   ],
+   "min_m": [
+    11.666,
+    1.287,
+    -0.017
+   ],
+   "max_m": [
+    11.977,
+    1.428,
+    0.041
+   ]
+  },
+  {
+   "nom": "Cube.025_Cube.047",
+   "ordre": 41,
+   "ligne_obj": 155431,
+   "role": "Robinetterie ou distributeur au-dessus du lavabo FEMMES (nord)",
+   "materiaux": [
+    "None"
+   ],
+   "texture": [
+    "(sans texture) None"
+   ],
+   "min_u": [
+    24.032,
+    2.751,
+    11.787
+   ],
+   "max_u": [
+    24.673,
+    3.042,
+    11.907
+   ],
+   "min_m": [
+    11.666,
+    1.287,
+    1.042
+   ],
+   "max_m": [
+    11.977,
+    1.428,
+    1.1
+   ]
+  },
+  {
+   "nom": "bar_accueil_Cube.030",
+   "ordre": 42,
+   "ligne_obj": 155514,
+   "role": "Comptoir d'accueil",
+   "materiaux": [
+    "Matériau.010"
+   ],
+   "texture": [
+    "desk.jpg"
+   ],
+   "min_u": [
+    -5.7,
+    0.1,
+    19.797
+   ],
+   "max_u": [
+    5.7,
+    2.684,
+    24.197
+   ],
+   "min_m": [
+    -2.767,
+    0.0,
+    4.93
+   ],
+   "max_m": [
+    2.767,
+    1.254,
+    7.066
+   ]
+  },
+  {
+   "nom": "Cube.047_Cube.089",
+   "ordre": 43,
+   "ligne_obj": 155689,
+   "role": "Panneau publicitaire, face avant du comptoir (ouest)",
+   "materiaux": [
+    "publicite.001"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    -5.277,
+    0.529,
+    19.897
+   ],
+   "max_u": [
+    -1.977,
+    2.529,
+    20.397
+   ],
+   "min_m": [
+    -2.561,
+    0.208,
+    4.979
+   ],
+   "max_m": [
+    -0.96,
+    1.179,
+    5.221
+   ]
+  },
+  {
+   "nom": "Cube.039_Cube.090",
+   "ordre": 44,
+   "ligne_obj": 155732,
+   "role": "Panneau publicitaire, face avant du comptoir (centre)",
+   "materiaux": [
+    "publicite.002"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    -1.65,
+    0.529,
+    19.897
+   ],
+   "max_u": [
+    1.65,
+    2.529,
+    20.397
+   ],
+   "min_m": [
+    -0.801,
+    0.208,
+    4.979
+   ],
+   "max_m": [
+    0.801,
+    1.179,
+    5.221
+   ]
+  },
+  {
+   "nom": "Cube.032_Cube.091",
+   "ordre": 45,
+   "ligne_obj": 155775,
+   "role": "Panneau publicitaire, face avant du comptoir (est)",
+   "materiaux": [
+    "publicite.003"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    1.977,
+    0.529,
+    19.897
+   ],
+   "max_u": [
+    5.277,
+    2.529,
+    20.397
+   ],
+   "min_m": [
+    0.96,
+    0.208,
+    4.979
+   ],
+   "max_m": [
+    2.561,
+    1.179,
+    5.221
+   ]
+  },
+  {
+   "nom": "Cube.035_Cube.092",
+   "ordre": 46,
+   "ligne_obj": 155818,
+   "role": "Panneau publicitaire, joue ouest du comptoir",
+   "materiaux": [
+    "publicite.004"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    -5.61,
+    0.529,
+    20.33
+   ],
+   "max_u": [
+    -5.11,
+    2.529,
+    23.63
+   ],
+   "min_m": [
+    -2.723,
+    0.208,
+    5.189
+   ],
+   "max_m": [
+    -2.48,
+    1.179,
+    6.791
+   ]
+  },
+  {
+   "nom": "Cube.042_Cube.093",
+   "ordre": 47,
+   "ligne_obj": 155861,
+   "role": "Panneau publicitaire, joue est du comptoir",
+   "materiaux": [
+    "publicite.005"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    5.11,
+    0.529,
+    20.33
+   ],
+   "max_u": [
+    5.61,
+    2.529,
+    23.63
+   ],
+   "min_m": [
+    2.48,
+    0.208,
+    5.189
+   ],
+   "max_m": [
+    2.723,
+    1.179,
+    6.791
+   ]
+  },
+  {
+   "nom": "sofa_Cube.001",
+   "ordre": 48,
+   "ligne_obj": 155904,
+   "role": "Canapé d'angle en cuir rouge (salon)",
+   "materiaux": [
+    "m_sofa",
+    "m_sofa_bottom",
+    "Material.003",
+    "Material.006",
+    "Material.007"
+   ],
+   "texture": [
+    "cuir_rouge.jpg"
+   ],
+   "min_u": [
+    4.21,
+    0.082,
+    -4.296
+   ],
+   "max_u": [
+    11.066,
+    2.814,
+    3.931
+   ],
+   "min_m": [
+    2.044,
+    -0.009,
+    -6.766
+   ],
+   "max_m": [
+    5.372,
+    1.317,
+    -2.772
+   ]
+  },
+  {
+   "nom": "PILONNE.005_Cube.044",
+   "ordre": 49,
+   "ligne_obj": 167151,
+   "role": "Pilier LIBRE du salon + cloison de lattes qui y aboutit",
+   "materiaux": [
+    "planche_mur",
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bois_noir.jpg",
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    2.895,
+    -0.414,
+    -4.982
+   ],
+   "max_u": [
+    3.896,
+    4.411,
+    5.202
+   ],
+   "min_m": [
+    1.405,
+    -0.25,
+    -7.099
+   ],
+   "max_m": [
+    1.891,
+    2.093,
+    -2.155
+   ]
+  },
+  {
+   "nom": "Cube.013_Cube.029",
+   "ordre": 50,
+   "ligne_obj": 167671,
+   "role": "Muret bas de la cloison du salon",
+   "materiaux": [
+    "marbre_poutre.001"
+   ],
+   "texture": [
+    "poutre.jpg"
+   ],
+   "min_u": [
+    2.95,
+    -0.694,
+    -4.788
+   ],
+   "max_u": [
+    3.85,
+    2.306,
+    4.212
+   ],
+   "min_m": [
+    1.432,
+    -0.385,
+    -7.004
+   ],
+   "max_m": [
+    1.869,
+    1.071,
+    -2.635
+   ]
+  },
+  {
+   "nom": "Cube.028_Cube.031",
+   "ordre": 51,
+   "ligne_obj": 167708,
+   "role": "Plateau de la table basse du salon",
+   "materiaux": [
+    "publicite.001"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    7.998,
+    1.296,
+    -2.732
+   ],
+   "max_u": [
+    10.998,
+    1.485,
+    0.268
+   ],
+   "min_m": [
+    3.883,
+    0.581,
+    -6.006
+   ],
+   "max_m": [
+    5.339,
+    0.672,
+    -4.55
+   ]
+  },
+  {
+   "nom": "Cube.030_Cube.032",
+   "ordre": 52,
+   "ligne_obj": 167817,
+   "role": "Piètement est de la table basse",
+   "materiaux": [
+    "publicite.001"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    10.387,
+    0.093,
+    -2.733
+   ],
+   "max_u": [
+    10.999,
+    1.294,
+    0.267
+   ],
+   "min_m": [
+    5.042,
+    -0.003,
+    -6.007
+   ],
+   "max_m": [
+    5.339,
+    0.58,
+    -4.55
+   ]
+  },
+  {
+   "nom": "Cube.031_Cube.015",
+   "ordre": 53,
+   "ligne_obj": 168084,
+   "role": "Piètement ouest de la table basse",
+   "materiaux": [
+    "publicite.001"
+   ],
+   "texture": [
+    "pub.jpg"
+   ],
+   "min_u": [
+    7.997,
+    0.093,
+    -2.732
+   ],
+   "max_u": [
+    8.608,
+    1.294,
+    0.268
+   ],
+   "min_m": [
+    3.882,
+    -0.003,
+    -6.006
+   ],
+   "max_m": [
+    4.179,
+    0.58,
+    -4.55
+   ]
+  },
+  {
+   "nom": "PILONNE.003_Cube.041",
+   "ordre": 54,
+   "ligne_obj": 168351,
+   "role": "Pilier engagé, mur est, travée centre",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    14.474,
+    0.007,
+    7.762
+   ],
+   "max_u": [
+    15.474,
+    6.007,
+    8.762
+   ],
+   "min_m": [
+    7.026,
+    -0.045,
+    -0.912
+   ],
+   "max_m": [
+    7.512,
+    2.868,
+    -0.427
+   ]
+  },
+  {
+   "nom": "PILONNE.006_Cube.055",
+   "ordre": 55,
+   "ligne_obj": 168388,
+   "role": "Pilier engagé, mur est, travée sud",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    14.474,
+    0.007,
+    0.971
+   ],
+   "max_u": [
+    15.474,
+    6.007,
+    1.971
+   ],
+   "min_m": [
+    7.026,
+    -0.045,
+    -4.209
+   ],
+   "max_m": [
+    7.512,
+    2.868,
+    -3.723
+   ]
+  },
+  {
+   "nom": "PILONNE.010_Cube.058",
+   "ordre": 56,
+   "ligne_obj": 168425,
+   "role": "Pilier engagé, angle sud-est",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    14.474,
+    0.007,
+    -5.529
+   ],
+   "max_u": [
+    15.474,
+    6.007,
+    -4.529
+   ],
+   "min_m": [
+    7.026,
+    -0.045,
+    -7.364
+   ],
+   "max_m": [
+    7.512,
+    2.868,
+    -6.878
+   ]
+  },
+  {
+   "nom": "PILONNE.008_Cube.060",
+   "ordre": 57,
+   "ligne_obj": 168462,
+   "role": "Pilier engagé, mur sud (4e depuis l'ouest)",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    9.395,
+    0.007,
+    -5.814
+   ],
+   "max_u": [
+    10.395,
+    6.007,
+    -4.813
+   ],
+   "min_m": [
+    4.561,
+    -0.045,
+    -7.502
+   ],
+   "max_m": [
+    5.046,
+    2.868,
+    -7.016
+   ]
+  },
+  {
+   "nom": "PILONNE.009_Cube.094",
+   "ordre": 58,
+   "ligne_obj": 168499,
+   "role": "Pilier engagé, mur sud (3e depuis l'ouest)",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    2.895,
+    0.007,
+    -5.814
+   ],
+   "max_u": [
+    3.896,
+    6.007,
+    -4.813
+   ],
+   "min_m": [
+    1.405,
+    -0.045,
+    -7.502
+   ],
+   "max_m": [
+    1.891,
+    2.868,
+    -7.016
+   ]
+  },
+  {
+   "nom": "PILONNE.011_Cube.095",
+   "ordre": 59,
+   "ligne_obj": 168536,
+   "role": "Pilier engagé, mur sud (2e depuis l'ouest)",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -3.896,
+    0.007,
+    -5.814
+   ],
+   "max_u": [
+    -2.895,
+    6.007,
+    -4.813
+   ],
+   "min_m": [
+    -1.891,
+    -0.045,
+    -7.502
+   ],
+   "max_m": [
+    -1.405,
+    2.868,
+    -7.016
+   ]
+  },
+  {
+   "nom": "PILONNE.016_Cube.096",
+   "ordre": 60,
+   "ligne_obj": 168573,
+   "role": "Pilier engagé, mur sud (1er depuis l'ouest)",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -10.395,
+    0.007,
+    -5.814
+   ],
+   "max_u": [
+    -9.395,
+    6.007,
+    -4.813
+   ],
+   "min_m": [
+    -5.046,
+    -0.045,
+    -7.502
+   ],
+   "max_m": [
+    -4.561,
+    2.868,
+    -7.016
+   ]
+  },
+  {
+   "nom": "PILONNE.017_Cube.097",
+   "ordre": 61,
+   "ligne_obj": 168610,
+   "role": "Pilier engagé, angle sud-ouest",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -15.45,
+    0.007,
+    -5.529
+   ],
+   "max_u": [
+    -14.45,
+    6.007,
+    -4.529
+   ],
+   "min_m": [
+    -7.5,
+    -0.045,
+    -7.364
+   ],
+   "max_m": [
+    -7.015,
+    2.868,
+    -6.878
+   ]
+  },
+  {
+   "nom": "PILONNE.001_Cube.098",
+   "ordre": 62,
+   "ligne_obj": 168647,
+   "role": "Pilier engagé, mur ouest, travée sud",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -15.538,
+    0.007,
+    0.971
+   ],
+   "max_u": [
+    -14.538,
+    6.007,
+    1.971
+   ],
+   "min_m": [
+    -7.543,
+    -0.045,
+    -4.209
+   ],
+   "max_m": [
+    -7.057,
+    2.868,
+    -3.723
+   ]
+  },
+  {
+   "nom": "PILONNE.002_Cube.100",
+   "ordre": 63,
+   "ligne_obj": 168684,
+   "role": "Pilier engagé, mur ouest, travée centre",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -15.538,
+    0.007,
+    7.762
+   ],
+   "max_u": [
+    -14.538,
+    6.007,
+    8.762
+   ],
+   "min_m": [
+    -7.543,
+    -0.045,
+    -0.912
+   ],
+   "max_m": [
+    -7.057,
+    2.868,
+    -0.427
+   ]
+  },
+  {
+   "nom": "PILONNE.004_Cube.101",
+   "ordre": 64,
+   "ligne_obj": 168721,
+   "role": "Pilier engagé, mur ouest, travée nord",
+   "materiaux": [
+    "marbre_poutre.014"
+   ],
+   "texture": [
+    "bordeaux.jpg"
+   ],
+   "min_u": [
+    -15.538,
+    0.007,
+    14.261
+   ],
+   "max_u": [
+    -14.538,
+    6.007,
+    15.262
+   ],
+   "min_m": [
+    -7.543,
+    -0.045,
+    2.243
+   ],
+   "max_m": [
+    -7.057,
+    2.868,
+    2.729
+   ]
+  },
+  {
+   "nom": "sconce_02.005",
+   "ordre": 65,
+   "ligne_obj": 168758,
+   "role": "Applique murale, mur ouest (sud)",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe.001"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    -14.548,
+    4.318,
+    1.217
+   ],
+   "max_u": [
+    -13.979,
+    5.125,
+    1.695
+   ],
+   "min_m": [
+    -7.062,
+    2.048,
+    -4.089
+   ],
+   "max_m": [
+    -6.786,
+    2.439,
+    -3.857
+   ]
+  },
+  {
+   "nom": "sconce_02.004",
+   "ordre": 66,
+   "ligne_obj": 182714,
+   "role": "Applique murale, mur ouest (nord)",
+   "materiaux": [
+    "pied_lampe",
+    "ampoule_lampe.001"
+   ],
+   "texture": [
+    "jaune.jpg"
+   ],
+   "min_u": [
+    -14.548,
+    4.318,
+    8.021
+   ],
+   "max_u": [
+    -13.979,
+    5.125,
+    8.499
+   ],
+   "min_m": [
+    -7.062,
+    2.048,
+    -0.786
+   ],
+   "max_m": [
+    -6.786,
+    2.439,
+    -0.554
+   ]
+  },
+  {
+   "nom": "Cube.038_Cube.102",
+   "ordre": 67,
+   "ligne_obj": 196686,
+   "role": "Bandeau bordeaux de haut de mur, mur ouest (travée centre)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -15.491,
+    4.006,
+    1.864
+   ],
+   "max_u": [
+    -14.691,
+    6.006,
+    7.864
+   ],
+   "min_m": [
+    -7.52,
+    1.896,
+    -3.775
+   ],
+   "max_m": [
+    -7.132,
+    2.867,
+    -0.862
+   ]
+  },
+  {
+   "nom": "Cube.011_Cube.103",
+   "ordre": 68,
+   "ligne_obj": 196958,
+   "role": "Bandeau bordeaux de haut de mur, mur ouest (travée sud)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -15.491,
+    4.006,
+    -4.764
+   ],
+   "max_u": [
+    -14.691,
+    6.006,
+    1.236
+   ],
+   "min_m": [
+    -7.52,
+    1.896,
+    -6.993
+   ],
+   "max_m": [
+    -7.132,
+    2.867,
+    -4.08
+   ]
+  },
+  {
+   "nom": "Cube.010_Cube.104",
+   "ordre": 69,
+   "ligne_obj": 197230,
+   "role": "Bandeau bordeaux de haut de mur, mur sud (travée 1)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -15.495,
+    4.006,
+    -5.801
+   ],
+   "max_u": [
+    -9.495,
+    6.006,
+    -5.001
+   ],
+   "min_m": [
+    -7.522,
+    1.896,
+    -7.496
+   ],
+   "max_m": [
+    -4.609,
+    2.867,
+    -7.108
+   ]
+  },
+  {
+   "nom": "Cube.007_Cube.105",
+   "ordre": 70,
+   "ligne_obj": 197502,
+   "role": "Bandeau bordeaux de haut de mur, mur sud (travée 3)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -3.0,
+    4.006,
+    -5.801
+   ],
+   "max_u": [
+    3.0,
+    6.006,
+    -5.001
+   ],
+   "min_m": [
+    -1.456,
+    1.896,
+    -7.496
+   ],
+   "max_m": [
+    1.456,
+    2.867,
+    -7.108
+   ]
+  },
+  {
+   "nom": "Cube.006_Cube.106",
+   "ordre": 71,
+   "ligne_obj": 197774,
+   "role": "Bandeau bordeaux de haut de mur, mur sud (travée 2)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    -9.756,
+    4.006,
+    -5.801
+   ],
+   "max_u": [
+    -3.756,
+    6.006,
+    -5.001
+   ],
+   "min_m": [
+    -4.736,
+    1.896,
+    -7.496
+   ],
+   "max_m": [
+    -1.823,
+    2.867,
+    -7.108
+   ]
+  },
+  {
+   "nom": "Cube.041_Cube.107",
+   "ordre": 72,
+   "ligne_obj": 198046,
+   "role": "Bandeau bordeaux de haut de mur, mur sud (travée 4)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    3.628,
+    4.006,
+    -5.801
+   ],
+   "max_u": [
+    9.628,
+    6.006,
+    -5.001
+   ],
+   "min_m": [
+    1.761,
+    1.896,
+    -7.496
+   ],
+   "max_m": [
+    4.674,
+    2.867,
+    -7.108
+   ]
+  },
+  {
+   "nom": "Cube.008_Cube.108",
+   "ordre": 73,
+   "ligne_obj": 198314,
+   "role": "Bandeau bordeaux de haut de mur, mur sud (travée 5)",
+   "materiaux": [
+    "haut_mur"
+   ],
+   "texture": [
+    "bordeau_uni.jpg"
+   ],
+   "min_u": [
+    9.44,
+    4.006,
+    -5.801
+   ],
+   "max_u": [
+    15.44,
+    6.006,
+    -5.001
+   ],
+   "min_m": [
+    4.582,
+    1.896,
+    -7.496
+   ],
+   "max_m": [
+    7.495,
+    2.867,
+    -7.108
+   ]
+  },
+  {
+   "nom": "Cube.009_Cube.110",
+   "ordre": 74,
+   "ligne_obj": 198586,
+   "role": "Fond sombre d'habillage de haut de mur, mur sud (est)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    9.791,
+    2.0,
+    -5.379
+   ],
+   "max_u": [
+    15.791,
+    6.0,
+    -5.179
+   ],
+   "min_m": [
+    4.753,
+    0.922,
+    -7.291
+   ],
+   "max_m": [
+    7.665,
+    2.864,
+    -7.194
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.001_Cube.109",
+   "ordre": 75,
+   "ligne_obj": 198623,
+   "role": "Lattes de bois noir, mur sud (est)",
+   "materiaux": [
+    "planche_mur.001"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    10.228,
+    1.579,
+    -5.695
+   ],
+   "max_u": [
+    14.607,
+    5.579,
+    -5.095
+   ],
+   "min_m": [
+    4.965,
+    0.718,
+    -7.444
+   ],
+   "max_m": [
+    7.091,
+    2.66,
+    -7.153
+   ]
+  },
+  {
+   "nom": "Cube.029_Cube.112",
+   "ordre": 76,
+   "ligne_obj": 198800,
+   "role": "Fond sombre d'habillage de haut de mur, mur sud (centre)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -3.006,
+    2.0,
+    -5.379
+   ],
+   "max_u": [
+    2.994,
+    6.0,
+    -5.179
+   ],
+   "min_m": [
+    -1.459,
+    0.922,
+    -7.291
+   ],
+   "max_m": [
+    1.453,
+    2.864,
+    -7.194
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.003_Cube.111",
+   "ordre": 77,
+   "ligne_obj": 198837,
+   "role": "Lattes de bois noir, mur sud (centre)",
+   "materiaux": [
+    "planche_mur.002"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -2.569,
+    1.579,
+    -5.695
+   ],
+   "max_u": [
+    2.571,
+    5.579,
+    -5.095
+   ],
+   "min_m": [
+    -1.247,
+    0.718,
+    -7.444
+   ],
+   "max_m": [
+    1.248,
+    2.66,
+    -7.153
+   ]
+  },
+  {
+   "nom": "Cube.034_Cube.114",
+   "ordre": 78,
+   "ligne_obj": 199042,
+   "role": "Fond sombre d'habillage de haut de mur, mur sud (ouest-centre)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -9.625,
+    2.0,
+    -5.379
+   ],
+   "max_u": [
+    -3.625,
+    6.0,
+    -5.179
+   ],
+   "min_m": [
+    -4.673,
+    0.922,
+    -7.291
+   ],
+   "max_m": [
+    -1.76,
+    2.864,
+    -7.194
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.004_Cube.113",
+   "ordre": 79,
+   "ligne_obj": 199079,
+   "role": "Lattes de bois noir, mur sud (ouest-centre)",
+   "materiaux": [
+    "planche_mur.005"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -9.189,
+    1.579,
+    -5.695
+   ],
+   "max_u": [
+    -4.048,
+    5.579,
+    -5.095
+   ],
+   "min_m": [
+    -4.461,
+    0.718,
+    -7.444
+   ],
+   "max_m": [
+    -1.965,
+    2.66,
+    -7.153
+   ]
+  },
+  {
+   "nom": "Cube.036_Cube.116",
+   "ordre": 80,
+   "ligne_obj": 199284,
+   "role": "Fond sombre d'habillage de haut de mur, mur sud (ouest)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -16.196,
+    2.0,
+    -5.379
+   ],
+   "max_u": [
+    -10.196,
+    6.0,
+    -5.179
+   ],
+   "min_m": [
+    -7.862,
+    0.922,
+    -7.291
+   ],
+   "max_m": [
+    -4.949,
+    2.864,
+    -7.194
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.005_Cube.115",
+   "ordre": 81,
+   "ligne_obj": 199321,
+   "role": "Lattes de bois noir, mur sud (ouest)",
+   "materiaux": [
+    "planche_mur.006"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -14.256,
+    1.579,
+    -5.695
+   ],
+   "max_u": [
+    -10.619,
+    5.579,
+    -5.095
+   ],
+   "min_m": [
+    -6.921,
+    0.718,
+    -7.444
+   ],
+   "max_m": [
+    -5.155,
+    2.66,
+    -7.153
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.006_Cube.117",
+   "ordre": 82,
+   "ligne_obj": 199470,
+   "role": "Lattes de bois noir, mur ouest (sud)",
+   "materiaux": [
+    "planche_mur.007"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -15.391,
+    1.579,
+    -4.383
+   ],
+   "max_u": [
+    -14.791,
+    5.579,
+    0.758
+   ],
+   "min_m": [
+    -7.471,
+    0.718,
+    -6.808
+   ],
+   "max_m": [
+    -7.18,
+    2.66,
+    -4.312
+   ]
+  },
+  {
+   "nom": "Cube.037_Cube.118",
+   "ordre": 83,
+   "ligne_obj": 199675,
+   "role": "Fond sombre d'habillage de haut de mur, mur ouest (sud)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -15.069,
+    2.0,
+    -5.05
+   ],
+   "max_u": [
+    -14.869,
+    6.0,
+    0.95
+   ],
+   "min_m": [
+    -7.315,
+    0.922,
+    -7.132
+   ],
+   "max_m": [
+    -7.218,
+    2.864,
+    -4.219
+   ]
+  },
+  {
+   "nom": "Cube.040_Cube.119",
+   "ordre": 84,
+   "ligne_obj": 199712,
+   "role": "Fond sombre d'habillage de haut de mur, mur ouest (centre)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -15.069,
+    2.0,
+    1.769
+   ],
+   "max_u": [
+    -14.869,
+    6.0,
+    7.769
+   ],
+   "min_m": [
+    -7.315,
+    0.922,
+    -3.821
+   ],
+   "max_m": [
+    -7.218,
+    2.864,
+    -0.908
+   ]
+  },
+  {
+   "nom": "Cube.043_Cube.120",
+   "ordre": 85,
+   "ligne_obj": 199749,
+   "role": "Fond sombre d'habillage de haut de mur, mur ouest (nord)",
+   "materiaux": [
+    "fond_mur"
+   ],
+   "texture": [
+    "marron_foncer.jpg"
+   ],
+   "min_u": [
+    -15.069,
+    2.0,
+    8.465
+   ],
+   "max_u": [
+    -14.869,
+    6.0,
+    14.465
+   ],
+   "min_m": [
+    -7.315,
+    0.922,
+    -0.571
+   ],
+   "max_m": [
+    -7.218,
+    2.864,
+    2.342
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.007_Cube.121",
+   "ordre": 86,
+   "ligne_obj": 199786,
+   "role": "Lattes de bois noir, mur ouest (centre)",
+   "materiaux": [
+    "planche_mur.008"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -15.391,
+    1.579,
+    2.313
+   ],
+   "max_u": [
+    -14.791,
+    5.579,
+    7.453
+   ],
+   "min_m": [
+    -7.471,
+    0.718,
+    -3.557
+   ],
+   "max_m": [
+    -7.18,
+    2.66,
+    -1.062
+   ]
+  },
+  {
+   "nom": "planche_bois_mur.008_Cube.122",
+   "ordre": 87,
+   "ligne_obj": 199991,
+   "role": "Lattes de bois noir, mur ouest (nord)",
+   "materiaux": [
+    "planche_mur.009"
+   ],
+   "texture": [
+    "bois_noir.jpg"
+   ],
+   "min_u": [
+    -15.391,
+    1.579,
+    8.928
+   ],
+   "max_u": [
+    -14.791,
+    5.579,
+    14.069
+   ],
+   "min_m": [
+    -7.471,
+    0.718,
+    -0.346
+   ],
+   "max_m": [
+    -7.18,
+    2.66,
+    2.149
+   ]
+  },
+  {
+   "nom": "Cube.044_Cube.004",
+   "ordre": 88,
+   "ligne_obj": 200196,
+   "role": "Cadre d'affiche, mur ouest (sud, poster_4)",
+   "materiaux": [
+    "poutre.001",
+    "poster_1.001"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    -14.812,
+    2.515,
+    -2.597
+   ],
+   "max_u": [
+    -14.612,
+    4.515,
+    -0.997
+   ],
+   "min_m": [
+    -7.19,
+    1.172,
+    -5.941
+   ],
+   "max_m": [
+    -7.093,
+    2.143,
+    -5.164
+   ]
+  },
+  {
+   "nom": "Cube.045_Cube.010",
+   "ordre": 89,
+   "ligne_obj": 200266,
+   "role": "Cadre d'affiche, mur ouest (nord, poster_5)",
+   "materiaux": [
+    "poutre.002",
+    "poster_1.003"
+   ],
+   "texture": [
+    "poster_5.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    -14.812,
+    2.515,
+    4.177
+   ],
+   "max_u": [
+    -14.612,
+    4.515,
+    5.777
+   ],
+   "min_m": [
+    -7.19,
+    1.172,
+    -2.652
+   ],
+   "max_m": [
+    -7.093,
+    2.143,
+    -1.875
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.006_Cube.043",
+   "ordre": 90,
+   "ligne_obj": 200336,
+   "role": "BORNE 3 — ASTEROID HARD, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.036",
+    "Matériau.035"
+   ],
+   "texture": [
+    "asteroid.jpg",
+    "asteroid_font_hard.jpg"
+   ],
+   "min_u": [
+    -3.597,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    -1.765,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    -1.746,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    -0.857,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "Plane.098_Plane.110",
+   "ordre": 91,
+   "ligne_obj": 201429,
+   "role": "Poste de radio mural, coin billard",
+   "materiaux": [
+    "Material.254"
+   ],
+   "texture": [
+    "Radio.jpg"
+   ],
+   "min_u": [
+    -12.502,
+    2.08,
+    1.336
+   ],
+   "max_u": [
+    -11.725,
+    3.449,
+    1.951
+   ],
+   "min_m": [
+    -6.069,
+    0.961,
+    -4.032
+   ],
+   "max_m": [
+    -5.692,
+    1.626,
+    -3.733
+   ]
+  },
+  {
+   "nom": "Plane.098_Plane.001",
+   "ordre": 92,
+   "ligne_obj": 205841,
+   "role": "Poste de radio, comptoir d'accueil",
+   "materiaux": [
+    "Material.008"
+   ],
+   "texture": [
+    "Radio.jpg"
+   ],
+   "min_u": [
+    -2.144,
+    2.685,
+    19.995
+   ],
+   "max_u": [
+    -1.368,
+    4.055,
+    20.518
+   ],
+   "min_m": [
+    -1.041,
+    1.255,
+    5.026
+   ],
+   "max_m": [
+    -0.664,
+    1.92,
+    5.28
+   ]
+  },
+  {
+   "nom": "Plane.098_Plane.002",
+   "ordre": 93,
+   "ligne_obj": 210296,
+   "role": "Poste de radio, salon",
+   "materiaux": [
+    "Material.009"
+   ],
+   "texture": [
+    "Radio.jpg"
+   ],
+   "min_u": [
+    10.405,
+    1.483,
+    -0.832
+   ],
+   "max_u": [
+    10.928,
+    2.853,
+    -0.055
+   ],
+   "min_m": [
+    5.051,
+    0.671,
+    -5.084
+   ],
+   "max_m": [
+    5.305,
+    1.336,
+    -4.707
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.009_Cube.062",
+   "ordre": 94,
+   "ligne_obj": 214709,
+   "role": "BORNE 1 — FLAPPY BIRD HARD, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.080",
+    "Matériau.079"
+   ],
+   "texture": [
+    "flappy.jpg",
+    "flappy_hard_font.jpg"
+   ],
+   "min_u": [
+    -7.48,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    -5.648,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    -3.631,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    -2.742,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.001_Cube.066",
+   "ordre": 95,
+   "ligne_obj": 215803,
+   "role": "BORNE 2 — TETRIS HARD, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.082",
+    "Matériau.081"
+   ],
+   "texture": [
+    "tetris.jpg",
+    "tetris_font.jpg"
+   ],
+   "min_u": [
+    -5.531,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    -3.7,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    -2.685,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    -1.796,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.005_Cube.067",
+   "ordre": 96,
+   "ligne_obj": 216899,
+   "role": "BORNE 8 — SNAKE EASY, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.084",
+    "Matériau.083"
+   ],
+   "texture": [
+    "snake.jpg",
+    "snake_font.jpg"
+   ],
+   "min_u": [
+    3.736,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    5.568,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    1.814,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    2.703,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.008_Cube.068",
+   "ordre": 97,
+   "ligne_obj": 217993,
+   "role": "BORNE 5 — SNAKE HARD, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.086",
+    "Matériau.085"
+   ],
+   "texture": [
+    "snake.jpg",
+    "snake_font.jpg"
+   ],
+   "min_u": [
+    -5.541,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    -3.709,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    -2.69,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    -1.8,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.003_Cube.069",
+   "ordre": 98,
+   "ligne_obj": 219089,
+   "role": "BORNE 11 — TETRIS EASY, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.088",
+    "Matériau.087"
+   ],
+   "texture": [
+    "tetris.jpg",
+    "tetris_font.jpg"
+   ],
+   "min_u": [
+    3.727,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    5.559,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    1.809,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    2.698,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.002_Cube.070",
+   "ordre": 99,
+   "ligne_obj": 220184,
+   "role": "BORNE 12 — FLAPPY BIRD EASY, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.090",
+    "Matériau.089"
+   ],
+   "texture": [
+    "flappy.jpg",
+    "flappy_easy_font.jpg"
+   ],
+   "min_u": [
+    5.675,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    7.507,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    2.755,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    3.644,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.004_Cube.071",
+   "ordre": 100,
+   "ligne_obj": 221279,
+   "role": "BORNE 10 — ASTEROID EASY, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.092",
+    "Matériau.091"
+   ],
+   "texture": [
+    "asteroid.jpg",
+    "asteroid_font.jpg"
+   ],
+   "min_u": [
+    1.792,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    3.624,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    0.87,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    1.759,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "Cube.046_Cube.003",
+   "ordre": 101,
+   "ligne_obj": 222374,
+   "role": "Dalle d'écran du poste de CLASSEMENT (borne 16), sur le comptoir",
+   "materiaux": [
+    "Matériau.011"
+   ],
+   "texture": [
+    "leaderboard_font.jpg"
+   ],
+   "min_u": [
+    -0.848,
+    3.084,
+    20.128
+   ],
+   "max_u": [
+    0.848,
+    4.034,
+    20.319
+   ],
+   "min_m": [
+    -0.412,
+    1.448,
+    5.091
+   ],
+   "max_m": [
+    0.412,
+    1.91,
+    5.183
+   ]
+  },
+  {
+   "nom": "Cube.048_Cube.006",
+   "ordre": 102,
+   "ligne_obj": 222415,
+   "role": "SAS D'ENTRÉE : sol, deux murs, plafond bas, en un seul objet",
+   "materiaux": [
+    "sol_moquette"
+   ],
+   "texture": [
+    "floor.jpg"
+   ],
+   "min_u": [
+    10.705,
+    -0.097,
+    16.946
+   ],
+   "max_u": [
+    14.505,
+    5.103,
+    36.075
+   ],
+   "min_m": [
+    5.196,
+    -0.096,
+    3.546
+   ],
+   "max_m": [
+    7.041,
+    2.429,
+    12.832
+   ]
+  },
+  {
+   "nom": "Cube.049_Cube.014",
+   "ordre": 103,
+   "ligne_obj": 222644,
+   "role": "Porte extérieure, extrémité nord du sas",
+   "materiaux": [
+    "porte_exterieur"
+   ],
+   "texture": [
+    "porte_exterieur.jpg"
+   ],
+   "min_u": [
+    11.338,
+    0.09,
+    35.659
+   ],
+   "max_u": [
+    13.838,
+    4.496,
+    36.159
+   ],
+   "min_m": [
+    5.504,
+    -0.005,
+    12.63
+   ],
+   "max_m": [
+    6.718,
+    2.134,
+    12.873
+   ]
+  },
+  {
+   "nom": "booleen.001_Cube.036",
+   "ordre": 104,
+   "ligne_obj": 222717,
+   "role": "Volume sans matériau, hors du bâtiment — rôle NON DÉTERMINÉ (reliquat de modélisation probable)",
+   "materiaux": [
+    "None"
+   ],
+   "texture": [
+    "(sans texture) None"
+   ],
+   "min_u": [
+    16.671,
+    0.101,
+    17.148
+   ],
+   "max_u": [
+    18.671,
+    4.901,
+    19.868
+   ],
+   "min_m": [
+    8.093,
+    0.0,
+    3.644
+   ],
+   "max_m": [
+    9.064,
+    2.331,
+    4.965
+   ]
+  },
+  {
+   "nom": "Cylindre",
+   "ordre": 105,
+   "ligne_obj": 222754,
+   "role": "Poignée de la porte extérieure (barre basse)",
+   "materiaux": [
+    "porte_exterieur"
+   ],
+   "texture": [
+    "porte_exterieur.jpg"
+   ],
+   "min_u": [
+    11.494,
+    2.004,
+    35.703
+   ],
+   "max_u": [
+    11.614,
+    2.124,
+    36.103
+   ],
+   "min_m": [
+    5.579,
+    0.924,
+    12.652
+   ],
+   "max_m": [
+    5.638,
+    0.983,
+    12.846
+   ]
+  },
+  {
+   "nom": "Cylindre.001",
+   "ordre": 106,
+   "ligne_obj": 223019,
+   "role": "Poignée de la porte extérieure (barre haute)",
+   "materiaux": [
+    "porte_exterieur.001"
+   ],
+   "texture": [
+    "porte_exterieur.jpg"
+   ],
+   "min_u": [
+    11.494,
+    2.177,
+    35.703
+   ],
+   "max_u": [
+    11.614,
+    2.297,
+    36.103
+   ],
+   "min_m": [
+    5.579,
+    1.008,
+    12.652
+   ],
+   "max_m": [
+    5.638,
+    1.067,
+    12.846
+   ]
+  },
+  {
+   "nom": "Cylindre.002",
+   "ordre": 107,
+   "ligne_obj": 223284,
+   "role": "Poignée de la porte extérieure (retour)",
+   "materiaux": [
+    "porte_exterieur.002"
+   ],
+   "texture": [
+    "porte_exterieur.jpg"
+   ],
+   "min_u": [
+    11.533,
+    2.207,
+    35.688
+   ],
+   "max_u": [
+    11.933,
+    2.267,
+    35.748
+   ],
+   "min_m": [
+    5.599,
+    1.023,
+    12.644
+   ],
+   "max_m": [
+    5.793,
+    1.052,
+    12.673
+   ]
+  },
+  {
+   "nom": "Cube.051_Cube.038",
+   "ordre": 108,
+   "ligne_obj": 223549,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.004",
+    "poster_1.005"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    17.477,
+    2.071,
+    28.869
+   ],
+   "max_u": [
+    17.677,
+    4.071,
+    30.469
+   ],
+   "min_m": [
+    8.484,
+    0.957,
+    9.334
+   ],
+   "max_m": [
+    8.581,
+    1.928,
+    10.111
+   ]
+  },
+  {
+   "nom": "Cube.050_Cube.037",
+   "ordre": 109,
+   "ligne_obj": 223619,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.003",
+    "poster_1.004"
+   ],
+   "texture": [
+    "poster_5.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    17.477,
+    2.071,
+    32.869
+   ],
+   "max_u": [
+    17.677,
+    4.071,
+    34.469
+   ],
+   "min_m": [
+    8.484,
+    0.957,
+    11.276
+   ],
+   "max_m": [
+    8.581,
+    1.928,
+    12.053
+   ]
+  },
+  {
+   "nom": "Cube.052_Cube.045",
+   "ordre": 110,
+   "ligne_obj": 223689,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.005",
+    "poster_1.006"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    17.477,
+    2.071,
+    20.869
+   ],
+   "max_u": [
+    17.677,
+    4.071,
+    22.469
+   ],
+   "min_m": [
+    8.484,
+    0.957,
+    5.451
+   ],
+   "max_m": [
+    8.581,
+    1.928,
+    6.228
+   ]
+  },
+  {
+   "nom": "Cube.053_Cube.046",
+   "ordre": 111,
+   "ligne_obj": 223759,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.006",
+    "poster_1.007"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    17.477,
+    2.071,
+    24.869
+   ],
+   "max_u": [
+    17.677,
+    4.071,
+    26.469
+   ],
+   "min_m": [
+    8.484,
+    0.957,
+    7.393
+   ],
+   "max_m": [
+    8.581,
+    1.928,
+    8.169
+   ]
+  },
+  {
+   "nom": "Cube.057_Cube.053",
+   "ordre": 112,
+   "ligne_obj": 223829,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.010",
+    "poster_1.011"
+   ],
+   "texture": [
+    "poster_5.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    20.855,
+    2.071,
+    32.869
+   ],
+   "max_u": [
+    21.055,
+    4.071,
+    34.469
+   ],
+   "min_m": [
+    10.124,
+    0.957,
+    11.276
+   ],
+   "max_m": [
+    10.221,
+    1.928,
+    12.053
+   ]
+  },
+  {
+   "nom": "Cube.056_Cube.051",
+   "ordre": 113,
+   "ligne_obj": 223899,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.009",
+    "poster_1.010"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    20.855,
+    2.071,
+    28.869
+   ],
+   "max_u": [
+    21.055,
+    4.071,
+    30.469
+   ],
+   "min_m": [
+    10.124,
+    0.957,
+    9.334
+   ],
+   "max_m": [
+    10.221,
+    1.928,
+    10.111
+   ]
+  },
+  {
+   "nom": "Cube.055_Cube.049",
+   "ordre": 114,
+   "ligne_obj": 223969,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.008",
+    "poster_1.009"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    20.855,
+    2.071,
+    20.869
+   ],
+   "max_u": [
+    21.055,
+    4.071,
+    22.469
+   ],
+   "min_m": [
+    10.124,
+    0.957,
+    5.451
+   ],
+   "max_m": [
+    10.221,
+    1.928,
+    6.228
+   ]
+  },
+  {
+   "nom": "Cube.054_Cube.048",
+   "ordre": 115,
+   "ligne_obj": 224039,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.007",
+    "poster_1.008"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    20.855,
+    2.071,
+    24.869
+   ],
+   "max_u": [
+    21.055,
+    4.071,
+    26.469
+   ],
+   "min_m": [
+    10.124,
+    0.957,
+    7.393
+   ],
+   "max_m": [
+    10.221,
+    1.928,
+    8.169
+   ]
+  },
+  {
+   "nom": "Cube.058_Cube.054",
+   "ordre": 116,
+   "ligne_obj": 224109,
+   "role": "Cadre d'affiche HORS BÂTIMENT (couloir fantôme est) — rôle non déterminé",
+   "materiaux": [
+    "poutre.013",
+    "poster_1.012"
+   ],
+   "texture": [
+    "poster_4.jpg",
+    "poutre.jpg"
+   ],
+   "min_u": [
+    19.037,
+    2.071,
+    17.018
+   ],
+   "max_u": [
+    20.637,
+    4.071,
+    17.218
+   ],
+   "min_m": [
+    9.241,
+    0.957,
+    3.581
+   ],
+   "max_m": [
+    10.018,
+    1.928,
+    3.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.010_Cube.021",
+   "ordre": 117,
+   "ligne_obj": 224179,
+   "role": "BORNE 6 — DEMINEUR HARD, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.012",
+    "ecran_demineur"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "demineur_font.jpg"
+   ],
+   "min_u": [
+    -3.592,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    -1.76,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    -1.744,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    -0.855,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.007_Cube.034",
+   "ordre": 118,
+   "ligne_obj": 225284,
+   "role": "BORNE 4 — SHOOTER HARD, rangée sud (écran vers -z)",
+   "materiaux": [
+    "Matériau.014",
+    "ecran_shooter"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "shooter_font.jpg"
+   ],
+   "min_u": [
+    -7.475,
+    0.095,
+    8.609
+   ],
+   "max_u": [
+    -5.644,
+    5.02,
+    11.038
+   ],
+   "min_m": [
+    -3.629,
+    -0.002,
+    -0.501
+   ],
+   "max_m": [
+    -2.74,
+    2.388,
+    0.678
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.011_Cube.056",
+   "ordre": 119,
+   "ligne_obj": 226390,
+   "role": "BORNE 13 — COMING SOON, mur ouest (écran vers +x) — détection DÉSACTIVÉE",
+   "materiaux": [
+    "Matériau.016",
+    "ecran_shooter.001"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "noir.jpg"
+   ],
+   "min_u": [
+    -14.853,
+    0.095,
+    9.588
+   ],
+   "max_u": [
+    -12.424,
+    5.02,
+    11.42
+   ],
+   "min_m": [
+    -7.21,
+    -0.002,
+    -0.025
+   ],
+   "max_m": [
+    -6.031,
+    2.388,
+    0.864
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.012_Cube.057",
+   "ordre": 120,
+   "ligne_obj": 227496,
+   "role": "BORNE 14 — COMING SOON, mur ouest (écran vers +x) — détection DÉSACTIVÉE",
+   "materiaux": [
+    "Matériau.018",
+    "ecran_shooter.001"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "noir.jpg"
+   ],
+   "min_u": [
+    -14.853,
+    0.095,
+    11.523
+   ],
+   "max_u": [
+    -12.424,
+    5.02,
+    13.355
+   ],
+   "min_m": [
+    -7.21,
+    -0.002,
+    0.914
+   ],
+   "max_m": [
+    -6.031,
+    2.388,
+    1.803
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.014_Cube.061",
+   "ordre": 121,
+   "ligne_obj": 228602,
+   "role": "BORNE 9 — SHOOTER EASY, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.022",
+    "ecran_shooter"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "shooter_font.jpg"
+   ],
+   "min_u": [
+    5.671,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    7.503,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    2.753,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    3.642,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.013_Cube.059",
+   "ordre": 122,
+   "ligne_obj": 229706,
+   "role": "BORNE 7 — DEMINEUR EASY, rangée nord (écran vers +z)",
+   "materiaux": [
+    "Matériau.020",
+    "ecran_demineur"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "demineur_font.jpg"
+   ],
+   "min_u": [
+    1.788,
+    0.095,
+    11.083
+   ],
+   "max_u": [
+    3.619,
+    5.02,
+    13.512
+   ],
+   "min_m": [
+    0.868,
+    -0.002,
+    0.7
+   ],
+   "max_m": [
+    1.757,
+    2.388,
+    1.879
+   ]
+  },
+  {
+   "nom": "FLAPPY_BIRD_HARD.015_Cube.072",
+   "ordre": 123,
+   "ligne_obj": 230810,
+   "role": "BORNE 15 — COMING SOON, borne centrale sur l'estrade (écran vers +z) — détection DÉSACTIVÉE",
+   "materiaux": [
+    "Matériau.024",
+    "ecran_shooter.001"
+   ],
+   "texture": [
+    "coming_soon.jpg",
+    "noir.jpg"
+   ],
+   "min_u": [
+    -0.916,
+    0.536,
+    -0.935
+   ],
+   "max_u": [
+    0.916,
+    5.46,
+    1.494
+   ],
+   "min_m": [
+    -0.445,
+    0.212,
+    -5.134
+   ],
+   "max_m": [
+    0.445,
+    2.602,
+    -3.955
+   ]
+  },
+  {
+   "nom": "Cube.059_Cube.007",
+   "ordre": 124,
+   "ligne_obj": 231913,
+   "role": "Enseigne lumineuse NINETEEN, au-dessus du comptoir",
+   "materiaux": [
+    "Matériau"
+   ],
+   "texture": [
+    "nineteen_name.jpg"
+   ],
+   "min_u": [
+    -2.622,
+    4.315,
+    23.995
+   ],
+   "max_u": [
+    2.622,
+    5.264,
+    24.945
+   ],
+   "min_m": [
+    -1.273,
+    2.046,
+    6.968
+   ],
+   "max_m": [
+    1.273,
+    2.507,
+    7.429
+   ]
+  },
+  {
+   "nom": "Cube.060_Cube.013",
+   "ordre": 125,
+   "ligne_obj": 231952,
+   "role": "Capot / dos du moniteur de classement",
+   "materiaux": [
+    "gris_foncer"
+   ],
+   "texture": [
+    "gris_foncer.jpg"
+   ],
+   "min_u": [
+    -0.875,
+    3.025,
+    20.109
+   ],
+   "max_u": [
+    0.875,
+    4.077,
+    20.359
+   ],
+   "min_m": [
+    -0.425,
+    1.42,
+    5.082
+   ],
+   "max_m": [
+    0.425,
+    1.931,
+    5.203
+   ]
+  },
+  {
+   "nom": "Cube.061_Cube.016",
+   "ordre": 126,
+   "ligne_obj": 232053,
+   "role": "Socle du moniteur de classement",
+   "materiaux": [
+    "gris_foncer"
+   ],
+   "texture": [
+    "gris_foncer.jpg"
+   ],
+   "min_u": [
+    -0.3,
+    2.569,
+    19.987
+   ],
+   "max_u": [
+    0.3,
+    2.769,
+    20.387
+   ],
+   "min_m": [
+    -0.146,
+    1.199,
+    5.023
+   ],
+   "max_m": [
+    0.146,
+    1.296,
+    5.217
+   ]
+  },
+  {
+   "nom": "Cylindre.003",
+   "ordre": 127,
+   "ligne_obj": 232090,
+   "role": "Pied du moniteur de classement",
+   "materiaux": [
+    "noir"
+   ],
+   "texture": [
+    "noir.jpg"
+   ],
+   "min_u": [
+    -0.1,
+    2.75,
+    20.204
+   ],
+   "max_u": [
+    0.1,
+    3.55,
+    20.304
+   ],
+   "min_m": [
+    -0.049,
+    1.286,
+    5.128
+   ],
+   "max_m": [
+    0.049,
+    1.675,
+    5.176
+   ]
+  }
+ ],
+ "regles_collision": [
+  {
+   "ligne": "legacy/room/room.c:2099",
+   "nom": "Comptoir d'accueil NINETEEN",
+   "condition_unites": "x <= 6.0 && x >= -6.0 && z >= 19.5 && z < 25.0",
+   "represente": "Le bloc du comptoir et tout ce qui est derrière",
+   "en_metres": "x de −2,913 à 2,913 ; z de 4,786 à 7,456"
+  },
+  {
+   "ligne": "legacy/room/room.c:2102",
+   "nom": "Mur derrière le comptoir",
+   "condition_unites": "x > -9.0 && x < 9.0 && z > 23.8 && z < 24.5",
+   "represente": "Le mur nord, plus large que le comptoir",
+   "en_metres": "x de −4,369 à 4,369 ; z de 6,868 à 7,208"
+  },
+  {
+   "ligne": "legacy/room/room.c:2108",
+   "nom": "Pan coupé ouest",
+   "condition_unites": "z >= 14.0 && x <= 0.4736842105*z - 19.36842105",
+   "represente": "Le mur en diagonale du coin nord-ouest",
+   "en_metres": "z ⩾ 2,116 ; bloqué si x ⩽ 0,4737·z − 7,185"
+  },
+  {
+   "ligne": "legacy/room/room.c:2116",
+   "nom": "Pan coupé est, au sud de la porte",
+   "condition_unites": "z >= 14.0 && z < 17.5 && x >= -0.4736842105*z + 19.36842105",
+   "represente": "Le mur en diagonale du coin nord-est, avant la porte du sas",
+   "en_metres": "z de 2,116 à 3,816 ; bloqué si x ⩾ 7,185 − 0,4737·z"
+  },
+  {
+   "ligne": "legacy/room/room.c:2119",
+   "nom": "Pan coupé est, au nord de la porte",
+   "condition_unites": "z >= 19.2 && x >= -0.4736842105*z + 19.36842105 && x < 11.3",
+   "represente": "Le même mur, après la porte du sas ; la borne x < 11,3 laisse entrer dans le sas",
+   "en_metres": "z ⩾ 4,641 ; bloqué si x de (7,185 − 0,4737·z) à 5,485"
+  },
+  {
+   "ligne": "legacy/room/room.c:2124",
+   "nom": "Îlot des douze bornes",
+   "condition_unites": "z >= 8.5 && z <= 13.5 && ((x <= 8.0 && x >= 1.4) || (x > -8.0 && x <= -1.4))",
+   "represente": "Les deux rangées de six bornes, dos à dos, et rien entre elles",
+   "en_metres": "z de −0,553 à 1,874 ; x de 0,680 à 3,883 et de −3,883 à −0,680"
+  },
+  {
+   "ligne": "legacy/room/room.c:2129",
+   "nom": "Double borne du mur ouest",
+   "condition_unites": "x <= -12.5 && z <= 13.72 && z >= 9.0",
+   "represente": "Les deux caissons COMING SOON contre le mur ouest",
+   "en_metres": "x ⩽ −6,068 ; z de −0,311 à 1,981"
+  },
+  {
+   "ligne": "legacy/room/room.c:2134",
+   "nom": "Borne centrale",
+   "condition_unites": "x >= -1.5 && x <= 1.5 && z >= -1.5 && z <= 1.5",
+   "represente": "Le caisson COMING SOON posé sur l'estrade",
+   "en_metres": "x de −0,728 à 0,728 ; z de −5,408 à −3,952"
+  },
+  {
+   "ligne": "legacy/room/room.c:2141",
+   "nom": "Mur est du hall, percé",
+   "condition_unites": "(z >= 7.0 || z <= 2.5) && x >= 14.0 && x <= 16.0",
+   "represente": "Le mur qui sépare le hall des sanitaires ; seule la bande z ]2,5 ; 7,0[ laisse passer",
+   "en_metres": "mur pour x de 6,796 à 7,767 ; passage libre de z −3,466 à −1,282, soit 2,184 m"
+  },
+  {
+   "ligne": "legacy/room/room.c:2146",
+   "nom": "Cloison intérieure des sanitaires",
+   "condition_unites": "x >= 18.0 && x <= 19.0 && z >= -0.5 && z <= 10.5",
+   "represente": "La cloison nord-sud du bloc sanitaire, pleine sur toute sa longueur",
+   "en_metres": "x de 8,738 à 9,223 ; z de −4,923 à 0,417"
+  },
+  {
+   "ligne": "legacy/room/room.c:2151",
+   "nom": "Cloison du salon",
+   "condition_unites": "x > 2.5 && x < 4.45 && z < 5.6",
+   "represente": "La cloison de lattes qui ferme le salon à l'ouest",
+   "en_metres": "x de 1,214 à 2,160 ; z < −1,961"
+  },
+  {
+   "ligne": "legacy/room/room.c:2156",
+   "nom": "Canapé, grand côté",
+   "condition_unites": "x > 4.4 && x < 11.0 && z < 4.2 && z > 0.9",
+   "represente": "Le retour long du canapé d'angle",
+   "en_metres": "x de 2,136 à 5,340 ; z de −4,243 à −2,641"
+  },
+  {
+   "ligne": "legacy/room/room.c:2161",
+   "nom": "Canapé, petit côté",
+   "condition_unites": "x > 4.4 && x < 7.2 && z < 0.9",
+   "represente": "Le retour court, jusqu'au mur sud",
+   "en_metres": "x de 2,136 à 3,495 ; z < −4,243"
+  },
+  {
+   "ligne": "legacy/room/room.c:2166",
+   "nom": "Table basse du salon",
+   "condition_unites": "x > 7.7 && x < 11.0 && z < 0.2 && z > -3.05",
+   "represente": "La table basse devant le canapé",
+   "en_metres": "x de 3,738 à 5,340 ; z de −6,161 à −4,583"
+  },
+  {
+   "ligne": "legacy/room/room.c:2171",
+   "nom": "Billard",
+   "condition_unites": "x <= -5.0 && x >= -13.5 && z <= 2.5 && z >= -2.5",
+   "represente": "La table de billard, hitbox rectangulaire alignée sur les axes",
+   "en_metres": "x de −6,553 à −2,427 ; z de −5,894 à −3,466"
+  },
+  {
+   "ligne": "legacy/room/room.c:2176",
+   "nom": "Enveloppe du bloc sanitaire",
+   "condition_unites": "x > 15.0 && (z < -2.6 || z > 12.0)",
+   "represente": "Les murs sud et nord des toilettes",
+   "en_metres": "x > 7,282 ; bloque z < −5,942 et z > 1,145"
+  },
+  {
+   "ligne": "legacy/room/room.c:2181",
+   "nom": "Cloison de fond des toilettes",
+   "condition_unites": "x > 21.0 && z < 9.0 && z > 0.5",
+   "represente": "La cloison nord-sud qui ferme les cabines : on ne peut jamais y entrer",
+   "en_metres": "x > 10,194 ; z de −4,437 à −0,311"
+  },
+  {
+   "ligne": "legacy/room/room.c:2186",
+   "nom": "Séparation hommes / femmes",
+   "condition_unites": "x > 18.0 && z > 4.5 && z < 5.5",
+   "represente": "La cloison est-ouest entre les deux blocs",
+   "en_metres": "x > 8,738 ; z de −2,495 à −2,010"
+  },
+  {
+   "ligne": "legacy/room/room.c:2191",
+   "nom": "Porte coulissante femmes",
+   "condition_unites": "z < 9.1 && z > 8.2 && x > toiletteFemme.x - 2.2",
+   "represente": "Le vantail mobile : porte fermée son seuil est à x = 18,0 ; porte ouverte à x = 20,8",
+   "en_metres": "bande z de −0,699 à −0,262 ; seuil x = 8,738 fermée, 10,097 ouverte"
+  },
+  {
+   "ligne": "legacy/room/room.c:2196",
+   "nom": "Porte coulissante hommes",
+   "condition_unites": "z < 1.4 && z > 0.4 && x > toiletteHomme.x - 2.2",
+   "represente": "Idem, côté hommes",
+   "en_metres": "bande z de −4,486 à −3,995 ; seuil x = 8,738 fermée, 10,097 ouverte"
+  },
+  {
+   "ligne": "legacy/room/room.c:2203",
+   "nom": "Limite sud",
+   "condition_unites": "z < -4.5",
+   "represente": "Le mur sud du hall",
+   "en_metres": "z < −6,865"
+  },
+  {
+   "ligne": "legacy/room/room.c:2206",
+   "nom": "Limite nord",
+   "condition_unites": "z > 35.2",
+   "represente": "Le fond du sas, derrière la porte extérieure",
+   "en_metres": "z > 12,407"
+  },
+  {
+   "ligne": "legacy/room/room.c:2209",
+   "nom": "Limite ouest",
+   "condition_unites": "x < -14.0",
+   "represente": "Le mur ouest du hall",
+   "en_metres": "x < −6,796"
+  },
+  {
+   "ligne": "legacy/room/room.c:2212",
+   "nom": "Limite est",
+   "condition_unites": "x > 22.8",
+   "represente": "Le mur est du bloc sanitaire",
+   "en_metres": "x > 11,068"
+  }
+ ],
+ "ouvertures": [
+  {
+   "nom": "Hall ↔ sas d'entrée",
+   "ou": "Trouée rectangulaire percée dans le pan coupé nord-est, avec jambages de 0,146 m et linteau.",
+   "unites": "z 17,148 à 19,868 ; x 11,835 à 10,582 sur le parement intérieur ; hauteur 0,101 à 4,901",
+   "metres": {
+    "debut_m": [
+     5.745,
+     0.0,
+     3.645
+    ],
+    "fin_m": [
+     5.137,
+     2.33,
+     4.965
+    ],
+    "largeur_diagonale_m": 1.453,
+    "hauteur_m": 2.33
+   },
+   "preuve": "`salle.obj`, faces l644 / l670 / l696 / l697 de `MUR_SAL_Cube.002` — elles ont six sommets chacune, et c'est la trouée qui les leur donne ; le linteau et les jambages sont les faces l731 à l734, matériau `haut_mur`.",
+   "collision": "`legacy/room/room.c:2116` et `:2119` ne laissent passer que la bande z 3,816 à 4,641 m, soit 0,825 m mesurés en z, contre 1,320 m en z (1,454 m sur la diagonale) pour la trouée géométrique."
+  },
+  {
+   "nom": "Hall ↔ bloc sanitaire",
+   "ou": "Baie sur toute la hauteur dans le mur est du hall.",
+   "unites": "z 1,254 à 8,295 ; épaisseur x 14,727 à 15,000 ; pleine hauteur",
+   "metres": {
+    "debut_m": [
+     7.149,
+     0.0,
+     -4.071
+    ],
+    "fin_m": [
+     7.282,
+     2.879,
+     -0.653
+    ],
+    "largeur_m": 3.418,
+    "hauteur_m": 2.879
+   },
+   "preuve": "`salle.obj`, faces l643 et l639 (les retours de mur qui s'arrêtent à z = 1,254 et reprennent à z = 8,295) et l714 / l719 (le parement x = 15,000 côté sanitaires).",
+   "collision": "`legacy/room/room.c:2141` ne laisse passer que z 2,5 à 7,0 unités, soit 2,184 m, centrés sur −2,374 m ; la baie géométrique, elle, est centrée sur −2,362 m. Le joueur dispose donc de 1,23 m de moins que ce qu'il voit."
+  },
+  {
+   "nom": "Corridor sanitaire ↔ toilettes HOMMES",
+   "ou": "Contournement par le SUD de la cloison x = 9,0. Il n'y a pas de porte : la cloison s'arrête avant le mur.",
+   "unites": "z de −2,995 (parement sud) à −0,150 (about de la cloison)",
+   "metres": {
+    "z_debut_m": -6.134,
+    "z_fin_m": -4.753,
+    "largeur_m": 1.381
+   },
+   "preuve": "`salle.obj`, faces l706 (about sud de la cloison, z = −0,150) et l715 (parement sud du bloc, z = −2,995).",
+   "collision": "`legacy/room/room.c:2146` (mur x 18…19 pour z −0,5…10,5) et `:2176` (z < −2,6 bloqué) laissent z de −5,942 à −4,923 m, soit 1,019 m."
+  },
+  {
+   "nom": "Corridor sanitaire ↔ toilettes FEMMES",
+   "ou": "Contournement par le NORD de la même cloison, symétrique du précédent.",
+   "unites": "z de 9,950 (about de la cloison) à 12,799 (parement nord)",
+   "metres": {
+    "z_debut_m": 0.15,
+    "z_fin_m": 1.533,
+    "largeur_m": 1.383
+   },
+   "preuve": "`salle.obj`, faces l704 (about nord, z = 9,950) et l717 (parement nord, z = 12,799).",
+   "collision": "`legacy/room/room.c:2146` et `:2176` laissent z de 0,417 à 1,145 m, soit 0,728 m."
+  },
+  {
+   "nom": "Porte coulissante FEMMES",
+   "ou": "Vantail de 1,456 m qui coulisse vers l'est de 1,359 m et se loge dans un coffre.",
+   "unites": "vantail x 18,7…21,7 fermé, 21,5…24,5 ouvert ; z 8,60…8,70 ; hauteur −0,05…3,85",
+   "metres": {
+    "z_m": -0.481,
+    "x_ferme_m": [
+     9.078,
+     10.534
+    ],
+    "x_ouvert_m": [
+     10.437,
+     11.893
+    ],
+    "hauteur_m": 1.869,
+    "course_m": 1.359
+   },
+   "preuve": "`legacy/room/room.c:162` (`toiletteFemme`), `:1591` (`GlDessinerQuad`, qui centre le quad sur `x` et l'étend de ±largeur/2), `:2977` (la course s'arrête à x ⩾ 23,0). Le coffre est modélisé : `Cube.012_Cube.005`, `Cube.015_Cube.009`, `Cube.016_Cube.022`.",
+   "collision": "`legacy/room/room.c:2191`. Porte ouverte, le passage utile ne fait que 0,874 m (x 9,223 à 10,097 m) : au-delà de 10,194 m la cloison de fond bloque de toute façon."
+  },
+  {
+   "nom": "Porte coulissante HOMMES",
+   "ou": "La même, symétrique, au sud.",
+   "unites": "z 1,00…1,10 ; reste identique",
+   "metres": {
+    "z_m": -4.17,
+    "x_ferme_m": [
+     9.078,
+     10.534
+    ],
+    "x_ouvert_m": [
+     10.437,
+     11.893
+    ],
+    "hauteur_m": 1.869,
+    "course_m": 1.359
+   },
+   "preuve": "`legacy/room/room.c:163` ; coffre `Cube.019_Cube.025`, `Cube.018_Cube.024`, `Cube.017_Cube.023`.",
+   "collision": "`legacy/room/room.c:2196`, mêmes valeurs."
+  },
+  {
+   "nom": "Allée centrale de l'îlot de bornes",
+   "ou": "Entre les deux groupes de trois, sur toute la profondeur du lot.",
+   "unites": "x −1,4 à 1,4 ; z 8,5 à 13,5",
+   "metres": {
+    "x_debut_m": -0.68,
+    "x_fin_m": 0.68,
+    "z_debut_m": -0.553,
+    "z_fin_m": 1.874,
+    "largeur_m": 1.36
+   },
+   "preuve": "`legacy/room/room.c:2124` : le lot est bloqué SAUF cette bande. Le panneau HARD/EASY est suspendu exactement au-dessus, x −0,469 à 0,501.",
+   "collision": "Aucune : c'est le seul passage nord-sud au centre du hall, et il est large de 1,36 m."
+  },
+  {
+   "nom": "Tour du comptoir",
+   "ou": "De part et d'autre du bloc d'accueil, jusqu'au mur nord.",
+   "unites": "comptoir bloqué x −6,0…6,0 pour z 19,5…25,0 ; mur arrière bloqué x −9,0…9,0 pour z 23,8…24,5",
+   "metres": {
+    "passage_ouest_x_m": [
+     -6.796,
+     -2.913
+    ],
+    "passage_est_x_m": [
+     2.913,
+     5.485
+    ],
+    "jusqu_a_z_m": 6.868
+   },
+   "preuve": "`legacy/room/room.c:2099` et `:2102`.",
+   "collision": "On peut passer derrière le comptoir par l'ouest (3,88 m de large) ou par l'est (2,57 m) et remonter jusqu'à z = 6,868 m, où le mur arrière arrête."
+  }
+ ],
+ "ecarts": [
+  {
+   "gravite": "bloquant",
+   "sujet": "Cloison du salon",
+   "en_2020": "Une cloison de lattes de bois noir, x 1,513 à 1,805 m, z −7,098 à −2,721 m, montant de 0,513 à 2,093 m, doublée d'un muret plein de −0,385 à 1,071 m (x 1,432 à 1,869 ; z −7,004 à −2,635). Elle part du mur sud et se termine au nord par le seul pilier libre de la salle. La collision la double sur x 1,214 à 2,160 pour tout z < −1,961.",
+   "aujourd_hui": "Rien. `boxes[pilier_salon]` est bien là, à 5 mm près, mais il ne tient plus rien.",
+   "ecart": "4,38 m de cloison et 2,09 m de hauteur absents. Le salon n'est plus une pièce : c'est un coin de hall avec un poteau isolé au milieu.",
+   "preuve": "`salle.obj` objets `PILONNE.005_Cube.044` (matériau `planche_mur`) et `Cube.013_Cube.029` ; `legacy/room/room.c:2151` ; `salle.room.json` `boxes[pilier_salon]`"
+  },
+  {
+   "gravite": "bloquant",
+   "sujet": "Les trois cloisons intérieures du bloc sanitaire",
+   "en_2020": "TROIS cloisons, et non une : (a) x = 8,999 m, z −4,753 à 0,150, pleine, haute de 2,185 m ; (b) x = 10,507 m, z −4,139 à −0,509, haute de 1,847 m ; (c) z = −2,311 m, x 9,017 à 11,960, haute de 1,850 m. Les toilettes de 2020 sont QUATRE pièces : deux sas de lavabos et deux blocs de cabines, reliés par deux portes coulissantes.",
+   "aujourd_hui": "Une seule, `walls[cloison_toilettes]` : x = 9,0, z −4,75 à 0,153 — c'est la (a), au centimètre. Les deux autres n'existent pas. Le bloc sanitaire est une seule pièce.",
+   "ecart": "Deux cloisons manquantes, de 3,63 m et 2,94 m de long, et les deux portes coulissantes de 1,456 m.",
+   "preuve": "`salle.obj` `MUR_SAL_Cube.002` faces l701–l707 pour (a), l708–l713 et l721–l725 pour (b), l682–l684, l718, l726–l727 pour (c) ; `legacy/room/room.c:2181` et `:2186` ; `salle.room.json` `walls[cloison_toilettes]`"
+  },
+  {
+   "gravite": "bloquant",
+   "sujet": "Estrade centrale, et la borne qui s'y pose",
+   "en_2020": "Estrade moquettée de 2,427 × 3,398 m, centrée sur (0 ; −4,680), haute de 0,228 m. La borne 15 (COMING SOON) est dessus, centrée sur (0 ; −4,544). Le moteur remonte la caméra de 0,291 m sur x −1,456…1,019 et z −6,379…−2,981.",
+   "aujourd_hui": "`boxes[estrade]` : 2,40 × 2,40 m centrée sur (0 ; −3,100), haute de 0,12 m, donc z −4,30 à −1,90. `cabinets[borne_classement]` est à z = −4,541 avec y = 0,12.",
+   "ecart": "Centre décalé de 1,580 m vers le nord, profondeur réduite de 0,998 m, hauteur de 0,108 m. Conséquence directe : la borne de classement commence 0,241 m au SUD du bord de l'estrade et repose sur du vide sur les deux tiers de sa profondeur. LA CAUSE EST LISIBLE dans le fichier : son commentaire dit « Il faisait 7 x 5 m, ce qui était une scène et non un marquage ». 7 × 5 sont les cotes en UNITÉS BLENDER (z −3,5…3,5 et x −2,5…2,5) ; en mètres l'estrade de 2020 fait 2,427 × 3,398. Elle a donc été rétrécie pour corriger une erreur qui n'existait pas — c'est très exactement la classe de faute que ce relevé sert à fermer.",
+   "preuve": "`salle.obj` `CENTRE_MACHINE_SOL_Cube` et `FLAPPY_BIRD_HARD.015_Cube.072` ; `legacy/room/room.c:2062` ; `salle.room.json` `boxes[estrade]`, `cabinets[borne_classement]`"
+  },
+  {
+   "gravite": "bloquant",
+   "sujet": "Le poste de CLASSEMENT n'est pas au même endroit",
+   "en_2020": "La borne 16 est un MONITEUR POSÉ SUR LE COMPTOIR : dalle x −0,412 à 0,412, y 1,449 à 1,910, z 5,091 à 5,184, regardée depuis z 4,301 à 4,786, face au nord. La place (0 ; −4,544) était occupée par la borne 15, un caisson COMING SOON injouable.",
+   "aujourd_hui": "`cabinets[borne_classement]` est un caisson d'arcade complet à (0 ; −4,541) : la place de la borne 15.",
+   "ecart": "9,68 m d'écart. Le classement a quitté le comptoir pour le centre de la salle, et le comptoir n'a plus d'écran.",
+   "preuve": "`salle.obj` `Cube.046_Cube.003`, `Cube.060_Cube.013`, `Cube.061_Cube.016`, `Cylindre.003` ; `legacy/room/room.c:2417` et `:1854` ; `salle.room.json` `cabinets[borne_classement]`"
+  },
+  {
+   "gravite": "bloquant",
+   "sujet": "Le commentaire de `borne_classement` se trompe de borne",
+   "en_2020": "En (0 ; −4,541) et regardant +z, il y a la borne 15, un caisson COMING SOON dont `detecterMachine` renvoie 0 (`legacy/room/room.c:2409-2413`) : elle est injouable. Le CLASSEMENT est la borne 16 : un moniteur posé sur le comptoir, dalle centrée sur (0 ; 1,679 ; 5,137), détecté depuis z 4,301…4,786 face au nord (`legacy/room/room.c:2417`), et sa cible de cadrage `cible[15]` vaut (0 ; 4,797) — juste devant le comptoir. Il y a bien SEIZE bornes et QUINZE caissons : le seizième poste n'est pas un caisson, c'est un écran sur un meuble.",
+   "aujourd_hui": "Le commentaire de `cabinets[borne_classement]` dit : « En 2020 il est en (0 ; -4,541) et regarde +Z ; `room.c` le declare comme la seizieme cible alors qu'il n'y a que quinze caissons. »",
+   "ecart": "Les deux moitiés de la phrase sont vraies séparément et fausses ensemble : (0 ; −4,541) est bien une position de 2020, mais c'est celle de la borne 15, pas du classement ; et le seizième rang n'est pas une incohérence du code, c'est le moniteur du comptoir. Tant que ce commentaire reste, la borne de classement restera au centre de la salle avec une justification historique qu'elle n'a pas.",
+   "preuve": "`legacy/room/room.c:171` (l'énumération), `:1854` (`cible[15]`), `:2409-2413` (la borne 15 renvoie 0), `:2417` (la zone du classement) ; `salle.obj` `FLAPPY_BIRD_HARD.015_Cube.072` contre `Cube.046_Cube.003` ; `salle.room.json` `cabinets[borne_classement]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Panneau HARD / EASY",
+   "en_2020": "Un panneau suspendu au-dessus de l'allée centrale, x −0,469 à 0,501, y 2,087 à 2,476, z 0,631 à 0,709, pendu par une tige qui monte à 2,953 m. Il est bicolore et porte deux mots sur chacune de ses deux faces. MESURE : le fond ROUGE est du côté x > 0 (côté EASY) et le fond BLEU du côté x < 0 (côté HARD) ; les LETTRES font l'inverse, rouges à x < 0 et bleues à x > 0.",
+   "aujourd_hui": "Absent. Aucun panneau, aucune couleur, aucune géométrie ne dit au joueur où est le côté difficile.",
+   "ecart": "L'unique signal spatial de la règle HARD/EASY a disparu. Et le champ qui aurait pu la porter ne la porte pas : `cabinets[].difficulty` vaut `normal` pour cinq des six bornes du côté EASY (4, 5, 6, 10, 11) et `easy` pour la seule 12.",
+   "preuve": "`salle.obj` `PANNEAU_EASY/HARD_Cube.035`, `Texte.004` à `Texte.007`, `Cylindre.005` ; `legacy/room/room.c:171` ; `salle.room.json` `cabinets[4..12].difficulty`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Rangée de bornes du mur ouest",
+   "en_2020": "DEUX caissons COMING SOON, écran vers l'est, centrés sur (−6,621 ; 0,419) et (−6,621 ; 1,359), emprise 1,180 m en x sur 0,889 m en z. Leur détection est désactivée : `legacy/room/room.c:2401` et `:2403` renvoient 0.",
+   "aujourd_hui": "SIX caissons, x = −6,48, z de −2,955 à 1,755 au pas de 0,942, jouant `pacman` et `piano`.",
+   "ecart": "Quatre bornes ajoutées ; les deux qui correspondent sont décalées de +0,395 m en z et +0,141 m en x.",
+   "preuve": "`salle.obj` `FLAPPY_BIRD_HARD.011_Cube.056` et `.012_Cube.057` ; `legacy/room/room.c:2394-2405` ; `salle.room.json` `cabinets[13..18]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Enseigne NINETEEN",
+   "en_2020": "Centrée sur x = 0, y 2,046 à 2,507, z 6,968 à 7,429 ; 2,546 × 0,461 m, texture `nineteen_name.jpg` émissive.",
+   "aujourd_hui": "`props[enseigne_nineteen]` à (−2,60 ; 2,47 ; 7,05), panneau de 3,20 × 0,80 m.",
+   "ecart": "Décalée de 2,600 m vers l'ouest, élargie de 0,654 m. Elle n'est plus dans l'axe du comptoir, qui lui est resté sur x = 0.",
+   "preuve": "`salle.obj` `Cube.059_Cube.007` ; `salle.room.json` `props[enseigne_nineteen]`, `props[bar_accueil]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Comptoir d'accueil",
+   "en_2020": "5,534 m en x sur 2,136 m en z, haut de 1,254 m, centré sur (0 ; 5,998), ADOSSÉ au mur nord : sa face arrière est en z 7,066, exactement le parement du mur. Trois panneaux publicitaires en façade, deux en joue.",
+   "aujourd_hui": "`props[bar_accueil]` : un caisson de 5,40 × 0,72 m centré sur (0 ; 6,05).",
+   "ecart": "Profondeur réduite de 1,416 m, et il n'est plus adossé : il reste 0,62 m de vide entre son dos et le mur.",
+   "preuve": "`salle.obj` `bar_accueil_Cube.030` et `Cube.047/039/032/035/042` ; `salle.room.json` `props[bar_accueil]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Billard",
+   "en_2020": "Table ALIGNÉE SUR LES AXES du modèle : tapis x −6,294 à −2,671, z −5,664 à −3,724, soit 3,623 × 1,940 m, centre (−4,483 ; −4,694). Sa hitbox est un rectangle droit, x −6,553 à −2,427, z −5,894 à −3,466.",
+   "aujourd_hui": "`props[billard]` à (−3,85 ; −4,75), lacet 12°.",
+   "ecart": "Centre décalé de 0,633 m vers l'est ; table pivotée de 12° alors que l'originale ne l'était pas.",
+   "preuve": "`salle.obj` `Billiard_Table`, matériaux `Table_de_billard` et `contour_billard` ; `legacy/room/room.c:2171` ; `salle.room.json` `props[billard]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Canapé et table basse du salon",
+   "en_2020": "Canapé d'angle en cuir rouge, emprise x 2,044 à 5,372, z −6,765 à −2,772, centre (3,708 ; −4,769) : il occupe l'angle sud-est du hall. Table basse x 3,882 à 5,339, z −6,007 à −4,550, centre (4,611 ; −5,279), plateau à 0,672 m.",
+   "aujourd_hui": "`props[canape]` à (5,60 ; −1,60) lacet 90° ; `props[table_basse]` à (5,60 ; −3,75) lacet 12°.",
+   "ecart": "Canapé décalé de 1,892 m à l'est et 3,169 m au nord ; table basse de 0,989 m à l'est et 1,529 m au nord. Le salon a quitté son angle.",
+   "preuve": "`salle.obj` `sofa_Cube.001`, `Cube.028_Cube.031`, `Cube.030_Cube.032`, `Cube.031_Cube.015` ; `legacy/room/room.c:2156`, `:2161`, `:2166` ; `salle.room.json` `props[canape]`, `props[table_basse]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Postes de radio",
+   "en_2020": "TROIS, tous interactifs, chacun avec sa zone de détection : (−5,880 ; 1,294 ; −3,882) au coin billard, (−0,852 ; 1,587 ; 5,154) au comptoir, (5,178 ; 1,004 ; −4,895) au salon.",
+   "aujourd_hui": "UN seul, `props[radio_murale]`, à (−7,06 ; 1,53 ; 1,90).",
+   "ecart": "Deux postes absents ; celui qui reste est à 5,90 m à plat du plus proche des trois emplacements de 2020.",
+   "preuve": "`salle.obj` `Plane.098_Plane.110`, `.001`, `.002`, matériau `Material.254` / `Radio.jpg` ; `legacy/room/room.c:2218-2251` ; `salle.room.json` `props[radio_murale]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Appliques murales",
+   "en_2020": "SIX. Quatre sur le mur sud à z = −6,874, x −4,782 / −1,653 / 1,652 / 4,809 ; deux sur le mur ouest à x = −6,924, z −3,973 et −0,670. Ampoule de 2,048 à 2,439 m.",
+   "aujourd_hui": "`lights[neon_mur_ouest]` (x −6,95 ; z −4,0 / 0,0 / 4,0) et `lights[neon_mur_est]` (x 6,95 ; z −2,0 / 2,0 / 6,0).",
+   "ecart": "Les deux appliques ouest sont reprises à 0,03 m et 0,67 m près, avec une troisième en plus. Les QUATRE du mur sud n'ont pas d'équivalent. Les trois du mur est n'existaient pas en 2020.",
+   "preuve": "`salle.obj` `sconce_02`, `.001` à `.005` ; `salle.room.json` `lights[neon_mur_ouest]`, `lights[neon_mur_est]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Affiches du mur sud",
+   "en_2020": "CINQ cadres identiques, y 1,172 à 2,143, z −7,201 à −7,104, centrés sur x −6,057 / −3,389 / −0,054 / 3,297 / 6,010.",
+   "aujourd_hui": "TROIS : `affiche_sud` (−3,20), `affiche_sud_b` (2,40), `affiche_sud_c` (4,60).",
+   "ecart": "Deux cadres absents (x −6,057 et x −0,054) ; les trois présents sont à 0,19 m, 0,90 m et 1,41 m de leurs homologues.",
+   "preuve": "`salle.obj` `Cube.001` à `Cube.005_Cube.075` à `.079` ; `salle.room.json` `props[affiche_sud*]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Affiches du mur ouest",
+   "en_2020": "DEUX cadres, x −7,190 à −7,093, y 1,172 à 2,143, centrés sur z −5,553 et −2,264.",
+   "aujourd_hui": "`affiche_ouest` (z −2,60) et `affiche_ouest_b` (z +0,90).",
+   "ecart": "Le cadre nord est repris à 0,34 m près ; celui de z −5,553 est absent ; celui de z +0,90 n'a pas d'original.",
+   "preuve": "`salle.obj` `Cube.044_Cube.004` et `Cube.045_Cube.010` ; `salle.room.json` `props[affiche_ouest]`, `props[affiche_ouest_b]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Équipement des toilettes",
+   "en_2020": "DEUX plans de lavabo en marbre de 1,940 m contre le mur est : hommes z −6,150 à −4,209, femmes z −0,413 à 1,529, chacun avec DEUX robinets. DEUX appareils sanitaires blancs, x 9,385 à 10,147, l'un en z −3,235…−2,417 (hommes), l'autre en z −2,198…−1,379 (femmes). Deux boutons poussoirs de 0,121 × 0,243 m sur la cloison, centrés sur z −0,111 (femmes) et −4,525 (hommes), à 1,477 m du sol.",
+   "aujourd_hui": "`props[lavabo_toilettes]` (un seul, 1,40 m, x 11,36…11,88 / z −3,00…−1,60), `props[robinet_toilettes]`, `props[cabine_toilettes]` (répété deux fois, à (9,60 ; −4,60) et (10,60 ; −4,60)), `props[porte_cabine_1]` et `[porte_cabine_2]`.",
+   "ecart": "Un plan de lavabo sur deux manquant, et celui qui reste est 2,88 m au nord du plan hommes de 2020. Les cabines ont reculé de 2,2 à 3,2 m vers le sud. Les deux boutons poussoirs, qui étaient le seul mode d'emploi des portes, n'ont pas d'équivalent.",
+   "preuve": "`salle.obj` `Cube.022_Cube.012`, `Cube.027_Cube.052`, `Cube.023` à `Cube.026`, `Cube.165_Cube.011`, `Cube.129_Cube.039`, `Cube.020_Cube.008`, `Cube.021_Cube.001` ; `salle.room.json` `props[lavabo_toilettes]`, `props[cabine_toilettes]`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Hauteur du sas",
+   "en_2020": "Le sas est PLUS BAS que le hall : 2,331 m sous plafond contre 2,879 m. Sa trouée dans le pan coupé est fermée par un LINTEAU à 2,330 m.",
+   "aujourd_hui": "`ceilings[plafond_sas]` est au même y = 3,1 que `ceilings[plafond]`, et la jonction hall/sas n'a aucune entrée dans `openings` : le passage monte jusqu'au plafond.",
+   "ecart": "0,55 m de retombée perdus, et un linteau de 2,33 m qui n'existe plus.",
+   "preuve": "`salle.obj` `Cube.048_Cube.006` (faces l222627 et l222642, plafond en y 4,898…5,103) et `MUR_SAL_Cube.002` faces l731–l734 ; `salle.room.json` `ceilings[plafond_sas]`, `walls[coquille]`"
+  },
+  {
+   "gravite": "bloquant",
+   "sujet": "Pan coupé nord-est supprimé — et la raison invoquée est fausse",
+   "en_2020": "Le pan coupé nord-est EXISTE dans le décor de 2020, et la porte du sas est une VRAIE trouée percée dedans, pas un trou dans la fonction de collision. Preuve : les quatre faces du mur diagonal (l644, l670, l696, l697 de `MUR_SAL_Cube.002`) ont SIX sommets chacune, et le sixième est là parce que la face contourne l'ouverture ; le tableau de la trouée est modélisé à part, faces l731 à l734, matériau `haut_mur` — deux jambages de 0,146 m et un linteau à 2,330 m. Le couloir de 2020 résout le problème géométrique ainsi : sa joue ouest suit le pan coupé, OBLIQUE, sur 1,32 m en z — de (5,284 ; 4,968) à (5,889 ; 3,643) en parements — avant de devenir parallèle à l'axe. Le couloir de 2020 est donc un contour polygonal ordinaire : SE (6,953 ; 3,643), NE (6,953 ; 12,735), NO (5,284 ; 12,735), puis l'oblique jusqu'à (5,889 ; 3,643), puis le mur sud jusqu'au SE. Largeur libre 1,669 m ; ses murs font 0,088 m, donc 1,756 m d'axe en axe — avec les 0,20 m du projet il faut 1,869 m d'axe en axe pour garder 1,669 m de libre.",
+   "aujourd_hui": "`walls[coquille]` va tout droit de (−4,203 ; 7,135) à (5,284 ; 7,135) : le pan coupé est remplacé par un mur nord et un angle droit. Le commentaire qui accompagne le changement affirme qu'« en 2020 le problème existait déjà et l'auteur l'avait tranché dans la fonction de collision, en supprimant purement le mur diagonal entre z 17,5 et 19,2 — la porte était un TROU dans le code, pas dans le décor ».",
+   "ecart": "La prémisse est fausse, et c'est mesurable : le décor de 2020 a bien son trou, avec jambages et linteau, à l'endroit exact où la collision en ouvre un. Le hall perd donc un de ses deux pans coupés symétriques — 5,06 m de mur en diagonale — pour un motif qui ne tient pas. La contrainte de construction invoquée (une bouche de couloir orientée au nord ne peut rencontrer la diagonale qu'en un point) se lève exactement comme 2020 l'avait levée : en donnant à la joue ouest du couloir les 1,32 premiers mètres en oblique.",
+   "preuve": "`salle.obj` `MUR_SAL_Cube.002` faces l644 / l670 / l696 / l697 (six sommets) et l731 à l734 (jambages et linteau) ; `Cube.048_Cube.006` faces l222621 et l222638 (les strips obliques du sol et du plafond du couloir) ; `salle.room.json` `walls[coquille].points`"
+  },
+  {
+   "gravite": "visible",
+   "sujet": "Une porte de toilettes que 2020 n'avait pas",
+   "en_2020": "La cloison x = 9,0 est PLEINE de z −4,753 à 0,150. On entre dans chaque bloc en la CONTOURNANT : 1,381 m de passage au sud, 1,383 m au nord.",
+   "aujourd_hui": "`walls[cloison_toilettes]` porte une ouverture `porte_toilettes` de 0,95 m en z −2,45 à −1,50, EN PLUS des deux contournements, qui sont eux conservés au centimètre.",
+   "ecart": "Un troisième passage là où il n'y en avait que deux. La circulation des sanitaires n'est plus celle de 2020, même si leurs murs le sont.",
+   "preuve": "`salle.obj` `MUR_SAL_Cube.002` faces l701 à l707 ; `legacy/room/room.c:2146` ; `salle.room.json` `walls[cloison_toilettes].openings`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Tracé des moulures",
+   "en_2020": "Sans objet : 2020 n'a ni plinthe, ni corniche, ni cimaise. Son habillage de mur est un empilement — soubassement de moquette noire de 0 à 1,056 m, fond sombre de 0,922 à 2,864 m, lattes de bois noir de 0,718 à 2,660 m devant ce fond, bandeau bordeaux de 1,896 à 2,867 m.",
+   "aujourd_hui": "`mouldings` (plinthes, corniche, cimaise) suivent un contour qui passe par x = ±9,65 et z = ±7,20.",
+   "ecart": "Le mur du hall est à x = ±7,215 et z = −7,135 / +7,135. Les moulures sont donc 2,435 m HORS du bâtiment à l'est et à l'ouest, et 0,065 m hors au sud. Ce tracé est celui de l'ancienne emprise 19,3 × 14,4, restée dans la prose du fichier.",
+   "preuve": "`salle.obj` (aucune moulure) ; `salle.room.json` `mouldings[*].points` comparés à `walls[coquille].points`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Zones sonores",
+   "en_2020": "Sans objet — 2020 n'en a pas — mais les objets qu'elles nomment sont mesurables : le billard occupe x −6,55…−2,43 / z −5,89…−3,47, les toilettes x 7,28…11,95 / z −6,13…1,53.",
+   "aujourd_hui": "`soundZones[toilettes]` couvre x −9,55…−6,20 / z −7,10…−3,30, et `soundZones[coin_billard]` x −9,55…−5,40 / z −3,20…0,60.",
+   "ecart": "Les deux zones sont restées sur l'ancien plan : la zone « toilettes » est au sud-OUEST alors que les toilettes sont à l'est, 13,5 m plus loin ; la zone « billard » est 4,1 m au nord du billard actuel.",
+   "preuve": "`salle.room.json` `soundZones[*]` comparés à `walls[coquille_sanitaires]` et `props[billard]`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Poutres de plafond",
+   "en_2020": "AUCUNE. Les seize matériaux nommés `poutre*` de `salle.mtl` servent tous des cadres d'affiche, sauf `marbre_poutre.001` qui sert le muret du salon. Vérifié objet par objet.",
+   "aujourd_hui": "`boxes[poutre]` et `boxes[poutre_5]`, 14,2 m et 10,5 m de long, à y = 2,70.",
+   "ecart": "Invention de la reconstruction. Le fichier le dit déjà lui-même (`salle.room.json` ligne 2930) ; je le confirme par la mesure. Bonne pour le bâti, mais qu'on ne peut pas justifier par la fidélité.",
+   "preuve": "`salle.mtl` (matériaux `poutre`, `poutre.001` à `.014`, `marbre_poutre.001`, `marbre_poutre.014`) et leurs porteurs dans `salle.obj`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "La prose du fichier contredite par ses propres données",
+   "en_2020": "Sans objet.",
+   "aujourd_hui": "Le champ `_plan` (`salle.room.json:7`) affirme que les toilettes sont « ici au sud-ouest sur 12,4 », que le bar est « ici à −2,60 », qu'il y a « ici deux [piliers], libres », et que l'emprise jouable « va de −9,65 à +9,65 et de −7,2 à +7,2 ».",
+   "ecart": "Les données du même fichier disent le contraire : toilettes à l'est sur 35,82 m² (`walls[coquille_sanitaires]`), bar à x = 0 (`props[bar_accueil]`), treize piliers dont douze engagés (`boxes[pilier_*]`), emprise jouable −7,115…11,85 et −7,035…12,64 (`room.playable`). La prose décrit un état antérieur au commit `90f3d9e`. Aucun effet sur le rendu — mais c'est exactement le genre de texte qui a produit l'inversion d'axes qu'on est en train de réparer.",
+   "preuve": "`assets/scene/salle.room.json:7` comparé à `walls`, `boxes`, `props` et `room.playable` du même fichier"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Point de départ du joueur",
+   "en_2020": "Les `#define` disent (6,068 ; 12,311), face au sud, dans le sas. Mais le binaire de 2020 ne démarre PAS là : `InitCamera` écrase ces valeurs sept lignes plus bas par px = −6,56, pz = 9,195632, angle = 0 — soit (−3,184 ; −0,216) face au NORD, c'est-à-dire exactement la cible de cadrage de la borne SHOOTER HARD, le nez sur l'écran.",
+   "aujourd_hui": "`playerStart` = (6,118 ; 11,95), lacet 270°, donc face au sud — c'est-à-dire la valeur des `#define` reculée de 0,36 m pour dégager la capsule du joueur du vantail.",
+   "ecart": "Le fichier actuel reprend l'INTENTION de 2020 à 0,05 m près, et non son comportement. C'est le bon choix, mais il faut savoir que ce n'est pas ce que voyait le joueur de 2020 au lancement.",
+   "preuve": "`legacy/room/room.c:96-98` (les `#define`) et `:1726-1731` (l'écrasement) ; `salle.room.json` `playerStart`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Objets de 2020 sans équivalent, et sans raison d'en avoir",
+   "en_2020": "Neuf cadres d'affiche en x 8,484…10,221 et z 3,581…12,014, plus un volume sans matériau en x 8,092…9,063 / z 3,632…4,953 : tous HORS du bâtiment, dans une bande à l'est du sas qu'aucun mur ne ferme. La dalle de plafond, elle, déborde de −10,387 à 16,530 en x et de −13,328 à 8,203 en z.",
+   "aujourd_hui": "Absents.",
+   "ecart": "Aucun. Je les signale pour que personne ne les « restaure » : ce sont des décors laissés hors champ, pas une pièce perdue.",
+   "preuve": "`salle.obj` `Cube.050` à `Cube.058`, `booleen.001_Cube.036`, `toit_Cube.033`"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Un défaut de 2020 à ne pas reproduire",
+   "en_2020": "La tige du luminaire du billard (matériau `support_lampe_billard`) monte jusqu'à y = 4,487 m, alors que la sous-face du plafond est à 2,879 m. Elle traverse le plafond sur 1,61 m.",
+   "aujourd_hui": "Sans objet.",
+   "ecart": "À signaler comme défaut d'origine, pas comme cote à reprendre.",
+   "preuve": "`salle.obj` `Billiard_Table`, groupe `support_lampe_billard` (y 4,881 à 9,344 unités)"
+  },
+  {
+   "gravite": "cosmetique",
+   "sujet": "Zone de remontée de caméra décalée de son estrade",
+   "en_2020": "L'estrade occupe x −1,214 à 1,214 ; la zone qui remonte la caméra de 0,291 m occupe x −1,456 à 1,019. Elle déborde de 0,242 m à l'ouest et manque 0,195 m à l'est : on monte sur l'estrade côté est sans que la caméra se lève.",
+   "aujourd_hui": "Sans objet : le moteur actuel ne fait pas de remontée scriptée.",
+   "ecart": "Défaut d'origine, mesuré pour mémoire.",
+   "preuve": "`legacy/room/room.c:2062` comparé à `salle.obj` `CENTRE_MACHINE_SOL_Cube`"
+  }
+ ],
+ "conformes": [
+  {
+   "sujet": "Coquille du hall, sauf son angle nord-est",
+   "constat": "Les lignes médianes du hall de 2020 tombent sur `walls[coquille]` à 1–4 mm près : x ±7,216 (fichier : ±7,215), z −7,138 / +7,132 (fichier : −7,135 / +7,135), retour de mur nord à z 2,535 (fichier : 2,539), départ du pan coupé ouest à x −6,329 (fichier : −6,329), extrémité mesurée à −4,194 (fichier : −4,203, symétrisé). Le pan coupé EST, mesuré à +4,212 / +6,329, n'est plus dans le fichier — voir l'écart correspondant au § 6.2."
+  },
+  {
+   "sujet": "Bloc sanitaire",
+   "constat": "Intérieur mesuré x 7,279 à 11,951, z −6,134 à 1,533, soit 4,672 × 7,667 m = 35,82 m². `walls[coquille_sanitaires]` déclare 7,279 à 11,952 et −6,131 à 1,536. Écart maximal 3 mm."
+  },
+  {
+   "sujet": "Baie des sanitaires",
+   "constat": "Trouée géométrique de 3,418 m entre z −4,071 et −0,653. Le fichier déclare 3,418 m entre −4,068 et −0,650, avec `head = 2,879` — la hauteur libre exacte de 2020."
+  },
+  {
+   "sujet": "Couloir d'entrée",
+   "constat": "Intérieur mesuré 1,669 × 9,092 m, x 5,284 à 6,953, z 3,643 à 12,735. Le fichier lui donne exactement cette largeur (`walls[coquille]` passe par x 5,284 et 6,953) et le mène à z 12,738. Son sol est partagé entre `floors[sol_hall]` jusqu'à z 7,20 et `floors[sol_sas]` au-delà ; la somme couvre la même chose. Écart maximal 3 mm."
+  },
+  {
+   "sujet": "Les treize piliers",
+   "constat": "Les treize `PILONNE` de 2020, convertis, tombent sur les treize `boxes[pilier_*]` à 5 mm près au maximum, section comprise : 0,4854 m mesurés, 0,486 déclarés. Douze sont engagés dans les murs, un est libre — celui du salon."
+  },
+  {
+   "sujet": "Les douze bornes de l'îlot",
+   "constat": "Les douze centres convertis tombent sur `cabinets[borne_arcade_1..12]` à 3 mm près, orientation comprise : rangée nord écran vers +z (lacet 0), rangée sud écran vers −z (lacet 180). Entraxe 0,942 m dans une rangée, 1,201 m dos à dos, allée centrale de 2,613 m entre les deux groupes de trois."
+  },
+  {
+   "sujet": "Affectation des jeux",
+   "constat": "Les douze jeux et leurs difficultés sont ceux de 2020, dans le même ordre et du même côté. Vérifié deux fois et indépendamment : par la texture d'écran de chaque caisson dans `salle.obj`, et par `detecterMachine()` croisée avec l'énumération de `legacy/room/room.c:171`."
+  },
+  {
+   "sujet": "Hauteur libre",
+   "constat": "2,879 m mesurés (sol en y = 0,100, sous-face de plafond en y = 6,030, unités). Le fichier déclare `head = 2,879` pour ses deux baies. `room.height` vaut 2,92, soit 4,1 cm de plus."
+  }
+ ]
+}

@@ -44,7 +44,12 @@ nineteen_add_tool(stepgen  stepgen.c)
 # salle de 2020 sous `salle-legacy.*` : les deux sortent du même binaire de jeu
 # avec les mêmes réglages de rendu, ce qui rend une différence d'image
 # attribuable — avec deux binaires elle ne l'est pas.
-nineteen_add_tool(roomgen roomgen.c geo_shapes.c geo_mesh.c geo_import.c gltf_write.c)
+# `reach_grid.c` est à part, et pas par goût du découpage : c'est le seul morceau
+# de `roomgen` qui soit éprouvable SANS salle. Le contrôle d'accessibilité se
+# vérifie sur une pièce scellée fabriquée exprès (`ns_test_reach`), ce qu'un
+# `roomgen` monolithique n'aurait permis qu'en écrivant une fausse description
+# complète — donc jamais.
+nineteen_add_tool(roomgen roomgen.c reach_grid.c geo_shapes.c geo_mesh.c geo_import.c gltf_write.c)
 target_include_directories(roomgen PRIVATE
     "${CMAKE_SOURCE_DIR}/engine/core"      # ns_math.h : ni SDL ni moteur, juste <math.h>
     "${CMAKE_SOURCE_DIR}/third_party/jsmn"

@@ -32,6 +32,7 @@
 #include "geo_import.h"
 #include "geo_shapes.h"
 #include "gltf_write.h"
+#include "reach_grid.h"
 #include "tool_json.h"
 
 #include <math.h>
@@ -233,12 +234,29 @@ typedef struct rg_floor {
  * `rg_cab_anchors` : la donnée existe une fois, à l'endroit où elle est écrite.
  */
 #define RG_MAX_WALLS 8
+/* Remonté ici pour la même raison que `RG_MAX_WALL_POINTS` : les baies font
+ * désormais partie du plan gardé, et le plan est déclaré avant les murs. */
+#define RG_MAX_WALL_OPENINGS 16
 typedef struct rg_wall_plan {
     char   name[64];
     ns_v2  points[RG_MAX_WALL_POINTS];
     size_t count;
     bool   closed;
     float  thickness;
+    float  height;
+
+    /*
+     * LES BAIES, gardées avec le plan.
+     *
+     * Elles ne servaient à aucun contrôle, et c'est exactement ce qui a laissé
+     * partir un joueur enfermé : un mur sans ses baies est un mur plein, et un
+     * contrôle qui ne connaît que les pleins ne peut pas dire par où l'on passe.
+     * Le format est celui que `geo_wall_run` consomme — même structure, mêmes
+     * abscisses cumulées le long de la polyligne — parce que deux lectures d'une
+     * même donnée finissent par diverger d'un décalage.
+     */
+    geo_opening openings[RG_MAX_WALL_OPENINGS];
+    size_t      opening_count;
 } rg_wall_plan;
 
 #define RG_MAX_SHELLS 8
@@ -671,29 +689,23 @@ static void check_lights_not_enclosed(const rg_builder *b)
  * Les coordonnées de plan suivent la convention de tout le fichier : `.x` est
  * X, `.y` est **Z**.
  */
+/*
+ * Les deux vivent dans `reach_grid.c`, et pas ici, pour une raison qui n'est pas
+ * de rangement : la règle du DEHORS s'en sert, elle a produit un faux positif
+ * réel — deux pièces mitoyennes déclarées incommunicables — et elle doit donc
+ * pouvoir s'éprouver sur des pièces fabriquées, sans salle et sans asset. Les
+ * réécrire ici en ferait une seconde version du théorème de Jordan, qui
+ * divergerait de l'autre sur un cas limite le jour où l'une des deux serait
+ * corrigée.
+ */
 static bool plan_inside(const ns_v2 *poly, size_t n, float x, float z)
 {
-    bool in = false;
-    for (size_t i = 0, j = n - 1; i < n; j = i++) {
-        if ((poly[i].y > z) != (poly[j].y > z)) {
-            const float t = (z - poly[i].y) / (poly[j].y - poly[i].y);
-            if (x < poly[i].x + t * (poly[j].x - poly[i].x)) in = !in;
-        }
-    }
-    return in;
+    return reach_point_in_polygon(poly, n, x, z);
 }
 
 static float plan_segment_distance(ns_v2 a, ns_v2 c, float x, float z)
 {
-    const float dx = c.x - a.x, dz = c.y - a.y;
-    const float len2 = dx * dx + dz * dz;
-    float t = 0.0f;
-    if (len2 > 1e-12f) {
-        t = ((x - a.x) * dx + (z - a.y) * dz) / len2;
-        t = ns_clampf(t, 0.0f, 1.0f);
-    }
-    const float px = a.x + t * dx - x, pz = a.y + t * dz - z;
-    return sqrtf(px * px + pz * pz);
+    return reach_point_segment_distance(a, c, x, z);
 }
 
 /*
@@ -1439,6 +1451,35 @@ static void check_grounded(const rg_builder *b)
 }
 
 /* ========================================================================== */
+/* LE CORPS DU JOUEUR, en un seul endroit                                     */
+/* ========================================================================== */
+
+/*
+ * Les cotes du personnage, recopiées de `room/room_camera.c` (lignes 58 à 63) où
+ * elles sont les DÉFAUTS de `personnage.rayon`, `personnage.taille` et
+ * `personnage.marche`.
+ *
+ * Pourquoi une copie plutôt qu'un partage : `tools/` ne dépend ni de SDL ni du
+ * moteur, c'est écrit en tête de `tools/CMakeLists.txt` et c'est ce qui permet de
+ * rejouer une conversion depuis n'importe quelle machine. Inclure
+ * `room_camera.h` ferait entrer SDL dans la chaîne d'assets pour trois flottants.
+ *
+ * Ce que la copie coûte, et il faut le dire : `nineteen.env` peut ÉLARGIR le
+ * joueur à l'exécution, et ces contrôles ne le sauront pas. Ils mesurent le
+ * joueur PAR DÉFAUT — celui avec lequel le jeu est livré, et le seul dont on
+ * puisse répondre au build. Un `personnage.rayon` porté à 40 cm est une décision
+ * de réglage, pas un état livrable.
+ *
+ * Deux contrôles s'en servent, et ce n'est pas un hasard : le couloir devant une
+ * borne (C-09) et le chemin qui y mène (C-10) mesurent le MÊME corps. Ils l'ont
+ * mesuré chacun de son côté pendant un palier, avec deux littéraux 0,32 — c'est
+ * ainsi qu'ils se seraient mis à parler de deux joueurs différents.
+ */
+#define RG_BODY_RADIUS 0.32f   /* personnage.rayon */
+#define RG_BODY_HEIGHT 1.82f   /* personnage.taille — le crâne, pas les yeux */
+#define RG_BODY_STEP   0.35f   /* personnage.marche — l'obstacle gravi sans saut */
+
+/* ========================================================================== */
 /* C-09 — on peut se tenir devant une borne                                   */
 /* ========================================================================== */
 
@@ -1467,7 +1508,7 @@ static void check_grounded(const rg_builder *b)
  * il n'y aura plus personne pour se souvenir que la question se posait.
  */
 #define RG_CLEARANCE_NEEDED 0.80f
-#define RG_CLEARANCE_HALF   0.32f   /* rayon du corps du joueur */
+#define RG_CLEARANCE_HALF   RG_BODY_RADIUS   /* le corps, pas un nombre à part */
 #define RG_CLEARANCE_LOW    0.30f
 #define RG_CLEARANCE_HIGH   1.80f
 
@@ -1596,6 +1637,538 @@ static void check_cabinet_clearance(const rg_builder *b)
     printf("  %zu borne(s) : %.2f m de couloir libre devant chacune, %zu défaut(s) "
            "connu(s) non corrigé(s)\n",
            b->cabinet_count, (double)RG_CLEARANCE_NEEDED, tolerated);
+}
+
+/* ========================================================================== */
+/* C-10 — on peut ALLER quelque part                                          */
+/* ========================================================================== */
+
+/*
+ * LE CONTRÔLE QUI MANQUAIT.
+ *
+ * La salle a été livrée avec son joueur ENFERMÉ. La description déclarait le sas
+ * d'entrée comme un contour FERMÉ, sans la moindre ouverture vers le hall ;
+ * `playerStart` était dedans. Le build a réussi, les trente-six tests sont
+ * passés, le paquet est parti, et le joueur a démarré scellé dans une boîte de
+ * 1,67 x 9,09 m avec dix-neuf bornes de l'autre côté de la brique.
+ *
+ * Aucun contrôle ne pouvait le voir, et pas par malchance : les neuf premiers
+ * regardent tous un OBJET — est-il dedans (C-01), se pénètre-t-il (C-02), est-il
+ * posé (C-05), a-t-il son couloir (C-09). Pas un ne regarde le VIDE entre eux,
+ * qui est pourtant la seule chose que le joueur habite. Une salle est un graphe
+ * de pièces avant d'être une liste de meubles.
+ *
+ * LA MESURE. Une grille en plan au pas de 5 cm, un remplissage par diffusion
+ * depuis `playerStart`, et une cellule n'est franchissable que si le CORPS y
+ * tient — c'est-à-dire si aucun obstacle n'est à moins de son rayon. C'est la
+ * collision du jeu réduite à deux dimensions : `room_camera_tick` glisse une
+ * capsule de `personnage.rayon`, rien de plus. Ce qui compte est ce qui BARRE :
+ *
+ *   - les murs GÉNÉRÉS, avec leurs baies. Une baie n'est un passage que si l'on
+ *     y entre debout — allège sous la hauteur de marche, linteau au-dessus du
+ *     crâne. Une fenêtre à 90 cm d'allège n'est pas une porte, et une trémie
+ *     qu'il faut franchir accroupi est une décision qui doit s'écrire ;
+ *   - les SOLIDES — boîtes, bornes, props — au triangle et non à la boîte
+ *     englobante, sur la seule tranche de hauteur que le corps occupe. Un tapis
+ *     de 8 mm ne barre rien, une poutre à 2,70 m passe au-dessus de la tête ;
+ *   - le DEHORS. Sans lui, le remplissage sortirait par la porte extérieure et
+ *     inonderait le trottoir : l'aire mesurée deviendrait celle du cadre de la
+ *     grille, et le contrôle rendrait un chiffre rassurant qui ne veut rien dire.
+ *     Est « dans le bâtiment » ce qui tombe dans l'un des contours fermés — le
+ *     hall, le bloc sanitaire, le sas.
+ *
+ * CE QU'IL NE VOIT PAS, dit ici plutôt que supposé. Il travaille en PLAN : une
+ * salle à deux niveaux reliés par un escalier lui apparaîtrait comme un seul
+ * plancher, et il déclarerait atteignable un étage qu'on ne peut pas monter. La
+ * salle n'a qu'un niveau — l'estrade se gravit d'un pas — donc la question ne se
+ * pose pas encore ; le jour où elle se posera, c'est ce paragraphe qu'il faudra
+ * venir contredire.
+ */
+
+/* Le pas. Cinq centimètres : la grille de la salle fait alors 200 000 cellules,
+ * ce qui se remplit en quelques dizaines de millisecondes, et un passage d'une
+ * porte standard y tient en une quinzaine de cellules. Au pas de 10 cm une porte
+ * de 64 cm n'en ferait plus que six, et le verdict deviendrait sensible à
+ * l'endroit où la grille tombe. */
+#define RG_REACH_CELL 0.05f
+
+/* La tranche de hauteur qu'occupe le corps. Sous la hauteur de marche on
+ * enjambe, au-dessus du crâne on passe dessous. Ce sont les cotes du joueur, pas
+ * des seuils choisis : voir le bloc « LE CORPS DU JOUEUR ». */
+#define RG_REACH_LOW  RG_BODY_STEP
+#define RG_REACH_HIGH RG_BODY_HEIGHT
+
+/*
+ * LE SEUIL D'AIRE, et sa justification — qui est une MESURE, pas une intuition.
+ *
+ * `room.playable` est une BOÎTE, et une boîte englobe beaucoup plus que le sol
+ * praticable : les deux pans coupés en retranchent près de 10 m², le sas et le
+ * bloc sanitaire l'étirent bien au-delà du hall, et le corps du joueur perd
+ * encore une bande de 32 cm le long de chaque mur et de chaque meuble. Une salle
+ * SAINE ne remplit donc jamais sa boîte, et un seuil haut serait absurde.
+ *
+ * Les trois chiffres qui fixent celui-ci ont été relevés sur CETTE salle, pour
+ * une boîte jouable de 373,1 m² :
+ *
+ *     salle réparée, on circule partout .............. 105,0 m²   28,1 %
+ *     enfermé dans le bloc sanitaire seul ............  17,8 m²    4,8 %
+ *     enfermé dans le sas — le défaut livré ..........   4,7 m²    1,3 %
+ *
+ * Dix pour cent tombe entre les deux mondes et pas au bord de l'un d'eux :
+ * presque trois fois sous la salle saine, deux fois au-dessus du plus grand
+ * enfermement possible ici, huit fois au-dessus de celui qui est parti en
+ * production. Le seuil ne prétend pas distinguer une salle bien meublée d'une
+ * salle vide — il n'en a pas les moyens et ce n'est pas son travail. Il sépare
+ * « on circule » de « on est enfermé », et ces deux-là ne sont pas voisins.
+ */
+#define RG_REACH_MIN_SHARE 0.10f
+
+/*
+ * L'ÉCHAPPATOIRE, et pourquoi c'est une variable d'environnement.
+ *
+ * Une option de ligne de commande se pose dans `assets/CMakeLists.txt`, c'est-à-
+ * dire dans un fichier VERSIONNÉ : elle se commet un soir de transition et
+ * désarme le contrôle pour tout le monde, sans que personne ne s'en aperçoive —
+ * ce qui est exactement l'état d'avant, avec un fichier de plus. Une variable
+ * d'environnement ne peut pas être commise. Elle débloque celui qui en a besoin,
+ * sur sa machine, pendant qu'il répare, et elle disparaît avec son terminal.
+ *
+ * Une valeur inconnue ARRÊTE l'outil plutôt que de retomber sur le défaut : un
+ * garde-fou qui s'arme sur une faute de frappe ne garde rien.
+ */
+static bool reach_warn_only(void)
+{
+    const char *value = getenv("NINETEEN_ACCESSIBILITE");
+    if (!value || !value[0]) return false;
+    if (strcmp(value, "avertissement") == 0) {
+        tool_warnf("NINETEEN_ACCESSIBILITE=avertissement : C-10 ne casse PAS le "
+                   "build. Le défaut est fatal ; ceci est une transition, pas un "
+                   "réglage.");
+        return true;
+    }
+    tool_fatalf("NINETEEN_ACCESSIBILITE vaut « %s », qui ne veut rien dire.\n"
+                "  La seule valeur acceptée est « avertissement ». Une variable "
+                "mal orthographiée qui retomberait en silence sur le défaut "
+                "laisserait croire qu'elle a été prise en compte.", value);
+    return false;
+}
+
+/* Une cible à atteindre : ce qui n'a aucun intérêt si l'on ne peut pas y aller. */
+typedef struct rg_reach_target {
+    const char *kind;    /* « borne », « point de vue », « zone sonore » */
+    char        name[64];
+    float       x, z;
+    /* Les zones sonores sont des VOLUMES : on n'exige pas un point précis, mais
+     * qu'une partie de la zone soit foulable. */
+    bool        is_box;
+    float       min_x, min_z, max_x, max_z;
+} rg_reach_target;
+
+#define RG_MAX_REACH_TARGETS (RG_MAX_CABINETS + 64)
+
+/* Les murs, avec leurs baies, versés dans la grille. Chaque mur se compose dans
+ * SON masque avant d'être versé : deux déclarations de mur suivent le même tracé
+ * dans cette salle, et percer directement dans la grille ouvrirait la baie de
+ * l'une dans le plein de l'autre. */
+static void reach_add_walls(reach_grid *g, const rg_builder *b, size_t *blind_openings)
+{
+    for (size_t w = 0; w < b->wall_plan_count; ++w) {
+        const rg_wall_plan *p = &b->wall_plans[w];
+        if (p->count < 2) continue;
+        const size_t nseg = p->closed ? p->count : p->count - 1;
+        const float half = p->thickness * 0.5f;
+
+        unsigned char *mask = reach_mask_new(g);
+
+        float cum[RG_MAX_WALL_POINTS + 1];
+        cum[0] = 0.0f;
+        for (size_t i = 0; i < nseg; ++i) {
+            const ns_v2 a = p->points[i];
+            const ns_v2 c = p->points[(i + 1) % p->count];
+            cum[i + 1] = cum[i] + ns_v2_len(ns_v2_sub(c, a));
+
+            /* On prolonge d'une demi-épaisseur aux JOINTURES, où le mur a un coin
+             * d'onglet plein, et de rien du tout aux extrémités libres — où il
+             * s'arrête vraiment, et où prolonger rétrécirait un passage de dix
+             * centimètres pour rien. */
+            const float cap_a = (p->closed || i > 0)        ? half : 0.0f;
+            const float cap_b = (p->closed || i + 1 < nseg) ? half : 0.0f;
+            reach_mask_segment(g, mask, a, c, half, cap_a, cap_b);
+        }
+
+        for (size_t k = 0; k < p->opening_count; ++k) {
+            const geo_opening *o = &p->openings[k];
+
+            /* Une baie n'est un passage que si l'on y entre DEBOUT. Le reste est
+             * une fenêtre, une trémie ou un passe-plat : cela laisse voir et
+             * entendre, pas circuler. */
+            if (o->sill > RG_REACH_LOW + 1e-4f || o->head < RG_REACH_HIGH - 1e-4f) {
+                if (blind_openings) (*blind_openings)++;
+                continue;
+            }
+
+            for (size_t i = 0; i < nseg; ++i) {
+                if (o->offset < cum[i] - 1e-4f
+                 || o->offset + o->width > cum[i + 1] + 1e-4f) continue;
+                const ns_v2 a = p->points[i];
+                const ns_v2 c = p->points[(i + 1) % p->count];
+                const ns_v2 dir = ns_v2_norm(ns_v2_sub(c, a));
+                const float local = o->offset - cum[i];
+                /* En travers, large : on est dans le masque de CE mur, et
+                 * déborder n'y atteint rien d'autre. Dans la longueur, juste. */
+                reach_mask_carve(g, mask,
+                                 ns_v2_add(a, ns_v2_scale(dir, local)),
+                                 ns_v2_add(a, ns_v2_scale(dir, local + o->width)),
+                                 half + g->cell);
+                break;
+            }
+        }
+
+        reach_grid_add(g, mask);
+        reach_mask_free(mask);
+    }
+}
+
+/* Les solides, au TRIANGLE, sur la seule tranche que le corps occupe. La boîte
+ * englobante aurait suffi pour un caisson droit ; elle enfle un meuble pivoté de
+ * la moitié de sa diagonale, et un couloir se referme vite comme ça. */
+static void reach_add_solids(reach_grid *g, const rg_builder *b)
+{
+    const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
+
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (s->tri_count == 0) continue;
+        if (s->bounds.max.y <= RG_REACH_LOW)  continue;   /* un tapis, une flaque */
+        if (s->bounds.min.y >= RG_REACH_HIGH) continue;   /* une poutre, un néon */
+
+        const geo_primitives *prim =
+            &TOOL_VEC_AT(&b->prim_blocks, geo_primitives, s->prim_block);
+        for (size_t k = 0; k < s->tri_count; ++k) {
+            const uint32_t *t = prim->storage + k * 3;
+            const float y0 = verts[t[0]].position[1];
+            const float y1 = verts[t[1]].position[1];
+            const float y2 = verts[t[2]].position[1];
+            float lo = y0, hi = y0;
+            if (y1 < lo) lo = y1;
+            if (y2 < lo) lo = y2;
+            if (y1 > hi) hi = y1;
+            if (y2 > hi) hi = y2;
+            if (hi <= RG_REACH_LOW || lo >= RG_REACH_HIGH) continue;
+
+            reach_grid_block_triangle(g,
+                ns_v2_make(verts[t[0]].position[0], verts[t[0]].position[2]),
+                ns_v2_make(verts[t[1]].position[0], verts[t[1]].position[2]),
+                ns_v2_make(verts[t[2]].position[0], verts[t[2]].position[2]));
+        }
+    }
+}
+
+/* Hors des contours fermés, il n'y a pas de sol : il y a la rue. Sans cette
+ * passe, le remplissage sortirait par la porte extérieure et mesurerait le
+ * trottoir — un grand chiffre parfaitement faux. */
+/*
+ * « DANS LE BÂTIMENT » N'EST PAS « DANS UN CONTOUR », et la différence a coûté
+ * un faux positif à ce contrôle.
+ *
+ * Le hall et le bloc sanitaire s'aboutent, et leurs lignes MÉDIANES ne
+ * coïncident pas : celle du hall est à x = 7,215, celle du bloc à x = 7,279. La
+ * bande de 6,4 cm entre les deux — une cellule et demie au pas de 5 cm — n'est
+ * strictement dans aucun des deux polygones. Bouchée, elle refermait la baie de
+ * 3,42 m qui relie les deux pièces, et C-10 déclarait le bloc sanitaire
+ * inatteignable alors qu'on y entre de plain-pied. Deux pièces mitoyennes ne
+ * pouvaient structurellement jamais communiquer.
+ *
+ * La règle juste vit dans `reach_grid_close_outside`, où elle s'éprouve sur deux
+ * pièces fabriquées ; ici il ne reste qu'à lui passer les contours fermés.
+ */
+static void reach_close_outside(reach_grid *g, const rg_builder *b)
+{
+    reach_contour contours[RG_MAX_SHELLS];
+    for (size_t c = 0; c < b->shell_count; ++c) {
+        const rg_wall_plan *sh = &b->wall_plans[b->shells[c]];
+        contours[c].points = sh->points;
+        contours[c].count = sh->count;
+        contours[c].thickness = sh->thickness;
+    }
+    reach_grid_close_outside(g, contours, b->shell_count);
+}
+
+static void check_reachable(const tool_json *doc, const tool_json_value *root,
+                            const rg_builder *b)
+{
+    const tool_json_value *start = tool_json_get(doc, root, "playerStart");
+    if (!start) {
+        tool_warnf("la description ne déclare pas « playerStart » : le contrôle "
+                   "d'accessibilité n'a rien vérifié. C'est le pire état d'un "
+                   "contrôle.");
+        return;
+    }
+    if (b->shell_count == 0) {
+        tool_warnf("aucun contour fermé dans « walls » : le contrôle "
+                   "d'accessibilité ne saurait pas où s'arrête le bâtiment, et "
+                   "mesurerait la rue. Rien n'a été vérifié.");
+        return;
+    }
+
+    float pmin[3], pmax[3];
+    const tool_json_value *playable = tool_json_get(doc, tool_json_get(doc, root, "room"),
+                                                    "playable");
+    if (!playable) tool_fatalf("la description ne déclare pas room.playable");
+    tool_json_get_vec3(doc, playable, "min", pmin, 0.0f);
+    tool_json_get_vec3(doc, playable, "max", pmax, 0.0f);
+
+    /* L'emprise de la grille : l'emprise jouable, tous les plans de murs et tous
+     * les solides. Large plutôt que juste — un mur laissé hors du cadre serait un
+     * mur qui ne barre rien, et la fuite passerait par là. */
+    float mnx = pmin[0], mxx = pmax[0], mnz = pmin[2], mxz = pmax[2];
+    for (size_t w = 0; w < b->wall_plan_count; ++w) {
+        const rg_wall_plan *p = &b->wall_plans[w];
+        for (size_t i = 0; i < p->count; ++i) {
+            if (p->points[i].x - p->thickness < mnx) mnx = p->points[i].x - p->thickness;
+            if (p->points[i].x + p->thickness > mxx) mxx = p->points[i].x + p->thickness;
+            if (p->points[i].y - p->thickness < mnz) mnz = p->points[i].y - p->thickness;
+            if (p->points[i].y + p->thickness > mxz) mxz = p->points[i].y + p->thickness;
+        }
+    }
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const ns_aabb *bb = &b->solids[i].bounds;
+        if (bb->min.x < mnx) mnx = bb->min.x;
+        if (bb->max.x > mxx) mxx = bb->max.x;
+        if (bb->min.z < mnz) mnz = bb->min.z;
+        if (bb->max.z > mxz) mxz = bb->max.z;
+    }
+
+    reach_grid grid;
+    reach_grid_init(&grid, mnx - 0.5f, mnz - 0.5f, mxx + 0.5f, mxz + 0.5f, RG_REACH_CELL);
+
+    size_t blind_openings = 0;
+    reach_add_walls(&grid, b, &blind_openings);
+    reach_add_solids(&grid, b);
+    reach_close_outside(&grid, b);
+    reach_grid_solve(&grid, RG_BODY_RADIUS);
+
+    /*
+     * LE PLAN, sur demande.
+     *
+     * « 33 cibles inatteignables » dit qu'il y a un trou, pas où il est. Trente
+     * secondes de regard sur un plan des poches valent une heure de lecture de
+     * coordonnées — c'est ainsi que la géométrie de ce contrôle a été vérifiée
+     * avant d'être crue. Un PGM parce que c'est six lignes et aucune dépendance ;
+     * la moindre visionneuse l'ouvre.
+     */
+    {
+        const char *dump = getenv("NINETEEN_ACCESSIBILITE_PGM");
+        FILE *img = (dump && dump[0]) ? fopen(dump, "wb") : NULL;
+        if (dump && dump[0] && !img) tool_warnf("impossible d'écrire %s", dump);
+        if (img) {
+            fprintf(img, "P2\n%d %d\n255\n", grid.nx, grid.nz);
+            /* Z décroissant : le nord en haut, comme sur le plan de 2020. */
+            for (int iz = grid.nz - 1; iz >= 0; --iz) {
+                for (int ix = 0; ix < grid.nx; ++ix) {
+                    const size_t k = reach_index(&grid, ix, iz);
+                    int shade = 0;                                   /* plein */
+                    if (!grid.solid[k]) {
+                        shade = grid.walkable[k]
+                              ? 60 + (grid.label[k] * 47) % 190      /* une teinte par poche */
+                              : 30;                                  /* le vide où le corps ne tient pas */
+                    }
+                    fprintf(img, "%d ", shade);
+                }
+                fprintf(img, "\n");
+            }
+            fclose(img);
+            tool_infof("plan des poches écrit dans %s", dump);
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Le départ                                                          */
+    /* ------------------------------------------------------------------ */
+    float sp[3];
+    tool_json_get_vec3(doc, start, "position", sp, 0.0f);
+    const int home = reach_grid_label_at(&grid, sp[0], sp[2]);
+    if (home < 0) {
+        tool_fatalf("« playerStart » est posé là où le CORPS du joueur ne tient "
+                    "pas (%.3f, %.3f).\n"
+                    "  Il faut %.2f m de dégagement autour du point de départ — "
+                    "c'est le rayon de la capsule que `room_camera_tick` fait "
+                    "glisser contre la géométrie.\n"
+                    "  Le joueur naîtrait dans un mur, ou coincé contre lui : la "
+                    "première image du jeu serait une texture vue de trop près.",
+                    (double)sp[0], (double)sp[2], (double)RG_BODY_RADIUS);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Les cibles                                                         */
+    /* ------------------------------------------------------------------ */
+    rg_reach_target targets[RG_MAX_REACH_TARGETS];
+    size_t target_count = 0;
+
+    for (size_t i = 0; i < b->cabinet_count && target_count < RG_MAX_REACH_TARGETS; ++i) {
+        rg_reach_target *t = &targets[target_count++];
+        memset(t, 0, sizeof *t);
+        t->kind = "borne";
+        snprintf(t->name, sizeof t->name, "%.63s", b->cabinets[i].name);
+        /* Le POINT DE JEU, pas le meuble : c'est là que la collision arrête le
+         * joueur, et c'est le seul endroit d'où la borne se joue. Une borne dont
+         * la façade est atteignable mais pas la place devant elle est un meuble
+         * qui montre une image. */
+        t->x = b->cabinets[i].player_anchor[0];
+        t->z = b->cabinets[i].player_anchor[2];
+    }
+
+    const tool_json_value *views = tool_json_get(doc, root, "captures");
+    const int view_count = tool_json_array_count(doc, views);
+    for (int i = 0; i < view_count && target_count < RG_MAX_REACH_TARGETS; ++i) {
+        const tool_json_value *e = tool_json_at(doc, views, i);
+        /* Une orbite tourne AUTOUR d'un centre et ne s'y tient jamais : celle de
+         * la salle est calée sur la borne centrale, donc dans un meuble. */
+        if (tool_json_get_bool(doc, e, "orbit", false)) continue;
+        rg_reach_target *t = &targets[target_count++];
+        memset(t, 0, sizeof *t);
+        t->kind = "point de vue";
+        tool_json_get_string(doc, e, "name", t->name, sizeof t->name);
+        float p[3];
+        tool_json_get_vec3(doc, e, "position", p, 0.0f);
+        t->x = p[0];
+        t->z = p[2];
+    }
+
+    const tool_json_value *zones = tool_json_get(doc, root, "soundZones");
+    const int zone_count = tool_json_array_count(doc, zones);
+    for (int i = 0; i < zone_count && target_count < RG_MAX_REACH_TARGETS; ++i) {
+        const tool_json_value *e = tool_json_at(doc, zones, i);
+        rg_reach_target *t = &targets[target_count++];
+        memset(t, 0, sizeof *t);
+        t->kind = "zone sonore";
+        tool_json_get_string(doc, e, "name", t->name, sizeof t->name);
+        float mn[3], mx[3];
+        tool_json_get_vec3(doc, e, "min", mn, 0.0f);
+        tool_json_get_vec3(doc, e, "max", mx, 0.0f);
+        t->is_box = true;
+        t->min_x = mn[0]; t->min_z = mn[2];
+        t->max_x = mx[0]; t->max_z = mx[2];
+        t->x = (mn[0] + mx[0]) * 0.5f;
+        t->z = (mn[2] + mx[2]) * 0.5f;
+    }
+
+    size_t unreachable = 0;
+    for (size_t i = 0; i < target_count; ++i) {
+        const rg_reach_target *t = &targets[i];
+        float hx = t->x, hz = t->z;
+        const int label = t->is_box
+            ? reach_grid_label_in_box(&grid, t->min_x, t->min_z, t->max_x, t->max_z, &hx, &hz)
+            : reach_grid_label_at(&grid, t->x, t->z);
+        if (label == home) continue;
+
+        unreachable++;
+        if (label < 0) {
+            fprintf(stderr, "  ✗ %s « %s » : AUCUNE cellule foulable %s "
+                            "(%.2f, %.2f)%s\n",
+                    t->kind, t->name[0] ? t->name : "?",
+                    t->is_box ? "dans la zone" : "à ce point",
+                    (double)t->x, (double)t->z,
+                    t->is_box ? " au centre de la zone" : "");
+        } else {
+            float e_min_x, e_min_z, e_max_x, e_max_z;
+            reach_grid_extent(&grid, label, &e_min_x, &e_min_z, &e_max_x, &e_max_z);
+            fprintf(stderr, "  ✗ %s « %s » : foulable en (%.2f, %.2f), mais dans "
+                            "une AUTRE poche que le départ — %.1f m², de "
+                            "(%.2f, %.2f) à (%.2f, %.2f)\n",
+                    t->kind, t->name[0] ? t->name : "?", (double)hx, (double)hz,
+                    (double)reach_grid_area(&grid, label),
+                    (double)e_min_x, (double)e_min_z, (double)e_max_x, (double)e_max_z);
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Ce qui n'est pas une erreur, et qui aurait fait gagner une journée  */
+    /* ------------------------------------------------------------------ */
+    const float home_area = reach_grid_area(&grid, home);
+    const float playable_area = (pmax[0] - pmin[0]) * (pmax[2] - pmin[2]);
+    const float share = playable_area > 1e-3f ? home_area / playable_area : 0.0f;
+
+    printf("  accessibilité : %.1f m² atteignables depuis le départ, soit %.1f %% "
+           "de l'emprise jouable déclarée (%.1f m²)\n",
+           (double)home_area, (double)(share * 100.0f), (double)playable_area);
+    printf("  %d poche(s) foulable(s) dans le bâtiment", grid.components);
+    if (grid.components > 1) {
+        printf(" — le départ est dans la n° %d :\n", home + 1);
+        for (int c = 0; c < grid.components; ++c) {
+            const float area = reach_grid_area(&grid, c);
+            /* Sous un demi-mètre carré, c'est le creux derrière un canapé, pas
+             * une pièce : les lister toutes noierait celle qui compte. */
+            if (area < 0.5f && c != home) continue;
+            float e_min_x, e_min_z, e_max_x, e_max_z;
+            reach_grid_extent(&grid, c, &e_min_x, &e_min_z, &e_max_x, &e_max_z);
+            printf("      n° %d%s : %6.1f m², de (%.2f, %.2f) à (%.2f, %.2f)\n",
+                   c + 1, c == home ? " (départ)" : "        ", (double)area,
+                   (double)e_min_x, (double)e_min_z, (double)e_max_x, (double)e_max_z);
+        }
+    } else {
+        printf("\n");
+    }
+    if (blind_openings) {
+        printf("  %zu baie(s) ne sont pas des passages (allège trop haute ou "
+               "linteau trop bas pour le corps) — vues, pas franchies\n",
+               blind_openings);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Verdict                                                            */
+    /* ------------------------------------------------------------------ */
+    const bool starved = share < RG_REACH_MIN_SHARE;
+    if (starved) {
+        fprintf(stderr, "  ✗ l'aire atteignable ne fait que %.1f %% de l'emprise "
+                        "jouable, pour %.0f %% attendus au minimum\n",
+                (double)(share * 100.0f), (double)(RG_REACH_MIN_SHARE * 100.0f));
+    }
+
+    if (unreachable || starved) {
+        /* Le grief, dit dans les termes de ce qui a été constaté — et jamais
+         * « 0 cible(s) inatteignable(s) », qui est ce qu'écrit un message
+         * assemblé au lieu d'être choisi. Une salle peut être un cul-de-sac sans
+         * qu'aucune cible n'y soit : c'est précisément le sas, qui ne contenait
+         * ni borne, ni point de vue, ni rien à atteindre. */
+        char grief[192];
+        if (unreachable && starved) {
+            snprintf(grief, sizeof grief,
+                     "%zu cible(s) inatteignable(s) depuis « playerStart », et "
+                     "l'aire atteignable est indigente", unreachable);
+        } else if (unreachable) {
+            snprintf(grief, sizeof grief,
+                     "%zu cible(s) inatteignable(s) depuis « playerStart »",
+                     unreachable);
+        } else {
+            snprintf(grief, sizeof grief,
+                     "le joueur est dans un cul-de-sac : %.1f m² atteignables, "
+                     "soit %.1f %% de l'emprise jouable",
+                     (double)home_area, (double)(share * 100.0f));
+        }
+
+        const char *plea =
+            "Une salle où l'on ne peut pas ALLER n'est pas une salle : c'est une "
+            "boîte avec des images dessus.\n"
+            "  Ce qui manque est presque toujours une BAIE — un contour fermé sans "
+            "ouverture est un mur tout autour, et rien d'autre ne le dit.";
+        if (reach_warn_only()) {
+            tool_warnf("%s — non fatal par NINETEEN_ACCESSIBILITE. %s", grief, plea);
+        } else {
+            tool_fatalf("%s.\n  %s\n"
+                        "  Pour voir OÙ sont les poches plutôt que de le déduire : "
+                        "NINETEEN_ACCESSIBILITE_PGM=/tmp/salle.pgm\n"
+                        "  Pendant une transition, et sur SA machine seulement : "
+                        "NINETEEN_ACCESSIBILITE=avertissement.",
+                        grief, plea);
+        }
+    } else {
+        printf("  %zu cible(s) atteignable(s) à pied depuis le départ : "
+               "%zu borne(s), les points de vue et les zones sonores\n",
+               target_count, b->cabinet_count);
+    }
+
+    reach_grid_release(&grid);
 }
 
 /* Comme `material_index`, mais rend −1 au lieu d'arrêter l'outil : pour les
@@ -1899,8 +2472,6 @@ static void parse_floors(rg_builder *b, const tool_json *doc, const tool_json_va
 /* Murs                                                                       */
 /* ========================================================================== */
 
-#define RG_MAX_WALL_OPENINGS 16
-
 static size_t read_plan_points(const tool_json *doc, const tool_json_value *e,
                                const char *key, ns_v2 *out, size_t max,
                                const char *owner)
@@ -1999,6 +2570,9 @@ static void parse_walls(rg_builder *b, const tool_json *doc, const tool_json_val
             w->count = point_count;
             w->closed = d.closed;
             w->thickness = d.thickness;
+            w->height = d.height;
+            for (int k = 0; k < op_count; ++k) w->openings[k] = openings[k];
+            w->opening_count = (size_t)op_count;
             if (d.closed && point_count >= 3) {
                 /*
                  * TOUS les contours fermés comptent, pas seulement le premier.
@@ -3746,6 +4320,10 @@ int main(int argc, char **argv)
     check_solid_overlaps(&b);
     check_grounded(&b);
     check_cabinet_clearance(&b);
+    /* Après C-09, et ce n'est pas indifférent : C-09 dit qu'on tient DEVANT une
+     * borne, C-10 dit qu'on peut y ARRIVER. Le second sans le premier laisserait
+     * croire qu'une borne encastrée dans sa voisine est jouable. */
+    check_reachable(&doc, root, &b);
     check_lights_not_enclosed(&b);
     check_fixture_naming(&b);
 

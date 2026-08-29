@@ -215,6 +215,29 @@ nineteen_set_warnings(ns_test_geo)
 nineteen_apply_sanitizers(ns_test_geo)
 add_test(NAME geo COMMAND ns_test_geo)
 
+# L'ACCESSIBILITÉ de la salle : le remplissage par diffusion sur lequel repose
+# C-10 (`check_reachable`, tools/roomgen.c).
+#
+# Il existe parce que la salle est partie en production avec son joueur ENFERMÉ —
+# un sas déclaré comme contour fermé, sans ouverture, et `playerStart` dedans. Le
+# build a réussi et les trente-six tests d'alors sont passés : aucun ne regardait
+# le VIDE entre les objets, qui est pourtant tout ce que le joueur habite.
+#
+# Ce test éprouve le contrôle sur les quatre cas qu'il doit départager — pièce
+# ouverte, pièce scellée, porte à la largeur exacte du corps, porte trop étroite
+# — et sur cinq alignements de grille, parce qu'un verdict qui dépendrait de
+# l'endroit où la grille tombe serait irreproductible et ne serait plus cru. Ni
+# GPU, ni asset, ni salle : de la géométrie posée à la main.
+add_executable(ns_test_reach test_reach.c "${CMAKE_SOURCE_DIR}/tools/reach_grid.c")
+target_include_directories(ns_test_reach PRIVATE
+    "${CMAKE_SOURCE_DIR}/tools" "${CMAKE_SOURCE_DIR}/engine/core")
+if(UNIX)
+    target_link_libraries(ns_test_reach PRIVATE m)
+endif()
+nineteen_set_warnings(ns_test_reach)
+nineteen_apply_sanitizers(ns_test_reach)
+add_test(NAME acces COMMAND ns_test_reach)
+
 # Les générateurs paramétriques, au-dessus du substrat.
 #
 # Les cas de refus valent autant que les invariants : `geo_wall_run` promet de
