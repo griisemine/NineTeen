@@ -1807,13 +1807,8 @@
         0.55
       ]
     },
-    {
-      "name": "applique_sas",
-      "at": [
-        8.9,
-        2.06,
-        5.85
-      ],
+    { "_": "AUDIT P-03. La source suit son luminaire : elle eclairait le trottoir, a 1,11 m au-dela du parement interieur, pendant que le sas restait au noir.", "name": "applique_sas",
+      "at": [5.27, 2.06, 6.40],
       "color": [
         1.0,
         0.8,
@@ -2796,6 +2791,23 @@
   "_props": "Le mobilier et le décor. Chaque objet est une composition de boîtes et de panneaux décrits DANS SON PROPRE REPÈRE, puis posé d'un bloc : on déplace un billard sans recalculer dix lignes. Ceux qui portent un « poi » deviennent des lieux d'interaction déclarés — le moteur les repérait jusqu'ici en cherchant des sous-chaînes dans les noms de nœuds du glTF.",
   "props": [
     {
+      "_": "AUDIT P-10. Les deux suspensions PENDAIENT DE RIEN : leurs chaines montaient en V et s'arretaient en l'air, a 1,12 m sous la sous-face du plafond pour le comptoir et 1,00 m pour le salon — mesure sur le maillage. Le fichier savait pourtant faire : `suspension_billard` declare explicitement son cable. Les deux autres suspensions sont des `model`, et roomgen interdit a un prop d'etre a la fois un modele et un empilement de morceaux : le cable a disparu avec la conversion en modele. Il revient donc comme prop a part, ce qui est exactement la manoeuvre deja employee pour les ampoules.",
+      "name": "cable_comptoir",
+      "at": [-4.35, 1.86, 6.20],
+      "yaw": 0.0,
+      "parts": [
+        { "type": "cylinder", "material": "bois_noir", "at": [0.0, 0.0, 0.0], "radius": 0.008, "height": 1.13, "sides": 8 }
+      ]
+    },
+    {
+      "name": "cable_salon",
+      "at": [6.55, 1.98, -3.90],
+      "yaw": 0.0,
+      "parts": [
+        { "type": "cylinder", "material": "bois_noir", "at": [0.0, 0.0, 0.0], "radius": 0.008, "height": 1.01, "sides": 8 }
+      ]
+    },
+    {
       "name": "billard",
       "at": [
         -7.2,
@@ -3019,12 +3031,8 @@
     },
     {
       "_": "Un vrai canapé, 2,73 m de large. Il remplace quatre boîtes qui se lisaient comme quatre boîtes.",
-      "name": "canape",
-      "at": [
-        6.1,
-        0.0,
-        -4.6
-      ],
+      "_at": "AUDIT P-05. Il etait EMPALE sur `pilier_est_1` : intersection reelle de 0,0412 m3, mesuree par colonnes verticales de deux centimetres, et 352 des 357 sommets presents dans la boite du pilier etaient dans son solide. `check_solid_overlaps` le signalait deja au build sans l'arreter, parce que la regle n'est fatale que si une borne est en cause. Decale d'un metre a l'est et de 55 cm au sud, il degage le pilier de 7,8 cm et la plante de 12.", "name": "canape",
+      "at": [7.10, 0.0, -5.15],
       "yaw": 205.0,
       "model": "cc0/models/sofa_03/sofa_03.gltf",
       "material": "canape_tissu",
@@ -3043,13 +3051,9 @@
       "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
     },
     {
-      "name": "bureau",
-      "at": [
-        8.2,
-        0.0,
-        5.7
-      ],
-      "yaw": 200.0,
+      "_at": "AUDIT P-01. Il etait DANS LA RUE : declare a x 8,2 z 5,7, son sommet le plus lointain tombait 1,24 m au-dela du parement interieur du pan coupe, donc 1,04 m sur le trottoir. Vu de l'exterieur, le comptoir d'accueil etait pose devant la porte. Et le sas — la premiere image du jeu, puisque playerStart est dedans — etait un volume de brique nue avec un pilier et rien d'autre. Ici il est contre le mur sud du sas, face a la porte, sans bloquer le passage vers le hall.", "name": "bureau",
+      "at": [7.10, 0.0, 4.75],
+      "yaw": 0.0,
       "parts": [
         {
           "type": "box",
@@ -3946,12 +3950,8 @@
       "material": "boombox_corps"
     },
     {
-      "name": "poubelle_sas",
-      "at": [
-        7.95,
-        0.0,
-        6.05
-      ],
+      "_at": "AUDIT P-02, trois defauts sur un objet. DEHORS : 0,80 m dans la rue. DANS LE BUREAU : 1520 de ses 2820 sommets etaient a l'interieur du solide du comptoir, dont la facade lui passait au travers. ET FLOTTANTE : le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero, soit onze centimetres d'air sous une poubelle metallique. Le calage vertical d'un modele appartient a `modelOffset`, pas a `at`.", "modelOffset": [0.0, -0.109, 0.0], "name": "poubelle_sas",
+      "at": [5.30, 0.0, 4.70],
       "yaw": 0.0,
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle"
@@ -4002,13 +4002,9 @@
       "material": "panneau_sol_mouille"
     },
     {
-      "name": "applique_sas",
-      "at": [
-        8.9,
-        2.15,
-        6.42
-      ],
-      "yaw": 180.0,
+      "_audit": "AUDIT P-03. Elle etait vissee sur la face EXTERIEURE du mur de brique, 1,38 m dehors, avec son ampoule et deux sources qui eclairaient le trottoir — et le sas etait au noir. Le commentaire ci-dessous raconte lui-meme l'origine : on l'avait poussee le long de X pour sortir de la capsule du joueur, et elle est sortie du batiment. Ici, mur ouest du sas, a 1,71 m du point de vue `entree` : hors de la capsule sans etre hors du mur.", "name": "applique_sas",
+      "at": [4.70, 2.15, 6.40],
+      "yaw": 90.0,
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
       "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur."
@@ -4027,11 +4023,7 @@
     },
     {
       "name": "ampoule_sas",
-      "at": [
-        8.9,
-        2.12,
-        6.3
-      ],
+      "at": [4.82, 2.12, 6.40],
       "yaw": 0.0,
       "parts": [
         {
@@ -4049,12 +4041,8 @@
       ]
     },
     {
-      "name": "ampoule_comptoir",
-      "at": [
-        -4.35,
-        1.68,
-        6.2
-      ],
+      "_at": "AUDIT P-11. Elle etait POSEE AU-DESSUS de son abat-jour : la masse du luminaire va de 1,545 a 1,60, et l'ampoule commencait a 1,680 — huit centimetres plus haut, entre les deux chaines. Une sphere de prop est posee sur son `at.y` (geo_revolve ecrit sinf(a)*r0 + r0), ce qui n'avait pas ete pris en compte.", "name": "ampoule_comptoir",
+      "at": [-4.35, 1.54, 6.20],
       "yaw": 0.0,
       "parts": [
         {
@@ -4085,11 +4073,7 @@
     },
     {
       "name": "ampoule_salon",
-      "at": [
-        6.55,
-        1.8,
-        -3.9
-      ],
+      "at": [6.55, 1.66, -3.90],
       "yaw": 0.0,
       "parts": [
         {
