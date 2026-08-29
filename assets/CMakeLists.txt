@@ -267,21 +267,87 @@ foreach(jeu shooter demineur pacman piano)
                             "${GEN}/materials/marquee_${jeu}${_map_orm}")
 endforeach()
 
+# LES DEUX ÉCRANS D'ATTENTE QUI MANQUAIENT.
+#
+# SPEC-ATMOSPHERE poste 14. Quatre bornes sur dix-neuf déclaraient un écran qui
+# dit que le jeu n'est pas là : `coming_soon.jpg` sur les deux bornes Pac-Man
+# (7 et 18), `chargement.png` sur les deux bornes Piano (8 et 15). Les deux jeux
+# sont jouables, et leurs enseignes le disaient déjà — c'est le poste 12 de
+# `DESIGN-SALLE.md` fait à moitié : les marquees ont été dessinés, les écrans
+# non.
+#
+# Même outil et même fonte que les enseignes, en mode `--neon` : un écran
+# d'attente n'est PAS un marquee. Un marquee est une plaque de plexiglas
+# rétro-éclairée, donc claire de bord à bord ; un tube cathodique est noir avec
+# du phosphore dessus. Mesuré sur les deux planches d'essai : le mode marquee
+# sort à 0,241 de réflectance, le mode neon à 0,191, et surtout son fond est
+# noir — or `gbuffer.frag` multiplie l'émissif par l'albédo texel par texel, si
+# bien qu'un fond clair ferait luire toute la dalle au lieu du seul lettrage.
+#
+# 1024 x 576, le 16:9 de la dalle et de la cible d'attract (512 x 288). Les deux
+# images retirées faisaient 1562 x 727 et 1024 x 512 : elles n'étaient pas au
+# format d'un écran, ce qui est un indice de plus qu'elles étaient des
+# bouche-trous.
+#
+# La teinte est celle de l'enseigne du même jeu : une borne se lit de loin par
+# sa couleur, et son écran ne doit pas la démentir.
+set(ECRAN_pacman "PAC-MAN" "1.0,0.84,0.16")
+set(ECRAN_piano  "PIANO"   "0.72,0.45,1.0")
+foreach(jeu pacman piano)
+    list(GET ECRAN_${jeu} 0 _titre)
+    list(GET ECRAN_${jeu} 1 _teinte)
+    set(_png "${GEN}/sideart/ecran_${jeu}.png")
+    add_custom_command(
+        OUTPUT  "${_png}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+        COMMAND marqueeart "--titre=${_titre}" "--teinte=${_teinte}" --neon
+                --width=1024 --height=576 "${_png}"
+        DEPENDS marqueeart
+        COMMENT "Écran d'attente : ecran_${jeu}.png"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/textures/ecran_${jeu}.png"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_png}" "${GEN}/scene/textures/ecran_${jeu}.png"
+        DEPENDS "${_png}"
+        VERBATIM
+    )
+    # `--strength=0.35`, comme l'enseigne au néon : la dalle est PLATE. Le relief
+    # déduit du contraste y graverait le lettrage en creux, or on regarde à
+    # travers une vitre bombée.
+    add_custom_command(
+        OUTPUT  "${GEN}/materials/ecran_${jeu}${_map_n}" "${GEN}/materials/ecran_${jeu}${_map_orm}"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.35 "${_png}" "${GEN}/materials"
+        DEPENDS texgen "${_png}"
+        COMMENT "Materiau PBR : ecran_${jeu}"
+        VERBATIM
+    )
+    list(APPEND MARQUEE_ART "${_png}" "${GEN}/scene/textures/ecran_${jeu}.png"
+                            "${GEN}/materials/ecran_${jeu}${_map_n}"
+                            "${GEN}/materials/ecran_${jeu}${_map_orm}")
+endforeach()
+
 
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-# +7 : l'art latéral, la sérigraphie de panneau, les quatre enseignes de borne
-# et l'enseigne au néon de la salle, dessinés juste au-dessus.
+# +9 : l'art latéral, la sérigraphie de panneau, les quatre enseignes de borne,
+# l'enseigne au néon de la salle et les DEUX ÉCRANS D'ATTENTE de Pac-Man et
+# Piano, dessinés juste au-dessus.
+#
+# Les deux écrans font sortir `coming_soon.jpg` et `chargement.png` du décor :
+# elles passent dans `retiredTextures` avec leur motif, et le total accordé ne
+# bouge donc que de +2, celui des deux planches ajoutées.
 #
 # Ce compte est un INVARIANT vérifié par roomgen, pas une constante décorative :
 # ajouter une texture sans le mettre à jour arrête le build avec « 84 pour 83
 # présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
 # c'est le comportement voulu — une texture générée que la salle n'emploie pas,
 # ou une texture employée qui n'est pas générée, sont deux pannes muettes.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 7")
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 9")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
