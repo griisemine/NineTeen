@@ -1779,8 +1779,8 @@
       "name": "applique_sas",
       "at": [
         8.9,
-        2.08,
-        5.97
+        2.06,
+        5.85
       ],
       "color": [
         1.0,
@@ -1796,7 +1796,7 @@
       "name": "suspension_comptoir",
       "at": [
         -2.6,
-        1.54,
+        1.4,
         6.1
       ],
       "color": [
@@ -1813,7 +1813,7 @@
       "name": "suspension_salon",
       "at": [
         6.55,
-        1.62,
+        1.48,
         -3.9
       ],
       "color": [

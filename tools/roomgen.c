@@ -76,6 +76,9 @@ typedef struct rg_light {
     bool  flicker;
     bool  ceiling_panel;
     float panel_size[2];    /* emprise du luminaire dans la trame, en mètres */
+    /* Assume d'être posée DANS un solide. Voir `check_lights_not_enclosed` : le
+     * cas normal est une erreur, celui-ci doit s'écrire. */
+    bool  inside_ok;
 } rg_light;
 
 /*
@@ -211,6 +214,24 @@ typedef struct rg_builder {
     rg_solid solids[RG_MAX_SOLIDS];
     size_t   solid_count;
 
+    /*
+     * La géométrie des LUMINAIRES, gardée à part pour un seul contrôle : une
+     * lumière posée à l'intérieur d'un solide fermé s'éteint elle-même.
+     *
+     * Ce n'est pas une hypothèse. Le lancer de rayons ne connaît pas les
+     * matériaux émissifs : un rayon d'ombre partant d'une surface vers la
+     * source doit traverser le verre de l'ampoule ou les barreaux de la cage
+     * qui l'entourent, et la lumière est intégralement occultée. Le défaut a
+     * coûté DEUX fois dans ce projet — la suspension du billard est restée
+     * ainsi pendant tout le développement, et l'applique du salon a refait la
+     * même chose trois heures après sa correction.
+     *
+     * Le symptôme est caractéristique et trompeur : monter l'intensité ne
+     * change RIEN. On croit alors à une lampe faible, et on cherche du côté de
+     * l'éclairement.
+     */
+    geo_mesh props_mesh;
+
     size_t triangle_count;
     ns_aabb bounds;
     /* Emprise du dernier objet émis. Sert aux props qui déclarent un point
@@ -337,6 +358,121 @@ static void check_fixture_naming(const rg_builder *b)
         }
     }
     if (checked) printf("  %zu luminaire(s) confronté(s) au lieu qu'ils nomment\n", checked);
+}
+
+/*
+ * Une lumière est-elle ENFERMÉE dans un solide ?
+ *
+ * Test de parité : on tire un rayon depuis la source et on compte les triangles
+ * qu'il traverse. Un nombre IMPAIR de croisements veut dire qu'on est à
+ * l'intérieur d'un volume fermé — c'est le théorème de Jordan, et il ne demande
+ * ni normales cohérentes ni maillage convexe.
+ *
+ * SEPT directions, et la majorité l'emporte. Un maillage de décor n'est pas
+ * toujours étanche : une cage a des ouvertures, un abat-jour est ouvert par le
+ * bas, et un rayon unique qui sortirait par un trou dirait « dehors » à tort.
+ * Sept rayons non alignés sur les axes rendent ce hasard-là très improbable
+ * dans les deux sens.
+ *
+ * Ce contrôle existe parce que le défaut a coûté DEUX fois dans cette seule
+ * séance, et qu'il est indétectable à la lecture : la lumière est déclarée, sa
+ * couleur est juste, son intensité est juste, et elle n'éclaire rien.
+ */
+static bool light_is_enclosed(const geo_mesh *m, ns_v3 p,
+                              int *odd_out, float *near_out)
+{
+    /* Sept directions non alignées sur les axes : un rayon axial longe trop
+     * souvent une arête de boîte, et donne alors un compte au hasard. */
+    static const ns_v3 dirs[7] = {
+        { 0.7137f,  0.4472f,  0.5395f }, { -0.6325f,  0.5477f,  0.5477f },
+        { 0.5164f, -0.7746f,  0.3651f }, { -0.4082f, -0.4082f,  0.8165f },
+        { 0.9129f,  0.2582f, -0.3162f }, { -0.3015f,  0.9045f, -0.3015f },
+        { 0.2673f, -0.5345f, -0.8018f },
+    };
+    const gltf_vertex *v = (const gltf_vertex *)m->verts.data;
+    const geo_tri *t = (const geo_tri *)m->tris.data;
+
+    int odd = 0;
+    float nearest = 1e9f;
+
+    for (int d = 0; d < 7; ++d) {
+        int hits = 0;
+        for (size_t k = 0; k < m->tris.count; ++k) {
+            const ns_v3 a = ns_v3_make(v[t[k].i[0]].position[0], v[t[k].i[0]].position[1],
+                                       v[t[k].i[0]].position[2]);
+            const ns_v3 bb = ns_v3_make(v[t[k].i[1]].position[0], v[t[k].i[1]].position[1],
+                                        v[t[k].i[1]].position[2]);
+            const ns_v3 c = ns_v3_make(v[t[k].i[2]].position[0], v[t[k].i[2]].position[1],
+                                       v[t[k].i[2]].position[2]);
+            float dist = 0.0f, bu = 0.0f, bv = 0.0f;
+            if (ns_ray_triangle(p, dirs[d], a, bb, c, 1e9f, &dist, &bu, &bv)) {
+                hits++;
+                if (dist < nearest) nearest = dist;
+            }
+        }
+        if (hits & 1) odd++;
+    }
+    if (odd_out) *odd_out = odd;
+    if (near_out) *near_out = nearest;
+
+    /*
+     * DEUX conditions, et il faut les deux.
+     *
+     * La parité seule ne suffit pas : le maillage d'un décor n'est pas étanche.
+     * Une ampoule de dix segments sur six anneaux a des pôles ouverts, une cage
+     * a des barreaux — mesuré sur la suspension du salon, une source posée
+     * exactement au centre de son ampoule donne sept comptes de 1, 1, 2, 0, 0,
+     * 1 et 4. Une majorité simple l'aurait déclarée DEHORS.
+     *
+     * On demande donc deux rayons impairs sur sept — le signe qu'on est dans
+     * quelque chose — ET qu'il y ait de la matière à moins de 25 cm, ce qui est
+     * la condition physique réelle : une source n'est occultée par son
+     * luminaire que si le luminaire est là. Un point isolé au milieu de la
+     * salle peut décrocher un compte impair par accident ; il n'aura pas de
+     * triangle à vingt-cinq centimètres.
+     */
+    return odd >= 2 && nearest < 0.25f;
+}
+
+/*
+ * Le contrôle, sur toutes les lumières.
+ *
+ * Il ARRÊTE le build. Un avertissement se noierait dans le journal, et le
+ * symptôme à l'exécution ne ressemble pas à sa cause : monter l'intensité d'une
+ * source enfermée ne change RIEN, ce qui envoie chercher du côté de
+ * l'éclairement. Ce défaut a coûté DEUX fois dans ce projet — la suspension du
+ * billard est restée ainsi tout le développement, et l'applique du salon a
+ * refait la même chose trois heures après sa correction.
+ *
+ * L'échappatoire est explicite : `"insideOk": true` pour qui sait ce qu'il
+ * fait. Mais il faut l'écrire.
+ */
+static void check_lights_not_enclosed(const rg_builder *b)
+{
+    if (b->props_mesh.tris.count == 0) return;
+    size_t checked = 0;
+    for (size_t i = 0; i < b->light_count; ++i) {
+        const rg_light *l = &b->lights[i];
+        if (l->inside_ok) continue;
+        checked++;
+        const ns_v3 p = ns_v3_make(l->position[0], l->position[1], l->position[2]);
+        int odd = 0;
+        float nearest = 0.0f;
+        if (light_is_enclosed(&b->props_mesh, p, &odd, &nearest)) {
+            tool_fatalf("la lumière « %s » est posée À L'INTÉRIEUR d'un luminaire "
+                        "(%.2f, %.2f, %.2f ; %d rayons sur 7 en parité impaire, "
+                        "matière à %.0f mm) — elle s'éteindra elle-même.\n"
+                        "  Le lancer de rayons ne connaît pas les matériaux "
+                        "émissifs : chaque rayon d'ombre devra traverser le verre "
+                        "ou la cage qui l'entoure.\n"
+                        "  Symptôme à l'exécution : monter l'intensité ne change "
+                        "RIEN. Poser la source SOUS ou DEVANT le luminaire.\n"
+                        "  Si c'est voulu, l'écrire : \"insideOk\": true.",
+                        l->name, (double)p.x, (double)p.y, (double)p.z,
+                        odd, (double)(nearest * 1000.0f));
+        }
+    }
+    if (checked) printf("  %zu lumière(s) vérifiée(s) hors de leur luminaire\n", checked);
 }
 
 static void check_solid_overlaps(const rg_builder *b)
@@ -1708,6 +1844,15 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
              * lieu que le moteur ne saurait plus rattacher à sa géométrie. */
             char name[64];
             instance_name(name, sizeof name, base_name, k, rep.count);
+            /* Copiée dans l'accumulateur AVANT `emit_object`, qui LIBÈRE le
+             * maillage qu'on lui passe. La première version copiait après :
+             * l'accumulateur restait vide et le contrôle des lumières enfermées
+             * ne vérifiait rien — le pire état possible pour un contrôle, et
+             * c'est un `tool_infof` temporaire qui l'a montré. */
+            {
+                const geo_xform id = GEO_XFORM_IDENTITY;
+                geo_mesh_append(&b->props_mesh, &placed, &id, -1);
+            }
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
             record_solid(b, name, RG_SOLID_PROP);
 
@@ -1937,7 +2082,7 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
          * disait. Une clé mal orthographiée casse maintenant le build. */
         static const char *const light_keys[] = {
             "name", "at", "color", "intensity", "range", "radius",
-            "flicker", "ceilingPanel", "panelSize", "repeat", NULL
+            "flicker", "ceilingPanel", "panelSize", "repeat", "insideOk", NULL
         };
         char what[128];
         snprintf(what, sizeof what, "lumière « %s »", base_name);
@@ -1955,6 +2100,7 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
         const float radius = tool_json_get_float(doc, e, "radius", 0.22f);
         const bool flicker = tool_json_get_bool(doc, e, "flicker", false);
         const bool panel = tool_json_get_bool(doc, e, "ceilingPanel", false);
+        const bool inside_ok = tool_json_get_bool(doc, e, "insideOk", false);
         float panel_size[2] = { 0.60f, 0.60f };
         tool_json_get_vec2(doc, e, "panelSize", panel_size, 0.60f);
 
@@ -1977,6 +2123,7 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
             l->source_radius = radius;
             l->flicker = flicker;
             l->ceiling_panel = panel;
+            l->inside_ok = inside_ok;
             l->panel_size[0] = panel_size[0];
             l->panel_size[1] = panel_size[1];
         }
@@ -2365,6 +2512,10 @@ int main(int argc, char **argv)
     tool_vec_init(&b.verts, sizeof(gltf_vertex));
     tool_vec_init(&b.meshes, sizeof(gltf_mesh));
     tool_vec_init(&b.prim_blocks, sizeof(geo_primitives));
+    /* L'accumulateur des luminaires : sans cette ligne, son tableau reste vide
+     * et le controle des lumieres enfermees ne verifie rien — ce qui est le
+     * pire etat possible pour un controle. */
+    geo_mesh_init(&b.props_mesh);
     b.bounds = ns_aabb_empty();
     for (size_t d = 0; d < texture_dir_count; ++d) b.texture_dirs[d] = texture_dirs[d];
     b.texture_dir_count = texture_dir_count;
@@ -2429,6 +2580,7 @@ int main(int argc, char **argv)
 
     /* Après tout le mobilier, avant d'écrire quoi que ce soit. */
     check_solid_overlaps(&b);
+    check_lights_not_enclosed(&b);
     check_fixture_naming(&b);
 
     if (b.meshes.count == 0) tool_fatalf("%s : la description ne produit aucun objet", in_path);
