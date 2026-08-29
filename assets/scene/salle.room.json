@@ -16,14 +16,14 @@
     "_playable": "Emprise de circulation, déclarée plutôt que déduite. Sans elle le moteur l'estime depuis l'union des bornes et des lumières élargie de 3 m, ce qui est une approximation nécessaire sur l'ancien modèle et inutile ici.",
     "playable": {
       "min": [
-        -9.65,
+        -7.115,
         0.0,
-        -7.2
+        -7.035
       ],
       "max": [
-        9.65,
+        11.85,
         2.92,
-        7.2
+        12.64
       ]
     }
   },
@@ -45,7 +45,7 @@
         0.92,
         0.84
       ],
-      "emissiveStrength": 0.10,
+      "emissiveStrength": 0.1,
       "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1."
     },
     {
@@ -129,7 +129,12 @@
       "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
       "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018.",
-      "baseColor": [0.30, 0.26, 0.13, 1.0]
+      "baseColor": [
+        0.3,
+        0.26,
+        0.13,
+        1.0
+      ]
     },
     {
       "name": "rail",
@@ -138,7 +143,12 @@
       "metallic": 0.3,
       "uvMetres": 0.3,
       "_": "Profilé en T du plafond. Toujours pas `noir.jpg`, qui est littéralement (0,0,0).",
-      "baseColor": [0.26, 0.24, 0.22, 1.0]
+      "baseColor": [
+        0.26,
+        0.24,
+        0.22,
+        1.0
+      ]
     },
     {
       "name": "plenum",
@@ -183,6 +193,7 @@
       "_": "Le bordeaux de 2020, remis. salle.mtl habille les treize PILONNE de bordeaux.jpg ; le commentaire qui affirmait ici qu'ils portaient « un matériau gris uni » était faux. La texture rapportée à leur place, pilonne_rouge.jpg, mesure en linéaire (0,500 ; 0,006 ; 0,020) : un rapport rouge/vert de 78, c'est-à-dire un rouge de signalisation. bordeaux.jpg vaut (0,0908 ; 0,0075 ; 0,0092), rapport 12. Pavée à 3,0 m et non 1,2 : l'image porte un léger dégradé, et un pilier de 3 m montrait donc deux coutures horizontales."
     },
     {
+      "_largeur": "14,20 et non 14,43 : la quatrieme repetition tombe a z = +2,4, donc son bord nord a 2,61 — juste au-dela du depart des pans coupes (2,539), ou le hall a deja commence a se retrecir. 14,20 passe partout ; 14,43 mordait le pan.",
       "name": "poutre",
       "texture": "painted_metal_shutter.jpg",
       "roughness": 0.86,
@@ -232,7 +243,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.18, 0.83, 0.36, 1.0]
+      "baseColor": [
+        0.18,
+        0.83,
+        0.36,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -241,7 +257,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.18, 0.36, 0.94, 1.0]
+      "baseColor": [
+        0.18,
+        0.36,
+        0.94,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -250,7 +271,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.13, 0.47, 0.23, 1.0]
+      "baseColor": [
+        0.13,
+        0.47,
+        0.23,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -259,7 +285,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.16, 0.16, 0.20, 1.0]
+      "baseColor": [
+        0.16,
+        0.16,
+        0.2,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -268,7 +299,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [1.00, 0.32, 0.13, 1.0]
+      "baseColor": [
+        1.0,
+        0.32,
+        0.13,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -277,7 +313,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.29, 0.47, 0.61, 1.0]
+      "baseColor": [
+        0.29,
+        0.47,
+        0.61,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -286,7 +327,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [1.04, 0.79, 0.09, 1.0]
+      "baseColor": [
+        1.04,
+        0.79,
+        0.09,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -295,7 +341,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.61, 0.22, 0.83, 1.0]
+      "baseColor": [
+        0.61,
+        0.22,
+        0.83,
+        1.0
+      ]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -304,7 +355,12 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [0.79, 0.18, 0.23, 1.0]
+      "baseColor": [
+        0.79,
+        0.18,
+        0.23,
+        1.0
+      ]
     },
     {
       "name": "caisson_flappy",
@@ -637,7 +693,12 @@
       "_atmo": "SPEC-ATMOSPHERE poste 4. Mesure : a 0,93 de saturation c'etait le materiau LE PLUS SATURE du decor, et il courait identique sur toute la silhouette des DIX-NEUF bornes. Un jonc de chant dessine le contour du meuble ; il n'a pas a etre la premiere chose que l'oeil trouve dans le cadre. Blanc casse a 0,22 de saturation : le contour reste, la criardise part.",
       "name": "borne_tmolding",
       "texture": "painted_panel.jpg",
-      "baseColor": [0.86, 0.83, 0.78, 1.0],
+      "baseColor": [
+        0.86,
+        0.83,
+        0.78,
+        1.0
+      ],
       "roughness": 0.52,
       "metallic": 0.0,
       "uvMetres": 0.1
@@ -960,7 +1021,12 @@
       "_atmo": "Le developpeur l'a signale en livrant : les assises sortaient CREME et non rouge. `cuir_rouge.jpg` est une texture pale, et un multiplicateur quasi gris [0,55 ; 0,50 ; 0,50] ne la teinte pas — il l'eclaircit. Trois grandes surfaces claires (deux bancs et le baby-foot) au meme endroit du hall, c'etait beaucoup de blanc dans une salle qu'on veut tamisee. Ce materiau ne sert qu'aux quatre bancs neufs, il se retouche donc sans effet de bord.",
       "name": "cuir",
       "texture": "cuir_rouge.jpg",
-      "baseColor": [0.66, 0.14, 0.13, 1.0],
+      "baseColor": [
+        0.66,
+        0.14,
+        0.13,
+        1.0
+      ],
       "roughness": 0.52,
       "uvMetres": 0.9
     },
@@ -1014,7 +1080,19 @@
       "emissiveStrength": 2.6,
       "fit": true
     },
-    {"_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le plus sature du decor, et une enseigne doit se detacher des murs chauds plutot que s'y ajouter. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.", "name": "enseigne", "texture": "nineteen_neon.png", "roughness": 0.30, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 2.4, "fit": true},
+    {
+      "_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le plus sature du decor, et une enseigne doit se detacher des murs chauds plutot que s'y ajouter. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.",
+      "name": "enseigne",
+      "texture": "nineteen_neon.png",
+      "roughness": 0.3,
+      "emissive": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "emissiveStrength": 2.4,
+      "fit": true
+    },
     {
       "name": "classement_fond",
       "texture": "background_classement.png",
@@ -1200,7 +1278,17 @@
     },
     {
       "_": "Le terrain du baby-foot. Il empruntait `billard_repere`, qui est le lisere creme du billard : un terrain de baby-foot est VERT, et c'est ce vert qui le distingue d'une table a langer vue de loin. Materiau a lui plutot que multiplicateur sur celui du billard : les deux meubles n'ont aucune raison de partager une teinte.",
-      "name": "babyfoot_terrain", "texture": "painted_panel.jpg", "roughness": 0.34, "metallic": 0.0, "uvMetres": 0.5, "baseColor": [0.10, 0.34, 0.14, 1.0]
+      "name": "babyfoot_terrain",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.34,
+      "metallic": 0.0,
+      "uvMetres": 0.5,
+      "baseColor": [
+        0.1,
+        0.34,
+        0.14,
+        1.0
+      ]
     },
     {
       "name": "billard_repere",
@@ -1564,17 +1652,17 @@
     {
       "name": "plafonnier_sas",
       "at": [
-        7.4,
-        2.74,
-        5.2
+        6.118,
+        2.2,
+        5.6
       ],
       "color": [
         1.0,
         0.8,
         0.56
       ],
-      "intensity": 52.0,
-      "range": 3.8,
+      "intensity": 78.0,
+      "range": 4.2,
       "radius": 0.3,
       "flicker": false,
       "ceilingPanel": true,
@@ -1582,15 +1670,23 @@
         0.9,
         0.45
       ],
-      "_": "Le sas. Chaud lui aussi : c'est la première lumière du jeu, elle doit donner envie d'entrer plutôt que de reculer."
+      "_": "TROIS plafonniers et non un : le sas de 2020 est un couloir de NEUF METRES, pas le reduit de trois qu'il etait ici. Un seul luminaire y laissait le joueur demarrer dans le noir complet, face a un mur — c'est la premiere image du jeu, et elle etait noire. Entraxe 3 m, a 2,20 m sous un plafond de sas mesure a 2,333.",
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          3.0
+        ]
+      }
     },
     {
       "_atmo": "SPEC-ATMOSPHERE poste 18, corrige APRES mesure. Le poste 7 de DESIGN-SALLE visait 55 a 70 de mediane pour les WC et n'a jamais atteint que 25 ; le poste 18 attribuait l'ecart a la seule portee, 3,6 au lieu de 4,4, et annoncait un facteur 2,4 a intensite inchangee. Mesure : la portee seule fait passer la mediane de 19 a 20,6. C'etait la moitie du diagnostic. En sondant l'intensite : 60 donne 36,7 et 100 donne 51,5 ; 120 pose la piece dans sa cible. Un bloc sanitaire est l'endroit le PLUS eclaire d'une salle d'arcade — c'est le seul ou l'on ne joue pas.",
       "name": "plafonnier_toilettes",
       "at": [
-        -7.9,
+        9.6,
         2.74,
-        -5.4
+        -2.3
       ],
       "color": [
         0.86,
@@ -1611,7 +1707,7 @@
     {
       "name": "neon_mur_ouest",
       "at": [
-        -8.9,
+        -6.95,
         2.58,
         -4.0
       ],
@@ -1637,7 +1733,7 @@
     {
       "name": "neon_mur_est",
       "at": [
-        8.9,
+        6.95,
         2.58,
         -2.0
       ],
@@ -1662,9 +1758,9 @@
     {
       "name": "applique_entree",
       "at": [
-        6.4,
+        5.4,
         2.05,
-        3.2
+        3.0
       ],
       "color": [
         1.0,
@@ -1690,9 +1786,9 @@
       "_intensite": "150 et non 76. La valeur de 76 avait été réglée à l'œil pendant que la lampe était occultée par sa propre ampoule : elle compensait un défaut qui n'existe plus. À 150 la table reçoit une vraie nappe de lumière, les billes portent une ombre, et seuls 0,3 % des pixels de la vue saturent.",
       "name": "suspension_billard",
       "at": [
-        -7.2,
+        -3.85,
         1.56,
-        -1.6
+        -4.75
       ],
       "color": [
         1.0,
@@ -1706,7 +1802,7 @@
       "_": "Le coin technique, où sont les caisses. Faible : on n'y joue pas, on doit seulement voir qu'il existe.",
       "name": "applique_technique",
       "at": [
-        -8.6,
+        -6.9,
         2.25,
         0.4
       ],
@@ -1808,8 +1904,14 @@
         0.55
       ]
     },
-    { "_": "AUDIT P-03. La source suit son luminaire : elle eclairait le trottoir, a 1,11 m au-dela du parement interieur, pendant que le sas restait au noir.", "name": "applique_sas",
-      "at": [5.27, 2.06, 6.40],
+    {
+      "_": "AUDIT P-03. La source suit son luminaire : elle eclairait le trottoir, a 1,11 m au-dela du parement interieur, pendant que le sas restait au noir.",
+      "name": "applique_sas",
+      "at": [
+        6.6,
+        2.06,
+        8.2
+      ],
       "color": [
         1.0,
         0.8,
@@ -1857,8 +1959,16 @@
     },
     {
       "name": "suspension_banc_ouest",
-      "at": [-2.40, 1.75, 2.45],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        -2.1,
+        1.75,
+        3.75
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 110.0,
       "range": 3.6,
       "radius": 0.1,
@@ -1867,16 +1977,32 @@
     },
     {
       "name": "suspension_banc_est",
-      "at": [2.40, 1.75, 2.45],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        2.1,
+        1.75,
+        3.75
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 110.0,
       "range": 3.6,
       "radius": 0.1
     },
     {
       "name": "suspension_babyfoot",
-      "at": [-4.00, 1.75, 2.80],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        -4.6,
+        1.75,
+        3.9
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 110.0,
       "range": 3.6,
       "radius": 0.1,
@@ -1884,8 +2010,16 @@
     },
     {
       "name": "suspension_banc_sud_o",
-      "at": [-4.00, 1.75, -6.40],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        -4.0,
+        1.75,
+        -6.4
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 110.0,
       "range": 3.6,
       "radius": 0.1,
@@ -1893,16 +2027,32 @@
     },
     {
       "name": "suspension_banc_sud_e",
-      "at": [3.00, 1.75, -6.40],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        3.0,
+        1.75,
+        -6.4
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 110.0,
       "range": 3.6,
       "radius": 0.1
     },
     {
       "name": "suspension_monnayeur",
-      "at": [0.95, 1.90, 6.55],
-      "color": [1.0, 0.78, 0.50],
+      "at": [
+        3.75,
+        1.9,
+        6.05
+      ],
+      "color": [
+        1.0,
+        0.78,
+        0.5
+      ],
       "intensity": 70.0,
       "range": 2.8,
       "radius": 0.1,
@@ -2050,69 +2200,84 @@
   "_sols": "Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement.",
   "floors": [
     {
+      "_": "Le hall, au plan de 2020 : presque carré, 14,43 x 14,27. Le rectangle déborde légèrement le polygone — les murs le recouvrent, et trois rectangles DISJOINTS valent mieux qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur.",
       "name": "sol_hall",
       "material": "sol",
       "centre": [
-        2.05,
+        0.0,
         0.0
       ],
       "size": [
-        18.1,
-        16.2
+        14.6,
+        14.4
       ],
       "y": 0.0
     },
     {
-      "name": "sol_couloir",
-      "material": "sol",
-      "centre": [
-        -9.05,
-        2.05
-      ],
-      "size": [
-        4.1,
-        12.1
-      ],
-      "y": 0.0
-    },
-    {
+      "_": "Le bloc sanitaire, à l'EST comme en 2020 et non au sud-ouest : x de 7,279 à 11,952, z de -6,131 à 1,536, soit 35,8 m2 — presque trois fois les 12,4 m2 qu'il occupait ici.",
       "name": "sol_toilettes",
       "material": "sol_toilettes",
       "centre": [
-        -9.05,
-        -6.05
+        9.6155,
+        -2.2975
       ],
       "size": [
-        4.1,
-        4.1
+        4.672,
+        7.667
+      ],
+      "y": 0.0
+    },
+    {
+      "_": "Le SAS, un couloir de neuf mètres qui monte plein nord depuis le pan coupé nord-est jusqu'à la porte extérieure. C'est là que le joueur de 2020 commençait sa partie, à la porte, tourné vers la salle.",
+      "name": "sol_sas",
+      "material": "sol",
+      "centre": [
+        6.1185,
+        8.192
+      ],
+      "size": [
+        1.669,
+        9.092
       ],
       "y": 0.0
     }
   ],
   "walls": [
     {
+      "_": "LE POURTOUR DU HALL, repris du plan de 2020 et mesuré sur salle.obj.\nIl faisait 19,30 x 14,40 m ici, presque deux fois plus large que profond. Le hall d'origine est PRESQUE CARRÉ : 14,43 x 14,27, soit 188,0 m2 contre 271,7. L'erreur venait de DESIGN-SALLE, où « 19,3 » et « 14,4 » désignent deux volumes DIFFÉRENTS — la profondeur de collision du hall PLUS le sas de 9 m d'un côté, la largeur de collision du hall seul de l'autre — puis ont été attribués l'un à X et l'autre à Z. La coïncidence qui a rendu la faute invisible : la profondeur réelle du hall vaut 14,4024 m, donc cette moitié-là était juste au centimètre.\nVérifié indépendamment : l'objet de murs de l'OBJ s'étend sur 19,31 m en X, ce qui est le hall (14,43) PLUS le bloc sanitaire est (4,67). Les deux mesures se recoupent.\nDEUX pans coupés symétriques et non un, de pente 0,462 — l'actuel en avait un, deux fois plus incliné. Les sommets 5 et 6 valent -4,194 et +4,212 dans le fichier d'origine ; la symétrisation à +-4,203 est le seul arrondi appliqué.",
       "name": "coquille",
-      "_": "Le pourtour, avec son pan coupé au nord-est — repris du mur en diagonale de 2020 — qui devient l'entrée.",
       "points": [
         [
-          -9.65,
-          -7.2
+          7.215,
+          -7.135
         ],
         [
-          -9.65,
-          7.2
+          -7.215,
+          -7.135
         ],
         [
-          6.173,
-          7.2
+          -7.215,
+          2.539
         ],
         [
-          9.65,
-          3.644
+          -6.329,
+          2.539
         ],
         [
-          9.65,
-          -7.2
+          -4.203,
+          7.135
+        ],
+        [
+          4.203,
+          7.135
+        ],
+        [
+          6.329,
+          2.539
+        ],
+        [
+          7.215,
+          2.539
         ]
       ],
       "closed": true,
@@ -2121,66 +2286,147 @@
       "materialReveal": "beton",
       "openings": [
         {
+          "_": "Dans le pan coupé nord-est, par où le sas s'aboute. L'offset court le long du PÉRIMÈTRE depuis le premier sommet : 40,88 tombe bien dans le segment 6->7, qui est ce pan coupé.",
           "name": "porte_entree",
-          "offset": 31.51,
-          "width": 2.4,
+          "offset": 40.88,
+          "width": 1.453,
           "sill": 0.0,
-          "head": 2.3,
-          "_": "Recalculée : l'offset court le long du PÉRIMÈTRE, et n'avait pas suivi le rétrécissement de la salle — la porte d'entrée s'était retrouvée au milieu du mur est."
+          "head": 2.33
+        },
+        {
+          "_": "La baie du bloc sanitaire, dans le mur est, de z = -0,650 a z = -4,068.",
+          "name": "baie_sanitaires",
+          "offset": 47.6,
+          "width": 3.418,
+          "sill": 0.0,
+          "head": 2.879
+        }
+      ],
+      "_ordre": "« coquille » EN PREMIER, et ce n'est pas cosmetique : `check_cabinet_clearance` mesure le degagement contre LE premier contour ferme. Avec le bloc sanitaire en tete, il mesurait les bornes de l'ilot contre un mur situe a dix metres et annoncait « 0,01 m de degagement » sur une borne parfaitement degagee. Le controle des sorties, lui, sait deja tenir compte des trois contours."
+    },
+    {
+      "_": "LE BLOC SANITAIRE, à l'EST comme en 2020 : x de 7,279 à 11,952, z de -6,131 à 1,536, soit 35,8 m2. C'est un POURTOUR a part entiere et pas seulement un sol : `check_inside_shell` teste contre les murs, et un volume sans murs n'existe pas pour lui — il rejetait le lavabo comme s'il etait dans la rue. Le mur ouest de ce bloc est mitoyen du mur est du hall, perce par `baie_sanitaires`.",
+      "name": "coquille_sanitaires",
+      "points": [
+        [
+          7.279,
+          1.536
+        ],
+        [
+          11.952,
+          1.536
+        ],
+        [
+          11.952,
+          -6.131
+        ],
+        [
+          7.279,
+          -6.131
+        ]
+      ],
+      "closed": true,
+      "materialInner": "mur_toilettes",
+      "materialOuter": "mur_exterieur",
+      "materialReveal": "beton",
+      "openings": [
+        {
+          "_": "Face a la baie du hall.",
+          "name": "baie_sanitaires_int",
+          "offset": 12.34,
+          "width": 3.418,
+          "sill": 0.0,
+          "head": 2.879
         }
       ]
     },
     {
-      "name": "cloison_entree",
-      "_": "Le couloir d'entrée, qui manquait. Une cloison en L ferme le nord-est : on entre par le pan coupé, on longe, on tourne, et la salle se découvre d'un coup. C'est ce qui donne le confinement — plus sûrement qu'un plafond bas, et sans rien coûter au rendu.",
+      "_": "LE SAS : un couloir de 9,09 m sur 1,669, plafond a 2,333 m, qui monte plein nord depuis le pan coupe nord-est jusqu'a la porte exterieure. La position de depart du jeu de 2020 y est, a la porte, tournee vers la salle.",
+      "name": "coquille_sas",
       "points": [
         [
-          4.6,
-          7.2
+          5.284,
+          3.646
         ],
         [
-          4.6,
-          4.2
+          5.284,
+          12.738
         ],
         [
-          9.65,
-          4.2
+          6.953,
+          12.738
+        ],
+        [
+          6.953,
+          3.646
+        ]
+      ],
+      "closed": true,
+      "materialInner": "mur",
+      "materialOuter": "mur_exterieur",
+      "materialReveal": "beton",
+      "openings": [
+        {
+          "_": "La porte exterieure, 1,214 x 2,139 m au seuil z = 12,755.",
+          "name": "porte_exterieure",
+          "offset": 9.32,
+          "width": 1.214,
+          "sill": 0.0,
+          "head": 2.139
+        },
+        {
+          "_": "L'about sur le pan coupe du hall.",
+          "name": "about_hall",
+          "offset": 18.2,
+          "width": 1.453,
+          "sill": 0.0,
+          "head": 2.33
+        }
+      ]
+    },
+    {
+      "_": "Les deux joues du sas, de part et d'autre du couloir de 1,669 m. Elles montent du pan coupé nord-est jusqu'à la porte extérieure.",
+      "name": "cloison_entree",
+      "points": [
+        [
+          5.284,
+          3.646
+        ],
+        [
+          5.284,
+          12.738
+        ],
+        [
+          6.953,
+          12.738
+        ],
+        [
+          6.953,
+          3.646
         ]
       ],
       "closed": false,
       "materialInner": "mur",
-      "materialOuter": "mur",
+      "materialOuter": "mur_exterieur",
       "materialReveal": "beton",
-      "openings": [
-        {
-          "name": "passage_hall",
-          "offset": 1.2,
-          "width": 1.4,
-          "sill": 0.0,
-          "head": 2.3
-        }
-      ]
+      "openings": []
     },
     {
+      "_": "Le refend du bloc sanitaire, mesuré en 2020 à x = 8,94..9,06 de z = -4,750 à 0,153 : il sépare un sas de lavabos des deux salles carrelées.",
       "name": "cloison_toilettes",
-      "_": "Le bloc sanitaire du sud-ouest. Cotes arrondies : les précédentes venaient d'un redimensionnement et tombaient sur des millièmes.",
       "points": [
         [
-          -9.65,
-          -3.6
+          9.0,
+          -4.75
         ],
         [
-          -6.2,
-          -3.6
-        ],
-        [
-          -6.2,
-          -7.2
+          9.0,
+          0.153
         ]
       ],
       "closed": false,
       "materialInner": "mur_toilettes",
-      "materialOuter": "mur",
+      "materialOuter": "mur_toilettes",
       "materialReveal": "beton",
       "openings": [
         {
@@ -2224,104 +2470,461 @@
   ],
   "boxes": [
     {
-      "name": "socle_pilier_ouest",
-      "_atmo": "SPEC-ATMOSPHERE poste 16 (§2.3 H). Dix dalles rouges qui sortent du sol sans embase se lisent comme des volumes poses. Une plinthe de 14 cm — la meme cote que `mouldings[plinthe_est]` — les raccorde au sol et fait qu'on les lit comme de la construction. Debord de 4 cm sur les quatre faces (0,56 pour un pilier de 0,48). `traverse` est declare parce que le pilier plonge de 14 cm DANS le socle : c'est un assemblage voulu, et roomgen exige qu'on l'ecrive plutot que de le tolerer par categorie.",
+      "_": "LES TREIZE PILIERS DE 2020, a leurs cotes mesurees. La salle n'en avait que DEUX, libres, en (+-5,4 ; -4,8) — ni au bon endroit, ni en bon nombre, ni du bon type.\nDOUZE SONT ENGAGES DANS LES MURS : ce sont des pilastres, qui debordent de 6 a 18 cm dans la piece et rythment le mur sud en cinq travees, les murs est et ouest en trois. Deux entraxes seulement dans toute la grille, 3,155 et 3,297 m, repetes a l'identique sur les quatre colonnes. C'est ce rythme qui fait lire une salle comme un batiment et non comme une boite, et il avait entierement disparu.\nLe treizieme est le SEUL isole : il coiffe le bout nord de la cloison du salon.\nSection 0,486 x 0,486 m, du sol au plafond.",
+      "_engage": "outsideOk sur les douze pilastres, et c'est le cas d'emploi exact de cette cle : un pilastre est ENGAGE dans le mur par definition — il en deborde de 6 a 18 cm dans la piece, et le reste de sa section est dans la maconnerie. Le controle a raison de signaler qu'ils passent le parement ; c'est a la description de dire que c'est voulu. Le treizieme, celui du salon, est libre et n'en a pas besoin — il le porte quand meme pour que les treize se lisent d'un bloc.",
+      "name": "pilier_sud_ouest",
+      "outsideOk": true,
       "at": [
-        -5.4,
+        -7.257,
         0.0,
-        -4.8
+        -7.118
       ],
       "size": [
-        0.56,
-        0.14,
-        0.56
-      ],
-      "material": "bois_noir",
-      "chamfer": 0.01,
-      "traverse": [
-        "pilier_ouest"
-      ],
-      "repeat": {
-        "count": 5,
-        "step": [
-          0.0,
-          0.0,
-          2.4
-        ]
-      }
-    },
-    {
-      "name": "socle_pilier_est",
-      "at": [
-        5.4,
-        0.0,
-        -4.8
-      ],
-      "size": [
-        0.56,
-        0.14,
-        0.56
-      ],
-      "material": "bois_noir",
-      "chamfer": 0.01,
-      "traverse": [
-        "pilier_est"
-      ],
-      "repeat": {
-        "count": 5,
-        "step": [
-          0.0,
-          0.0,
-          2.4
-        ]
-      }
-    },
-    {
-      "name": "pilier_ouest",
-      "at": [
-        -5.4,
-        0.0,
-        -4.8
-      ],
-      "size": [
-        0.48,
+        0.486,
         2.92,
-        0.48
+        0.486
       ],
       "material": "pilier",
-      "chamfer": 0.012,
-      "repeat": {
-        "count": 5,
-        "step": [
-          0.0,
-          0.0,
-          2.4
-        ]
-      },
-      "_": "Deux rangées de cinq, écartées de l'îlot : à 6,60 m elles traversaient le billard et une cabine de toilettes."
+      "chamfer": 0.01
     },
     {
-      "name": "pilier_est",
+      "name": "pilier_sud_1",
+      "outsideOk": true,
       "at": [
-        5.4,
+        -4.804,
         0.0,
-        -4.8
+        -7.256
       ],
       "size": [
-        0.48,
+        0.486,
         2.92,
-        0.48
+        0.486
       ],
       "material": "pilier",
-      "chamfer": 0.012,
-      "repeat": {
-        "count": 5,
-        "step": [
-          0.0,
-          0.0,
-          2.4
-        ]
-      }
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_sud_2",
+      "outsideOk": true,
+      "at": [
+        -1.648,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_sud_3",
+      "outsideOk": true,
+      "at": [
+        1.648,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_sud_4",
+      "outsideOk": true,
+      "at": [
+        4.804,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_sud_est",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -7.118
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_ouest_1",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        -3.963
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_ouest_2",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        -0.666
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_ouest_3",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        2.489
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_est_1",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -3.963
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_est_2",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -0.666
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_est_3",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        2.489
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "pilier_salon",
+      "outsideOk": true,
+      "at": [
+        1.648,
+        0.0,
+        -2.394
+      ],
+      "size": [
+        0.486,
+        2.92,
+        0.486
+      ],
+      "material": "pilier",
+      "chamfer": 0.01
+    },
+    {
+      "name": "socle_pilier_sud_ouest",
+      "outsideOk": true,
+      "at": [
+        -7.257,
+        0.0,
+        -7.118
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_ouest"
+      ]
+    },
+    {
+      "name": "socle_pilier_sud_1",
+      "outsideOk": true,
+      "at": [
+        -4.804,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_1"
+      ]
+    },
+    {
+      "name": "socle_pilier_sud_2",
+      "outsideOk": true,
+      "at": [
+        -1.648,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_2"
+      ]
+    },
+    {
+      "name": "socle_pilier_sud_3",
+      "outsideOk": true,
+      "at": [
+        1.648,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_3"
+      ]
+    },
+    {
+      "name": "socle_pilier_sud_4",
+      "outsideOk": true,
+      "at": [
+        4.804,
+        0.0,
+        -7.256
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_4"
+      ]
+    },
+    {
+      "name": "socle_pilier_sud_est",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -7.118
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_sud_est"
+      ]
+    },
+    {
+      "name": "socle_pilier_ouest_1",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        -3.963
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_ouest_1"
+      ]
+    },
+    {
+      "name": "socle_pilier_ouest_2",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        -0.666
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_ouest_2"
+      ]
+    },
+    {
+      "name": "socle_pilier_ouest_3",
+      "outsideOk": true,
+      "at": [
+        -7.3,
+        0.0,
+        2.489
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_ouest_3"
+      ]
+    },
+    {
+      "name": "socle_pilier_est_1",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -3.963
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_est_1"
+      ]
+    },
+    {
+      "name": "socle_pilier_est_2",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        -0.666
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_est_2"
+      ]
+    },
+    {
+      "name": "socle_pilier_est_3",
+      "outsideOk": true,
+      "at": [
+        7.269,
+        0.0,
+        2.489
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_est_3"
+      ]
+    },
+    {
+      "name": "socle_pilier_salon",
+      "outsideOk": true,
+      "at": [
+        1.648,
+        0.0,
+        -2.394
+      ],
+      "size": [
+        0.566,
+        0.14,
+        0.566
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.006,
+      "traverse": [
+        "pilier_salon"
+      ]
     },
     {
       "_audit": "AUDIT P-14. La cinquieme repetition sortait du batiment par le pan coupe : 1,048 m au-dela du parement, 0,85 m sur le trottoir, et un about de poutre claire se voyait depuis la rue au-dessus du linteau. Quatre repetitions ici ; la cinquieme est declaree a part, arretee au parement.\nA noter, mesure par l'historien sur salle.obj : AUCUNE poutre de plafond n'existe dans le modele de 2020. Les seize materiaux nommes poutre* y servent des cadres d'affiche et une cloison. Ces poutres sont une invention de la reconstruction — bonne pour le bati, mais qu'on ne peut pas justifier par la fidelite.",
@@ -2332,7 +2935,7 @@
         -4.8
       ],
       "size": [
-        19.3,
+        14.2,
         0.2,
         0.42
       ],
@@ -2346,13 +2949,33 @@
           2.4
         ]
       },
-      "_": "19,30 m : la portée réelle de la salle. Elle en faisait 22,20 et traversait les deux murs de 1,45 m — une taille non redimensionnée quand la salle a rétréci."
+      "_": "19,30 m : la portée réelle de la salle. Elle en faisait 22,20 et traversait les deux murs de 1,45 m — une taille non redimensionnée quand la salle a rétréci.",
+      "traverse": [
+        "pilier_ouest",
+        "pilier_est",
+        "pilier_sud",
+        "pilier_salon"
+      ]
     },
     {
-      "_": "La cinquieme, arretee au parement du pan coupe.",
+      "_": "La cinquieme est a z = +4,8, ou le hall s'est deja retreci par ses deux pans coupes : il n'y fait plus que 10,57 m. Elle mesure donc 10,50 et non 14,43 comme les quatre autres.",
+      "traverse": [
+        "pilier_ouest",
+        "pilier_est",
+        "pilier_sud",
+        "pilier_salon"
+      ],
       "name": "poutre_5",
-      "at": [-0.74, 2.7, 4.8],
-      "size": [17.82, 0.2, 0.42],
+      "at": [
+        0.0,
+        2.7,
+        4.8
+      ],
+      "size": [
+        10.5,
+        0.2,
+        0.42
+      ],
       "material": "poutre",
       "chamfer": 0.01
     },
@@ -2376,177 +2999,15 @@
   "_bornes": "Dix-neuf bornes, chacune nommée, placée, orientée, et sachant à quoi elle joue. Le moteur devinait ces trois dernières choses : l'écran par des fractions inventées de la boîte englobante (centre 31 cm trop bas), l'orientation par le barycentre du troupeau, et le jeu par un tri en X puis Z qui ne collait pas aux images peintes sur les marquees. Cotes réelles : 0,72 x 1,86 x 0,88 m — le modèle de 2020 mélangeait deux échelles et donnait des bornes de 2,39 m sous un plafond de 2,92.",
   "cabinets": [
     {
+      "_": "L'ILOT DE 2020, aux cotes mesurees sur salle.obj. Entraxe 0,942 m dans une rangee (c'etait 0,80), entraxe dos a dos 1,201 m (c'etait 0,88), allee centrale de 1,725 m, emprise 7,27 x 2,38 m centree sur z = +0,69.\nET LA REGLE DE DIFFICULTE EST SPATIALE, ce qui n'existait plus du tout : les six bornes HARD sont toutes a x < 0, les six autres a x > 0, et un panneau suspendu au-dessus de l'allee le dit — moitie rouge cote HARD, moitie bleue cote EASY. Les dix-neuf bornes portaient bien un champ `difficulty`, mais AUCUNE geometrie ne le disait au joueur.",
       "name": "borne_arcade_1",
       "slot": 1,
       "game": "flappy",
-      "difficulty": "easy",
-      "at": [
-        -2.8,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_flappy",
-      "materialSide": "flanc_flappy",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_facile",
-      "marquee": "marquee_flappy",
-      "_": "Îlot central, rangée face à l'entrée. Dos à dos avec la rangée B, à exactement une profondeur de caisson."
-    },
-    {
-      "name": "borne_arcade_2",
-      "slot": 2,
-      "game": "tetris",
-      "difficulty": "normal",
-      "at": [
-        -2.0,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_tetris",
-      "materialSide": "flanc_tetris",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_tetris",
-      "marquee": "marquee_tetris"
-    },
-    {
-      "name": "borne_arcade_3",
-      "slot": 3,
-      "game": "shooter",
-      "difficulty": "normal",
-      "at": [
-        -1.2,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_shooter",
-      "materialSide": "flanc_shooter",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_shooter",
-      "marquee": "marquee_shooter"
-    },
-    {
-      "name": "borne_arcade_4",
-      "slot": 4,
-      "game": "snake",
-      "difficulty": "normal",
-      "at": [
-        1.2,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_snake",
-      "materialSide": "flanc_snake",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_snake",
-      "marquee": "marquee_snake"
-    },
-    {
-      "name": "borne_arcade_5",
-      "slot": 5,
-      "game": "asteroid",
-      "difficulty": "normal",
-      "at": [
-        2.0,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_asteroid",
-      "materialSide": "flanc_asteroid",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_asteroid",
-      "marquee": "marquee_asteroid"
-    },
-    {
-      "name": "borne_arcade_6",
-      "slot": 6,
-      "game": "demineur",
-      "difficulty": "normal",
-      "at": [
-        2.8,
-        0,
-        -0.44
-      ],
-      "yaw": 180.0,
-      "materialBody": "caisson_demineur",
-      "materialSide": "flanc_demineur",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_demineur",
-      "marquee": "marquee_demineur"
-    },
-    {
-      "name": "borne_arcade_7",
-      "slot": 7,
-      "game": "pacman",
-      "difficulty": "normal",
-      "at": [
-        -2.8,
-        0,
-        0.44
-      ],
-      "yaw": 0.0,
-      "materialBody": "caisson_pacman",
-      "materialSide": "flanc_pacman",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_pacman",
-      "marquee": "marquee_pacman"
-    },
-    {
-      "name": "borne_arcade_8",
-      "slot": 8,
-      "game": "piano",
-      "difficulty": "normal",
-      "at": [
-        -2.0,
-        0,
-        0.44
-      ],
-      "yaw": 0.0,
-      "materialBody": "caisson_piano",
-      "materialSide": "flanc_piano",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_piano",
-      "marquee": "marquee_piano"
-    },
-    {
-      "name": "borne_arcade_9",
-      "slot": 9,
-      "game": "asteroid",
       "difficulty": "hard",
       "at": [
-        -1.2,
+        -3.186,
         0,
-        0.44
-      ],
-      "yaw": 0.0,
-      "materialBody": "caisson_asteroid",
-      "materialSide": "flanc_asteroid",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_asteroid_dur",
-      "marquee": "marquee_asteroid"
-    },
-    {
-      "name": "borne_arcade_10",
-      "slot": 10,
-      "game": "flappy",
-      "difficulty": "hard",
-      "at": [
-        1.2,
-        0,
-        0.44
+        1.293
       ],
       "yaw": 0.0,
       "materialBody": "caisson_flappy",
@@ -2557,14 +3018,14 @@
       "marquee": "marquee_flappy"
     },
     {
-      "name": "borne_arcade_11",
-      "slot": 11,
+      "name": "borne_arcade_2",
+      "slot": 2,
       "game": "tetris",
       "difficulty": "hard",
       "at": [
-        2.0,
+        -2.241,
         0,
-        0.44
+        1.293
       ],
       "yaw": 0.0,
       "materialBody": "caisson_tetris",
@@ -2575,14 +3036,50 @@
       "marquee": "marquee_tetris"
     },
     {
-      "name": "borne_arcade_12",
-      "slot": 12,
-      "game": "snake",
+      "name": "borne_arcade_3",
+      "slot": 3,
+      "game": "asteroid",
       "difficulty": "hard",
       "at": [
-        2.8,
+        -1.301,
         0,
-        0.44
+        1.293
+      ],
+      "yaw": 0.0,
+      "materialBody": "caisson_asteroid",
+      "materialSide": "flanc_asteroid",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_asteroid_dur",
+      "marquee": "marquee_asteroid"
+    },
+    {
+      "name": "borne_arcade_4",
+      "slot": 4,
+      "game": "demineur",
+      "difficulty": "normal",
+      "at": [
+        1.312,
+        0,
+        1.293
+      ],
+      "yaw": 0.0,
+      "materialBody": "caisson_demineur",
+      "materialSide": "flanc_demineur",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_demineur",
+      "marquee": "marquee_demineur"
+    },
+    {
+      "name": "borne_arcade_5",
+      "slot": 5,
+      "game": "snake",
+      "difficulty": "normal",
+      "at": [
+        2.258,
+        0,
+        1.293
       ],
       "yaw": 0.0,
       "materialBody": "caisson_snake",
@@ -2593,16 +3090,16 @@
       "marquee": "marquee_snake"
     },
     {
-      "name": "borne_arcade_13",
-      "slot": 13,
+      "name": "borne_arcade_6",
+      "slot": 6,
       "game": "shooter",
-      "difficulty": "hard",
+      "difficulty": "normal",
       "at": [
-        -9.1,
+        3.198,
         0,
-        1.2
+        1.293
       ],
-      "yaw": 90.0,
+      "yaw": 0.0,
       "materialBody": "caisson_shooter",
       "materialSide": "flanc_shooter",
       "materialTrim": "borne_cadre",
@@ -2611,16 +3108,52 @@
       "marquee": "marquee_shooter"
     },
     {
-      "name": "borne_arcade_14",
-      "slot": 14,
+      "name": "borne_arcade_7",
+      "slot": 7,
+      "game": "shooter",
+      "difficulty": "hard",
+      "at": [
+        -3.184,
+        0,
+        0.092
+      ],
+      "yaw": 180.0,
+      "materialBody": "caisson_shooter",
+      "materialSide": "flanc_shooter",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_shooter",
+      "marquee": "marquee_shooter"
+    },
+    {
+      "name": "borne_arcade_8",
+      "slot": 8,
+      "game": "snake",
+      "difficulty": "hard",
+      "at": [
+        -2.245,
+        0,
+        0.092
+      ],
+      "yaw": 180.0,
+      "materialBody": "caisson_snake",
+      "materialSide": "flanc_snake",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_snake",
+      "marquee": "marquee_snake"
+    },
+    {
+      "name": "borne_arcade_9",
+      "slot": 9,
       "game": "demineur",
       "difficulty": "hard",
       "at": [
-        -9.1,
+        -1.299,
         0,
-        2.0
+        0.092
       ],
-      "yaw": 90.0,
+      "yaw": 180.0,
       "materialBody": "caisson_demineur",
       "materialSide": "flanc_demineur",
       "materialTrim": "borne_cadre",
@@ -2629,14 +3162,89 @@
       "marquee": "marquee_demineur"
     },
     {
-      "name": "borne_arcade_15",
-      "slot": 15,
+      "name": "borne_arcade_10",
+      "slot": 10,
+      "game": "asteroid",
+      "difficulty": "normal",
+      "at": [
+        1.315,
+        0,
+        0.092
+      ],
+      "yaw": 180.0,
+      "materialBody": "caisson_asteroid",
+      "materialSide": "flanc_asteroid",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_asteroid",
+      "marquee": "marquee_asteroid"
+    },
+    {
+      "name": "borne_arcade_11",
+      "slot": 11,
+      "game": "tetris",
+      "difficulty": "normal",
+      "at": [
+        2.254,
+        0,
+        0.092
+      ],
+      "yaw": 180.0,
+      "materialBody": "caisson_tetris",
+      "materialSide": "flanc_tetris",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_tetris",
+      "marquee": "marquee_tetris"
+    },
+    {
+      "name": "borne_arcade_12",
+      "slot": 12,
+      "game": "flappy",
+      "difficulty": "easy",
+      "at": [
+        3.2,
+        0,
+        0.092
+      ],
+      "yaw": 180.0,
+      "materialBody": "caisson_flappy",
+      "materialSide": "flanc_flappy",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_flappy_facile",
+      "marquee": "marquee_flappy"
+    },
+    {
+      "_": "Le mur ouest. En 2020 il en portait DEUX, a z = +0,422 et +1,362, d'entraxe 0,942. On garde cet alignement et cet entraxe, et on en met six : le jeu s'appelle Nineteen et compte dix-neuf bornes depuis toujours. C'est le seul endroit ou l'on s'ecarte du decompte de 2020 — quinze caissons — et c'est dit plutot que masque. Le PLAN est repris ; le nombre de bornes appartient au jeu, pas au plan.",
+      "_z": "La rangee est recentree sur z = -0,6 et non sur 0 : a +2,302 la derniere borne mordait le DEPART DU PAN COUPE nord-ouest, qui commence a z = 2,539. Le controle l'a dit au centimetre — « 0,02 m dehors ». Avec six bornes d'entraxe 0,942 la rangee fait 4,71 m ; centree ainsi, la plus au nord s'arrete a 2,115.",
+      "name": "borne_arcade_13",
+      "slot": 13,
+      "game": "pacman",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        -2.955
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_pacman",
+      "materialSide": "flanc_pacman",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_pacman",
+      "marquee": "marquee_pacman",
+      "_x": "-6,48 et non -6,621 comme en 2020 : les socles des pilastres, larges de 0,566, atteignent x = -7,017, et le dos d'une borne a -6,621 tombe a -7,061. Le controle l'a chiffre au millimetre — 44 x 134 x 238 mm de recouvrement. En 2020 les pilastres du mur ouest et les deux bornes ne se genaient pas parce qu'il n'y en avait que deux, posees entre eux ; a six, la rangee croise la grille. 14 cm suffisent a degager."
+    },
+    {
+      "name": "borne_arcade_14",
+      "slot": 14,
       "game": "piano",
       "difficulty": "normal",
       "at": [
-        -9.1,
+        -6.48,
         0,
-        2.8
+        -2.013
       ],
       "yaw": 90.0,
       "materialBody": "caisson_piano",
@@ -2647,52 +3255,16 @@
       "marquee": "marquee_piano"
     },
     {
-      "name": "borne_arcade_16",
-      "slot": 16,
-      "game": "tetris",
-      "difficulty": "normal",
-      "at": [
-        9.1,
-        0,
-        -1.2
-      ],
-      "yaw": 270.0,
-      "materialBody": "caisson_tetris",
-      "materialSide": "flanc_tetris",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_tetris",
-      "marquee": "marquee_tetris"
-    },
-    {
-      "name": "borne_arcade_17",
-      "slot": 17,
-      "game": "flappy",
-      "difficulty": "easy",
-      "at": [
-        9.1,
-        0,
-        -2.0
-      ],
-      "yaw": 270.0,
-      "materialBody": "caisson_flappy",
-      "materialSide": "flanc_flappy",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_facile",
-      "marquee": "marquee_flappy"
-    },
-    {
-      "name": "borne_arcade_18",
-      "slot": 18,
+      "name": "borne_arcade_15",
+      "slot": 15,
       "game": "pacman",
       "difficulty": "normal",
       "at": [
-        9.1,
+        -6.48,
         0,
-        -2.8
+        -1.071
       ],
-      "yaw": 270.0,
+      "yaw": 90.0,
       "materialBody": "caisson_pacman",
       "materialSide": "flanc_pacman",
       "materialTrim": "borne_cadre",
@@ -2701,14 +3273,69 @@
       "marquee": "marquee_pacman"
     },
     {
+      "name": "borne_arcade_16",
+      "slot": 16,
+      "game": "piano",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        -0.129
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_piano",
+      "materialSide": "flanc_piano",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_piano",
+      "marquee": "marquee_piano"
+    },
+    {
+      "name": "borne_arcade_17",
+      "slot": 17,
+      "game": "pacman",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        0.813
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_pacman",
+      "materialSide": "flanc_pacman",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_pacman",
+      "marquee": "marquee_pacman"
+    },
+    {
+      "name": "borne_arcade_18",
+      "slot": 18,
+      "game": "piano",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        1.755
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_piano",
+      "materialSide": "flanc_piano",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_piano",
+      "marquee": "marquee_piano"
+    },
+    {
+      "_": "Le poste de classement, sur l'estrade centrale. En 2020 il est en (0 ; -4,541) et regarde +Z ; `room.c` le declare comme la seizieme cible alors qu'il n'y a que quinze caissons.",
       "name": "borne_classement",
-      "slot": 0,
+      "slot": 19,
       "game": "leaderboard",
       "difficulty": "normal",
       "at": [
         0.0,
         0.12,
-        -3.45
+        -4.541
       ],
       "yaw": 0.0,
       "materialBody": "caisson_leaderboard",
@@ -2716,8 +3343,7 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_classement",
-      "marquee": "marquee_nineteen",
-      "_": "La borne de classement, FACE À L'ENTRÉE. Elle avait un lacet de 180° : son écran regardait le mur sud, et le joueur qui descendait l'allée depuis le sas rencontrait son dos — un panneau rouge nu, en plein axe. C'est la première borne qu'on croise, c'est la seule dont le classement donne envie de rejouer, et elle tournait le dos à tout le monde. Reculée de 35 cm en la retournant : sa face avant venait sinon buter sur le point de vue `allee`, et roomgen refuse un cadrage posé dans un solide — il rendrait un cadre noir."
+      "marquee": "marquee_nineteen"
     }
   ],
   "_moulures": "Plinthes, corniche, cimaise, nez de marche. Ce sont elles qui font le bâti : sans moulure, une géométrie générée se lit comme un assemblage de boîtes, quel que soit le soin mis aux textures.",
@@ -2910,26 +3536,56 @@
     {
       "_": "AUDIT P-10. Les deux suspensions PENDAIENT DE RIEN : leurs chaines montaient en V et s'arretaient en l'air, a 1,12 m sous la sous-face du plafond pour le comptoir et 1,00 m pour le salon — mesure sur le maillage. Le fichier savait pourtant faire : `suspension_billard` declare explicitement son cable. Les deux autres suspensions sont des `model`, et roomgen interdit a un prop d'etre a la fois un modele et un empilement de morceaux : le cable a disparu avec la conversion en modele. Il revient donc comme prop a part, ce qui est exactement la manoeuvre deja employee pour les ampoules.",
       "name": "cable_comptoir",
-      "at": [-4.35, 1.86, 6.20],
+      "at": [
+        -4.35,
+        1.86,
+        6.2
+      ],
       "yaw": 0.0,
       "parts": [
-        { "type": "cylinder", "material": "bois_noir", "at": [0.0, 0.0, 0.0], "radius": 0.008, "height": 1.13, "sides": 8 }
+        {
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.008,
+          "height": 1.13,
+          "sides": 8
+        }
       ]
     },
     {
       "name": "cable_salon",
-      "at": [6.55, 1.98, -3.90],
+      "at": [
+        6.55,
+        1.98,
+        -3.9
+      ],
       "yaw": 0.0,
       "parts": [
-        { "type": "cylinder", "material": "bois_noir", "at": [0.0, 0.0, 0.0], "radius": 0.008, "height": 1.01, "sides": 8 }
+        {
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "radius": 0.008,
+          "height": 1.01,
+          "sides": 8
+        }
       ]
     },
     {
       "name": "billard",
       "at": [
-        -7.2,
+        -3.85,
         0.0,
-        -1.6
+        -4.75
       ],
       "yaw": 12.0,
       "poi": "billard",
@@ -2947,14 +3603,15 @@
         "billard_metal",
         "billard_repere"
       ],
-      "_": "La table, construite par `assets/blender/billard.py`. Elle etait onze boites empilees : pas de poche, pas de mouluration, des pieds carres, et un placage de bois pave a 0,80 m sur des bandes de 6 cm — d'ou des bandes qui se lisaient comme une pile de planches. Les cotes hors tout n'ont pas bouge (2,36 x 1,36, drap a 0,784) pour que ni le controle de chevauchement ni la collision ne changent."
+      "_": "La table, construite par `assets/blender/billard.py`. Elle etait onze boites empilees : pas de poche, pas de mouluration, des pieds carres, et un placage de bois pave a 0,80 m sur des bandes de 6 cm — d'ou des bandes qui se lisaient comme une pile de planches. Les cotes hors tout n'ont pas bouge (2,36 x 1,36, drap a 0,784) pour que ni le controle de chevauchement ni la collision ne changent.",
+      "_place": "Le billard, 2,50 x 1,40 m et tourne de 12 deg, ne tient plus contre le mur ouest : le hall a perdu 4,87 m de largeur, les pilastres y avancent de 18 cm, et la rangee de six bornes en occupe le pied. Pose au SUD-OUEST, entre l'ilot (z >= -0,50) et le mur sud (z = -7,135), il a du degagement sur ses quatre cotes."
     },
     {
       "name": "suspension_billard",
       "at": [
-        -7.2,
+        -3.85,
         0.0,
-        -1.6
+        -4.75
       ],
       "yaw": 12.0,
       "parts": [
@@ -3005,71 +3662,260 @@
       "name": "billard_billes",
       "_": "Trois billes posees, pas rangees en triangle : une partie interrompue, pas une table de demonstration. Elles etaient toutes les trois BLANCHES (SPEC-ATMOSPHERE §1.11) ; elles prennent trois teintes de jeu — la blanche, la bleue, la rouge — sur des materiaux qui existaient deja. Les trois positions sont recalculees pour degager la queue : la plus proche est a 14 cm de son axe, pour 4,5 cm de somme des rayons.",
       "at": [
-        -7.2,
+        -3.85,
         0.0,
-        -1.6
+        -4.75
       ],
       "yaw": 12.0,
       "parts": [
-        { "_": "la blanche, celle qu'on joue", "type": "sphere", "material": "billard_bille", "at": [-0.60, 0.786, -0.15], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "bleu", "at": [-0.30, 0.786, 0.38], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "bouton_rouge", "at": [-0.05, 0.786, -0.05], "radius": 0.029, "sides": 12, "rings": 7 }
+        {
+          "_": "la blanche, celle qu'on joue",
+          "type": "sphere",
+          "material": "billard_bille",
+          "at": [
+            -0.6,
+            0.786,
+            -0.15
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "bleu",
+          "at": [
+            -0.3,
+            0.786,
+            0.38
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "bouton_rouge",
+          "at": [
+            -0.05,
+            0.786,
+            -0.05
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "billard_triangle",
       "_atmo": "SPEC-ATMOSPHERE poste 24 (§1.11) : « trois billes blanches sans numero ni triangle ». Le triangle est au point de mouche, a +0,47 du centre : trois barres de bois autour de six billes en pyramide, la noire au coeur. Les billes ne portent pas de CHIFFRE — il faudrait une planche par numero, donc une texture par bille — mais elles portent chacune leur couleur de jeu, ce qui est ce qu'on lit d'une bille a plus d'un metre. Le pas de 5,02 cm entre rangees est 0,029 x racine(3) : c'est l'empilement compact de spheres de 29 mm, pas une valeur choisie.",
       "at": [
-        -7.2,
+        -3.85,
         0.0,
-        -1.6
+        -4.75
       ],
       "yaw": 12.0,
       "parts": [
-        { "_": "les trois barres du triangle, posees sur le drap (0,784) — a 0,787, trois millimetres au-dessus : a la cote exacte du drap leurs sommets bas comptent DANS le solide de la table et roomgen arrete le build", "type": "box", "material": "billard_bois", "at": [0.4725, 0.787, 0.05], "yaw": -34.6, "size": [0.19, 0.022, 0.014], "chamfer": 0.003 },
-        { "type": "box", "material": "billard_bois", "at": [0.4725, 0.787, -0.05], "yaw": 34.6, "size": [0.19, 0.022, 0.014], "chamfer": 0.003 },
-        { "type": "box", "material": "billard_bois", "at": [0.560, 0.787, 0.0], "yaw": 90.0, "size": [0.24, 0.022, 0.014], "chamfer": 0.003 },
-        { "_": "la pointe", "type": "sphere", "material": "jaune", "at": [0.418, 0.786, 0.0], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "bouton_jaune", "at": [0.468, 0.786, 0.029], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "_": "la noire au coeur, comme au jeu", "type": "sphere", "material": "borne_noir", "at": [0.468, 0.786, -0.029], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "bouton_rouge", "at": [0.518, 0.786, 0.0], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "bleu", "at": [0.518, 0.786, 0.058], "radius": 0.029, "sides": 12, "rings": 7 },
-        { "type": "sphere", "material": "billard_bille", "at": [0.518, 0.786, -0.058], "radius": 0.029, "sides": 12, "rings": 7 }
+        {
+          "_": "les trois barres du triangle, posees sur le drap (0,784) — a 0,787, trois millimetres au-dessus : a la cote exacte du drap leurs sommets bas comptent DANS le solide de la table et roomgen arrete le build",
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.4725,
+            0.787,
+            0.05
+          ],
+          "yaw": -34.6,
+          "size": [
+            0.19,
+            0.022,
+            0.014
+          ],
+          "chamfer": 0.003
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.4725,
+            0.787,
+            -0.05
+          ],
+          "yaw": 34.6,
+          "size": [
+            0.19,
+            0.022,
+            0.014
+          ],
+          "chamfer": 0.003
+        },
+        {
+          "type": "box",
+          "material": "billard_bois",
+          "at": [
+            0.56,
+            0.787,
+            0.0
+          ],
+          "yaw": 90.0,
+          "size": [
+            0.24,
+            0.022,
+            0.014
+          ],
+          "chamfer": 0.003
+        },
+        {
+          "_": "la pointe",
+          "type": "sphere",
+          "material": "jaune",
+          "at": [
+            0.418,
+            0.786,
+            0.0
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "bouton_jaune",
+          "at": [
+            0.468,
+            0.786,
+            0.029
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "_": "la noire au coeur, comme au jeu",
+          "type": "sphere",
+          "material": "borne_noir",
+          "at": [
+            0.468,
+            0.786,
+            -0.029
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "bouton_rouge",
+          "at": [
+            0.518,
+            0.786,
+            0.0
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "bleu",
+          "at": [
+            0.518,
+            0.786,
+            0.058
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        },
+        {
+          "type": "sphere",
+          "material": "billard_bille",
+          "at": [
+            0.518,
+            0.786,
+            -0.058
+          ],
+          "radius": 0.029,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "billard_craie",
       "_atmo": "SPEC-ATMOSPHERE poste 24. Le cube de craie de 2020 (`bleu.001`), pose sur la bande : y 0,848, c'est-a-dire le POINT LE PLUS HAUT du modele de table — rien n'est donc enfonce dedans. A x local +0,80, z +0,66, il est sur le bois de la bande et non sur le drap (demi-largeur du drap 0,55, de la table 0,764).",
       "at": [
-        -7.2,
+        -3.85,
         0.0,
-        -1.6
+        -4.75
       ],
       "yaw": 12.0,
       "parts": [
-        { "type": "box", "material": "billard_craie", "at": [0.80, 0.848, 0.66], "yaw": 18.0, "size": [0.036, 0.023, 0.034], "chamfer": 0.002 }
+        {
+          "type": "box",
+          "material": "billard_craie",
+          "at": [
+            0.8,
+            0.848,
+            0.66
+          ],
+          "yaw": 18.0,
+          "size": [
+            0.036,
+            0.023,
+            0.034
+          ],
+          "chamfer": 0.002
+        }
       ]
     },
     {
       "name": "billard_queue",
       "_atmo": "SPEC-ATMOSPHERE poste 24. La queue, posee EN TRAVERS DU DRAP : c'est le signe d'une partie interrompue, et c'est ce que le §1.11 reclame. Un cone de 1,449 m, 32 mm au talon et 15 mm en fleche, plus la virole claire au bout. Son axe est a 0,803 : le drap est a 0,784 et le rayon au talon vaut 0,016, elle affleure donc a 3 mm — a 0,800 pile, ses sommets bas comptaient DANS le solide de la table et roomgen arretait le build. Le prop est declare a part avec son propre yaw parce qu'un morceau ne peut pas cumuler proprement yaw et pitch ; son `at` est le TALON et le `pitch 90` couche le cylindre le long du +z local.",
       "at": [
-        -8.084,
+        -3.85,
         0.0,
-        -0.952
+        -4.75
       ],
       "yaw": 122.2,
       "parts": [
-        { "type": "cylinder", "material": "billard_queue", "at": [0.0, 0.803, 0.0], "radius": 0.016, "radiusTop": 0.0075, "height": 1.429, "sides": 10, "pitch": 90.0 },
-        { "_": "la virole", "type": "cylinder", "material": "billard_repere", "at": [0.0, 0.803, 1.429], "radius": 0.0078, "height": 0.02, "sides": 10, "pitch": 90.0 }
+        {
+          "type": "cylinder",
+          "material": "billard_queue",
+          "at": [
+            0.0,
+            0.803,
+            0.0
+          ],
+          "radius": 0.016,
+          "radiusTop": 0.0075,
+          "height": 1.429,
+          "sides": 10,
+          "pitch": 90.0
+        },
+        {
+          "_": "la virole",
+          "type": "cylinder",
+          "material": "billard_repere",
+          "at": [
+            0.0,
+            0.803,
+            1.429
+          ],
+          "radius": 0.0078,
+          "height": 0.02,
+          "sides": 10,
+          "pitch": 90.0
+        }
       ]
     },
     {
       "name": "bar_accueil",
       "at": [
-        -2.6,
         0.0,
-        6.3
+        0.0,
+        6.05
       ],
       "yaw": 180.0,
       "poi": "bar",
@@ -3162,9 +4008,14 @@
     },
     {
       "_": "Un vrai canapé, 2,73 m de large. Il remplace quatre boîtes qui se lisaient comme quatre boîtes.",
-      "_at": "AUDIT P-05. Il etait EMPALE sur `pilier_est_1` : intersection reelle de 0,0412 m3, mesuree par colonnes verticales de deux centimetres, et 352 des 357 sommets presents dans la boite du pilier etaient dans son solide. `check_solid_overlaps` le signalait deja au build sans l'arreter, parce que la regle n'est fatale que si une borne est en cause. Decale d'un metre a l'est et de 55 cm au sud, il degage le pilier de 7,8 cm et la plante de 12.", "name": "canape",
+      "_at": "AUDIT P-05. Il etait EMPALE sur `pilier_est_1` : intersection reelle de 0,0412 m3, mesuree par colonnes verticales de deux centimetres, et 352 des 357 sommets presents dans la boite du pilier etaient dans son solide. `check_solid_overlaps` le signalait deja au build sans l'arreter, parce que la regle n'est fatale que si une borne est en cause. Decale d'un metre a l'est et de 55 cm au sud, il degage le pilier de 7,8 cm et la plante de 12.",
+      "name": "canape",
       "_atmo": "SPEC-ATMOSPHERE poste 11 (§2.3 J). Il regarde les trois bornes est (x = 9,1 ; z de -1,2 a -2,8) a 1,80 m : on s'assoit pour voir jouer. YAW 90 ET NON 270, et c'est verifie en image : le modele `sofa_03` a son assise vers son +z local, et la table de conventions du §0.2 donne « face vers +x = yaw 90 ». A 270 le canape tournait le dos aux bornes qu'il est cense regarder. Emprise obtenue : x 6,84..7,76, z -2,97..-0,23 ; les caissons est occupent x 8,67..9,54, il reste donc 0,90 m de passage devant eux.",
-      "at": [7.30, 0.0, -1.60],
+      "at": [
+        5.6,
+        0.0,
+        -1.6
+      ],
       "yaw": 90.0,
       "model": "cc0/models/sofa_03/sofa_03.gltf",
       "material": "canape_tissu",
@@ -3174,7 +4025,7 @@
       "name": "table_basse",
       "_atmo": "SPEC-ATMOSPHERE poste 11. La spec la posait en (6,30 ; -2,70) : roomgen ARRETE le build, « canape PENETRE table_basse ». Le canape fait 2,73 m et, tourne vers les bornes est, il occupe z -2,97..-0,23 sur x 6,84..7,76 ; la table, 1,54 m de long, y entre de 22 cm. Le trio de la spec ne tient pas dans la bande est, quel que soit le yaw du canape — l'emprise du canape est la meme a 90 et a 270. Le salon est donc range EN LIGNE le long de la bande est : canape au nord, table au milieu, fauteuil au sud. La table tombe sous `lights[suspension_salon]` (6,55 ; -3,90), ce qui est exactement ce que le commentaire de cette lampe declare vouloir eclairer.",
       "at": [
-        7.30,
+        5.6,
         0.0,
         -3.75
       ],
@@ -3184,8 +4035,13 @@
       "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
     },
     {
-      "_at": "AUDIT P-01. Il etait DANS LA RUE : declare a x 8,2 z 5,7, son sommet le plus lointain tombait 1,24 m au-dela du parement interieur du pan coupe, donc 1,04 m sur le trottoir. Vu de l'exterieur, le comptoir d'accueil etait pose devant la porte. Et le sas — la premiere image du jeu, puisque playerStart est dedans — etait un volume de brique nue avec un pilier et rien d'autre. Ici il est contre le mur sud du sas, face a la porte, sans bloquer le passage vers le hall.", "name": "bureau",
-      "at": [7.10, 0.0, 4.75],
+      "_at": "AUDIT P-01. Il etait DANS LA RUE : declare a x 8,2 z 5,7, son sommet le plus lointain tombait 1,24 m au-dela du parement interieur du pan coupe, donc 1,04 m sur le trottoir. Vu de l'exterieur, le comptoir d'accueil etait pose devant la porte. Et le sas — la premiere image du jeu, puisque playerStart est dedans — etait un volume de brique nue avec un pilier et rien d'autre. Ici il est contre le mur sud du sas, face a la porte, sans bloquer le passage vers le hall.",
+      "name": "bureau",
+      "at": [
+        6.12,
+        0.0,
+        6.4
+      ],
       "yaw": 0.0,
       "parts": [
         {
@@ -3236,12 +4092,13 @@
       ]
     },
     {
+      "_place": "Contre le mur SUD, dans la travee entre les pilastres de x = -4,804 et -1,648. Le mur ouest est pris : six bornes en occupent le pied, et les pilastres y avancent de 18 cm.",
       "name": "distributeur",
       "_atmo": "SPEC-ATMOSPHERE poste 11 (§2.3 J) : « un distributeur de boissons se met SUR LE TRAJET, pas dans l'angle mort ». De (-9,20 ; 5,60) a (-9,25 ; -0,30), sur le mur ouest entre le tapis technique et le billard, vu de toute la travee ouest.\nEt une correction que le deplacement a rendue visible : les deux panneaux de facade etaient poses a z local 0,356 pour un caisson dont la demi-profondeur vaut 0,39 — ENFOUIS de 3,4 cm. Amene dans la lumiere, le distributeur etait une dalle noire sans un seul detail. Ils passent a 0,392, la meme marge de deux millimetres que la vitrine a lots et le monnayeur.",
       "at": [
-        -9.25,
+        -3.2,
         0.0,
-        -0.30
+        -6.7
       ],
       "yaw": 90.0,
       "parts": [
@@ -3291,9 +4148,9 @@
     {
       "name": "jukebox",
       "at": [
-        3.8,
+        -3.75,
         0.0,
-        6.2
+        6.05
       ],
       "yaw": 195.0,
       "parts": [
@@ -3340,12 +4197,17 @@
             0.44
           ]
         }
-      ]
+      ],
+      "_place": "A l'ouest du comptoir, en miroir du monnayeur qui est a l'est. Les deux se disputaient la meme place depuis que le bar est revenu au centre."
     },
     {
       "_audit": "AUDIT P-07. Meme faute que le lavabo, axes X et Z intervertis : la radio se presentait de TRANCHE au mur et sa facade regardait le sud. Sans `yaw` sur le panneau, sa normale est le +Z local, que le lacet du prop envoie sur +X — c'est-a-dire dans la salle.",
       "name": "radio_murale",
-      "at": [-9.50, 1.53, 3.6],
+      "at": [
+        -7.06,
+        1.53,
+        1.9
+      ],
       "yaw": 90.0,
       "poi": "radio",
       "anchor": [
@@ -3362,13 +4224,21 @@
             0.0,
             0.0
           ],
-          "size": [0.4, 0.24, 0.1],
+          "size": [
+            0.4,
+            0.24,
+            0.1
+          ],
           "chamfer": 0.012
         },
         {
           "type": "panel",
           "material": "radio",
-          "at": [0.0, 0.113, 0.052],
+          "at": [
+            0.0,
+            0.113,
+            0.052
+          ],
           "size": [
             0.36,
             0.22
@@ -3379,7 +4249,11 @@
     {
       "_audit": "AUDIT P-04. Ses axes X et Z etaient INTERVERTIS : le plan de 1,40 m partait perpendiculairement au mur ouest et le TRAVERSAIT de 35 cm, donc 15 cm dans la rue. La convention de ce fichier est qu'un prop regarde son +Z local ; elle etait violee ici et sur la radio murale, et c'est le meme defaut deux fois. Le dos du meuble tombe maintenant exactement sur le parement. Cette correction en regle une SECONDE : le panneau « sol mouille » etait plante dans le meuble, et la facade reculant de -8,50 a -9,03 il degage de 34 cm.",
       "name": "lavabo_toilettes",
-      "at": [-9.29, 0.0, -4.4],
+      "at": [
+        11.62,
+        0.0,
+        -2.3
+      ],
       "yaw": 90.0,
       "poi": "toilettes",
       "anchor": [
@@ -3396,7 +4270,11 @@
             0.0,
             0.0
           ],
-          "size": [1.4, 0.86, 0.52],
+          "size": [
+            1.4,
+            0.86,
+            0.52
+          ],
           "chamfer": 0.012
         },
         {
@@ -3407,24 +4285,33 @@
             0.815,
             0.0
           ],
-          "size": [1.2, 0.44],
+          "size": [
+            1.2,
+            0.44
+          ],
           "pitch": -90
         },
         {
           "type": "panel",
           "material": "miroir",
-          "at": [0.0, 1.46, -0.259],
-          "material": "miroir",
-          "size": [1.3, 0.9]
+          "at": [
+            0.0,
+            1.46,
+            -0.259
+          ],
+          "size": [
+            1.3,
+            0.9
+          ]
         }
       ]
     },
     {
       "name": "flaque_toilettes",
       "at": [
-        -8.75,
+        10.9,
         0.004,
-        -4.55
+        -2.45
       ],
       "yaw": 24.0,
       "_": "Une flaque : une dalle de 4 mm en matériau très lisse. Ce n'est pas de l'eau simulée, c'est un miroir sale — et à cette échelle la différence ne se voit pas, alors que l'absence de reflet au sol, elle, se voit.",
@@ -3448,7 +4335,11 @@
     },
     {
       "name": "robinet_toilettes",
-      "at": [-9.42, 0.0, -4.4],
+      "at": [
+        11.49,
+        0.0,
+        -2.3
+      ],
       "yaw": 90.0,
       "_": "Le robinet qui goutte. La goutte elle-même est une particule et un son : A8. Ici il n'y a que le col de cygne — sans lui, le lavabo est un bloc de marbre creusé.",
       "parts": [
@@ -3503,7 +4394,11 @@
     {
       "_audit": "AUDIT P-08. Il etait ENTERRE dans la cloison : quatre centimetres suffisaient a le faire disparaitre de moitie.",
       "name": "panneau_restrooms",
-      "at": [-7.85, 1.72, -3.48],
+      "at": [
+        7.44,
+        1.72,
+        -1.38
+      ],
       "yaw": 0.0,
       "_": "Sur la cloison, côté salle, à gauche de la baie. Un panel et non une boîte : une boîte aurait porté le même panneau sur ses six faces, à l'envers sur trois.",
       "parts": [
@@ -3525,9 +4420,9 @@
     {
       "name": "cabine_toilettes",
       "at": [
-        -7.7,
+        9.6,
         0.0,
-        -6.1
+        -4.6
       ],
       "yaw": 0.0,
       "repeat": {
@@ -3604,9 +4499,9 @@
       "_audit": "AUDIT P-06. Les vantaux etaient SUSPENDUS a 1,02 m du sol et depassaient leurs joues de 77 cm. 15 cm de jeu sous la porte est la cote d'une cabine sanitaire courante, et le vantail reste alors sous les joues.",
       "name": "porte_cabine_1",
       "at": [
-        -8.14,
+        10.04,
         0.0,
-        -5.45
+        -3.95
       ],
       "yaw": 0.0,
       "_": "Fermée. Le gond est à x −8,14, contre la joue gauche de la première cabine.",
@@ -3614,7 +4509,11 @@
         {
           "type": "box",
           "material": "cabine_panneau",
-          "at": [0.44, 0.15, 0.0],
+          "at": [
+            0.44,
+            0.15,
+            0.0
+          ],
           "size": [
             0.88,
             1.72,
@@ -3652,7 +4551,11 @@
         {
           "type": "box",
           "material": "cabine_panneau",
-          "at": [0.44, 0.15, 0.0],
+          "at": [
+            0.44,
+            0.15,
+            0.0
+          ],
           "size": [
             0.88,
             1.72,
@@ -3678,16 +4581,17 @@
       ]
     },
     {
+      "_": "LA PORTE EXTÉRIEURE, au bout du sas. En 2020 elle mesure 1,214 x 2,139 m au seuil z = 12,755, et c'est par elle qu'on entre.\nSes deux panneaux — le vantail de bois, et le ciel qu'on voit par l'ouverture — étaient côte à côte sur 2,30 m de large. Le couloir du sas n'en fait que 1,669 : ils n'y tiennent pas. Ramenés à 0,70 chacun, ils passent, et le vantail garde la cote de la porte réelle.",
       "name": "porte_entree_battant",
       "at": [
-        7.91,
+        6.118,
         0.0,
-        5.42
+        12.66
       ],
-      "yaw": 225.0,
+      "yaw": 180.0,
       "poi": "porte",
       "anchor": [
-        -0.522,
+        -0.35,
         0.0,
         0.8
       ],
@@ -3696,26 +4600,26 @@
           "type": "panel",
           "material": "porte_bois",
           "at": [
-            -0.522,
-            1.083,
+            -0.35,
+            1.07,
             0.0
           ],
           "size": [
-            1.15,
-            2.26
+            0.7,
+            2.139
           ]
         },
         {
           "type": "panel",
           "material": "ciel",
           "at": [
-            0.522,
-            1.083,
+            0.35,
+            1.07,
             0.0
           ],
           "size": [
-            1.15,
-            2.26
+            0.7,
+            2.139
           ]
         }
       ]
@@ -3723,8 +4627,12 @@
     {
       "_audit": "AUDIT P-15. Il etait aux SEPT DIXIEMES dans le mur plein : on ne voyait de la sortie de secours qu'une tranche verte. Ramene sur le parement interieur, 12 cm en avant de la ligne mediane le long de la normale rentrante, et remonte a 2,42 pour s'inscrire entierement au-dessus du linteau — comme un vrai bloc de secours.",
       "name": "panneau_sortie",
-      "at": [7.82, 2.42, 5.34],
-      "yaw": 225.0,
+      "at": [
+        6.12,
+        2.42,
+        11.9
+      ],
+      "yaw": 180.0,
       "parts": [
         {
           "type": "panel",
@@ -3783,7 +4691,7 @@
     {
       "name": "affiche_ouest",
       "at": [
-        -9.53,
+        -7.1,
         1.46,
         -2.6
       ],
@@ -3815,9 +4723,9 @@
     {
       "name": "affiche_ouest_b",
       "at": [
-        -9.53,
+        -7.1,
         1.34,
-        5.8
+        0.9
       ],
       "yaw": 90.0,
       "parts": [
@@ -3915,7 +4823,7 @@
     {
       "name": "affiche_est",
       "at": [
-        9.53,
+        7.1,
         1.49,
         1.4
       ],
@@ -3939,9 +4847,9 @@
     {
       "name": "affiche_est_b",
       "at": [
-        9.53,
+        6.055,
         1.28,
-        3.1
+        2.644
       ],
       "yaw": 270.0,
       "parts": [
@@ -3964,9 +4872,9 @@
     {
       "name": "affiche_nord",
       "at": [
-        -6.4,
+        -2.4,
         1.43,
-        7.08
+        6.95
       ],
       "yaw": 180.0,
       "parts": [
@@ -3989,9 +4897,9 @@
       "_audit": "AUDIT P-23. Il debordait de 0,350 m au-dela du parement interieur, soit 15 cm dehors. Rentre de 20 cm.",
       "name": "tapis_technique",
       "at": [
-        -8.0,
+        6.118,
         0.0,
-        1.80
+        11.1
       ],
       "yaw": 0.0,
       "parts": [
@@ -4004,21 +4912,22 @@
             0.0
           ],
           "size": [
-            3.4,
+            1.4,
             0.008,
-            2.2
+            2.0
           ],
           "chamfer": 0.0
         }
-      ]
+      ],
+      "_place": "DANS LE SAS, devant la porte exterieure — c'est-a-dire un paillasson, ce qu'un « tapis technique » de 3,40 x 2,20 pose au milieu du hall n'a jamais vraiment ete.\\nIl ne tenait plus nulle part : le hall est passe de 271 a 188 m2, et la grille de pilastres de 2020 ne laisse que 3,16 m entre deux. Ramene a 1,40 x 2,00, il passe dans le couloir de 1,669 m et il y sert a quelque chose."
     },
     {
       "_": "L'extincteur réglementaire, à 1,10 m du sol comme le veut l'usage. Il porte trois matériaux — corps, verre du manomètre, étiquette — et c'est très exactement ce qui distingue un modèle d'une boîte peinte : sans la table de correspondance, tout l'objet serait rouge mat.",
       "name": "extincteur",
       "at": [
-        9.42,
+        6.941,
         1.1,
-        -0.4
+        -0.103
       ],
       "yaw": 270.0,
       "model": "cc0/models/korean_fire_extinguisher_01/korean_fire_extinguisher_01.gltf",
@@ -4032,18 +4941,28 @@
     {
       "name": "boombox",
       "at": [
-        -4.6,
+        -4.244,
         1.025,
-        6.25
+        5.767
       ],
       "yaw": 196.0,
       "model": "models/boombox/boombox.gltf",
       "material": "boombox_corps"
     },
     {
-      "_at": "AUDIT P-02, trois defauts sur un objet. DEHORS : 0,80 m dans la rue. DANS LE BUREAU : 1520 de ses 2820 sommets etaient a l'interieur du solide du comptoir, dont la facade lui passait au travers. ET FLOTTANTE : le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero, soit onze centimetres d'air sous une poubelle metallique. Le calage vertical d'un modele appartient a `modelOffset`, pas a `at`.", "modelOffset": [0.0, -0.109, 0.0], "name": "poubelle_sas",
+      "_at": "AUDIT P-02, trois defauts sur un objet. DEHORS : 0,80 m dans la rue. DANS LE BUREAU : 1520 de ses 2820 sommets etaient a l'interieur du solide du comptoir, dont la facade lui passait au travers. ET FLOTTANTE : le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero, soit onze centimetres d'air sous une poubelle metallique. Le calage vertical d'un modele appartient a `modelOffset`, pas a `at`.",
+      "modelOffset": [
+        0.0,
+        -0.109,
+        0.0
+      ],
+      "name": "poubelle_sas",
       "_atmo": "DEPLACEE de (5,30 ; 4,70) a (5,35 ; 6,70), et c'est un CORRECTIF. Elle etait ENTIEREMENT dans `pilier_est_5` — 1 422 sommets sur 1 422, defaut trouve et journalise par le controle de recouvrement de roomgen, jamais corrige. Le socle du poste 16 (§2.3 H) vient chausser ce meme pilier : la poubelle passait alors DANS le socle aussi, et le build s'arretait. Declarer un `traverse` aurait marque comme assemblage voulu ce que le controle est fait pour attraper. Elle prend donc l'angle nord-est du sas, hors du pilier, hors du passage porte -> hall (z 5,3..5,5) et a 23 cm du parement nord. La ligne pilier_est_5 / poubelle_sas de `RG_OVERLAP_DEBT` est desormais sans objet : a retirer de tools/roomgen.c, que ce lot ne touche pas.",
-      "at": [5.35, 0.0, 6.70],
+      "at": [
+        6.216,
+        0.0,
+        4.08
+      ],
       "yaw": 0.0,
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle"
@@ -4052,7 +4971,7 @@
       "name": "cible_flechettes",
       "_atmo": "NON DEPLACEE, contre le §2.3 J. Deux raisons. (1) Le §6 de la meme specification la nomme dans la liste « ce qu'il ne faut surtout pas toucher — positions inchangees » : la specification se contredit, et la liste de garde l'emporte. (2) Le motif ecrit en J — « le distributeur passerait devant » — ne tient pas : le distributeur mesure 0,86 x 0,78 et, pose en (-9,25 ; -0,30) avec yaw 90, il occupe z -0,73..0,13, soit 0,65 m avant d'atteindre la cible. J annonce z -0,93..0,53, ce qui ne correspond a aucune de ses cotes.",
       "at": [
-        -9.52,
+        -7.09,
         1.68,
         -1.6
       ],
@@ -4063,7 +4982,7 @@
     {
       "name": "plante_salon",
       "at": [
-        8.9,
+        6.4,
         0.0,
         -5.6
       ],
@@ -4076,7 +4995,7 @@
       "name": "fauteuil_salon",
       "_atmo": "SPEC-ATMOSPHERE poste 11. « Reste en vis-a-vis oblique du canape sans lui masquer les bornes. » La cote de la spec (7,20 ; -3,60) est prise par la table basse une fois celle-ci degagee du canape ; le fauteuil descend donc au sud du groupe. Yaw 20 et non 300 : le modele `ArmChair_01` a lui aussi son assise vers son +z local, verifie en image sur l'ancienne pose.",
       "at": [
-        7.30,
+        5.6,
         0.0,
         -5.15
       ],
@@ -4087,17 +5006,22 @@
     {
       "name": "panneau_sol_mouille",
       "at": [
-        -8.45,
+        10.6,
         0.0,
-        -4.15
+        -2.05
       ],
       "yaw": 62.0,
       "model": "models/WetFloorSign_01/WetFloorSign_01.gltf",
       "material": "panneau_sol_mouille"
     },
     {
-      "_audit": "AUDIT P-03. Elle etait vissee sur la face EXTERIEURE du mur de brique, 1,38 m dehors, avec son ampoule et deux sources qui eclairaient le trottoir — et le sas etait au noir. Le commentaire ci-dessous raconte lui-meme l'origine : on l'avait poussee le long de X pour sortir de la capsule du joueur, et elle est sortie du batiment. Ici, mur ouest du sas, a 1,71 m du point de vue `entree` : hors de la capsule sans etre hors du mur.", "name": "applique_sas",
-      "at": [4.70, 2.15, 6.40],
+      "_audit": "AUDIT P-03. Elle etait vissee sur la face EXTERIEURE du mur de brique, 1,38 m dehors, avec son ampoule et deux sources qui eclairaient le trottoir — et le sas etait au noir. Le commentaire ci-dessous raconte lui-meme l'origine : on l'avait poussee le long de X pour sortir de la capsule du joueur, et elle est sortie du batiment. Ici, mur ouest du sas, a 1,71 m du point de vue `entree` : hors de la capsule sans etre hors du mur.",
+      "name": "applique_sas",
+      "at": [
+        6.72,
+        2.15,
+        8.2
+      ],
       "yaw": 90.0,
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
@@ -4118,7 +5042,11 @@
     },
     {
       "name": "ampoule_sas",
-      "at": [4.82, 2.12, 6.40],
+      "at": [
+        6.6,
+        2.12,
+        8.2
+      ],
       "yaw": 0.0,
       "parts": [
         {
@@ -4136,8 +5064,13 @@
       ]
     },
     {
-      "_at": "AUDIT P-11. Elle etait POSEE AU-DESSUS de son abat-jour : la masse du luminaire va de 1,545 a 1,60, et l'ampoule commencait a 1,680 — huit centimetres plus haut, entre les deux chaines. Une sphere de prop est posee sur son `at.y` (geo_revolve ecrit sinf(a)*r0 + r0), ce qui n'avait pas ete pris en compte.", "name": "ampoule_comptoir",
-      "at": [-4.35, 1.54, 6.20],
+      "_at": "AUDIT P-11. Elle etait POSEE AU-DESSUS de son abat-jour : la masse du luminaire va de 1,545 a 1,60, et l'ampoule commencait a 1,680 — huit centimetres plus haut, entre les deux chaines. Une sphere de prop est posee sur son `at.y` (geo_revolve ecrit sinf(a)*r0 + r0), ce qui n'avait pas ete pris en compte.",
+      "name": "ampoule_comptoir",
+      "at": [
+        -4.35,
+        1.54,
+        6.2
+      ],
       "yaw": 0.0,
       "parts": [
         {
@@ -4168,7 +5101,11 @@
     },
     {
       "name": "ampoule_salon",
-      "at": [6.55, 1.66, -3.90],
+      "at": [
+        6.55,
+        1.66,
+        -3.9
+      ],
       "yaw": 0.0,
       "parts": [
         {
@@ -4188,113 +5125,677 @@
     {
       "name": "banc_ilot_ouest",
       "_": "SPEC-ATMOSPHERE §2.3 A, l'objet qui manque le plus. Deux assises dos a dos autour d'un dossier commun. La rangee nord de l'ilot est a z +0,44 et regarde +z : un joueur debout devant elle a les pieds a z 1,34, et l'assise a 2,45 le place a 1,1 m derriere lui — la distance a laquelle on voit l'ecran par-dessus son epaule. A x -2,40 le banc est en face du bloc de trois bornes 7-8-9 et laisse libre la trouee centrale x [-1,2 ; 1,2] : la fuyante de `allee` n'est pas bouchee. Le dos de l'autre assise regarde le bar : on s'y assoit avec un verre. `cuir` etait declare et employe par PERSONNE — c'est du skai rouge de 2020, sans un octet ajoute au depot.",
-      "at": [-2.40, 0.0, 2.45],
+      "at": [
+        -2.1,
+        0.0,
+        3.75
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "les deux joues", "type": "box", "material": "bois_noir", "at": [-0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
-        { "type": "box", "material": "bois_noir", "at": [0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
-        { "_": "le dossier commun aux deux assises", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, 0.00], "size": [1.80, 0.46, 0.10], "chamfer": 0.010 },
-        { "_": "assise nord, regarde le bar", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 },
-        { "_": "assise sud, regarde l'ilot", "type": "box", "material": "cuir", "at": [0.00, 0.40, -0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 }
-      ]
+        {
+          "_": "les deux joues",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.8,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.94
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.8,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.94
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "le dossier commun aux deux assises",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.44,
+            0.0
+          ],
+          "size": [
+            1.8,
+            0.46,
+            0.1
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "_": "assise nord, regarde le bar",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            0.25
+          ],
+          "size": [
+            1.8,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "_": "assise sud, regarde l'ilot",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            -0.25
+          ],
+          "size": [
+            1.8,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        }
+      ],
+      "_place": "Les bancs, le baby-foot et les mange-debout remontent entre l'ilot et le bar. Dans le hall de 271 m2 ils tenaient a z = 2,45 ; dans celui de 188 ils tombaient DANS la zone ou l'on se tient pour jouer la rangee nord — le controle de degagement l'a dit : « 0,01 m de degagement, 0,80 demandes ». La bande z = 2,6 a 4,9 est libre entre l'ilot et le comptoir."
     },
     {
       "name": "banc_ilot_est",
       "_": "Le symetrique, en face du bloc 10-11-12.",
-      "at": [2.40, 0.0, 2.45],
+      "at": [
+        2.1,
+        0.0,
+        3.75
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "les deux joues", "type": "box", "material": "bois_noir", "at": [-0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
-        { "type": "box", "material": "bois_noir", "at": [0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
-        { "_": "le dossier commun aux deux assises", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, 0.00], "size": [1.80, 0.46, 0.10], "chamfer": 0.010 },
-        { "_": "assise nord, regarde le bar", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 },
-        { "_": "assise sud, regarde l'ilot", "type": "box", "material": "cuir", "at": [0.00, 0.40, -0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 }
+        {
+          "_": "les deux joues",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.8,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.94
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.8,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.94
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "le dossier commun aux deux assises",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.44,
+            0.0
+          ],
+          "size": [
+            1.8,
+            0.46,
+            0.1
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "_": "assise nord, regarde le bar",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            0.25
+          ],
+          "size": [
+            1.8,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "_": "assise sud, regarde l'ilot",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            -0.25
+          ],
+          "size": [
+            1.8,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        }
       ]
     },
     {
       "name": "babyfoot",
       "_": "SPEC-ATMOSPHERE §2.3 C. Le troisieme jeu sans ecran, avec le billard et la cible : les trois forment une diagonale ouest, ce qui donne a cette moitie de la salle une raison d'etre traversee. Il s'arrete a x -4,70, le pilier ouest commence a -5,16 : 0,46 m de passage. Un baby-foot et pas un flipper — un flipper est une machine, et le joueur se demanderait pourquoi elle ne se lance pas.",
-      "at": [-4.00, 0.0, 2.80],
+      "at": [
+        -4.6,
+        0.0,
+        3.9
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "quatre pieds", "type": "box", "material": "bois_noir", "at": [-0.62, 0.00, -0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
-        { "type": "box", "material": "bois_noir", "at": [0.62, 0.00, -0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
-        { "type": "box", "material": "bois_noir", "at": [-0.62, 0.00, 0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
-        { "type": "box", "material": "bois_noir", "at": [0.62, 0.00, 0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
-        { "_": "la caisse, dessus a 0,86", "type": "box", "material": "bois", "at": [0.00, 0.62, 0.00], "size": [1.40, 0.24, 0.76], "chamfer": 0.012 },
-        { "_": "le terrain : panneau couche, normale +Z basculee en +Y par pitch -90", "type": "panel", "material": "babyfoot_terrain", "at": [0.00, 0.865, 0.00], "size": [1.22, 0.62], "pitch": -90 },
-        { "_": "huit barres, ecrites une par une : `repeat` n'existe pas sur un morceau de prop. `roll -90` et non +90 : la matrice de geo_mesh.c (R = Ry.Rx.Rz, vecteur ligne) envoie le +Y local sur le -X monde a roll +90, donc la barre partirait du mauvais cote.", "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.28], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.20], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.12], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.04], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.04], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.12], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.20], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.28], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 }
+        {
+          "_": "quatre pieds",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.62,
+            0.0,
+            -0.31
+          ],
+          "size": [
+            0.09,
+            0.62,
+            0.09
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.62,
+            0.0,
+            -0.31
+          ],
+          "size": [
+            0.09,
+            0.62,
+            0.09
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.62,
+            0.0,
+            0.31
+          ],
+          "size": [
+            0.09,
+            0.62,
+            0.09
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.62,
+            0.0,
+            0.31
+          ],
+          "size": [
+            0.09,
+            0.62,
+            0.09
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "_": "la caisse, dessus a 0,86",
+          "type": "box",
+          "material": "bois",
+          "at": [
+            0.0,
+            0.62,
+            0.0
+          ],
+          "size": [
+            1.4,
+            0.24,
+            0.76
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "_": "le terrain : panneau couche, normale +Z basculee en +Y par pitch -90",
+          "type": "panel",
+          "material": "babyfoot_terrain",
+          "at": [
+            0.0,
+            0.865,
+            0.0
+          ],
+          "size": [
+            1.22,
+            0.62
+          ],
+          "pitch": -90
+        },
+        {
+          "_": "huit barres, ecrites une par une : `repeat` n'existe pas sur un morceau de prop. `roll -90` et non +90 : la matrice de geo_mesh.c (R = Ry.Rx.Rz, vecteur ligne) envoie le +Y local sur le -X monde a roll +90, donc la barre partirait du mauvais cote.",
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            -0.28
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            -0.2
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            -0.12
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            -0.04
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            0.04
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            0.12
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            0.2
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            -0.55,
+            0.93,
+            0.28
+          ],
+          "radius": 0.011,
+          "height": 1.1,
+          "sides": 8,
+          "roll": -90
+        }
       ]
     },
     {
       "name": "banc_sud_ouest",
       "_": "SPEC-ATMOSPHERE §2.3 D. La bande sud est la poche la plus profonde du hall : 5,12 m de tout meuble en (-4,4 ; -7,2). Elle est aussi DERRIERE la borne de classement, qui regarde +z : c'est l'endroit d'ou l'on voit a la fois le tableau des scores et toute la rangee sud de l'ilot. On y va apres une partie — aujourd'hui jamais, parce qu'il n'y a rien.",
-      "at": [-4.00, 0.0, -6.80],
+      "at": [
+        -6.0,
+        0.0,
+        -6.55
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.", "type": "box", "material": "bois_noir", "at": [-1.10, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
-        { "type": "box", "material": "bois_noir", "at": [1.10, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
-        { "_": "le dossier, adosse au mur", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, -0.20], "size": [2.40, 0.62, 0.10], "chamfer": 0.010 },
-        { "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.05], "size": [2.40, 0.08, 0.40], "chamfer": 0.012 }
+        {
+          "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -1.1,
+            0.0,
+            0.05
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.6
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            1.1,
+            0.0,
+            0.05
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.6
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "le dossier, adosse au mur",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.44,
+            -0.2
+          ],
+          "size": [
+            2.4,
+            0.62,
+            0.1
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            0.05
+          ],
+          "size": [
+            2.4,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        }
       ]
     },
     {
       "name": "banc_sud_est",
       "_": "Le second banc de la bande sud, plus court, sous le plafonnier sud.",
-      "at": [3.00, 0.0, -6.80],
+      "at": [
+        3.0,
+        0.0,
+        -6.8
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.", "type": "box", "material": "bois_noir", "at": [-0.90, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
-        { "type": "box", "material": "bois_noir", "at": [0.90, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
-        { "_": "le dossier, adosse au mur", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, -0.20], "size": [2.00, 0.62, 0.10], "chamfer": 0.010 },
-        { "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.05], "size": [2.00, 0.08, 0.40], "chamfer": 0.012 }
+        {
+          "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            -0.9,
+            0.0,
+            0.05
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.6
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.9,
+            0.0,
+            0.05
+          ],
+          "size": [
+            0.1,
+            0.4,
+            0.6
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "le dossier, adosse au mur",
+          "type": "box",
+          "material": "bois_noir",
+          "at": [
+            0.0,
+            0.44,
+            -0.2
+          ],
+          "size": [
+            2.0,
+            0.62,
+            0.1
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.",
+          "type": "box",
+          "material": "cuir",
+          "at": [
+            0.0,
+            0.4,
+            0.05
+          ],
+          "size": [
+            2.0,
+            0.08,
+            0.4
+          ],
+          "chamfer": 0.012
+        }
       ]
     },
     {
       "name": "mange_debout_nord",
       "_": "SPEC-ATMOSPHERE §2.3 F. Plateau a 1,06 m : la hauteur a laquelle on pose un verre sans se pencher. Trois primitives, et c'est le signe le plus fiable qu'une salle est UTILISEE. Celui-ci occupe la poche 5 (2,0 ; 3,5), entre l'ilot et le bar.",
-      "at": [1.60, 0.0, 3.90],
+      "at": [
+        4.6,
+        0.0,
+        3.9
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.", "type": "cylinder", "material": "borne_noir", "at": [0, 0.00, 0], "radius": 0.28, "height": 0.03, "sides": 20 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [0, 0.03, 0], "radius": 0.035, "height": 0.99, "sides": 12 },
-        { "type": "cylinder", "material": "bois", "at": [0, 1.02, 0], "radius": 0.31, "height": 0.04, "sides": 24 }
+        {
+          "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.",
+          "type": "cylinder",
+          "material": "borne_noir",
+          "at": [
+            0,
+            0.0,
+            0
+          ],
+          "radius": 0.28,
+          "height": 0.03,
+          "sides": 20
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            0,
+            0.03,
+            0
+          ],
+          "radius": 0.035,
+          "height": 0.99,
+          "sides": 12
+        },
+        {
+          "type": "cylinder",
+          "material": "bois",
+          "at": [
+            0,
+            1.02,
+            0
+          ],
+          "radius": 0.31,
+          "height": 0.04,
+          "sides": 24
+        }
       ]
     },
     {
       "name": "mange_debout_ouest",
       "_": "Celui-ci occupe la poche 4 (-5,7 ; 2,5), sur le passage bar -> billard.",
-      "at": [-6.90, 0.0, 3.30],
+      "at": [
+        -4.629,
+        0.0,
+        5.32
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.", "type": "cylinder", "material": "borne_noir", "at": [0, 0.00, 0], "radius": 0.28, "height": 0.03, "sides": 20 },
-        { "type": "cylinder", "material": "borne_chrome", "at": [0, 0.03, 0], "radius": 0.035, "height": 0.99, "sides": 12 },
-        { "type": "cylinder", "material": "bois", "at": [0, 1.02, 0], "radius": 0.31, "height": 0.04, "sides": 24 }
-      ]
+        {
+          "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.",
+          "type": "cylinder",
+          "material": "borne_noir",
+          "at": [
+            0,
+            0.0,
+            0
+          ],
+          "radius": 0.28,
+          "height": 0.03,
+          "sides": 20
+        },
+        {
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            0,
+            0.03,
+            0
+          ],
+          "radius": 0.035,
+          "height": 0.99,
+          "sides": 12
+        },
+        {
+          "type": "cylinder",
+          "material": "bois",
+          "at": [
+            0,
+            1.02,
+            0
+          ],
+          "radius": 0.31,
+          "height": 0.04,
+          "sides": 24
+        }
+      ],
+      "_place": "Remonte vers le bar : a (-5,10 ; 1,10) il ne laissait que 0,64 m devant la rangee ouest, pour 0,80 exiges."
     },
     {
       "name": "poubelle_ilot",
       "_": "SPEC-ATMOSPHERE §2.3 G. Au debouche nord de la trouee centrale, emprise x -1,75..-1,35 : elle marque le coin sans mordre sur le couloir libre x [-1,2 ; 1,2]. Une poubelle en bord d'allee est ce qui distingue un plan d'architecte d'un lieu ou l'on boit.",
       "_modelOffset": "Le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero : sans ce calage la poubelle flotte de onze centimetres. Meme valeur que `poubelle_sas`, d'ou le defaut avait ete releve (AUDIT P-02).",
-      "modelOffset": [0.0, -0.109, 0.0],
-      "at": [-1.55, 0.0, 1.55],
+      "modelOffset": [
+        0.0,
+        -0.109,
+        0.0
+      ],
+      "at": [
+        -4.35,
+        0.0,
+        0.7
+      ],
       "yaw": 0.0,
       "model": "models/metal_trash_can/metal_trash_can.gltf",
-      "material": "poubelle"
+      "material": "poubelle",
+      "_place": "Au bout OUEST de l'ilot, dans l'allee : l'ilot s'arrete a x = -3,631, et la poubelle degage de 47 cm. Elle etait posee dans le flanc d'une borne."
     },
     {
       "name": "poubelle_sud",
       "_": "Celle de la bande sud, au bout du banc ouest.",
       "_modelOffset": "Le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero : sans ce calage la poubelle flotte de onze centimetres. Meme valeur que `poubelle_sas`, d'ou le defaut avait ete releve (AUDIT P-02).",
-      "modelOffset": [0.0, -0.109, 0.0],
-      "at": [-1.90, 0.0, -6.75],
+      "modelOffset": [
+        0.0,
+        -0.109,
+        0.0
+      ],
+      "at": [
+        -1.9,
+        0.0,
+        -6.75
+      ],
       "yaw": 0.0,
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle"
@@ -4302,116 +5803,545 @@
     {
       "name": "vitrine_lots",
       "_": "SPEC-ATMOSPHERE §2.3 I. Le point le plus desert du hall apres la bande sud etait (9,6 ; 4,2) a 4,93 m de tout meuble : la bande coincee entre la cloison du sas et les bornes est. C'est aussi le premier mur qu'on longe en sortant du sas. La vitrine habille 1,8 m de cloison, elle porte une bande lumineuse a 1,84 m qui balise la sortie, et elle donne une raison de regarder a gauche. Le caisson est un cadre PEINT et non un vitrage : le moteur n'a pas de transparence ici.",
-      "at": [7.60, 0.0, 3.95],
+      "at": [
+        5.224,
+        0.0,
+        3.011
+      ],
       "yaw": 180.0,
       "parts": [
-        { "_": "le socle plein", "type": "box", "material": "laque_sombre", "at": [0.00, 0.00, 0.00], "size": [1.80, 0.86, 0.42], "chamfer": 0.012 },
-        { "type": "box", "material": "borne_cadre", "at": [0.00, 0.86, 0.00], "size": [1.80, 0.94, 0.42], "chamfer": 0.008 },
-        { "_": "les lots, en facade. La face avant du caisson est en z local +0,21.", "type": "panel", "material": "affiche_6", "at": [0.00, 1.28, 0.212], "size": [1.62, 0.76] },
-        { "type": "panel", "material": "panneau_lumineux", "at": [0.00, 1.84, 0.212], "size": [1.76, 0.10] }
+        {
+          "_": "le socle plein",
+          "type": "box",
+          "material": "laque_sombre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            1.8,
+            0.86,
+            0.42
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            0.86,
+            0.0
+          ],
+          "size": [
+            1.8,
+            0.94,
+            0.42
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "les lots, en facade. La face avant du caisson est en z local +0,21.",
+          "type": "panel",
+          "material": "affiche_6",
+          "at": [
+            0.0,
+            1.28,
+            0.212
+          ],
+          "size": [
+            1.62,
+            0.76
+          ]
+        },
+        {
+          "type": "panel",
+          "material": "panneau_lumineux",
+          "at": [
+            0.0,
+            1.84,
+            0.212
+          ],
+          "size": [
+            1.76,
+            0.1
+          ]
+        }
       ]
     },
     {
       "name": "tableau_semaine",
       "_atmo": "SPEC-ATMOSPHERE poste 16 (§2.3 E). Le mur sud est un aplat de 19,3 x 2,4 m sans un objet ; DESIGN-SALLE §4.2 demande une deuxieme lecture des scores. Elle se lit depuis la rangee sud de l'ilot (6,6 m) et depuis l'entree par la trouee centrale.\nECART ASSUME SUR LA PLANCHE. La specification demande une image dessinee par `marqueeart --titre=\"MEILLEURS DE LA SEMAINE\"`, donc une texture de plus dans `assets/CMakeLists.txt` — hors du mandat de ce lot. Le tableau porte donc `classement_fond`, le materiau que le moteur PILOTE (cle `scoreboard` en tete de ce fichier, `room_hud_draw_scoreboard`) : la salle a deja un tableau vivant au bar, et un second panneau du meme materiau montre le meme classement EN DIRECT, sans un octet ajoute. C'est litteralement la « deuxieme lecture des scores » demandee, et elle bouge.\nCotes : la planche fait 2,40 x 1,20, soit le 2:1 exact de la cible de rendu (640 x 320) — la cote de la spec, 2,20 x 0,90, aurait etire le lettrage de 22 %. Cadre de 0,92 a 2,24 m, bandeau lumineux a 2,29, sous la cimaise (2,42).",
-      "at": [0.00, 1.58, -7.04],
+      "at": [
+        0.0,
+        1.58,
+        -7.04
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cadre, en retrait. Sa face arriere touche le parement du mur sud (z -7,10), sa face avant sort a -7,04.", "type": "box", "material": "borne_cadre", "at": [0.00, -0.66, -0.03], "size": [2.52, 1.32, 0.06], "chamfer": 0.008 },
-        { "_": "la planche. Un panel est centre sur son at, et sa normale est en +Z local : a yaw 0 elle regarde la salle.", "type": "panel", "material": "classement_fond", "at": [0.00, 0.00, 0.002], "size": [2.40, 1.20] },
-        { "type": "panel", "material": "panneau_lumineux", "at": [0.00, 0.71, 0.004], "size": [2.50, 0.10] }
+        {
+          "_": "le cadre, en retrait. Sa face arriere touche le parement du mur sud (z -7,10), sa face avant sort a -7,04.",
+          "type": "box",
+          "material": "borne_cadre",
+          "at": [
+            0.0,
+            -0.66,
+            -0.03
+          ],
+          "size": [
+            2.52,
+            1.32,
+            0.06
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "la planche. Un panel est centre sur son at, et sa normale est en +Z local : a yaw 0 elle regarde la salle.",
+          "type": "panel",
+          "material": "classement_fond",
+          "at": [
+            0.0,
+            0.0,
+            0.002
+          ],
+          "size": [
+            2.4,
+            1.2
+          ]
+        },
+        {
+          "type": "panel",
+          "material": "panneau_lumineux",
+          "at": [
+            0.0,
+            0.71,
+            0.004
+          ],
+          "size": [
+            2.5,
+            0.1
+          ]
+        }
       ]
     },
     {
       "name": "monnayeur",
       "_": "SPEC-ATMOSPHERE §2.3 B, poste 7. Le comptoir occupe x -5,5..0,3 et z 5,85..6,75 ; le monnayeur se pose dans son prolongement, a 0,65 m de son extremite est, dos au mur nord (z = 7,2 en ligne mediane, parement a 7,10 ; le corps s'arrete a 6,85). En sortant du sas — l'ouverture est en x = 4,6, z de 4,6 a 6,0 — c'est le premier objet eclaire du champ, a 3,4 m du bord de la trouee. On entre, on prend ses jetons, on joue. La bande `panneau_lumineux` est ce qui le rend trouvable de l'autre bout de la salle : c'est le seul materiau emissif du decor qui ne soit ni un ecran ni une dalle de plafond. La suspension du meme nom etait deja posee — elle pendait AU-DESSUS DU VIDE ; elle a enfin quelque chose a eclairer.",
-      "at": [0.95, 0.0, 6.55],
+      "at": [
+        3.79,
+        0.0,
+        6.243
+      ],
       "yaw": 180.0,
       "poi": "monnayeur",
       "parts": [
-        { "_": "le corps. Il occupe z local -0,30 a +0,30 : la face avant est donc en z local +0,30, et un panel a sa normale en +Z local — les quatre pieces de facade se posent a z ~ +0,30. Avec yaw 180 cette face regarde le monde en -z, c'est-a-dire la salle.", "type": "box", "material": "laque_sombre", "at": [0.00, 0.00, 0.00], "size": [0.70, 1.42, 0.60], "chamfer": 0.014 },
-        { "_": "la facade, face locale +z", "type": "panel", "material": "jaune", "at": [0.00, 1.02, 0.302], "size": [0.52, 0.34] },
-        { "_": "le bandeau qui le rend trouvable", "type": "panel", "material": "panneau_lumineux", "at": [0.00, 1.34, 0.302], "size": [0.56, 0.14] },
-        { "_": "la sebile a jetons", "type": "box", "material": "borne_noir", "at": [-0.11, 0.62, 0.315], "size": [0.22, 0.10, 0.03], "chamfer": 0.004 },
-        { "_": "le bouton de rendu, couche a plat contre la facade", "type": "cylinder", "material": "bouton_rouge", "at": [0.18, 0.72, 0.31], "radius": 0.028, "height": 0.02, "sides": 12, "pitch": 90.0 }
-      ]
+        {
+          "_": "le corps. Il occupe z local -0,30 a +0,30 : la face avant est donc en z local +0,30, et un panel a sa normale en +Z local — les quatre pieces de facade se posent a z ~ +0,30. Avec yaw 180 cette face regarde le monde en -z, c'est-a-dire la salle.",
+          "type": "box",
+          "material": "laque_sombre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.7,
+            1.42,
+            0.6
+          ],
+          "chamfer": 0.014
+        },
+        {
+          "_": "la facade, face locale +z",
+          "type": "panel",
+          "material": "jaune",
+          "at": [
+            0.0,
+            1.02,
+            0.302
+          ],
+          "size": [
+            0.52,
+            0.34
+          ]
+        },
+        {
+          "_": "le bandeau qui le rend trouvable",
+          "type": "panel",
+          "material": "panneau_lumineux",
+          "at": [
+            0.0,
+            1.34,
+            0.302
+          ],
+          "size": [
+            0.56,
+            0.14
+          ]
+        },
+        {
+          "_": "la sebile a jetons",
+          "type": "box",
+          "material": "borne_noir",
+          "at": [
+            -0.11,
+            0.62,
+            0.315
+          ],
+          "size": [
+            0.22,
+            0.1,
+            0.03
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "le bouton de rendu, couche a plat contre la facade",
+          "type": "cylinder",
+          "material": "bouton_rouge",
+          "at": [
+            0.18,
+            0.72,
+            0.31
+          ],
+          "radius": 0.028,
+          "height": 0.02,
+          "sides": 12,
+          "pitch": 90.0
+        }
+      ],
+      "_place": "Au-DELA du bout est du comptoir. Le bar de 2020 fait 5,54 m et il est centre sur x = 0 : il occupe donc -2,77 a +2,77, et le monnayeur doit se poser plus loin."
     },
     {
       "name": "suspension_banc_ouest",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [-2.40, 0.0, 2.45],
+      "at": [
+        -2.1,
+        0.0,
+        3.75
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.06,
+            0
+          ],
+          "radius": 0.008,
+          "height": 1.04,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.84,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.83,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "suspension_banc_est",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [2.40, 0.0, 2.45],
+      "at": [
+        2.1,
+        0.0,
+        3.75
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.06,
+            0
+          ],
+          "radius": 0.008,
+          "height": 1.04,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.84,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.83,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "suspension_babyfoot",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [-4.00, 0.0, 2.80],
+      "at": [
+        -4.6,
+        0.0,
+        3.9
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.06,
+            0
+          ],
+          "radius": 0.008,
+          "height": 1.04,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.84,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.83,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "suspension_banc_sud_o",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [-4.00, 0.0, -6.40],
+      "at": [
+        -4.0,
+        0.0,
+        -6.4
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.06,
+            0
+          ],
+          "radius": 0.008,
+          "height": 1.04,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.84,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.83,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "suspension_banc_sud_e",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [3.00, 0.0, -6.40],
+      "at": [
+        3.0,
+        0.0,
+        -6.4
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.06,
+            0
+          ],
+          "radius": 0.008,
+          "height": 1.04,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.84,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.83,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     },
     {
       "name": "suspension_monnayeur",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
-      "at": [0.95, 0.0, 6.55],
+      "at": [
+        3.75,
+        0.0,
+        6.05
+      ],
       "yaw": 0.0,
       "parts": [
-        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.21, 0], "radius": 0.008, "height": 0.89, "sides": 8 },
-        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.99, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
-        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.98, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+        {
+          "_": "le cable",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0,
+            2.21,
+            0
+          ],
+          "radius": 0.008,
+          "height": 0.89,
+          "sides": 8
+        },
+        {
+          "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans",
+          "type": "cylinder",
+          "material": "billard_abatjour",
+          "at": [
+            0,
+            1.99,
+            0
+          ],
+          "radius": 0.28,
+          "radiusTop": 0.1,
+          "height": 0.22,
+          "sides": 20,
+          "capBottom": false,
+          "capTop": true
+        },
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            1.98,
+            0
+          ],
+          "radius": 0.045,
+          "sides": 12,
+          "rings": 7
+        }
       ]
     }
   ],
   "_depart": "Le joueur entre par le pan coupé et regarde vers le centre de la salle. La position est celle des PIEDS : le moteur ajoute la hauteur d'œil.",
   "playerStart": {
     "position": [
-      7.3,
+      6.118,
       0.0,
-      5.4
+      12.31
     ],
-    "yaw": 215.0,
-    "_": "Dans le sas : on entre, on tourne, la salle se découvre."
+    "yaw": 270.0,
+    "_": "La position de depart de 2020, mesuree : room.c pose le joueur en START_PX 12,5 / START_PZ 35,0 avec un angle de pi, ce qui donne (6,068 ; 12,313) dans ce repere — DANS LE SAS, a la porte exterieure, tourne vers la salle. On entre par un couloir de neuf metres et la salle se decouvre au bout. C'est exactement ce que le commentaire precedent decrivait (« on entre, on tourne, la salle se decouvre ») sans que la position le fasse : elle etait dans un sas de trois metres.",
+    "_yaw": "270 et non 180 : dans ce moteur, yaw 90 regarde vers +Z — c'est ce que `atan2(-normal.z, -normal.x)` donne pour une borne dont la dalle regarde -Z. Le sas monte vers +Z, donc regarder LA SALLE depuis la porte exterieure, c'est regarder -Z. A 180 le joueur demarrait le nez dans le mur du fond, ce que la capture a montre tout de suite."
   },
   "_captures": "Les MÊMES NOMS que salle-legacy.scene.json, mais exprimés ici en mètres. C'est tout l'intérêt : --pos= désignerait deux endroits différents dans deux salles d'échelles différentes, alors que --view=allee désigne le même cadrage dans chacune.",
   "captures": [
@@ -4420,36 +6350,37 @@
       "position": [
         0.0,
         1.7,
-        -2.2
+        -2.6
       ],
-      "yaw": 90.0,
+      "yaw": 0.0,
       "pitch": -2.0,
-      "_": "Dans l'allée centrale, entre les deux grappes de trois, face à l'îlot."
+      "_": "Dans l'allée centrale, entre les deux grappes de trois, face à l'îlot.",
+      "_replan": "LES POINTS DE VUE, REPRIS APRES LE RETRECISSEMENT. Ils cadraient un hall de 19,30 x 14,40 ; il fait 14,43 x 14,27, le bar est revenu au centre, les toilettes sont passees a l'est et le sas est devenu un couloir de neuf metres. Un point de vue laisse en place se retrouve dans un meuble — le controle l'a dit pour « bar », qui etait DANS la suspension d'un banc — ou face a un mur.\\n`borne` garde son tangage a zero : le moteur pose lui-meme le regard sur la dalle, a condition d'etre en mode joueur, ce que --pose=idle impose."
     },
     {
       "name": "bar",
       "position": [
-        -2.6,
+        0.0,
         1.7,
-        3.4
+        2.8
       ],
-      "yaw": 90.0,
+      "yaw": 0.0,
       "pitch": -2.0
     },
     {
       "name": "billard",
       "position": [
-        -7.2,
+        -3.85,
         1.7,
-        1.4
+        -2.6
       ],
-      "yaw": 270.0,
+      "yaw": 180.0,
       "pitch": -8.0
     },
     {
       "name": "plafond",
       "position": [
-        -4.5,
+        0.0,
         1.7,
         -3.0
       ],
@@ -4460,11 +6391,11 @@
     {
       "name": "entree",
       "position": [
-        6.3,
+        6.12,
         1.7,
-        6.0
+        9.5
       ],
-      "yaw": 196.0,
+      "yaw": 270.0,
       "pitch": -3.0,
       "_": "Dans le sas d'entrée, avant le passage vers le hall. C'est la première chose qu'on voit du jeu."
     },
@@ -4473,31 +6404,31 @@
       "position": [
         0.0,
         1.7,
-        -1.9
+        -2.9
       ],
-      "yaw": 270.0,
+      "yaw": 180.0,
       "pitch": -6.0,
       "_": "La borne de classement, vue depuis l'allée — c'est-à-dire d'où l'on vient. Elle était à 6 m de l'îlot, elle est à 2,2 m ; et depuis B3 elle regarde enfin dans la bonne direction."
     },
     {
       "name": "toilettes",
       "position": [
-        -6.6,
+        8.1,
         1.7,
-        -3.95
+        -2.3
       ],
-      "yaw": 217.0,
+      "yaw": 90.0,
       "pitch": -7.0,
       "_": "Le bloc sanitaire, depuis la baie, en diagonale : le lavabo et son miroir à gauche, les deux cabines en face, le néon qui grésille au-dessus. Il n'y avait ici ni lumière, ni porte, ni rien à regarder."
     },
     {
       "name": "borne",
       "position": [
-        -2.778,
+        -3.186,
         1.7,
-        -1.278
+        2.2
       ],
-      "yaw": 90.0,
+      "yaw": 180.0,
       "pitch": 0.0,
       "_pitch": "ZERO, et c'est le point : le tangage etait ecrit -34 a la main ici. C'etait une QUATRIEME copie du meme calcul — --play-at le fait, l'entree en partie le fait, et cette capture le recopiait fige. Le moteur pose maintenant le regard sur la dalle des qu'on arrive devant une borne, donc cette capture n'a plus rien a declarer.\nCONSEQUENCE A CONNAITRE, et elle a ete mesuree : le moteur ne pose le regard QU'EN MODE JOUEUR. Cette capture doit donc etre prise avec --pose=idle, qui impose ce mode. Sans lui la camera reste libre a tangage nul, le marquee remplit le cadre, et 17,0 % des pixels brulent. Avec, on retombe a 7,5 %, dans la cible.\n    --view=borne              -> mediane 57,6, 17,0 %% au-dessus de 200\n    --view=borne --pose=idle  -> mediane 44,6,  7,5 %%\nC'est la lecon que main.c porte deja : une verification qui emprunte un chemin que le joueur n'emprunte pas ne verifie rien.",
       "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`."
@@ -4508,9 +6439,9 @@
       "position": [
         0.0,
         1.7,
-        2.6
+        4.8
       ],
-      "yaw": 270.0,
+      "yaw": 180.0,
       "pitch": -4.0
     },
     {
@@ -4519,18 +6450,18 @@
       "position": [
         0.0,
         1.7,
-        -5.4
+        -6.2
       ],
-      "yaw": 90.0,
+      "yaw": 0.0,
       "pitch": -3.0
     },
     {
       "name": "arrivee",
       "_atmo": "Ce qu'on voit en SORTANT DU SAS, ce que ne cadre ni `entree` (qui est dans le sas) ni `allee` (qui est deja au milieu de l'ilot). C'est la vue de recette du poste 7 : le monnayeur doit y etre, eclaire, a moins de 4 m.",
       "position": [
-        4.2,
+        6.12,
         1.7,
-        5.2
+        4.2
       ],
       "yaw": 200.0,
       "pitch": -4.0
@@ -4539,11 +6470,11 @@
       "name": "travee",
       "_atmo": "La travee OUEST, entre le bar et le billard : les trois bornes du mur ouest de trois quarts, le mur, la corniche. C'est la vue de recette des postes 15 (collisions de palette) et 19 (les neons en corniche).",
       "position": [
-        -6.2,
+        -5.2,
         1.7,
-        3.6
+        -0.5
       ],
-      "yaw": 200.0,
+      "yaw": 90.0,
       "pitch": -5.0
     },
     {

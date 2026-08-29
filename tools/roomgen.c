@@ -241,6 +241,8 @@ typedef struct rg_wall_plan {
     float  thickness;
 } rg_wall_plan;
 
+#define RG_MAX_SHELLS 8
+
 typedef struct rg_builder {
     tool_vec verts;         /* gltf_vertex — un seul pool, partagé (cf. gltf_write.h) */
     tool_vec meshes;        /* gltf_mesh */
@@ -310,6 +312,10 @@ typedef struct rg_builder {
     rg_wall_plan wall_plans[RG_MAX_WALLS];
     size_t       wall_plan_count;
     int          shell_index;    /* -1 tant qu'aucun contour fermé n'a été lu */
+    /* Les contours fermés, tous : un objet est DANS le bâtiment s'il est dans
+     * l'un d'eux. Le hall, le bloc sanitaire et le sas en sont trois. */
+    int          shells[RG_MAX_SHELLS];
+    size_t       shell_count;
 
     rg_floor floors[RG_MAX_FLOORS];
     size_t   floor_count;
@@ -819,37 +825,54 @@ static void check_inside_shell(const rg_builder *b)
         if (s->outside_ok) continue;
         checked++;
 
-        float worst = -1e9f;
+        /*
+         * On retient le contour qui accueille le MIEUX l'objet, c'est-à-dire
+         * celui dont le pire débord est le plus faible. Un objet du bloc
+         * sanitaire est très loin hors du hall, et parfaitement dedans chez
+         * lui : lui reprocher le hall n'aurait aucun sens.
+         */
+        float worst = 1e9f;
         ns_v3 worst_p = ns_v3_zero();
         size_t worst_seg = 0;
-        for (size_t k = s->vert_begin; k < s->vert_end; ++k) {
-            const float x = verts[k].position[0], z = verts[k].position[2];
-            size_t seg = 0;
-            /* `beyond` compte depuis le PAREMENT INTÉRIEUR, qui est à
-             * `thickness / 2` de la médiane, du côté de la salle. */
-            const float beyond = t * 0.5f - shell_signed_distance(sh, x, z, &seg);
-            if (beyond > worst) {
-                worst = beyond;
-                worst_p = ns_v3_make(verts[k].position[0], verts[k].position[1],
-                                     verts[k].position[2]);
-                worst_seg = seg;
+        const rg_wall_plan *sh_used = sh;
+        for (size_t c = 0; c < b->shell_count; ++c) {
+            const rg_wall_plan *cand = &b->wall_plans[b->shells[c]];
+            float w = -1e9f;
+            ns_v3 wp = ns_v3_zero();
+            size_t wseg = 0;
+            for (size_t k = s->vert_begin; k < s->vert_end; ++k) {
+                const float x = verts[k].position[0], z = verts[k].position[2];
+                size_t seg = 0;
+                /* `beyond` compte depuis le PAREMENT INTÉRIEUR, qui est à
+                 * `thickness / 2` de la médiane, du côté de la salle. */
+                const float beyond = cand->thickness * 0.5f
+                                   - shell_signed_distance(cand, x, z, &seg);
+                if (beyond > w) {
+                    w = beyond;
+                    wp = ns_v3_make(verts[k].position[0], verts[k].position[1],
+                                    verts[k].position[2]);
+                    wseg = seg;
+                }
             }
+            if (w < worst) { worst = w; worst_p = wp; worst_seg = wseg; sh_used = cand; }
         }
-        if (worst <= t + RG_SHELL_SLACK) continue;
+        if (worst > 1e8f) continue;
+        if (worst <= sh_used->thickness + RG_SHELL_SLACK) continue;
 
         /* Le pan de parement le plus proche, rentré de la demi-épaisseur, pour
          * que le message montre le mur dont il parle. */
-        const ns_v2 a = sh->points[worst_seg];
-        const ns_v2 c = sh->points[(worst_seg + 1) % sh->count];
+        const ns_v2 a = sh_used->points[worst_seg];
+        const ns_v2 c = sh_used->points[(worst_seg + 1) % sh_used->count];
         float nx = c.y - a.y, nz = -(c.x - a.x);
         const float nl = sqrtf(nx * nx + nz * nz);
         if (nl > 1e-9f) { nx /= nl; nz /= nl; }
         const float mx = (a.x + c.x) * 0.5f, mz = (a.y + c.y) * 0.5f;
-        if (!plan_inside(sh->points, sh->count, mx + nx * 0.01f, mz + nz * 0.01f)) {
+        if (!plan_inside(sh_used->points, sh_used->count, mx + nx * 0.01f, mz + nz * 0.01f)) {
             nx = -nx; nz = -nz;
         }
-        const float in_ax = a.x + nx * t * 0.5f, in_az = a.y + nz * t * 0.5f;
-        const float in_cx = c.x + nx * t * 0.5f, in_cz = c.y + nz * t * 0.5f;
+        const float th = sh_used->thickness;
+        const float in_ax = a.x + nx * th * 0.5f, in_az = a.y + nz * th * 0.5f;
+        const float in_cx = c.x + nx * th * 0.5f, in_cz = c.y + nz * th * 0.5f;
 
         const rg_outside_debt *debt = NULL;
         for (size_t d = 0; d < RG_OUTSIDE_DEBT_COUNT; ++d) {
@@ -1976,8 +1999,22 @@ static void parse_walls(rg_builder *b, const tool_json *doc, const tool_json_val
             w->count = point_count;
             w->closed = d.closed;
             w->thickness = d.thickness;
-            if (d.closed && b->shell_index < 0 && point_count >= 3) {
-                b->shell_index = (int)b->wall_plan_count;
+            if (d.closed && point_count >= 3) {
+                /*
+                 * TOUS les contours fermés comptent, pas seulement le premier.
+                 *
+                 * Il n'y en avait qu'un tant que le bâtiment était une seule
+                 * pièce. Le plan de 2020 en a trois — le hall, le bloc sanitaire
+                 * à l'est, le sas au nord-est — et un bâtiment a le droit d'avoir
+                 * des annexes. Avec un seul contour retenu, le contrôle mesurait
+                 * les poutres du hall contre le couloir du sas et les déclarait
+                 * « 14,48 m dehors » : un verdict absurde, et le genre de faux
+                 * positif qui fait désactiver un contrôle.
+                 */
+                if (b->shell_index < 0) b->shell_index = (int)b->wall_plan_count;
+                if (b->shell_count < RG_MAX_SHELLS) {
+                    b->shells[b->shell_count++] = (int)b->wall_plan_count;
+                }
             }
             b->wall_plan_count++;
         }
@@ -3634,6 +3671,7 @@ int main(int argc, char **argv)
     memset(&b, 0, sizeof b);
     /* Aucun contour fermé lu pour l'instant. Zéro serait un index valide. */
     b.shell_index = -1;
+    b.shell_count = 0;
     tool_vec_init(&b.verts, sizeof(gltf_vertex));
     tool_vec_init(&b.meshes, sizeof(gltf_mesh));
     tool_vec_init(&b.prim_blocks, sizeof(geo_primitives));
