@@ -889,8 +889,9 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
-      "fit": true
+      "emissiveStrength": 0.85,
+      "fit": true,
+      "_emissif": "0,85 et non 1,52, et c'est MESURE a la distance ou l'enseigne compte le plus. Sous `--play-at`, le marquee occupe le haut du cadre a 40 cm de l'oeil pendant toute la partie : a 1,52 l'emissif multiplie l'albedo blanc des lettres et sort a 1,52 en HDR, ce que le tone mapping ecrase en blanc pur avant meme que la floraison s'y ajoute. On lisait une tache lumineuse a la forme approximative du mot. A 0,85 la plaque reste VERTE, les lettres restent blanches, et le mot se lit — de pres comme depuis l'autre bout de la salle, les deux verifies en capture. Une enseigne retroeclairee doit etre plus claire que son mur, pas plus claire que tout."
     },
     {
       "_": "RECETTE VISUELLE. Elle portait « snake.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre trois verts differents et une queue de serpent tronquee, jamais le mot « SNAKE ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
@@ -902,7 +903,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true
     },
     {
@@ -915,7 +916,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true
     },
     {
@@ -928,7 +929,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true
     },
     {
@@ -940,7 +941,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true
     },
     {
@@ -952,7 +953,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true,
       "_": "L'enseigne de « SHOOTER », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
@@ -965,7 +966,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true,
       "_": "L'enseigne de « DEMINEUR », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
@@ -978,7 +979,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true,
       "_": "L'enseigne de « PAC-MAN », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
@@ -991,7 +992,7 @@
         0.97,
         0.9
       ],
-      "emissiveStrength": 1.52,
+      "emissiveStrength": 0.85,
       "fit": true,
       "_": "L'enseigne de « PIANO », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
