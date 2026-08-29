@@ -219,17 +219,13 @@
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
+      "_atmo": "SPEC-ATMOSPHERE poste 6. Le flanc et le caisson avaient leurs ROLES INVERSES, mesure sur les neuf paires : le flanc etait 1,7 fois plus clair et 1,8 fois MOINS colore que le corps qu'il habille. Une serigraphie de flanc est la piece la plus coloree d'une borne — c'est elle qu'on voit de trois quarts dans une allee — et elle etait devenue un pastel. Regle : le flanc porte la couleur du caisson, un cran plus clair, et non une autre couleur plus pale. baseColor = celle du caisson x 1,8, le facteur venant du rapport mesure entre flanc_borne.png (0,303) et painted_panel.jpg (0,401). flanc_asteroid reste sombre et peu sature : c'est VOULU, un caisson d'Asteroids est noir, et une rangee a besoin d'un silence.",
       "name": "flanc_flappy",
       "texture": "flanc_borne.png",
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.426,
-        0.736,
-        0.512,
-        1.0
-      ]
+      "baseColor": [0.18, 0.83, 0.36, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -238,12 +234,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.426,
-        0.512,
-        0.787,
-        1.0
-      ]
+      "baseColor": [0.18, 0.36, 0.94, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -252,12 +243,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.478,
-        0.718,
-        0.46,
-        1.0
-      ]
+      "baseColor": [0.13, 0.47, 0.23, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -266,12 +252,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.478,
-        0.503,
-        0.598,
-        1.0
-      ]
+      "baseColor": [0.16, 0.16, 0.20, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -280,12 +261,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.822,
-        0.495,
-        0.4,
-        1.0
-      ]
+      "baseColor": [1.00, 0.32, 0.13, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -294,12 +270,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.787,
-        0.667,
-        0.409,
-        1.0
-      ]
+      "baseColor": [0.29, 0.47, 0.61, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -308,12 +279,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.804,
-        0.701,
-        0.392,
-        1.0
-      ]
+      "baseColor": [1.04, 0.79, 0.09, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -322,12 +288,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.632,
-        0.443,
-        0.736,
-        1.0
-      ]
+      "baseColor": [0.61, 0.22, 0.83, 1.0]
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
@@ -336,12 +297,7 @@
       "uvMetres": 1.0,
       "roughness": 0.46,
       "metallic": 0.05,
-      "baseColor": [
-        0.718,
-        0.426,
-        0.452,
-        1.0
-      ]
+      "baseColor": [0.79, 0.18, 0.23, 1.0]
     },
     {
       "name": "caisson_flappy",

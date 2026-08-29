@@ -110,7 +110,13 @@ set(SIDEART_RUNTIME "${GEN}/scene/textures/flanc_borne.png")
 add_custom_command(
     OUTPUT  "${SIDEART}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
-    COMMAND sideart "${SIDEART}"
+    # SPEC-ATMOSPHERE poste 6. Le losange faisait 18,75 cm : une cote de
+    # capitonnage de fauteuil, pas de tole gaufree — et c'est ce qui donnait aux
+    # flancs leur air de tissu d'ameublement. A 6,6 cm c'est un gaufrage.
+    # `--high` 0,86 -> 0,62 : le haut du flanc cessait de saturer a blanc, ce
+    # qui y effacait la teinte du multiplicateur, justement la ou on le voit
+    # depuis l'allee.
+    COMMAND sideart --step=34 --line=0.06 --low=0.12 --high=0.62 "${SIDEART}"
     DEPENDS sideart
     COMMENT "Art latéral de borne : flanc_borne.png"
     VERBATIM
