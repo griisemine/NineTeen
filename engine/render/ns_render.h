@@ -151,7 +151,13 @@ void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
  * moment où on a envie de la regarder. Une seule dalle vivante ne le permettait
  * pas.
  */
-#define NS_MAX_LIVE_SCREENS 4
+/*
+ * Dalles vivantes simultanees. C'etait 4 — une partie, le classement, et deux
+ * de marge — et ca suffisait tant que dix-huit bornes sur dix-neuf affichaient
+ * une image fixe. Depuis `room_attract`, elles jouent TOUTES : il en faut une
+ * par borne, plus le classement.
+ */
+#define NS_MAX_LIVE_SCREENS 28
 
 /*
  * Fait afficher `texture` par le matériau `material`, en écrasant son albédo.

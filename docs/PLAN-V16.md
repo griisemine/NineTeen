@@ -120,10 +120,10 @@ moi, pas par celui qui a fait le travail.
 
 | # | lot | critère de recette | état |
 |---|---|---|---|
-| L1 | L'écran, un seul rendu | les 19 dalles passent par le tube ; capture attract et capture en jeu indiscernables en traitement | ouvert |
+| L1 | L'écran, un seul rendu | les 19 dalles passent par le tube ; capture attract et capture en jeu indiscernables en traitement | **fermé** (88fd75c) |
 | L2 | Le panneau de commande | aucun bouton ne franchit l'axe ; les colonnes suivent un arc mesurable ; le nombre de boutons vient du jeu | ouvert |
 | L3 | Les flancs et le liseré | plus de trame matelassée sur de la tôle ; le T-molding cesse de prendre l'œil avant le caisson | ouvert |
-| L4 | Les bras | bras + avant-bras + main, coude et poignet réels ; la main se REFERME sur la boule | ouvert |
+| L4 | Les bras | bras + avant-bras + main, coude et poignet réels ; la main se REFERME sur la boule | **fermé** (a97cbfa) |
 | L5 | L'ergonomie | œil à 25–30 cm au-dessus du centre d'écran ; angle de plongée sous 28° | ouvert |
 | L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre ; contrôle au build | ouvert |
 | L7 | L'atmosphère | le centre de la salle se parcourt ; le plafond n'est plus une pergola | ouvert |
@@ -142,3 +142,34 @@ dispositif est donc :
 
 Et par-dessus : **je vérifie moi-même chaque preuve**. Un agent qui dit qu'un
 lot est fermé ne le ferme pas. C'est la capture qui le ferme.
+
+
+## Journal des lots fermés
+
+### L1 — `88fd75c`
+
+Preuve : capture `--view=allee` avant / après. L'écran de la borne Snake passe
+d'un aplat vert vif à bords francs à un tube bombé, coins assombris, lignes de
+balayage gravées dans la surface. Les dix-huit dalles non jouées reçoivent
+exactement le traitement de celle qui joue.
+
+### L4 — `a97cbfa`
+
+Preuve : `ns_test_ik`, 3 493 vérifications, 0 échec, et les trois distances qui
+comptent, avant → après :
+
+| ce qu'on mesure | main plate | main fléchie |
+|---|---|---|
+| bout du doigt gauche au manche | 3,0 cm | **0,2 cm** |
+| bout du doigt droit aux boutons | 2,7 cm | **1,3 cm** |
+| bout du doigt à la fente | — | **1,3 cm** |
+
+Et la capture `--play-at=borne_arcade_1` : la main gauche enveloppe la boule du
+manche au lieu de la traverser, la droite est en suspension au-dessus des
+pastilles, le pouce est opposé. `ctest` : 35/35.
+
+Trois défauts trouvés en le faisant, chacun réel et aucun soupçonné au départ :
+les normales d'une main fléchie que l'étirement en Z faussait ; le roulis de la
+main, laissé au hasard par la rotation minimale de `segment_matrix` ; et
+`test_ik` qui mesurait le bout du doigt à l'ancienne place et accusait l'IK
+d'une faute qui n'était pas la sienne.

@@ -29,6 +29,7 @@
 #include "ns_scores.h"
 
 #include "room_camera.h"
+#include "room_attract.h"
 #include "room_hud.h"
 #include "room_menu.h"
 #include "room_sound.h"
@@ -1658,6 +1659,24 @@ int main(int argc, char **argv)
     }
 
     /*
+     * L'ATTRACT MODE : chaque borne joue sa propre partie.
+     *
+     * Créé après les deux cibles ci-dessus et non avant, parce qu'il en alloue
+     * une par borne : si la mémoire vidéo venait à manquer, mieux vaut que ce
+     * soit la démo qui y renonce que la partie du joueur.
+     */
+    /*
+     * `NINETEEN_NO_ATTRACT` éteint les démos. Il existe pour une seule raison,
+     * et c'est celle qui a servi : MESURER ce qu'elles coûtent. Le chiffre, sur
+     * l'allée en palier medium, est 23,7 ms sans et 24,2 ms avec — un demi-pas
+     * de temps pour dix-huit écrans vivants, parce qu'on n'en redessine que
+     * quatre par image. Sans cet interrupteur, la seule façon de connaître ce
+     * chiffre aurait été de croire une estimation.
+     */
+    room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
+                          ? NULL : room_attract_create(rhi, &scene);
+
+    /*
      * Le matériau de la dalle de la borne de classement, cherché une fois.
      *
      * Par le JEU déclaré et non par le nom : `salle.room.json` peut renommer la
@@ -2452,6 +2471,13 @@ play_at_done: ;
                 look_settle -= dt;
             }
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
+            /* Les dix-neuf démos avancent du même pas que la partie du joueur :
+             * c'est la seule façon qu'elles aient la bonne vitesse quel que
+             * soit le nombre d'images par seconde. */
+            if (attract) {
+                room_attract_tick(attract, (float)clock.tick_seconds,
+                                  (in_game && !fullscreen_game) ? playing_material : -1);
+            }
 
             /*
              * Les mains se posent sur les commandes dès que la séquence du jeton
@@ -2744,6 +2770,18 @@ play_at_done: ;
                 }
             }
 
+            /*
+             * Les DÉMOS, après la partie du joueur et jamais avant : elles
+             * doivent connaître la dalle qu'il occupe pour la laisser
+             * tranquille. `playing_material` ne vaut quelque chose que si une
+             * partie tourne dans une dalle — en plein écran il n'y en a pas, et
+             * les dix-neuf bornes de la salle continuent de jouer derrière.
+             */
+            if (attract) {
+                const int32_t taken = (in_game && !fullscreen_game) ? playing_material : -1;
+                room_attract_draw(rhi, sprites, attract, renderer, taken);
+            }
+
             if (in_game && fullscreen_game && sprites) {
                 /*
                  * En partie, le jeu occupe l'écran. Le repère logique est fixé à
@@ -2939,6 +2977,7 @@ play_at_done: ;
                 frames_rendered, clock.fps_smoothed);
     }
 
+    room_attract_destroy(rhi, attract);
     ns_texture_destroy(rhi, &screen_rt);
     /* `board_rt` n'était pas détruite. Une seule texture, libérée par le pilote
      * à la sortie du processus — mais c'est exactement la fuite qui s'installe :
