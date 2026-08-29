@@ -444,6 +444,16 @@ typedef struct duel_ghost {
      */
     ns_lockstep *live;
     int32_t      live_stall;     /* pas passés à attendre l'adversaire */
+    /*
+     * Le dernier pas du FANTÔME déjà confronté à l'empreinte du pair.
+     *
+     * Il existe parce que le fantôme et nous n'avançons PAS du même nombre de
+     * pas : quand l'entrée de l'adversaire n'est pas encore arrivée,
+     * `duel_tick` rend la main sans rejouer — ce qui est exactement ce qu'il
+     * doit faire. Sans mémoire de ce qu'on a déjà comparé, on re-confronterait
+     * le même pas à chaque image de l'attente.
+     */
+    int32_t      live_verified;
 } duel_ghost;
 
 static void duel_release(duel_ghost *d)
@@ -541,11 +551,29 @@ static void duel_begin(duel_ghost *d, const ns_game_api *api, uint64_t seed, boo
  * l'intérêt de n'enregistrer que les changements, et l'oublier donnerait un
  * adversaire qui relâche ses commandes entre deux appuis.
  */
+/* Un pas du fantôme : ses appuis, ses maintiens, son avancée, ses événements.
+ * Isolé parce que le duel EN DIRECT peut en jouer PLUSIEURS dans la même image
+ * quand il rattrape une attente — voir `duel_tick`. */
+static void duel_step(duel_ghost *d, const ns_game_api *api, uint8_t press, float dt)
+{
+    for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+        if (press & (1u << b)) api->press(d->state, (ns_game_button)b);
+    }
+    if (api->hold) {
+        bool h[NS_GAME_BUTTON_COUNT];
+        for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) h[b] = (d->held & (1u << b)) != 0;
+        api->hold(d->state, h);
+    }
+    api->tick(d->state, dt);
+    /* `events` CONSOMME : la boucle de jeu l'appelle à chaque pas, et ne pas le
+     * faire ici rejouerait un jeu différent de celui qu'on rejoue. */
+    ns_game_events ev; SDL_zero(ev);
+    api->events(d->state, &ev);
+}
+
 static void duel_tick(duel_ghost *d, const ns_game_api *api, int32_t tick, float dt)
 {
     if (!d->running || !d->state || !api) return;
-
-    uint8_t press = 0;
 
     if (d->live) {
         /*
@@ -560,6 +588,19 @@ static void duel_tick(duel_ghost *d, const ns_game_api *api, int32_t tick, float
          * SÉPARÉES courent sur la même graine, et chacun rejoue celle de
          * l'autre pour la voir — un hoquet fige l'adversaire à l'écran, pas la
          * borne sous les doigts.
+         *
+         * LE FANTÔME AVANCE À SON PROPRE RYTHME, et c'est la correction d'un
+         * défaut qui a coûté cher à diagnostiquer. Le pas rejoué était calculé
+         * comme « le nôtre moins huit ». Quand l'entrée de ce pas n'était pas
+         * encore arrivée, on rendait la main — correctement — mais à l'image
+         * suivante on demandait le pas SUIVANT, et le pas manqué n'était JAMAIS
+         * rejoué. Le fantôme perdait une entrée et une avancée à chaque attente,
+         * et l'empreinte le disait : mesuré, deux attentes suffisaient à faire
+         * annoncer « divergence au pas 96 » alors que les deux parties réelles
+         * portaient exactement la même empreinte à ce pas-là.
+         *
+         * On boucle donc depuis le dernier pas VRAIMENT rejoué jusqu'à la cible,
+         * ce qui rattrape naturellement le retard dès que les entrées arrivent.
          */
         ns_lockstep_poll(d->live);
         const ns_lockstep_state st = ns_lockstep_status(d->live);
@@ -569,41 +610,33 @@ static void duel_tick(duel_ghost *d, const ns_game_api *api, int32_t tick, float
             d->running = false;
             return;
         }
-        const int32_t ghost_tick = tick - NS_LOCKSTEP_DELAY;
-        if (ghost_tick < 0) return;
+        const int32_t cible = tick - NS_LOCKSTEP_DELAY;
+        while (d->last_tick < cible) {
+            const int32_t suivant = d->last_tick + 1;
+            uint8_t held = 0, pressed = 0;
+            if (!ns_lockstep_peer_input(d->live, suivant, &held, &pressed)) {
+                /* En retard : on ne devine pas. Rejouer une entrée qu'on n'a pas
+                 * reçue est exactement ce qui fait diverger deux parties, et on
+                 * s'est donné une empreinte pour ne PAS en arriver là. On
+                 * REPRENDRA à ce pas-ci, pas au suivant. */
+                d->live_stall++;
+                return;
+            }
+            d->held = held;
+            duel_step(d, api, pressed, dt);
+            d->last_tick = suivant;
+        }
+        return;
+    }
 
-        uint8_t held = 0, pressed = 0;
-        if (!ns_lockstep_peer_input(d->live, ghost_tick, &held, &pressed)) {
-            /* En retard : on ne devine pas. Rejouer une entrée qu'on n'a pas
-             * reçue est exactement ce qui fait diverger deux parties, et on
-             * s'est donné une empreinte pour ne PAS en arriver là. */
-            d->live_stall++;
-            return;
-        }
-        d->held = held;
-        press = pressed;
-        d->last_tick = ghost_tick;
-    } else {
-        if (tick > d->last_tick) { d->finished = true; d->running = false; return; }
-        while (d->cursor < d->count && d->input[d->cursor].tick == tick) {
-            d->held = d->input[d->cursor].held;
-            press |= d->input[d->cursor].pressed;
-            d->cursor++;
-        }
+    uint8_t press = 0;
+    if (tick > d->last_tick) { d->finished = true; d->running = false; return; }
+    while (d->cursor < d->count && d->input[d->cursor].tick == tick) {
+        d->held = d->input[d->cursor].held;
+        press |= d->input[d->cursor].pressed;
+        d->cursor++;
     }
-    for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
-        if (press & (1u << b)) api->press(d->state, (ns_game_button)b);
-    }
-    if (api->hold) {
-        bool h[NS_GAME_BUTTON_COUNT];
-        for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) h[b] = (d->held & (1u << b)) != 0;
-        api->hold(d->state, h);
-    }
-    api->tick(d->state, dt);
-    /* `events` CONSOMME : la boucle de jeu l'appelle à chaque pas, et ne pas le
-     * faire ici rejouerait un jeu différent de celui qu'on rejoue. */
-    ns_game_events ev; SDL_zero(ev);
-    api->events(d->state, &ev);
+    duel_step(d, api, press, dt);
 }
 
 /*
@@ -718,7 +751,11 @@ static uint64_t duel_live_open(duel_ghost *d, const char *spec,
     api->set_best(d->state, 0);
     d->cursor = 0;
     d->held = 0;
-    d->last_tick = 0;
+    /* −1 et non 0 : le fantôme n'a rejoué AUCUN pas. Le laisser à zéro ferait
+     * croire au contrôle d'empreinte que le pas 0 est déjà joué, et il
+     * confronterait un état neuf à l'empreinte d'un pas simulé. */
+    d->last_tick = -1;
+    d->live_verified = -1;
     d->live_stall = 0;
     d->loaded = d->running = true;
     d->finished = false;
@@ -2658,13 +2695,43 @@ play_at_done: ;
                 if (duel.live && in_game) {
                     const int32_t done = run_tick - 1;
                     if (done >= 0 && (done % NS_LOCKSTEP_HASH_EVERY) == 0) {
-                        ns_lockstep_publish_hash(duel.live, done,
-                                                 ns_game_state_hash(game_api, game));
+                        const uint64_t h = ns_game_state_hash(game_api, game);
+                        if (SDL_getenv("NINETEEN_DUEL_TRACE")) {
+                            NS_INFO("TRACE moi pas %d : %016llx", done, (unsigned long long)h);
+                        }
+                        ns_lockstep_publish_hash(duel.live, done, h);
                     }
-                    const int32_t gdone = done - NS_LOCKSTEP_DELAY;
-                    if (gdone >= 0 && duel.state && (gdone % NS_LOCKSTEP_HASH_EVERY) == 0) {
-                        ns_lockstep_verify_peer(duel.live, gdone,
-                                                ns_game_state_hash(game_api, duel.state));
+                    /*
+                     * Le fantôme se compare à SON pas, celui qu'il a réellement
+                     * rejoué — et non à « le nôtre moins le retard ».
+                     *
+                     * C'est la correction d'un défaut qui accusait le jeu d'une
+                     * faute du RÉSEAU. Quand l'entrée de l'adversaire n'est pas
+                     * arrivée, `duel_tick` rend la main sans rejouer : le
+                     * fantôme prend du retard, et ce retard n'est pas de huit
+                     * pas mais de huit PLUS le nombre de pas d'attente. En
+                     * confrontant son état à l'empreinte publiée pour
+                     * `nous − 8`, on comparait donc deux instants différents,
+                     * et les deux clients annonçaient « divergence » sur une
+                     * partie parfaitement saine.
+                     *
+                     * Mesuré : sans attract mode les images sont assez rapides
+                     * pour qu'aucun pas ne stalle et le duel tenait ses quatre
+                     * cents pas ; avec les dix-huit démos, une seule attente
+                     * suffisait à rompre le duel au pas 32. Le défaut était là
+                     * depuis le début — il fallait juste une image assez lente
+                     * pour le révéler.
+                     */
+                    const int32_t g = duel.last_tick;
+                    if (g >= 0 && duel.state && g != duel.live_verified &&
+                        (g % NS_LOCKSTEP_HASH_EVERY) == 0) {
+                        duel.live_verified = g;
+                        const uint64_t gh = ns_game_state_hash(game_api, duel.state);
+                        if (SDL_getenv("NINETEEN_DUEL_TRACE")) {
+                            NS_INFO("TRACE fantome pas %d : %016llx (attentes %d)",
+                                    g, (unsigned long long)gh, duel.live_stall);
+                        }
+                        ns_lockstep_verify_peer(duel.live, g, gh);
                     }
                 }
                 /*
