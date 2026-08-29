@@ -394,12 +394,53 @@ static bool parse_options(int argc, char **argv, options *o)
  *   3. le répertoire du binaire, monté en dernier recours par `ns_paths_init` et
  *      marqué comme tel : c'est la disposition d'un paquet installé.
  */
+/*
+ * L'ARBRE DE BUILD N'EXISTE QUE POUR CELUI QUI CONSTRUIT.
+ *
+ * `NINETEEN_BUILD_ASSET_DIR` est un chemin ABSOLU gravé dans le binaire à la
+ * compilation, et il passe devant les assets posés à côté de l'exécutable. En
+ * développement c'est exactement ce qu'on veut : on relance sans réinstaller.
+ * Dans un PAQUET, c'est un piège à deux détentes.
+ *
+ * La première est un faux positif de recette, et on vient de la subir : le
+ * paquet 17.0.0 a été déballé et lancé sur la machine de construction, il a
+ * démarré, il a affiché sa salle — et il l'avait lue dans
+ * `.../build/macos-universal/assets/`. Le paquet n'était donc PAS éprouvé, et
+ * l'essai qui devait le prouver ne prouvait rien. C'est la même famille de
+ * défaut que la version précédente, où `models/` et `nineteen.env` manquaient à
+ * l'installation sans que personne le voie.
+ *
+ * La seconde est un vrai défaut chez le joueur, plus rare et plus vicieux : si
+ * ce chemin existe sur SA machine — un développeur, un ancien arbre resté là —
+ * le jeu installé lit des assets périmés, en silence.
+ *
+ * La règle : des assets À CÔTÉ du binaire, c'est une installation, et une
+ * installation se suffit. On ne monte alors PAS l'arbre de build. L'arbre de
+ * build, lui, n'a pas de `bin/assets` — ses assets sont un cran plus haut — donc
+ * le développeur garde son montage. `$NINETEEN_ASSETS` reste prioritaire dans
+ * les deux cas : c'est une surcharge demandée explicitement.
+ */
+static bool assets_beside_binary(void)
+{
+    const char *base = SDL_GetBasePath();
+    if (!base) return false;
+    char probe[512];
+    SDL_snprintf(probe, sizeof probe, "%sassets/scene", base);
+    SDL_PathInfo info;
+    return SDL_GetPathInfo(probe, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
+
 static void mount_asset_directories(void)
 {
     const char *env = SDL_getenv("NINETEEN_ASSETS");
     if (env && *env) ns_paths_mount(env);
 #ifdef NINETEEN_BUILD_ASSET_DIR
-    ns_paths_mount(NINETEEN_BUILD_ASSET_DIR);
+    if (assets_beside_binary()) {
+        NS_INFO("assets trouvés à côté du binaire : l'arbre de build n'est pas "
+                "monté (c'est une installation, elle se suffit)");
+    } else {
+        ns_paths_mount(NINETEEN_BUILD_ASSET_DIR);
+    }
 #endif
 }
 
