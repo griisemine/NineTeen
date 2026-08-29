@@ -788,13 +788,21 @@ typedef struct rg_outside_debt {
     const char *why;
 } rg_outside_debt;
 
-static const rg_outside_debt RG_OUTSIDE_DEBT[] = {
-    { "poutre_5", 1.048f,
-      "AUDIT P-14 : la cinquième poutre traverse le pan coupé et ressort dehors" },
-    { "tapis_technique", 0.350f,
-      "AUDIT P-23 : le tapis technique traverse le mur ouest" },
-};
-#define RG_OUTSIDE_DEBT_COUNT (sizeof RG_OUTSIDE_DEBT / sizeof RG_OUTSIDE_DEBT[0])
+/*
+ * VIDE, et c'est le but de la table plutôt que sa fin. Elle a porté deux
+ * dettes — la cinquième poutre qui ressortait par le pan coupé (P-14) et le
+ * tapis technique qui traversait le mur ouest (P-23) — jusqu'à ce que le plan
+ * de 2020 soit rétabli et qu'elles n'aient plus lieu d'être. C'est le contrôle
+ * lui-même qui a demandé le retrait de leurs lignes, une fois qu'il a mesuré
+ * que les deux objets étaient rentrés.
+ *
+ * On garde la mécanique : la prochaine dette s'écrira ici, et le contrôle
+ * réclamera son retrait le jour où elle sera payée. On ne garde pas une dette
+ * imaginaire pour faire tenir un tableau — d'où le pointeur nul plutôt qu'une
+ * entrée sentinelle qu'il faudrait penser à sauter.
+ */
+static const rg_outside_debt *const RG_OUTSIDE_DEBT = NULL;
+#define RG_OUTSIDE_DEBT_COUNT 0u
 
 /*
  * C-01 — chaque sommet de chaque objet est dans le bâtiment.
@@ -829,7 +837,7 @@ static void check_inside_shell(const rg_builder *b)
     const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
     const float t = sh->thickness;
     size_t checked = 0, tolerated = 0;
-    bool debt_seen[RG_OUTSIDE_DEBT_COUNT];
+    bool debt_seen[RG_OUTSIDE_DEBT_COUNT + 1u];   /* + 1 : un tableau de zéro élément est interdit en C */
     memset(debt_seen, 0, sizeof debt_seen);
 
     for (size_t i = 0; i < b->solid_count; ++i) {
@@ -1033,14 +1041,8 @@ typedef struct rg_named_pair {
  * routines d'appariement qui divergeraient sur le suffixe de série. */
 
 static const rg_named_pair RG_OVERLAP_ASSEMBLY[] = {
-    { "bar_accueil", "enseigne_nineteen",
-      "l'enseigne est fixée au comptoir (2 sommets, 3,40 x 0,014 x 0,033 m)" },
     { "lavabo_toilettes", "robinet_toilettes",
       "le robinet est monté dans la vasque (216 sommets sur 288)" },
-    { "lavabo_toilettes", "flaque_toilettes",
-      "la flaque passe sous le meuble (24 sommets, 8 mm de haut)" },
-    { "applique_sas", "ampoule_sas",
-      "l'ampoule est dans sa douille (0,00030 m³ de boîtes communes)" },
     { "suspension_comptoir", "ampoule_comptoir",
       "l'ampoule est dans sa douille (0,00041 m³)" },
     { "suspension_salon", "ampoule_salon",
@@ -1049,16 +1051,15 @@ static const rg_named_pair RG_OVERLAP_ASSEMBLY[] = {
 #define RG_OVERLAP_ASSEMBLY_COUNT \
     (sizeof RG_OVERLAP_ASSEMBLY / sizeof RG_OVERLAP_ASSEMBLY[0])
 
-static const rg_named_pair RG_OVERLAP_DEBT[] = {
-    { "bar_accueil", "boombox",
-      "AUDIT P-16 : le boombox est enfoncé de 2,3 cm dans le plateau du "
-      "comptoir (109 sommets sur 2 410)" },
-    { "bureau", "porte_entree_battant",
-      "TROUVÉ PAR CE CONTRÔLE : le comptoir d'accueil occupe le débattement du "
-      "battant — 36 sommets sur 144, 0,398 m³ de boîtes communes. Sorti de la "
-      "rue (P-01), il est entré dans la porte" },
-};
-#define RG_OVERLAP_DEBT_COUNT (sizeof RG_OVERLAP_DEBT / sizeof RG_OVERLAP_DEBT[0])
+/*
+ * VIDE — même histoire que `RG_OUTSIDE_DEBT`. Le boombox enfoncé dans le
+ * plateau du comptoir (P-16) et le comptoir d'accueil planté dans le
+ * débattement du battant d'entrée sont l'un et l'autre séparés depuis que le
+ * mobilier a repris ses places de 2020, et le contrôle a demandé le retrait de
+ * leurs deux lignes.
+ */
+static const rg_named_pair *const RG_OVERLAP_DEBT = NULL;
+#define RG_OVERLAP_DEBT_COUNT 0u
 
 static const rg_named_pair *pair_in_table(const rg_named_pair *table, size_t count,
                                             const rg_solid *A, const rg_solid *B)
@@ -1103,7 +1104,7 @@ static const rg_named_pair *pair_in_table(const rg_named_pair *table, size_t cou
 static void check_solid_overlaps(const rg_builder *b)
 {
     size_t boxes = 0, declared = 0, assembled = 0, tolerated = 0, clear = 0;
-    bool debt_seen[RG_OVERLAP_DEBT_COUNT];
+    bool debt_seen[RG_OVERLAP_DEBT_COUNT + 1u];   /* + 1 : un tableau de zéro élément est interdit en C */
     bool asm_seen[RG_OVERLAP_ASSEMBLY_COUNT];
     memset(debt_seen, 0, sizeof debt_seen);
     memset(asm_seen, 0, sizeof asm_seen);
@@ -1521,12 +1522,12 @@ static void check_grounded(const rg_builder *b)
  * C'est exactement le cas de figure annoncé — « l'îlot central est manipulé à
  * chaque fois qu'on ajoute un jeu » — arrivé entre-temps.
  */
-static const rg_named_pair RG_CLEARANCE_DEBT[] = {
-    { "borne_arcade_9", "poubelle_ilot",
-      "TROUVÉ PAR CE CONTRÔLE : la poubelle de l'îlot se tient à 0,51 m devant "
-      "la borne, dans le couloir de 0,32 m où le joueur se plante" },
-};
-#define RG_CLEARANCE_DEBT_COUNT (sizeof RG_CLEARANCE_DEBT / sizeof RG_CLEARANCE_DEBT[0])
+/*
+ * VIDE. La poubelle de l'îlot ne se tient plus dans les 0,32 m où le joueur se
+ * plante devant `borne_arcade_9` ; le contrôle a demandé le retrait de sa ligne.
+ */
+static const rg_named_pair *const RG_CLEARANCE_DEBT = NULL;
+#define RG_CLEARANCE_DEBT_COUNT 0u
 
 static void check_cabinet_clearance(const rg_builder *b)
 {
@@ -1535,7 +1536,7 @@ static void check_cabinet_clearance(const rg_builder *b)
     const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
 
     size_t tolerated = 0;
-    bool debt_seen[RG_CLEARANCE_DEBT_COUNT];
+    bool debt_seen[RG_CLEARANCE_DEBT_COUNT + 1u];   /* + 1 : un tableau de zéro élément est interdit en C */
     memset(debt_seen, 0, sizeof debt_seen);
 
     for (size_t i = 0; i < b->cabinet_count; ++i) {

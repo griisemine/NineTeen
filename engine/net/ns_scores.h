@@ -72,6 +72,26 @@ const ns_score_board *ns_scores_board(const char *game, const char *difficulty);
 /* Le meilleur score connu, 0 si aucun. Raccourci pour l'attract mode. */
 uint32_t ns_scores_best(const char *game, const char *difficulty);
 
+/*
+ * LA DIFFICULTÉ QUE DIT LA SALLE, ET CELLE QUI CLASSE.
+ *
+ * Une borne DÉCLARE sa difficulté dans `salle.room.json`, et elle la déclare
+ * telle que l'enseigne la dit au joueur : le plan de 2020 sépare la salle en
+ * EASY et HARD, et six caissons portent donc « easy ». Le jeu, lui, n'a que
+ * deux régimes — `bool hard` — et enregistre sous « hard » ou « normal ».
+ *
+ * Les deux vocabulaires se sont croisés : le tableau des scores se range sur la
+ * chaîne VERBATIM, si bien qu'une borne « easy » interrogeait un tableau
+ * `<jeu>|easy` que rien n'écrit jamais, et n'affichait plus son meilleur score.
+ * La faute ne se voit pas : il n'y a ni erreur ni tableau vide, seulement une
+ * ligne qui disparaît de l'écran.
+ *
+ * Cette fonction est le SEUL endroit où la traduction a lieu. Tout ce qui va
+ * chercher un score à partir d'une difficulté déclarée doit passer par elle —
+ * l'affichage, le billet en ligne, la demande de fantômes.
+ */
+const char *ns_scores_bucket(const char *declared);
+
 /* Tout effacer — pour les tests, et pour un futur réglage « remettre à zéro ». */
 void ns_scores_clear(void);
 

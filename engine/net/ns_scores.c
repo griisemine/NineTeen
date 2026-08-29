@@ -248,6 +248,13 @@ const ns_score_board *ns_scores_board(const char *game, const char *difficulty)
     return find_board(key, false);
 }
 
+const char *ns_scores_bucket(const char *declared)
+{
+    /* Seul « hard » est un régime à part ; « easy » et « normal » sont le même
+     * jeu sous deux enseignes, et partagent donc leur tableau. */
+    return (declared && SDL_strcasecmp(declared, "hard") == 0) ? "hard" : "normal";
+}
+
 uint32_t ns_scores_best(const char *game, const char *difficulty)
 {
     const ns_score_board *b = ns_scores_board(game, difficulty);

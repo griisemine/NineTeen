@@ -82,7 +82,8 @@ static void draw_prompt(ns_sprite *s, const room_hud_state *st)
 
     /* Le meilleur score local de CETTE borne, sous l'invite. C'est l'information
      * qui transforme « je peux jouer » en « je peux faire mieux ». */
-    const uint32_t best = ns_scores_best(st->near->game, st->near->difficulty);
+    const uint32_t best = ns_scores_best(st->near->game,
+                                        ns_scores_bucket(st->near->difficulty));
     if (best > 0) {
         char sub[64];
         SDL_snprintf(sub, sizeof sub, "MEILLEUR : %u", best);
@@ -488,10 +489,10 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
         const float y = (48.0f + (float)line * 38.0f) * u;
         ns_sprite_text(s, 336.0f * u, y, 2.2f * u, me, my_name);
         if (my_game && my_game[0]) {
-            char n[24];
-            group_number(n, sizeof n, my_score);
+            char sc[24];
+            group_number(sc, sizeof sc, my_score);
             ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, my_game);
-            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, me, n);
+            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, me, sc);
         } else {
             ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, "dans la salle");
         }

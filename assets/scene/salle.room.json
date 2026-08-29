@@ -4,7 +4,7 @@
   "_lu_par": "tools/roomgen.c, au build. Ce fichier est une SOURCE versionnée, pas un asset : il n'est jamais copié à côté du jeu.",
   "_pourquoi": "Le décor de 2020 est un OBJ de 127 objets dont la moitié s'appelle Cube.0XX. Le moteur devait donc deviner quelle borne joue à quoi, où est son écran, quelle boîte est une lampe — et chacune de ces déductions se trompe quelque part. Ici tout est nommé et placé. La classe entière de bugs disparaît avec les heuristiques.",
   "_echelle": "Le mètre. Le modèle d'origine est en unités Blender à 2,06 par mètre — l'auteur l'a écrit lui-même, HAUTEUR_CAMERA_DEBOUT 3.5F pour un œil debout (legacy/room/room.c:90) — et le moteur V15 l'a lu comme des mètres, ce qui donnait un joueur de 82 cm au milieu de bornes de 2,40 m. Le problème cesse d'exister ici par construction.",
-  "_plan": "LES COTES DE 2020, MESUREES — et la phrase qui etait ici disait vrai sans dire de QUOI.\nElle affirmait « le hall d'origine faisait 19,3 x 14,4 m ». Verifie sur salle.obj : l'unique objet de murs, MUR_SAL_Cube.002, mesure 19,31 x 14,41 m sous 2,97 m — au centimetre. Mais c'est l'ENVELOPPE du batiment, sas compris, et non le hall. L'agent historien mesure le hall PROPRE a 14,43 x 14,27 m : la difference, environ 4,9 m de largeur, est le sas.\nLes deux chiffres sont donc justes et mesurent deux choses. C'etait le piege, et il valait la peine d'etre ecrit : c'est sur cette ambiguite qu'on aurait retreci le hall de 4,87 m en croyant corriger une erreur.\nCE QUE LA SALLE D'AUJOURD'HUI EN FAIT : son emprise jouable declaree va de -9,65 a +9,65 et de -7,2 a +7,2, soit 19,3 x 14,4 m. Elle a donc EXACTEMENT l'enveloppe de 2020. Le « 22 x 16 » cite plus loin est l'etendue des lignes MEDIANES de murs, epaisseur comprise, pas une surface de plancher.\nCE QUI DIFFERE VRAIMENT du plan de 2020, et qui reste a faire : le sas y prend pres du quart de la largeur (ici il est petit, au nord-est) ; les toilettes y sont a l'EST sur 35,8 m2 (ici au sud-ouest sur 12,4) ; le bar y est centre sur x = 0 (ici a -2,60) ; il y a DEUX pans coupes symetriques (ici un seul, deux fois plus incline) ; treize piliers dont douze ENGAGES dans les murs (ici deux, libres) ; et quinze caissons de borne et non dix-neuf. Le detail chiffre est dans docs/SPEC-PLAN-2020.md.\nCE QU'IL NE FAUT PAS REPRENDRE de 2020 : ses bornes de 2,39 m sous un plafond de 2,92, ses UV de plafond bouclant tous les 8,69 m, et ses sept materiaux qui sont des aplats de 24 x 24 pixels. Le proprietaire veut son PLAN, pas ses defauts.\nLe pan coupe du coin nord-est reprend le mur en diagonale de l'original (x = -0,4737 z + 9,401 en unites du modele), et devient l'entree.",
+  "_plan": "LE PLAN DE 2020, MESURE — docs/RELEVE-2020.md, etabli objet par objet sur legacy/room/textures/salle.obj et legacy/room/room.c.\nECHELLE. 2,06 unites Blender par metre, l'auteur l'ecrit lui-meme (HAUTEUR_CAMERA_DEBOUT 3.5F pour un oeil debout, room.c:90). x_m = x_u/2,06 ; z_m = z_u/2,06 - 4,68 ; y_m = (y_u - 0,100)/2,06.\nLE PIEGE, ET IL A DEJA COUTE. « 19,3 x 14,4 m » est l'ENVELOPPE batie — MUR_SAL_Cube.002, bloc sanitaire compris. Le HALL PROPRE fait 14,43 x 14,27 en lignes medianes et 184,4 m2 de plancher. Les deux chiffres sont justes et mesurent deux choses ; c'est sur cette ambiguite qu'on a rebati une emprise de +/-9,65, ou courent encore les moulures dans les versions anterieures a celle-ci.\nCE QUE CE FICHIER DECRIT AUJOURD'HUI, et qui est le plan de 2020 au centimetre : un hall de 14,43 x 14,27 ferme par DEUX PANS COUPES SYMETRIQUES de 5,06 m au nord-ouest et au nord-est ; un couloir d'entree de 1,67 m de libre sur 8,9, contour ferme a part, dont la joue ouest epouse le pan coupe nord-est sur ses 1,32 derniers metres et s'y ouvre par une trouee de 1,51 m sous un linteau a 2,33 ; un bloc sanitaire de 35,8 m2 a l'EST, coupe en quatre par trois cloisons et desservi par deux portes coulissantes ; un comptoir centre sur x = 0 sous une enseigne de 2,55 m centree sur x = 0 ; treize piliers dont douze engages ; une estrade de 2,427 x 3,398 centree sur (0 ; -4,68) ; un salon ferme a l'ouest par 4,38 m de cloison qui aboutit au seul pilier libre de la salle.\nCE QUI RESTE DIFFERENT DE 2020, ET QUI EST VOULU : DIX-NEUF bornes et non seize — le jeu s'appelle Nineteen —, dont six sur le mur ouest la ou 2020 n'avait que deux caissons COMING SOON, et un poste de classement au centre la ou 2020 mettait un caisson COMING SOON, son classement etant un moniteur pose sur le comptoir. Voir le commentaire de cabinets[borne_classement].\nCE QU'IL NE FAUT PAS REPRENDRE de 2020 : ses bornes de 2,39 m sous un plafond de 2,92, ses UV de plafond bouclant tous les 8,69 m, ses sept materiaux qui sont des aplats de 24 x 24 pixels, et la tige du luminaire du billard qui traverse le plafond sur 1,61 m. Le proprietaire veut son PLAN, pas ses defauts.",
   "_convention": "Les points de mur se lisent [x, z] et suivent la LIGNE MÉDIANE. Ils sont listés de sorte qu'en marchant de l'un au suivant, l'intérieur soit à gauche : c'est la seule règle à tenir, tout le reste en découle (face intérieure, sens des onglets, côté des moulures).",
   "_tableau": "Le TABLEAU DU BAR, derriere le comptoir. Il est DECLARE et non deduit : le moteur y dessine le classement et les joueurs en direct, comme il dessine une partie dans la dalle d'une borne. Il portait `background_classement.png`, une image peinte de 2020 avec des scores dessus — un tableau de scores qui ne bouge pas est une decoration. Le nommer ici est la seule facon que le moteur sache lequel des 190 materiaux de la salle est un ecran vivant : le deviner par son nom serait exactement l'heuristique qu'on a passe le projet a retirer.",
   "scoreboard": "classement_fond",
@@ -1208,6 +1208,44 @@
       ]
     },
     {
+      "_": "Le fond BLEU du panneau HARD/EASY. Meme albedo que « bleu », plus un emissif faible : le panneau pend a 2,09-2,48 m au-dessus de l'allee, entre deux rampes de plafond qui l'eclairent par la tranche, et la premiere version — aplat non emissif — sortait GRISE sur la capture. Un panneau de signalisation qu'on ne lit pas ne signale rien. 0,45 : assez pour que la couleur porte, pas assez pour qu'il fasse lampe.",
+      "name": "panneau_hard",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.16,
+        0.38,
+        0.86,
+        1.0
+      ],
+      "roughness": 0.38,
+      "uvMetres": 0.55,
+      "emissive": [
+        0.3,
+        0.52,
+        1.0
+      ],
+      "emissiveStrength": 0.45
+    },
+    {
+      "_": "Le fond ROUGE du meme panneau, cote EASY. 0,85 et non les 0,45 du bleu : l'emissif est module par l'albedo, et « lacquered_wood.jpg » est deux fois plus sombre que « painted_panel.jpg » — a valeur egale la moitie rouge sortait grise a cote de la bleue sur la capture.",
+      "name": "panneau_easy",
+      "texture": "lacquered_wood.jpg",
+      "baseColor": [
+        0.86,
+        0.14,
+        0.16,
+        1.0
+      ],
+      "roughness": 0.34,
+      "uvMetres": 0.55,
+      "emissive": [
+        1.0,
+        0.24,
+        0.2
+      ],
+      "emissiveStrength": 0.85
+    },
+    {
       "_atmo": "SPEC-ATMOSPHERE poste 13, applique APRES verification et pas comme il etait ecrit. La specification disait de remplacer la texture parce qu'elle mesurait 0,0030 de reflectance et que c'etait « un aplat de 1 x 1 pixel ». C'etait vrai de l'etat d'ORIGINE ; `bordeau_uni.jpg` est retire depuis, et ce materiau porte deja `lacquered_wood.jpg`, une vraie texture. Sa premisse etait donc perimee, et l'appliquer telle quelle orphelinait une texture — ce qu'a dit l'invariant de comptage de roomgen, « 83 employees pour 84 presentes ». La vraie cause du caisson noir n'etait pas la texture mais le MULTIPLICATEUR, a 0,40 de rouge et 0,07 de vert. 0,62 / 0,13 / 0,17 : le jukebox redevient bordeaux au lieu d'etre une silhouette.",
       "name": "bordeau_uni",
       "texture": "lacquered_wood.jpg",
@@ -1684,9 +1722,9 @@
       "_atmo": "SPEC-ATMOSPHERE poste 18, corrige APRES mesure. Le poste 7 de DESIGN-SALLE visait 55 a 70 de mediane pour les WC et n'a jamais atteint que 25 ; le poste 18 attribuait l'ecart a la seule portee, 3,6 au lieu de 4,4, et annoncait un facteur 2,4 a intensite inchangee. Mesure : la portee seule fait passer la mediane de 19 a 20,6. C'etait la moitie du diagnostic. En sondant l'intensite : 60 donne 36,7 et 100 donne 51,5 ; 120 pose la piece dans sa cible. Un bloc sanitaire est l'endroit le PLUS eclaire d'une salle d'arcade — c'est le seul ou l'on ne joue pas.",
       "name": "plafonnier_toilettes",
       "at": [
-        9.6,
+        9.8,
         2.74,
-        -2.3
+        -4.0
       ],
       "color": [
         0.86,
@@ -1702,7 +1740,15 @@
         0.9,
         0.45
       ],
-      "_": "Le SEUL luminaire froid de la salle, et c'est voulu : un tube fluo vert-blanc qui grésille. Il ne fonctionne comme repoussoir que parce que tout le reste est chaud."
+      "_": "DEUX et non un : le bloc est maintenant coupe en deux pieces par « cloison_wc_centre », et une seule source laissait le bloc hommes noir. z = -4,00 et -0,40, un par bloc.",
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          3.6
+        ]
+      }
     },
     {
       "name": "neon_mur_ouest",
@@ -1758,9 +1804,9 @@
     {
       "name": "applique_entree",
       "at": [
-        5.4,
+        5.35,
         2.05,
-        3.0
+        5.6
       ],
       "color": [
         1.0,
@@ -1778,7 +1824,7 @@
           2.4
         ]
       },
-      "_": "Applique murale, ambre franc."
+      "_": "Les deux appliques du couloir. Elles etaient a z = 3,0 et 5,4 : la premiere tombait dans le hall a 0,6 m du pan coupe retabli, la seconde dans le couloir. Elles sont maintenant toutes deux sur la joue ouest du couloir (parement 5,284), a 5,6 et 8,0."
     },
     {
       "_": "La suspension du billard. Le coin ouest recevait 9 d'éclairement du plafonnier d'allée le plus proche, à 3,2 m : la table, les tabourets et le mur y étaient illisibles. Une table de billard a sa propre lampe, basse et chaude — c'est aussi ce qui la désigne comme un endroit où l'on va.",
@@ -1786,9 +1832,9 @@
       "_intensite": "150 et non 76. La valeur de 76 avait été réglée à l'œil pendant que la lampe était occultée par sa propre ampoule : elle compensait un défaut qui n'existe plus. À 150 la table reçoit une vraie nappe de lumière, les billes portent une ombre, et seuls 0,3 % des pixels de la vue saturent.",
       "name": "suspension_billard",
       "at": [
-        -3.85,
+        -4.483,
         1.56,
-        -4.75
+        -4.694
       ],
       "color": [
         1.0,
@@ -1921,6 +1967,31 @@
       "range": 4.2,
       "radius": 0.1,
       "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13)."
+    },
+    {
+      "_": "Les quatre sources des appliques du mur sud. 48 et non 62 comme celle du couloir : elles sont quatre sur un mur de 14,4 m deja borde par les bancs et le tableau, et le sud etait la seule paroi du hall sans eclairage propre.",
+      "name": "applique_sud",
+      "at": [
+        -4.782,
+        2.06,
+        -6.78
+      ],
+      "color": [
+        1.0,
+        0.79,
+        0.54
+      ],
+      "intensity": 48.0,
+      "range": 3.8,
+      "radius": 0.1,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.197,
+          0.0,
+          0.0
+        ]
+      }
     },
     {
       "name": "suspension_comptoir",
@@ -2146,14 +2217,14 @@
     {
       "name": "poussiere_salon",
       "min": [
-        4.6,
+        2.0,
         0.9,
-        -6.2
+        -6.6
       ],
       "max": [
-        9.4,
+        7.0,
         2.6,
-        -2.0
+        -2.4
       ],
       "density": 0.5,
       "drift": [
@@ -2175,12 +2246,12 @@
       "min": [
         5.4,
         0.9,
-        4.2
+        4.0
       ],
       "max": [
-        9.4,
+        6.9,
         2.6,
-        7.0
+        9.0
       ],
       "density": 0.4,
       "drift": [
@@ -2229,7 +2300,7 @@
       "y": 0.0
     },
     {
-      "_": "La dalle du hall couvre z jusqu'a 7,20 ; celle-ci prend le relais exactement la, au lieu de la recouvrir sur 3,55 m comme elle le faisait.",
+      "_": "La dalle du hall couvre z jusqu'a 7,20 ; celle-ci prend le relais exactement la. Elle passe de 1,869 a 2,069 m de large (5,084 a 7,153) parce que les joues du couloir ont recule de 0,10 m chacune pour rendre au passage ses 1,669 m de libre : la dalle va desormais de parement EXTERIEUR a parement exterieur, comme le plafond du sas le faisait deja.",
       "name": "sol_sas",
       "material": "sol",
       "centre": [
@@ -2237,7 +2308,7 @@
         10.019
       ],
       "size": [
-        1.869,
+        2.069,
         5.638
       ],
       "y": 0.0
@@ -2245,7 +2316,7 @@
   ],
   "walls": [
     {
-      "_": "LE POURTOUR DU BATIMENT : le hall ET le couloir d'entree, d'un seul tenant.\nLE DEFAUT QU'IL CORRIGE. Le couloir etait un second contour FERME (`coquille_sas`), double par un mur ouvert de memes points (`cloison_entree`) qui n'avait aucune baie : les deux percements du couloir etaient donc REBOUCHES par ce doublon, et sa seule ouverture vers le hall, `about_hall`, tombait dans la joue EST — sur la rue. Le joueur naissait scelle dans une boite de 1,67 x 9,09 m. Le jeu se construisait, les 36 tests passaient, le paquet partait. Il manquait le seul controle qui comptait : peut-on ALLER quelque part.\nPOURQUOI D'UN SEUL TENANT. Un couloir relie au hall par une baie dont l'abscisse se calcule a la main est un couloir qui sera referme un jour. Ici il n'y a plus de liaison a calculer : le couloir EST le contour. Aucun decalage ne peut le detacher.\nCE QUE CELA COUTE, et c'est le seul ecart assume avec le plan de 2020 : le pan coupe du NORD-EST disparait. Le hall en avait deux, symetriques, de pente -2,162 ; celui de l'est descendait de 3,61 m en travers des 1,67 m du couloir. Aucune bouche de couloir orientee au nord ne peut donc le rencontrer AUTREMENT QU'EN UN POINT, et un plan qui remonte le couloir depuis ce point y rebrousse chemin : le mur se replie sur lui-meme et son epaisseur de 20 cm bouche le passage. Mesure : 0,15 m de large, pour un joueur qui en demande 0,64. En 2020 le probleme existait deja et l'auteur l'avait tranche dans la fonction de collision, en supprimant purement le mur diagonal entre z 17,5 et 19,2 — la porte etait un TROU dans le code, pas dans le decor. Ici le coin nord-est est droit et le mur nord file jusqu'a la joue ouest du couloir. Le pan coupe du nord-ouest, lui, est conserve tel quel.\nLe couloir garde ses cotes mesurees sur Cube.048_Cube.006 de salle.obj : x 10,70..14,50 et z 16,95..36,08 unites, soit 9,09 m de long sur 1,67. On entre par la porte du fond, on descend le couloir, et le hall s'ouvre en grand avec les machines en face.",
+      "_": "LE POURTOUR DU HALL, avec SES DEUX PANS COUPES — celui du nord-ouest et celui du nord-est, symetriques, de meme pente.\nCE QUI EST REVENU, ET LA MESURE QUI L'A IMPOSE. Le pan coupe nord-est avait ete supprime au motif qu'« en 2020 la porte etait un TROU dans le code, pas dans le decor ». C'est faux, et c'est mesurable : les faces l644, l670, l696 et l697 de MUR_SAL_Cube.002 (salle.obj) ont SIX sommets chacune parce qu'elles contournent une vraie trouee, et le tableau de cette trouee est modelise a part, faces l731 a l734, materiau haut_mur — deux jambages de 0,146 m et un linteau a 2,330 m. Le decor de 2020 avait donc son trou, avec ses tableaux, la ou la collision en ouvre un. Voir docs/RELEVE-2020.md § 6.2.\nCOTES. Pente du pan coupe est mesuree a dx/dz = -0,4606 sur la face l644 ; ici -0,4626, de (4,203 ; 7,135) a (6,329 ; 2,539), soit 5,064 m de diagonale — la symetrique exacte du pan coupe ouest deja present. Le releve mesure ses extremites a +4,212 et +6,329 ; le fichier avait deja symetrise l'ouest a -4,203 (mesure -4,194), on garde donc +/-4,203.\nLE COULOIR N'EST PLUS DANS CE CONTOUR. Il l'etait depuis qu'on avait supprime le pan coupe pour le faire entrer d'equerre. Il redevient un contour separe, « coquille_couloir », comme 2020 le fait : sa joue ouest emprunte le pan coupe sur ses 1,32 derniers metres en z, et la trouee est percee dans le mur MITOYEN — une seule paroi, deux baies qui se font face, aucun mur double.\nPOURQUOI PAS D'UN SEUL TENANT. Fusionner le couloir dans ce contour fait de la jonction un REBROUSSEMENT : le mur se replie sur lui-meme et geo_wall_run y pose un onglet qui bouche le passage — 0,15 m de libre mesures pour un joueur qui en demande 0,64. Deux contours qui partagent un mur n'ont pas ce defaut.",
       "name": "coquille",
       "points": [
         [
@@ -2269,24 +2340,16 @@
           7.135
         ],
         [
-          5.284,
+          4.203,
           7.135
         ],
         [
-          5.284,
-          12.738
-        ],
-        [
-          6.953,
-          12.738
-        ],
-        [
-          6.953,
-          3.646
+          6.329,
+          2.539
         ],
         [
           7.215,
-          3.646
+          2.539
         ]
       ],
       "closed": true,
@@ -2295,23 +2358,71 @@
       "materialReveal": "beton",
       "openings": [
         {
-          "_": "La porte exterieure, au fond du couloir. Son abscisse suit le perimetre de la coquille unique.",
-          "name": "porte_exterieure",
-          "offset": 45.371,
-          "width": 1.214,
+          "_": "LA TROUEE DU PAN COUPE, celle de 2020. Elle occupe EXACTEMENT la portion de pan coupe que le couloir vient border : de l'abscisse 40.797 a 42.305 m sur le perimetre, soit 1.5076 m de diagonale, entre (5,184 ; 5,014) et (5,817 ; 3,646) en ligne mediane. 2020 la mesure a 1,453 m sur le parement (releve § 4.1) ; elle fait ici 1,508 m sur la mediane parce que le mur du projet est epais de 0,20 m et non de 0,133.\nLINTEAU A 2,330 m : la cote des faces l731-l734 de MUR_SAL_Cube.002. Le couloir, lui, ouvre sa baie sur TOUTE la hauteur du pan (2,92) et ne pose donc aucun linteau : deux linteaux sur une meme paroi seraient deux quads coplanaires confondus, c'est-a-dire du z-fighting.",
+          "name": "about_couloir",
+          "offset": 40.797,
+          "width": 1.5076,
           "sill": 0.0,
-          "head": 2.139
+          "head": 2.33
         },
         {
-          "_": "La baie du bloc sanitaire, dans le mur est, de z = -0,650 a z = -4,068.",
+          "_": "La baie du bloc sanitaire, dans le mur est, de z = -0,650 a z = -4,068. Son abscisse a change de 60,464 a 47.600 : le perimetre de la coquille est passe de 66,95 a 54.084 m quand le couloir en est sorti. La baie, elle, n'a pas bouge d'un millimetre.",
           "name": "baie_sanitaires",
-          "offset": 60.464,
+          "offset": 47.6,
           "width": 3.418,
           "sill": 0.0,
           "head": 2.879
         }
       ],
       "_ordre": "« coquille » EN PREMIER, et ce n'est pas cosmetique : `check_cabinet_clearance` mesure le degagement contre LE premier contour ferme. Avec le bloc sanitaire en tete, il mesurait les bornes de l'ilot contre un mur situe a dix metres et annoncait « 0,01 m de degagement » sur une borne parfaitement degagee. Le controle des sorties, lui, sait deja tenir compte des trois contours."
+    },
+    {
+      "_": "LE COULOIR D'ENTREE, contour ferme a part entiere — le plan de 2020, releve § 6.2.\nSON TRACE. 2020 le donne en parements : SE (6,953 ; 3,643), NE (6,953 ; 12,735), NO (5,284 ; 12,735), puis l'OBLIQUE jusqu'a (5,889 ; 3,643), puis le mur sud jusqu'au SE. C'est cette oblique qui leve la contrainte geometrique : une bouche de couloir orientee au nord ne rencontre le pan coupe qu'en un point, mais une joue qui EPOUSE le pan coupe sur ses 1,32 derniers metres le rencontre sur toute une paroi.\nLARGEUR. 2020 mesure 1,669 m de libre entre parements, avec des murs de 0,088 m (Cube.048_Cube.006), donc 1,756 m d'axe en axe. Avec les 0,20 m du projet il en faut 1,869 pour garder les memes 1,669 : les medianes passent donc a x = 5,184 et 7,053, et non 5,284 et 6,953 qui ne laissaient que 1,469 m de libre. Ces 20 cm rendus sont ceux qui manquaient au comptoir « bureau » : il passait de 1,469 - 0,82 = 0,649 m de degagement, pour un joueur qui en demande 0,64.\nLE MUR MITOYEN. Le segment 3 (de (5,817 ; 3,646) a (5,184 ; 5,014)) est POSE SUR LA MEDIANE DU PAN COUPE DU HALL : c'est la MEME paroi, decrite une fois de chaque cote. On ne la dessine donc pas deux fois — les deux contours y ouvrent une baie, et il ne reste de mur que les DEUX JAMBAGES de 0,146 m que 2020 mesure aux faces l731-l734. Ce sont eux qui portent le linteau.\nLE FOND reste a z = 12,738 : c'est la cote sur laquelle sont cales le battant de la porte exterieure (z 12,66) et le point de depart du joueur (z 11,95). L'interieur va donc de 3,746 a 12,638, soit 8,89 m au lieu des 9,09 de 2020.",
+      "name": "coquille_couloir",
+      "points": [
+        [
+          5.184,
+          12.738
+        ],
+        [
+          7.053,
+          12.738
+        ],
+        [
+          7.053,
+          3.646
+        ],
+        [
+          5.8169,
+          3.646
+        ],
+        [
+          5.184,
+          5.0143
+        ]
+      ],
+      "closed": true,
+      "materialInner": "mur",
+      "materialOuter": "mur_exterieur",
+      "materialReveal": "beton",
+      "openings": [
+        {
+          "_": "La porte exterieure, au fond du couloir. Elle etait a l'abscisse 45,371 du perimetre de l'ancienne coquille unique ; elle est ici a 0.3275 du depart du contour du couloir, ce qui la laisse centree sur x = 6,1185 — l'axe du battant « porte_entree_battant ».",
+          "name": "porte_exterieure",
+          "offset": 0.3275,
+          "width": 1.214,
+          "sill": 0.0,
+          "head": 2.139
+        },
+        {
+          "_": "LA BOUCHE SUR LE HALL, dans la paroi OBLIQUE — et non dans la joue est, ou elle donnait sur la rue et scellait le joueur. Elle fait face, au millimetre, a « about_couloir » du hall : meme mediane, meme paroi.\nElle est retranchee de 0,146 m a chaque bout : ce sont les deux JAMBAGES de 2020 (faces l731 et l733 de MUR_SAL_Cube.002). Restent 1.2156 m de passage libre, pour un joueur qui en demande 0,64.\nHEAD = 2,92, c'est-a-dire toute la hauteur du pan : le linteau de 2,330 m est declare du cote hall. Le declarer des deux cotes poserait deux linteaux confondus sur la meme paroi.",
+          "name": "about_hall",
+          "offset": 12.3431,
+          "width": 1.2156,
+          "sill": 0.0,
+          "head": 2.92
+        }
+      ]
     },
     {
       "_": "LE BLOC SANITAIRE, à l'EST comme en 2020 : x de 7,279 à 11,952, z de -6,131 à 1,536, soit 35,8 m2. C'est un POURTOUR a part entiere et pas seulement un sol : `check_inside_shell` teste contre les murs, et un volume sans murs n'existe pas pour lui — il rejetait le lavabo comme s'il etait dans la rue. Le mur ouest de ce bloc est mitoyen du mur est du hall, perce par `baie_sanitaires`.",
@@ -2350,7 +2461,7 @@
       ]
     },
     {
-      "_": "Le refend du bloc sanitaire, mesuré en 2020 à x = 8,94..9,06 de z = -4,750 à 0,153 : il sépare un sas de lavabos des deux salles carrelées.",
+      "_": "Le refend du bloc sanitaire, mesure en 2020 a x = 8,94..9,06 de z = -4,750 a 0,153 : il separe le sas de lavabos des deux salles carrelees. Il porte MAINTENANT DEUX baies, une par bloc, comme 2020 en a deux (`toiletteFemme` et `toiletteHomme`, room.c:162-163).",
       "name": "cloison_toilettes",
       "points": [
         [
@@ -2368,13 +2479,82 @@
       "materialReveal": "beton",
       "openings": [
         {
+          "_": "La baie NORD, celle du bloc femmes. Elle etait a l'abscisse 2,30 (z -2,45 a -1,50) : c'est-a-dire A CHEVAL sur la cloison « cloison_wc_centre » que 2020 mesure a z = -2,311, qui vient s'y abouter. Reculee de 0,40 m au nord, elle laisse 0,16 m de refend plein entre elle et cet about. Largeur inchangee : 0,95 m, dont il reste 0,90 apres le pas de grille du controle d'accessibilite, pour un joueur qui en demande 0,64.",
           "name": "porte_toilettes",
-          "offset": 2.3,
+          "offset": 2.7,
+          "width": 0.95,
+          "sill": 0.0,
+          "head": 2.1
+        },
+        {
+          "_": "La baie SUD, celle du bloc hommes — elle n'existait pas. 2020 a DEUX portes coulissantes et n'en avait ici qu'une. z -3,60 a -2,65, soit 0,24 m de refend plein avant l'about de « cloison_wc_centre ».",
+          "name": "porte_toilettes_2",
+          "offset": 1.15,
           "width": 0.95,
           "sill": 0.0,
           "head": 2.1
         }
       ]
+    },
+    {
+      "_": "LA CLOISON DU SALON, absente depuis la refonte — ecart « bloquant » du releve § 6.2.\n2020 la fait en DEUX morceaux : des lattes de bois noir (PILONNE.005_Cube.044, materiau planche_mur) en x 1,513 a 1,805 et z -7,098 a -2,721, montant de 0,513 a 2,093 m ; et un muret plein (Cube.013_Cube.029) en x 1,432 a 1,869, z -7,004 a -2,635, de -0,385 a 1,071 m. La collision les double sur x 1,214 a 2,160 pour tout z < -1,961 (room.c:2151).\nICI : une seule paroi pleine de 0,292 m d'epaisseur — la cote des lattes — haute de 2,093 m, sur l'axe x = 1,648 qui est celui de « pilier_salon ». Longueur 4,38 m, de z = -7,10 (0,065 m dans le mur sud, pour que sa joue ne soit pas coplanaire avec le parement) a z = -2,72, ou « pilier_salon » prend le relais : le pilier LIBRE de la salle, le seul, et le seul qui ne tenait plus rien.\nCE QU'ELLE FAIT : le salon redevient une piece. On n'y entre plus que par le nord, en contournant le pilier — 4,4 m de cloison, exactement ce que le releve mesure.",
+      "name": "cloison_salon",
+      "points": [
+        [
+          1.648,
+          -7.1
+        ],
+        [
+          1.648,
+          -2.72
+        ]
+      ],
+      "closed": false,
+      "height": 2.093,
+      "thickness": 0.292,
+      "materialInner": "bois_noir",
+      "materialOuter": "bois_noir",
+      "materialReveal": "poutre"
+    },
+    {
+      "_": "LA CLOISON QUI FERME LES CABINES, ecart « bloquant » du releve § 6.2 (cloison b). 2020 : x = 10,507, z -4,139 a -0,509, haute de 1,847 m — 3,63 m, reprise ici au millimetre. La collision la double a x > 10,194 pour z -4,437 a -0,311 (room.c:2181) et le releve est explicite : « on ne peut jamais y entrer ». Le volume qu'elle borde a l'est est le volume de service des cabines ; ici il reste atteignable par le sud, ce qui ne coute rien et evite une poche morte.\nEpaisseur 0,12 et non 0,20 : c'est une cloison de sanitaire, pas un refend. Les deux cabines sont a l'OUEST d'elle, sur l'axe x = 9,77 que 2020 donne a ses deux appareils sanitaires.",
+      "name": "cloison_wc_est",
+      "points": [
+        [
+          10.507,
+          -4.139
+        ],
+        [
+          10.507,
+          -0.509
+        ]
+      ],
+      "closed": false,
+      "height": 1.847,
+      "thickness": 0.12,
+      "materialInner": "mur_toilettes",
+      "materialOuter": "mur_toilettes",
+      "materialReveal": "beton"
+    },
+    {
+      "_": "LA CLOISON ENTRE LES DEUX BLOCS, ecart « bloquant » du releve § 6.2 (cloison c). 2020 : z = -2,311, x 9,017 a 11,960, haute de 1,850 m — 2,94 m. Collision room.c:2186. C'est elle qui fait des toilettes DEUX pieces, femmes au nord et hommes au sud, chacune derriere sa porte coulissante ; sans elle le bloc sanitaire est une seule salle et les deux portes ne separent rien.\nSes deux abouts mordent dans les parois qu'elle rejoint : 9,017 est dans l'epaisseur de « cloison_toilettes » (8,90 a 9,10) et 11,960 dans celle du mur est (11,852 a 12,052).",
+      "name": "cloison_wc_centre",
+      "points": [
+        [
+          9.017,
+          -2.311
+        ],
+        [
+          11.96,
+          -2.311
+        ]
+      ],
+      "closed": false,
+      "height": 1.85,
+      "thickness": 0.12,
+      "materialInner": "mur_toilettes",
+      "materialOuter": "mur_toilettes",
+      "materialReveal": "beton"
     }
   ],
   "ceilings": [
@@ -2943,16 +3123,16 @@
       "at": [
         0.0,
         0.0,
-        -3.1
+        -4.68
       ],
       "size": [
-        2.4,
-        0.12,
-        2.4
+        2.427,
+        0.228,
+        3.398
       ],
       "material": "sol_sombre",
       "chamfer": 0.02,
-      "_": "Le marquage au sol de la borne de classement, repris du CENTRE_MACHINE_SOL de 2020. Il faisait 7 x 5 m, ce qui était une scène et non un marquage."
+      "_": "L'ESTRADE, AUX COTES DE 2020 — 2,427 x 3,398 m, centree sur (0 ; -4,680), haute de 0,228 m. Boite englobante de CENTRE_MACHINE_SOL_Cube dans salle.obj : x -2,500..2,500 et z -3,500..3,500 en UNITES, soit +/-1,2136 et +/-1,6990 en metres.\nCE QUI ETAIT ECRIT ICI : « Il faisait 7 x 5 m, ce qui etait une scene et non un marquage ». 7 et 5 sont les cotes en unites Blender, pas en metres : l'estrade a ete retrecie a 2,40 x 2,40 et remontee a z = -3,100 pour corriger une erreur qui n'existait pas. Conséquence mesuree : « borne_classement », a z = -4,541 sur un caisson de 0,88 m de profond, commencait 0,241 m au SUD du bord du marquage et reposait sur du vide sur les deux tiers de sa profondeur. Elle repose maintenant en plein dessus, avec 0,74 m de marge au sud et 1,54 au nord.\n0,228 m et non 0,12 : c'est la cote mesuree, et elle reste sous les 0,35 m que le corps du joueur enjambe — l'estrade est une marche, pas un obstacle, et le controle d'accessibilite continue de la traverser."
     }
   ],
   "_bornes": "Dix-neuf bornes, chacune nommée, placée, orientée, et sachant à quoi elle joue. Le moteur devinait ces trois dernières choses : l'écran par des fractions inventées de la boîte englobante (centre 31 cm trop bas), l'orientation par le barycentre du troupeau, et le jeu par un tri en X puis Z qui ne collait pas aux images peintes sur les marquees. Cotes réelles : 0,72 x 1,86 x 0,88 m — le modèle de 2020 mélangeait deux échelles et donnait des bornes de 2,39 m sous un plafond de 2,92.",
@@ -3016,7 +3196,7 @@
       "name": "borne_arcade_4",
       "slot": 4,
       "game": "demineur",
-      "difficulty": "normal",
+      "difficulty": "easy",
       "at": [
         1.312,
         0,
@@ -3028,13 +3208,14 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_demineur",
-      "marquee": "marquee_demineur"
+      "marquee": "marquee_demineur",
+      "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
       "name": "borne_arcade_5",
       "slot": 5,
       "game": "snake",
-      "difficulty": "normal",
+      "difficulty": "easy",
       "at": [
         2.258,
         0,
@@ -3046,13 +3227,14 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_snake",
-      "marquee": "marquee_snake"
+      "marquee": "marquee_snake",
+      "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
       "name": "borne_arcade_6",
       "slot": 6,
       "game": "shooter",
-      "difficulty": "normal",
+      "difficulty": "easy",
       "at": [
         3.198,
         0,
@@ -3064,7 +3246,8 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_shooter",
-      "marquee": "marquee_shooter"
+      "marquee": "marquee_shooter",
+      "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
       "name": "borne_arcade_7",
@@ -3124,7 +3307,7 @@
       "name": "borne_arcade_10",
       "slot": 10,
       "game": "asteroid",
-      "difficulty": "normal",
+      "difficulty": "easy",
       "at": [
         1.315,
         0,
@@ -3136,13 +3319,14 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_asteroid",
-      "marquee": "marquee_asteroid"
+      "marquee": "marquee_asteroid",
+      "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
       "name": "borne_arcade_11",
       "slot": 11,
       "game": "tetris",
-      "difficulty": "normal",
+      "difficulty": "easy",
       "at": [
         2.254,
         0,
@@ -3154,7 +3338,8 @@
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
       "screen": "ecran_tetris",
-      "marquee": "marquee_tetris"
+      "marquee": "marquee_tetris",
+      "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
       "name": "borne_arcade_12",
@@ -3286,14 +3471,14 @@
       "marquee": "marquee_piano"
     },
     {
-      "_": "Le poste de classement, sur l'estrade centrale. En 2020 il est en (0 ; -4,541) et regarde +Z ; `room.c` le declare comme la seizieme cible alors qu'il n'y a que quinze caissons.",
+      "_": "Le poste de classement, sur l'estrade centrale — et la phrase qui etait ici melangeait deux bornes.\nCE QU'IL Y A VRAIMENT EN (0 ; -4,541) DANS 2020 : la borne 15, un caisson COMING SOON (FLAPPY_BIRD_HARD.015_Cube.072) dont `detecterMachine` renvoie 0 — injouable (legacy/room/room.c:2409-2413). Le CLASSEMENT est la borne 16 : un MONITEUR POSE SUR LE COMPTOIR, dalle x -0,412..0,412, y 1,449..1,910, z 5,091..5,184 (Cube.046_Cube.003 et son capot Cube.060_Cube.013), regarde depuis z 4,301..4,786 face au nord (room.c:2417), cible de cadrage (0 ; 4,797) (room.c:1854).\nIL Y A DONC SEIZE BORNES ET QUINZE CAISSONS dans 2020, et ce n'est pas une incoherence du code : le seizieme poste n'est pas un caisson, c'est un ecran sur un meuble. La phrase « room.c le declare comme la seizieme cible alors qu'il n'y a que quinze caissons » etait donc fausse.\nCE QUI N'EST PAS CORRIGE ICI, ET POURQUOI : dix-neuf bornes est un choix assume du proprietaire — le jeu s'appelle Nineteen. Deplacer le classement sur le comptoir demanderait de decider ce qui prend sa place au centre, et cette decision ne m'appartient pas. Elle est posee dans le rapport. Sa cote y, elle, suit l'estrade : 0,228 et non 0,12.",
       "name": "borne_classement",
       "slot": 19,
       "game": "leaderboard",
       "difficulty": "normal",
       "at": [
         0.0,
-        0.12,
+        0.228,
         -4.541
       ],
       "yaw": 0.0,
@@ -3320,26 +3505,23 @@
       "closed": false,
       "points": [
         [
-          9.65,
-          3.644
+          5.8169,
+          3.646
         ],
         [
-          9.65,
-          -7.2
+          6.329,
+          2.539
         ],
         [
-          -6.086,
-          -7.2
+          7.215,
+          2.539
         ],
         [
-          -6.086,
-          -3.556
-        ],
-        [
-          -6.738,
-          -3.556
+          7.215,
+          -0.651
         ]
-      ]
+      ],
+      "_": "RECALEE SUR LE BATIMENT REEL. Ce trace passait par x = +/-9,65 et z = +/-7,20, c'est-a-dire l'ancienne emprise 19,3 x 14,4 qui est celle de l'ENVELOPPE de 2020, sas compris. Le mur du hall est a x = +/-7,215 et z = -7,135 / +7,135 : la moulure courait donc 2,435 m DEHORS a l'est et a l'ouest, et 0,065 m dehors au sud. Elle suit maintenant les points de « coquille », pans coupes compris, avec le meme decalage de 0,10 m qui la pose sur le parement.\nCOURSE 1 sur 2 : de la trouee du pan coupe (5,817 ; 3,646) jusqu'au bord nord de la baie des sanitaires (7,215 ; -0,651). Une plinthe s'arrete a une baie a allege nulle ; elle en traverse deux ici, d'ou deux courses."
     },
     {
       "name": "plinthe_ouest",
@@ -3354,23 +3536,39 @@
       "closed": false,
       "points": [
         [
-          -7.564,
-          -3.556
+          7.215,
+          -4.069
         ],
         [
-          -9.65,
-          -3.556
+          7.215,
+          -7.135
         ],
         [
-          -9.65,
-          7.2
+          -7.215,
+          -7.135
         ],
         [
-          6.173,
-          7.2
+          -7.215,
+          2.539
+        ],
+        [
+          -6.329,
+          2.539
+        ],
+        [
+          -4.203,
+          7.135
+        ],
+        [
+          4.203,
+          7.135
+        ],
+        [
+          5.184,
+          5.0143
         ]
       ],
-      "_": "Deux courses et non une : la plinthe s'interrompt à la porte des toilettes, entre x = -8,70 et x = -7,75. Une plinthe qui traverse une baie est le détail qui trahit une salle générée."
+      "_": "RECALEE SUR LE BATIMENT REEL. Ce trace passait par x = +/-9,65 et z = +/-7,20, c'est-a-dire l'ancienne emprise 19,3 x 14,4 qui est celle de l'ENVELOPPE de 2020, sas compris. Le mur du hall est a x = +/-7,215 et z = -7,135 / +7,135 : la moulure courait donc 2,435 m DEHORS a l'est et a l'ouest, et 0,065 m dehors au sud. Elle suit maintenant les points de « coquille », pans coupes compris, avec le meme decalage de 0,10 m qui la pose sur le parement.\nCOURSE 2 sur 2, et le nom lui reste par commodite : elle fait desormais le SUD, l'OUEST et le NORD d'une traite, du bord sud de la baie des sanitaires (7,215 ; -4,069) au bord nord de la trouee du pan coupe (5,184 ; 5,014)."
     },
     {
       "name": "corniche_hall",
@@ -3378,41 +3576,46 @@
       "profile": "corniche",
       "section": [
         0.09,
-        0.1
+        0.18
       ],
       "y": 3.1,
       "offset": 0.1,
       "closed": true,
       "points": [
         [
-          9.65,
-          3.644
+          7.215,
+          -7.135
         ],
         [
-          9.65,
-          -7.2
+          -7.215,
+          -7.135
         ],
         [
-          -6.086,
-          -7.2
+          -7.215,
+          2.539
         ],
         [
-          -6.086,
-          -3.556
+          -6.329,
+          2.539
         ],
         [
-          -9.65,
-          -3.556
+          -4.203,
+          7.135
         ],
         [
-          -9.65,
-          7.2
+          4.203,
+          7.135
         ],
         [
-          6.173,
-          7.2
+          6.329,
+          2.539
+        ],
+        [
+          7.215,
+          2.539
         ]
-      ]
+      ],
+      "_": "RECALEE SUR LE BATIMENT REEL. Ce trace passait par x = +/-9,65 et z = +/-7,20, c'est-a-dire l'ancienne emprise 19,3 x 14,4 qui est celle de l'ENVELOPPE de 2020, sas compris. Le mur du hall est a x = +/-7,215 et z = -7,135 / +7,135 : la moulure courait donc 2,435 m DEHORS a l'est et a l'ouest, et 0,065 m dehors au sud. Elle suit maintenant les points de « coquille », pans coupes compris, avec le meme decalage de 0,10 m qui la pose sur le parement.\nSA HAUTEUR passe de 0,10 a 0,18 m, et ce n'est pas un choix d'ornement : le mur s'arrete a room.height = 2,92 et la sous-face du plafond est a 3,10 — 0,18 m de vide tout autour de la salle, defaut connu et ecrit dans docs/DESIGN-SALLE.md § 383. La corniche se compte VERS LE BAS depuis son y ; a 3,10 sur 0,18 elle occupe exactement 2,92 a 3,10 et ferme le joint."
     },
     {
       "name": "cimaise_hall",
@@ -3424,38 +3627,50 @@
       ],
       "y": 2.42,
       "offset": 0.1,
-      "closed": true,
+      "closed": false,
       "points": [
         [
-          9.65,
-          3.644
+          7.215,
+          -4.069
         ],
         [
-          9.65,
-          -7.2
+          7.215,
+          -7.135
         ],
         [
-          -6.086,
-          -7.2
+          -7.215,
+          -7.135
         ],
         [
-          -6.086,
-          -3.556
+          -7.215,
+          2.539
         ],
         [
-          -9.65,
-          -3.556
+          -6.329,
+          2.539
         ],
         [
-          -9.65,
-          7.2
+          -4.203,
+          7.135
         ],
         [
-          6.173,
-          7.2
+          4.203,
+          7.135
+        ],
+        [
+          6.329,
+          2.539
+        ],
+        [
+          7.215,
+          2.539
+        ],
+        [
+          7.215,
+          -0.651
         ]
       ],
-      "_": "À 2,42 m, soit au-dessus des deux linteaux (2,30 et 2,10) : une cimaise qui coupe une porte se voit tout de suite."
+      "_": "RECALEE SUR LE BATIMENT REEL. Ce trace passait par x = +/-9,65 et z = +/-7,20, c'est-a-dire l'ancienne emprise 19,3 x 14,4 qui est celle de l'ENVELOPPE de 2020, sas compris. Le mur du hall est a x = +/-7,215 et z = -7,135 / +7,135 : la moulure courait donc 2,435 m DEHORS a l'est et a l'ouest, et 0,065 m dehors au sud. Elle suit maintenant les points de « coquille », pans coupes compris, avec le meme decalage de 0,10 m qui la pose sur le parement.\nA 2,42 m elle passe AU-DESSUS des deux linteaux qu'elle rencontre — 2,33 pour la trouee du pan coupe, 2,10 pour la porte des toilettes — et n'a donc pas a s'y interrompre. Elle s'interrompt en revanche a la baie des sanitaires, dont le linteau est a 2,879 : une cimaise qui coupe une baie se voit tout de suite. Une seule course ouverte, d'un bord de la baie a l'autre."
     },
     {
       "name": "nez_estrade",
@@ -3465,29 +3680,29 @@
         0.04,
         0.06
       ],
-      "y": 0.09,
+      "y": 0.198,
       "offset": 0.0,
       "closed": true,
       "points": [
         [
-          -1.2,
-          -4.3
+          -1.2135,
+          -6.379
         ],
         [
-          1.2,
-          -4.3
+          1.2135,
+          -6.379
         ],
         [
-          1.2,
-          -1.9
+          1.2135,
+          -2.981
         ],
         [
-          -1.2,
-          -1.9
+          -1.2135,
+          -2.981
         ]
       ],
       "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme.",
-      "_defaut": "Ce nez traçait un rectangle de 6,09 x 4,44 m allant de (-3,043 ; -1,333) à (3,043 ; 3,111), alors que l'estrade qu'il est censé border occupe x de -1,2 a 1,2 et z de -4,3 a -1,9. Les deux emprises sont DISJOINTES : la moulure ne bordait rien, elle traversait la moquette du hall. Recalée sur l'emprise exacte de la boîte estrade."
+      "_defaut": "Ce nez traçait un rectangle de 6,09 x 4,44 m allant de (-3,043 ; -1,333) à (3,043 ; 3,111), alors que l'estrade qu'il est censé border occupe x de -1,2 a 1,2 et z de -4,3 a -1,9. Les deux emprises sont DISJOINTES : la moulure ne bordait rien, elle traversait la moquette du hall. Recalée sur l'emprise exacte de la boîte estrade. PUIS RECALE UNE SECONDE FOIS, sur l'estrade de 2020 : x +/-1,2135 et z -6,379 a -2,981, y 0,198 — trois centimetres sous l'arete, comme les 0,09 l'etaient sous les 0,12."
     }
   ],
   "_props": "Le mobilier et le décor. Chaque objet est une composition de boîtes et de panneaux décrits DANS SON PROPRE REPÈRE, puis posé d'un bloc : on déplace un billard sans recalculer dix lignes. Ceux qui portent un « poi » deviennent des lieux d'interaction déclarés — le moteur les repérait jusqu'ici en cherchant des sous-chaînes dans les noms de nœuds du glTF.",
@@ -3542,16 +3757,16 @@
     {
       "name": "billard",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 12.0,
+      "yaw": 0.0,
       "poi": "billard",
       "anchor": [
         0.0,
         0.0,
-        -0.978
+        -1.35
       ],
       "model": "models/billard/billard.gltf",
       "material": "billard_bois",
@@ -3562,17 +3777,18 @@
         "billard_metal",
         "billard_repere"
       ],
-      "_": "La table, construite par `assets/blender/billard.py`. Elle etait onze boites empilees : pas de poche, pas de mouluration, des pieds carres, et un placage de bois pave a 0,80 m sur des bandes de 6 cm — d'ou des bandes qui se lisaient comme une pile de planches. Les cotes hors tout n'ont pas bouge (2,36 x 1,36, drap a 0,784) pour que ni le controle de chevauchement ni la collision ne changent.",
-      "_place": "Le billard, 2,50 x 1,40 m et tourne de 12 deg, ne tient plus contre le mur ouest : le hall a perdu 4,87 m de largeur, les pilastres y avancent de 18 cm, et la rangee de six bornes en occupe le pied. Pose au SUD-OUEST, entre l'ilot (z >= -0,50) et le mur sud (z = -7,135), il a du degagement sur ses quatre cotes."
+      "_": "A SA PLACE DE 2020 ET DANS SON AXE. Billiard_Table donne un tapis en x -6,294..-2,671 et z -5,664..-3,724, soit un centre (-4,483 ; -4,694) et AUCUNE rotation — la hitbox de room.c:2171 est un rectangle droit. La table etait a (-3,85 ; -4,75) avec un lacet de 12 degres : 0,633 m a l'est, et pivotee alors que l'originale ne l'etait pas. Ses cinq accessoires et sa suspension la suivent ; la queue garde ses 110 degres relatifs.",
+      "_place": "Le billard, 2,50 x 1,40 m et tourne de 12 deg, ne tient plus contre le mur ouest : le hall a perdu 4,87 m de largeur, les pilastres y avancent de 18 cm, et la rangee de six bornes en occupe le pied. Pose au SUD-OUEST, entre l'ilot (z >= -0,50) et le mur sud (z = -7,135), il a du degagement sur ses quatre cotes.",
+      "_anchor": "-1,35 et non -0,978 : a 0,978 du centre le joueur se tenait DANS l'emprise de la table, qui va jusqu'a 1,143 m de son axe."
     },
     {
       "name": "suspension_billard",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 12.0,
+      "yaw": 0.0,
       "parts": [
         {
           "_": "LA SUSPENSION. La salle déclarait sa lumière et pas son luminaire — une source sans objet visible, ce que le plan s'interdit. Trois morceaux : le câble, l'abat-jour tronconique, l'ampoule. L'abat-jour est ouvert vers le bas (pas de bouchon bas) pour qu'on voie l'ampoule dedans depuis la table.",
@@ -3621,11 +3837,11 @@
       "name": "billard_billes",
       "_": "Trois billes posees, pas rangees en triangle : une partie interrompue, pas une table de demonstration. Elles etaient toutes les trois BLANCHES (SPEC-ATMOSPHERE §1.11) ; elles prennent trois teintes de jeu — la blanche, la bleue, la rouge — sur des materiaux qui existaient deja. Les trois positions sont recalculees pour degager la queue : la plus proche est a 14 cm de son axe, pour 4,5 cm de somme des rayons.",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 12.0,
+      "yaw": 0.0,
       "parts": [
         {
           "_": "la blanche, celle qu'on joue",
@@ -3670,11 +3886,11 @@
       "name": "billard_triangle",
       "_atmo": "SPEC-ATMOSPHERE poste 24 (§1.11) : « trois billes blanches sans numero ni triangle ». Le triangle est au point de mouche, a +0,47 du centre : trois barres de bois autour de six billes en pyramide, la noire au coeur. Les billes ne portent pas de CHIFFRE — il faudrait une planche par numero, donc une texture par bille — mais elles portent chacune leur couleur de jeu, ce qui est ce qu'on lit d'une bille a plus d'un metre. Le pas de 5,02 cm entre rangees est 0,029 x racine(3) : c'est l'empilement compact de spheres de 29 mm, pas une valeur choisie.",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 12.0,
+      "yaw": 0.0,
       "parts": [
         {
           "_": "les trois barres du triangle, posees sur le drap (0,784) — a 0,787, trois millimetres au-dessus : a la cote exacte du drap leurs sommets bas comptent DANS le solide de la table et roomgen arrete le build",
@@ -3805,11 +4021,11 @@
       "name": "billard_craie",
       "_atmo": "SPEC-ATMOSPHERE poste 24. Le cube de craie de 2020 (`bleu.001`), pose sur la bande : y 0,848, c'est-a-dire le POINT LE PLUS HAUT du modele de table — rien n'est donc enfonce dedans. A x local +0,80, z +0,66, il est sur le bois de la bande et non sur le drap (demi-largeur du drap 0,55, de la table 0,764).",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 12.0,
+      "yaw": 0.0,
       "parts": [
         {
           "type": "box",
@@ -3833,11 +4049,11 @@
       "name": "billard_queue",
       "_atmo": "SPEC-ATMOSPHERE poste 24. La queue, posee EN TRAVERS DU DRAP : c'est le signe d'une partie interrompue, et c'est ce que le §1.11 reclame. Un cone de 1,449 m, 32 mm au talon et 15 mm en fleche, plus la virole claire au bout. Son axe est a 0,803 : le drap est a 0,784 et le rayon au talon vaut 0,016, elle affleure donc a 3 mm — a 0,800 pile, ses sommets bas comptaient DANS le solide de la table et roomgen arretait le build. Le prop est declare a part avec son propre yaw parce qu'un morceau ne peut pas cumuler proprement yaw et pitch ; son `at` est le TALON et le `pitch 90` couche le cylindre le long du +z local.",
       "at": [
-        -3.85,
+        -4.483,
         0.0,
-        -4.75
+        -4.694
       ],
-      "yaw": 122.2,
+      "yaw": 110.2,
       "parts": [
         {
           "type": "cylinder",
@@ -3994,10 +4210,10 @@
       "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
     },
     {
-      "_at": "AUDIT P-01 puis C-10. Il etait DANS LA RUE, on l'a rentre — et rentre EN TRAVERS DU COULOIR. Le commentaire qui remplacait celui-ci affirmait « sans bloquer le passage vers le hall » : un comptoir de 1,72 m dans un couloir qui en fait 1,469 de libre le bouche INTEGRALEMENT. C'est le meuble qui scellait le joueur, autant que le mur manquant. Une phrase rassurante n'est pas une mesure ; c'est le controle d'accessibilite qui l'a dit, pas la relecture.\nIci il est dans l'alcove nord-est du hall, plaque contre le mur est et tourne vers la salle : on tombe dessus en sortant du couloir, ce qui est la place d'un comptoir d'accueil, et il ne touche plus aucun cheminement.",
+      "_at": "AUDIT P-01 puis C-10. Il etait DANS LA RUE, on l'a rentre — et rentre EN TRAVERS DU COULOIR. Le commentaire qui remplacait celui-ci affirmait « sans bloquer le passage vers le hall » : un comptoir de 1,72 m dans un couloir qui en fait 1,469 de libre le bouche INTEGRALEMENT. C'est le meuble qui scellait le joueur, autant que le mur manquant. Une phrase rassurante n'est pas une mesure ; c'est le controle d'accessibilite qui l'a dit, pas la relecture.\nIci il est dans l'alcove nord-est du hall, plaque contre le mur est et tourne vers la salle : on tombe dessus en sortant du couloir, ce qui est la place d'un comptoir d'accueil, et il ne touche plus aucun cheminement.\nET REPOUSSE CONTRE LA JOUE EST, de x 6,40 a 6,54. A 6,40 son plateau de 0,82 m occupait x 5,99 a 6,81 dans un couloir dont l'interieur va de 5,284 a 6,953 : il restait 0,706 m de passage a l'ouest, dont 0,066 seulement franchissables par une capsule de 0,64. Adosse au parement est (6,953), il occupe 6,13 a 6,95 et laisse 0,846 m, soit 0,206 m de bande foulable. Le controle d'accessibilite l'a dit avant moi : le point de vue « arrivee » n'avait plus une seule cellule ou se tenir.",
       "name": "bureau",
       "at": [
-        6.4,
+        6.54,
         0.0,
         5.2
       ],
@@ -4209,9 +4425,9 @@
       "_audit": "AUDIT P-04. Ses axes X et Z etaient INTERVERTIS : le plan de 1,40 m partait perpendiculairement au mur ouest et le TRAVERSAIT de 35 cm, donc 15 cm dans la rue. La convention de ce fichier est qu'un prop regarde son +Z local ; elle etait violee ici et sur la radio murale, et c'est le meme defaut deux fois. Le dos du meuble tombe maintenant exactement sur le parement. Cette correction en regle une SECONDE : le panneau « sol mouille » etait plante dans le meuble, et la facade reculant de -8,50 a -9,03 il degage de 34 cm.",
       "name": "lavabo_toilettes",
       "at": [
-        11.62,
+        11.592,
         0.0,
-        -2.3
+        0.558
       ],
       "yaw": 90.0,
       "poi": "toilettes",
@@ -4263,17 +4479,72 @@
             0.9
           ]
         }
-      ]
+      ],
+      "_": "Le plan de lavabo du bloc FEMMES. Il etait a z = -2,30, c'est-a-dire a cheval sur la cloison que 2020 mesure a z = -2,311, et 2,88 m au nord du plan hommes. 2020 en a DEUX, tous deux contre le mur est : femmes z -0,413..1,529 (Cube.027_Cube.052), hommes z -6,150..-4,209 (Cube.022_Cube.012). Celui-ci prend le centre mesure du plan femmes, z = 0,558 ; son jumeau « lavabo_toilettes_2 » prend celui du plan hommes. Leur longueur reste 1,40 m et non les 1,941 de 2020 : c'est la seule cote que je n'ai pas reprise, le meuble et son miroir etant dessines pour celle-la."
+    },
+    {
+      "name": "lavabo_toilettes_2",
+      "at": [
+        11.592,
+        0.0,
+        -5.18
+      ],
+      "yaw": 90.0,
+      "parts": [
+        {
+          "type": "box",
+          "material": "marbre",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            1.4,
+            0.86,
+            0.52
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "type": "panel",
+          "material": "lavabo",
+          "at": [
+            0.0,
+            0.815,
+            0.0
+          ],
+          "size": [
+            1.2,
+            0.44
+          ],
+          "pitch": -90
+        },
+        {
+          "type": "panel",
+          "material": "miroir",
+          "at": [
+            0.0,
+            1.46,
+            -0.259
+          ],
+          "size": [
+            1.3,
+            0.9
+          ]
+        }
+      ],
+      "_": "Le plan de lavabo du bloc HOMMES, absent. 2020 le mesure en x 11,194..11,971 et z -6,150..-4,209 (Cube.022_Cube.012), centre z = -5,180, avec deux robinets. Sans lui le bloc hommes n'avait ni lavabo ni miroir."
     },
     {
       "name": "flaque_toilettes",
       "at": [
-        10.9,
+        8.1,
         0.004,
-        -2.45
+        -3.1
       ],
       "yaw": 24.0,
-      "_": "Une flaque : une dalle de 4 mm en matériau très lisse. Ce n'est pas de l'eau simulée, c'est un miroir sale — et à cette échelle la différence ne se voit pas, alors que l'absence de reflet au sol, elle, se voit.",
+      "_": "La flaque et son panneau suivent le sas de lavabos, ou l'on entre : ils etaient contre l'ancien lavabo, dont la place est desormais coupee par « cloison_wc_est ».",
       "parts": [
         {
           "type": "box",
@@ -4295,12 +4566,70 @@
     {
       "name": "robinet_toilettes",
       "at": [
-        11.49,
+        11.462,
         0.0,
-        -2.3
+        0.558
       ],
       "yaw": 90.0,
-      "_": "Le robinet qui goutte. La goutte elle-même est une particule et un son : A8. Ici il n'y a que le col de cygne — sans lui, le lavabo est un bloc de marbre creusé.",
+      "_": "Suit son lavabo, au meme ecart de 0,13 m.",
+      "parts": [
+        {
+          "type": "box",
+          "material": "chasse",
+          "at": [
+            0.0,
+            0.87,
+            0.0
+          ],
+          "size": [
+            0.07,
+            0.04,
+            0.07
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "chasse",
+          "at": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "size": [
+            0.035,
+            0.22,
+            0.035
+          ],
+          "chamfer": 0.01
+        },
+        {
+          "type": "box",
+          "material": "chasse",
+          "at": [
+            0.0,
+            1.1,
+            0.075
+          ],
+          "size": [
+            0.03,
+            0.03,
+            0.19
+          ],
+          "chamfer": 0.01,
+          "pitch": 24.0
+        }
+      ]
+    },
+    {
+      "name": "robinet_toilettes_2",
+      "at": [
+        11.462,
+        0.0,
+        -5.18
+      ],
+      "yaw": 90.0,
+      "_": "Celui du bloc hommes.",
       "parts": [
         {
           "type": "box",
@@ -4379,19 +4708,11 @@
     {
       "name": "cabine_toilettes",
       "at": [
-        9.6,
+        9.77,
         0.0,
-        -4.6
+        -4.3
       ],
       "yaw": 0.0,
-      "repeat": {
-        "count": 2,
-        "step": [
-          1.0,
-          0.0,
-          0.0
-        ]
-      },
       "parts": [
         {
           "type": "box",
@@ -4452,18 +4773,88 @@
           ]
         }
       ],
-      "_": "Les joues et la cuvette seulement : les portes sont déclarées à part, parce que `repeat` les rendrait identiques et que c'est exactement ce qu'on ne veut pas."
+      "_": "LA CABINE DU BLOC HOMMES. Elles etaient DEUX, cote a cote en (9,6 ; -4,6) et (10,6 ; -4,6), donc 1,996 m de large en travers d'un bloc qui n'avait pas encore ses cloisons. 2020 n'en a qu'une par bloc : les deux appareils sanitaires mesurables sont Cube.129_Cube.039 cote hommes (x 9,391..10,147 ; z -3,235..-2,416) et Cube.165_Cube.011 cote femmes (x 9,385..10,142 ; z -2,198..-1,379). Leur axe x, 9,77, est repris ici tel quel.\nSON z NE L'EST PAS, et la raison est mesuree : a z = -2,83 la cabine, joues comprises, occupe z -3,48 a -2,18 et recouvre 0,59 m de la baie « porte_toilettes_2 » (z -3,60..-2,65), qui n'en fait que 0,95. Reculee a -4,30, elle laisse la baie entiere et garde 1,08 m au sud pour le contournement du refend, celui que 2020 mesure a 1,381 m (releve § 4.3). Elle ouvre au NORD, face a sa baie."
+    },
+    {
+      "name": "cabine_toilettes_2",
+      "at": [
+        9.77,
+        0.0,
+        -0.3
+      ],
+      "yaw": 180.0,
+      "parts": [
+        {
+          "type": "box",
+          "material": "cabine_panneau",
+          "at": [
+            -0.478,
+            0.113,
+            0.0
+          ],
+          "size": [
+            0.04,
+            1.9,
+            1.3
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "cabine_panneau",
+          "at": [
+            0.478,
+            0.113,
+            0.0
+          ],
+          "size": [
+            0.04,
+            1.9,
+            1.3
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "type": "box",
+          "material": "lavabo",
+          "at": [
+            0.0,
+            0.0,
+            -0.373
+          ],
+          "size": [
+            0.36,
+            0.42,
+            0.54
+          ],
+          "chamfer": 0.03
+        },
+        {
+          "type": "panel",
+          "material": "chasse",
+          "at": [
+            0.0,
+            0.81,
+            -0.604
+          ],
+          "size": [
+            0.24,
+            0.18
+          ]
+        }
+      ],
+      "_": "LA CABINE DU BLOC FEMMES, absente : le bloc n'avait que celles du sud. Meme axe x que 2020 (9,77) ; z = -0,30 pour laisser libres a la fois la baie « porte_toilettes » (z -2,05..-1,10) et le contournement nord du refend (z 0,253..1,436), qui gardent respectivement 0,95 et 1,09 m. Elle ouvre au SUD, face a sa baie."
     },
     {
       "_audit": "AUDIT P-06. Les vantaux etaient SUSPENDUS a 1,02 m du sol et depassaient leurs joues de 77 cm. 15 cm de jeu sous la porte est la cote d'une cabine sanitaire courante, et le vantail reste alors sous les joues.",
       "name": "porte_cabine_1",
       "at": [
-        10.04,
+        9.27,
         0.0,
-        -3.95
+        -3.62
       ],
       "yaw": 0.0,
-      "_": "Fermée. Le gond est à x −8,14, contre la joue gauche de la première cabine.",
+      "_": "Fermee, devant la cabine du bloc hommes ; son gond est contre la joue ouest. z = -3,62 et non -3,65 : a la cote exacte de la joue, ses 35 mm d'epaisseur y entraient de 17 mm et roomgen arrete le build.",
       "parts": [
         {
           "type": "box",
@@ -4500,12 +4891,12 @@
     {
       "name": "porte_cabine_2",
       "at": [
-        -7.14,
+        10.25,
         0.0,
-        -5.45
+        -0.98
       ],
-      "yaw": -38.0,
-      "_": "Entrouverte de 38°. C'est le détail qui fait la différence entre un bloc sanitaire et un placard : on voit qu'il y a quelque chose derrière.",
+      "yaw": 142.0,
+      "_": "Entrouverte de 38 degres, devant la cabine du bloc femmes. Elle etait a (-7,14 ; -5,45), c'est-a-dire DANS LE MUR OUEST DU HALL, a 13,4 m de la cabine qu'elle est censee fermer et de l'autre cote du batiment. C'est le detail qui fait la difference entre un bloc sanitaire et un placard : on voit qu'il y a quelque chose derriere.",
       "parts": [
         {
           "type": "box",
@@ -4540,12 +4931,12 @@
       ]
     },
     {
-      "_": "LA PORTE DES TOILETTES, coulissante, reprise de 2020. `toiletteFemme` et `toiletteHomme` y sont deux GL_Quadf qui glissent le long de X de 20,2 a 23,0 unites (legacy/room/room.c:162), avec SF-ouvport.wav a l'ouverture, SF-fermport.wav a la fermeture, une portee de 8 unites pour le volume et une refermeture automatique au bout de trois secondes. Les deux sons sont charges par room_sound.c depuis toujours ; rien ne les jouait.\nELLE EST DECLAREE OUVERTE, et c'est deliberé. Le vantail ferme bouche la baie de `cloison_toilettes` — c'est son travail — mais le controle d'accessibilite du build ne sait pas encore qu'un ouvrant s'ouvre : il verrait le bloc sanitaire scelle et arreterait la construction, ce qui est le contraire de ce qu'on veut. La geometrie cuite la montre donc au repos, degagee, et le MOTEUR possede son etat. Le jour ou le controle saura lire un ouvrant, cette position deviendra la position FERMEE et ce paragraphe disparaitra.\nElle coulisse selon +z de 1,05 m : fermee elle couvre la baie (z -2,45 a -1,50), ouverte elle est rangee le long du refend au nord. Face ouest du refend, a 2,2 cm du parement, cote lavabos.",
+      "_": "LA PORTE DES TOILETTES, coulissante, reprise de 2020. `toiletteFemme` et `toiletteHomme` y sont deux GL_Quadf qui glissent le long de X de 20,2 a 23,0 unites (legacy/room/room.c:162), avec SF-ouvport.wav a l'ouverture, SF-fermport.wav a la fermeture, une portee de 8 unites pour le volume et une refermeture automatique au bout de trois secondes. Les deux sons sont charges par room_sound.c depuis toujours ; rien ne les jouait.\nELLE EST DECLAREE OUVERTE, et c'est deliberé. Le vantail ferme bouche la baie de `cloison_toilettes` — c'est son travail — mais le controle d'accessibilite du build ne sait pas encore qu'un ouvrant s'ouvre : il verrait le bloc sanitaire scelle et arreterait la construction, ce qui est le contraire de ce qu'on veut. La geometrie cuite la montre donc au repos, degagee, et le MOTEUR possede son etat. Le jour ou le controle saura lire un ouvrant, cette position deviendra la position FERMEE et ce paragraphe disparaitra.\nElle coulisse selon +z de 1,05 m : fermee elle couvre la baie (z -2,45 a -1,50), ouverte elle est rangee le long du refend au nord. Face ouest du refend, a 2,2 cm du parement, cote lavabos.\nDEPLACEE DE 0,25 m VERS LE NORD, de z = -0,925 a -0,675, et c'est la seule modification qu'elle subit — meme nom, meme geometrie, meme course de 1,05 m selon +z, meme face ouest du refend. Sa baie a du reculer de 0,40 m pour degager l'about de la cloison mesuree a z = -2,311 ; le vantail suit sa baie. FERMEE il est centre sur z = -1,725 et couvre z -2,25 a -1,20, soit la baie -2,05..-1,10 avec 0,20 m de recouvrement de chaque cote. OUVERT — la position cuite ici — il est centre sur -0,675 et couvre -1,20 a -0,15, entierement au nord de la baie.",
       "name": "porte_wc",
       "at": [
         8.855,
         0.0,
-        -0.925
+        -0.675
       ],
       "yaw": 0.0,
       "parts": [
@@ -4573,6 +4964,50 @@
             -0.03,
             1.05,
             0.38
+          ],
+          "size": [
+            0.022,
+            0.14,
+            0.05
+          ],
+          "chamfer": 0.004
+        }
+      ]
+    },
+    {
+      "_": "LA SECONDE PORTE DES TOILETTES, celle du bloc HOMMES. 2020 en a deux : `toiletteFemme` ET `toiletteHomme` (legacy/room/room.c:162-163), deux quads identiques qui glissent le long de X de 20,2 a 23,0 unites, avec leurs deux coffres modelises — Cube.019_Cube.025, Cube.018_Cube.024 et Cube.017_Cube.023 pour celle-ci. Une seule etait declaree ici.\nElle est le MIROIR de « porte_wc » : meme vantail de 1,05 x 2,05 m et 45 mm d'epaisseur, meme face ouest du refend a 2,2 cm du parement, meme course de 1,05 m — mais vers le SUD, parce que sa baie est au sud et que le coffre de 2020 est du cote oppose au sien. La poignee passe donc en z local -0,38.\nELLE EST DECLAREE OUVERTE, pour la meme raison que l'autre et qui est ecrite chez elle : le controle d'accessibilite du build ne sait pas encore qu'un ouvrant s'ouvre, et un vantail cuit ferme lui ferait declarer le bloc hommes scelle. FERMEE elle est centree sur z = -3,125 et couvre -3,65 a -2,60, soit la baie -3,60..-2,65 avec 0,05 m de recouvrement. OUVERTE — ici — elle est centree sur -4,175 et couvre -4,70 a -3,65 : rangee le long du refend, 0,05 m avant son extremite sud (z = -4,75).",
+      "name": "porte_wc_2",
+      "at": [
+        8.855,
+        0.0,
+        -4.175
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "_": "le vantail",
+          "type": "box",
+          "material": "cabine_panneau",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.045,
+            2.05,
+            1.05
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "_": "la poignee encastree, cote lavabos — au sud, la porte glissant vers le sud",
+          "type": "box",
+          "material": "chasse",
+          "at": [
+            -0.03,
+            1.05,
+            -0.38
           ],
           "size": [
             0.022,
@@ -4655,9 +5090,9 @@
     {
       "name": "enseigne_nineteen",
       "at": [
-        -2.6,
-        2.47,
-        7.05
+        0.0,
+        2.277,
+        7.02
       ],
       "yaw": 180.0,
       "parts": [
@@ -4670,8 +5105,8 @@
             0.0
           ],
           "size": [
-            3.2,
-            0.8
+            2.546,
+            0.461
           ]
         },
         {
@@ -4679,32 +5114,33 @@
           "material": "borne_cadre",
           "at": [
             0.0,
-            -0.433,
+            -0.2635,
             0.044
           ],
           "size": [
-            3.4,
+            2.65,
             0.06,
             0.1
           ],
           "chamfer": 0.01
         }
-      ]
+      ],
+      "_": "Aux cotes et a la place de 2020 : Cube.059_Cube.007 mesure x -1,273..1,273, y 2,046..2,507, z 6,968..7,429 — 2,546 x 0,461 m CENTREE SUR x = 0, c'est-a-dire dans l'axe du comptoir. Elle etait a x = -2,60 et faisait 3,20 x 0,80 : 2,600 m a l'ouest et 0,654 m trop large, decalee de l'axe du meuble qu'elle surmonte."
     },
     {
       "name": "affiche_ouest",
       "at": [
         -7.1,
-        1.46,
-        -2.6
+        1.6575,
+        -5.553
       ],
       "yaw": 90.0,
       "repeat": {
-        "count": 3,
+        "count": 2,
         "step": [
           0.0,
           0.0,
-          2.044
+          3.289
         ]
       },
       "parts": [
@@ -4717,20 +5153,21 @@
             0.0
           ],
           "size": [
-            0.62,
-            0.9
+            0.777,
+            0.971
           ]
         }
-      ]
+      ],
+      "_": "Les DEUX cadres du mur ouest de 2020 : Cube.044_Cube.004 centre sur z = -5,553 et Cube.045_Cube.010 sur z = -2,264, memes 0,777 x 0,971 m que ceux du sud. Il y en avait TROIS ici, au pas de 2,044 depuis z = -2,60."
     },
     {
       "name": "affiche_ouest_b",
       "at": [
-        -7.1,
-        1.34,
-        0.9
+        -5.175,
+        1.6575,
+        4.795
       ],
-      "yaw": 90.0,
+      "yaw": 114.8,
       "parts": [
         {
           "type": "panel",
@@ -4741,18 +5178,19 @@
             0.0
           ],
           "size": [
-            0.58,
-            0.86
+            0.777,
+            0.971
           ]
         }
-      ]
+      ],
+      "_": "SUR LE PAN COUPE NORD-OUEST, en symetrique d'« affiche_est_b ». Elle etait a z = +0,90 sur le mur ouest, ou 2020 n'a pas de cadre — et ou elle etait prise entre le mur et le dos de « borne_arcade_17 ». Le parement du pan coupe passe par (-5,175 ; 4,795), sa normale interieure vaut (0,908 ; -0,420), soit un lacet de 114,8. Les deux pans coupes portent donc chacun leur cadre."
     },
     {
       "name": "affiche_sud",
       "at": [
-        -3.2,
-        1.41,
-        -7.08
+        -3.389,
+        1.6575,
+        -7.03
       ],
       "yaw": 0.0,
       "parts": [
@@ -4765,22 +5203,22 @@
             0.0
           ],
           "size": [
-            0.62,
-            0.9
+            0.777,
+            0.971
           ]
         }
-      ]
+      ],
+      "_": "Les cinq cadres du mur sud de 2020 sont IDENTIQUES : 0,777 x 0,971 m, y 1,172 a 2,143, z -7,201 a -7,104, centres sur x -6,057 / -3,389 / -0,054 / 3,297 / 6,010 (Cube.001 a Cube.005). Il y en avait trois ici, de trois tailles et a trois hauteurs, a 0,19, 0,90 et 1,41 m de leurs homologues."
     },
     {
       "name": "affiche_sud_b",
       "_atmo": "De x 1,20 a 2,40 : le tableau de la semaine (SPEC-ATMOSPHERE §2.3 E) occupe x -1,26..1,26 sur ce mur, et l'affiche tombait DANS son cadre. Elle reste entre le tableau et `affiche_sud_c` (x 4,27..4,93), au-dessus du banc sud-est.",
       "at": [
-        2.4,
-        1.53,
-        -7.08
+        3.297,
+        1.6575,
+        -7.03
       ],
       "yaw": 0.0,
-      "roll": 0.0,
       "parts": [
         {
           "type": "panel",
@@ -4791,20 +5229,20 @@
             0.0
           ],
           "size": [
-            0.58,
-            0.84
-          ],
-          "roll": -3.5
+            0.777,
+            0.971
+          ]
         }
-      ]
+      ],
+      "_": "Les cinq cadres du mur sud de 2020 sont IDENTIQUES : 0,777 x 0,971 m, y 1,172 a 2,143, z -7,201 a -7,104, centres sur x -6,057 / -3,389 / -0,054 / 3,297 / 6,010 (Cube.001 a Cube.005). Il y en avait trois ici, de trois tailles et a trois hauteurs, a 0,19, 0,90 et 1,41 m de leurs homologues."
     },
     {
       "name": "affiche_sud_c",
       "_atmo": "`affiche_5` -> `affiche_2`. Le §2.3 J donne `affiche_5` a `affiche_ouest_b` pour casser la paire du mur ouest (§1.6) ; applique tel quel, il met deux fois la meme planche dans la salle et laisse `poster_2.png` sur AUCUNE surface — roomgen ne le voit pas, parce que le materiau reste declare. Le mot echange ici rend le compte exact : chaque affiche est employee une fois, et `affiche_1` et `affiche_2` ne sont plus sur le meme mur, ce qui etait tout le motif du §1.6.",
       "at": [
-        4.6,
-        1.36,
-        -7.08
+        6.01,
+        1.6575,
+        -7.03
       ],
       "yaw": 0.0,
       "parts": [
@@ -4817,18 +5255,44 @@
             0.0
           ],
           "size": [
-            0.66,
-            0.94
+            0.777,
+            0.971
           ]
         }
-      ]
+      ],
+      "_": "Les cinq cadres du mur sud de 2020 sont IDENTIQUES : 0,777 x 0,971 m, y 1,172 a 2,143, z -7,201 a -7,104, centres sur x -6,057 / -3,389 / -0,054 / 3,297 / 6,010 (Cube.001 a Cube.005). Il y en avait trois ici, de trois tailles et a trois hauteurs, a 0,19, 0,90 et 1,41 m de leurs homologues."
+    },
+    {
+      "name": "affiche_sud_d",
+      "at": [
+        -6.057,
+        1.6575,
+        -7.03
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "panel",
+          "material": "affiche_6",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.777,
+            0.971
+          ]
+        }
+      ],
+      "_": "Les cinq cadres du mur sud de 2020 sont IDENTIQUES : 0,777 x 0,971 m, y 1,172 a 2,143, z -7,201 a -7,104, centres sur x -6,057 / -3,389 / -0,054 / 3,297 / 6,010 (Cube.001 a Cube.005). Il y en avait trois ici, de trois tailles et a trois hauteurs, a 0,19, 0,90 et 1,41 m de leurs homologues.\nQUATRIEME cadre, ajoute. Le cinquieme, celui de x = -0,054, n'a pas ete remis : « tableau_semaine » occupe x -1,26 a 1,26 sur ce mur depuis SPEC-ATMOSPHERE, et deux objets ne tiennent pas la."
     },
     {
       "name": "affiche_est",
       "at": [
         7.1,
         1.49,
-        1.4
+        -5.4
       ],
       "yaw": 270.0,
       "parts": [
@@ -4845,16 +5309,17 @@
             0.88
           ]
         }
-      ]
+      ],
+      "_": "Deplacee de z = 1,40 a -5,40 : « vitrine_lots » occupe maintenant z 0,25 a 2,05 sur ce mur, et au sud de la baie des sanitaires (z -4,069) le mur est n'avait rien."
     },
     {
       "name": "affiche_est_b",
       "at": [
-        6.055,
+        5.982,
         1.28,
-        2.644
+        3.051
       ],
-      "yaw": 270.0,
+      "yaw": 245.2,
       "parts": [
         {
           "type": "panel",
@@ -4870,7 +5335,8 @@
           ],
           "roll": 2.5
         }
-      ]
+      ],
+      "_": "SUR LE PAN COUPE NORD-EST, au sud de la trouee. Elle etait a (6,055 ; 2,644) avec un lacet de 270 : plaquee contre un mur est qui, a cette cote, n'existe plus depuis que le pan coupe est revenu — elle flottait a 0,115 m du parement oblique et regardait a 25 degres de lui. Le parement du pan coupe passe par (5,982 ; 3,051) et sa normale interieure vaut (-0,908 ; -0,420), soit un lacet de 245,2."
     },
     {
       "name": "affiche_nord",
@@ -4960,11 +5426,11 @@
         0.0
       ],
       "name": "poubelle_sas",
-      "_atmo": "Contre le mur est de l'alcove, au sud du comptoir. Elle etait au milieu de la bouche du couloir. Son `at` n'est PAS son centre : la boite du modele va de -0,047 a +0,431 en x, donc elle deborde de 43 cm vers l'est et de 5 vers l'ouest — pose a 6,62 elle traversait le mur. Le parement interieur est a 6,853 : 6,30 la laisse a 12 cm du mur.",
+      "_atmo": "Contre le mur est du couloir. Son `at` n'est PAS son centre : la boite du modele va de -0,047 a +0,431 en x, donc elle deborde de 43 cm vers l'est. Le parement interieur est passe de 6,853 a 6,953 ; a x = 6,45 elle en est a 22 cm. Elle a recule de z 3,95 a 4,15 : le couloir a repris son mur sud (mediane 3,646, parement 3,746) et elle y entrait de 3,6 cm.",
       "at": [
-        6.3,
+        6.45,
         0.0,
-        3.95
+        4.15
       ],
       "yaw": 0.0,
       "model": "models/metal_trash_can/metal_trash_can.gltf",
@@ -4985,37 +5451,39 @@
     {
       "name": "plante_salon",
       "at": [
-        2.0,
+        2.6,
         0.0,
-        -6.2
+        -6.3
       ],
       "yaw": 0.0,
       "model": "models/potted_plant_01/potted_plant_01.gltf",
       "material": "plante",
-      "_": "Dans l'angle sud-est, derriere le canape. Le premier placement la mettait dans la borne 17 — le controle de chevauchement de roomgen l'a dit tout de suite, avec les trois cotes du recouvrement."
+      "_": "Ecartee de 0,60 m a l'est : « cloison_salon » occupe x 1,502 a 1,794."
     },
     {
       "name": "fauteuil_salon",
       "_atmo": "SPEC-ATMOSPHERE poste 11. « Reste en vis-a-vis oblique du canape sans lui masquer les bornes. » La cote de la spec (7,20 ; -3,60) est prise par la table basse une fois celle-ci degagee du canape ; le fauteuil descend donc au sud du groupe. Yaw 20 et non 300 : le modele `ArmChair_01` a lui aussi son assise vers son +z local, verifie en image sur l'ancienne pose.",
       "at": [
-        2.1,
+        2.9,
         0.0,
-        -3.6
+        -3.4
       ],
       "yaw": 100.0,
       "model": "models/ArmChair_01/ArmChair_01.gltf",
-      "material": "fauteuil"
+      "material": "fauteuil",
+      "_": "Ecarte de 0,80 m a l'est. A 2,10 il laissait 0,3 m entre lui et « cloison_salon » (parement x = 1,794) : une poche de 0,5 m2 ou l'on ne pouvait pas entrer, mesuree par le controle d'accessibilite."
     },
     {
       "name": "panneau_sol_mouille",
       "at": [
-        10.6,
+        7.75,
         0.0,
-        -2.05
+        -3.5
       ],
       "yaw": 62.0,
       "model": "models/WetFloorSign_01/WetFloorSign_01.gltf",
-      "material": "panneau_sol_mouille"
+      "material": "panneau_sol_mouille",
+      "_": "Contre le mur ouest du sas de lavabos. Il etait a (8,60 ; -3,00), c'est-a-dire DEVANT la baie « porte_toilettes_2 » : le controle d'accessibilite a declare le bloc hommes inatteignable, poche de 1,3 m2. Un panneau qui signale un sol mouille ne se met pas dans la porte."
     },
     {
       "_audit": "AUDIT P-03. Elle etait vissee sur la face EXTERIEURE du mur de brique, 1,38 m dehors, avec son ampoule et deux sources qui eclairaient le trottoir — et le sas etait au noir. Le commentaire ci-dessous raconte lui-meme l'origine : on l'avait poussee le long de X pour sortir de la capsule du joueur, et elle est sortie du batiment. Ici, mur ouest du sas, a 1,71 m du point de vue `entree` : hors de la capsule sans etre hors du mur.",
@@ -5029,6 +5497,61 @@
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
       "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur."
+    },
+    {
+      "_": "LES QUATRE APPLIQUES DU MUR SUD, absentes. 2020 en a SIX : quatre au sud (sconce_02, .001, .002, .003 — x -4,782 / -1,653 / 1,652 / 4,809, z = -6,874) et deux a l'ouest, ces dernieres deja reprises a 0,03 et 0,67 m pres par « neon_mur_ouest ». Ampoule de 2,048 a 2,439 m.\nLe pas de 2020 n'est pas regulier (3,129 / 3,305 / 3,157) ; celui-ci l'est a 3,197, ce qui pose les quatre a 0,00 / 0,07 / 0,04 / 0,00 m de leurs originales. z = -6,90 : le parement sud est a -7,035 et le modele de cage sort de 0,135, comme « applique_sas » sur la joue du couloir.\nELLES SONT SUR LES PILIERS, et ce n'est pas un hasard de cote : les quatre x de 2020 (-4,782 / -1,653 / 1,652 / 4,809) sont ceux des quatre piliers engages du mur sud (-4,804 / -1,648 / 1,648 / 4,804), a 2 cm pres. Le pilier deborde de 2,2 cm devant le parement ; la cage de l'applique y entre. L'assemblage est donc declare : \"traverse\": [\"pilier_sud\"].",
+      "name": "applique_sud",
+      "at": [
+        -4.782,
+        2.15,
+        -6.9
+      ],
+      "yaw": 180.0,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.197,
+          0.0,
+          0.0
+        ]
+      },
+      "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
+      "material": "applique_cage",
+      "traverse": [
+        "pilier_sud"
+      ]
+    },
+    {
+      "_": "Les quatre ampoules, 0,12 m DEVANT leur cage — une source enfermee s'eteint elle-meme.",
+      "name": "ampoule_sud",
+      "at": [
+        -4.782,
+        2.12,
+        -6.78
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.197,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.035,
+          "sides": 10,
+          "rings": 6
+        }
+      ]
     },
     {
       "name": "suspension_comptoir",
@@ -5805,13 +6328,13 @@
     },
     {
       "name": "vitrine_lots",
-      "_": "SPEC-ATMOSPHERE §2.3 I. Le point le plus desert du hall apres la bande sud etait (9,6 ; 4,2) a 4,93 m de tout meuble : la bande coincee entre la cloison du sas et les bornes est. C'est aussi le premier mur qu'on longe en sortant du sas. La vitrine habille 1,8 m de cloison, elle porte une bande lumineuse a 1,84 m qui balise la sortie, et elle donne une raison de regarder a gauche. Le caisson est un cadre PEINT et non un vitrage : le moteur n'a pas de transparence ici.",
+      "_": "SPEC-ATMOSPHERE § 2.3 I : habiller le mur qu'on longe en sortant du couloir. Elle etait a (5,224 ; 3,011) et faisait 1,80 m de large, donc jusqu'a x = 6,124 ; le pan coupe nord-est retabli a son parement interieur en x = 5,904 a la cote z = 3,221 : son angle nord-est sortait de 0,200 m au-dela du parement, la valeur exacte a laquelle C-01 arrete le build. Et posee la elle bouchait la vue depuis la trouee. Elle passe sur le MUR EST du hall, dans l'alcove nord-est : adossee au parement x = 7,115, centree sur z = 1,15, elle occupe z 0,25 a 2,05 — entre « pilier_est_2 » (z -0,909..-0,423) et « pilier_est_3 » (z 2,246..2,732), et c'est le mur qu'on longe en sortant du couloir.",
       "at": [
-        5.224,
+        6.905,
         0.0,
-        3.011
+        1.15
       ],
-      "yaw": 180.0,
+      "yaw": 270.0,
       "parts": [
         {
           "_": "le socle plein",
@@ -6333,9 +6856,123 @@
           "rings": 7
         }
       ]
+    },
+    {
+      "_": "LE PANNEAU HARD / EASY, suspendu au-dessus de l'allee centrale — le SEUL signal spatial de la regle de difficulte, et il n'existait pas.\nLA REGLE, elle, est sans exception dans 2020 : les six bornes HARD sont a x < 0, les six EASY a x > 0 (releve § 5). Rien dans le decor ne le disait plus.\nCOTES MESUREES sur PANNEAU_EASY/HARD_Cube.035 : x -0,470 a 0,501, y 2,088 a 2,476, z 0,631 a 0,709 ; tige Cylindre.005 de 2,467 a 2,953. Le panneau tombe donc a 0,016 pres dans l'axe de l'allee et exactement entre les deux rangees (z 0,092 et 1,293, milieu 0,6925).\nLES COULEURS SONT CELLES DE LA MESURE, ET ELLES SURPRENNENT : le FOND rouge est du cote x > 0, c'est-a-dire du cote EASY, et le fond bleu du cote HARD ; les LETTRES font l'inverse, rouges a x < 0 et bleues a x > 0. Les glyphes de 2020 sont de la geometrie 3D (Texte.004 a Texte.007) que cette description ne sait pas produire : ils sont ici deux bandeaux de couleur inversee, qui portent la meme lecture — deux moities, deux couleurs, et chaque face montre les deux.\nLa tige monte jusqu'a 3,10, la sous-face du plafond, et non 2,953 : le plafond de 2020 etait a 2,879 et la tige le traversait.\nLES DEUX FONDS SONT EMISSIFS a 0,45 et les LETTRES ne le sont pas : c'est un panneau retroeclaire, et c'est la seule facon qu'il se lise a cette hauteur. Premiere capture, fonds non emissifs : deux rectangles gris.",
+      "name": "panneau_hard_easy",
+      "at": [
+        0.016,
+        0.0,
+        0.67
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "_": "moitie HARD, fond BLEU, cote x < 0",
+          "type": "box",
+          "material": "panneau_hard",
+          "at": [
+            -0.2425,
+            2.088,
+            0.0
+          ],
+          "size": [
+            0.485,
+            0.388,
+            0.078
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "_": "moitie EASY, fond ROUGE, cote x > 0",
+          "type": "box",
+          "material": "panneau_easy",
+          "at": [
+            0.2425,
+            2.088,
+            0.0
+          ],
+          "size": [
+            0.485,
+            0.388,
+            0.078
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "_": "face nord : le mot du cote HARD, en ROUGE sur le fond bleu",
+          "type": "panel",
+          "material": "rouge",
+          "at": [
+            -0.2425,
+            2.282,
+            0.041
+          ],
+          "size": [
+            0.36,
+            0.104
+          ]
+        },
+        {
+          "_": "face nord : le mot du cote EASY, en BLEU sur le fond rouge",
+          "type": "panel",
+          "material": "bleu",
+          "at": [
+            0.2425,
+            2.282,
+            0.041
+          ],
+          "size": [
+            0.36,
+            0.104
+          ]
+        },
+        {
+          "_": "face sud, meme inversion",
+          "type": "panel",
+          "material": "rouge",
+          "at": [
+            -0.2425,
+            2.282,
+            -0.041
+          ],
+          "yaw": 180.0,
+          "size": [
+            0.36,
+            0.104
+          ]
+        },
+        {
+          "type": "panel",
+          "material": "bleu",
+          "at": [
+            0.2425,
+            2.282,
+            -0.041
+          ],
+          "yaw": 180.0,
+          "size": [
+            0.36,
+            0.104
+          ]
+        },
+        {
+          "_": "la tige de suspension, jusqu'a la sous-face du plafond",
+          "type": "cylinder",
+          "material": "borne_chrome",
+          "at": [
+            0.0,
+            2.476,
+            0.0
+          ],
+          "radius": 0.024,
+          "height": 0.624,
+          "sides": 8
+        }
+      ]
     }
   ],
-  "_depart": "Le joueur entre par le pan coupé et regarde vers le centre de la salle. La position est celle des PIEDS : le moteur ajoute la hauteur d'œil.",
+  "_depart": "Le joueur entre par la porte du fond du couloir, descend les neuf metres du couloir et debouche dans le hall par la trouee du pan coupe nord-est — l'unique entree, comme en 2020. La position est celle des PIEDS : le moteur ajoute la hauteur d'oeil.",
   "playerStart": {
     "position": [
       6.118,
@@ -6373,12 +7010,13 @@
     {
       "name": "billard",
       "position": [
-        -3.85,
+        -4.483,
         1.7,
         -2.6
       ],
-      "yaw": 180.0,
-      "pitch": -8.0
+      "yaw": 270.0,
+      "pitch": -8.0,
+      "_": "Suit la table, qui est revenue a (-4,483 ; -4,694). Le cap passe de 180 a 270 : a 180 la camera regardait -X, c'est-a-dire le mur ouest, et non la table qui est au SUD du point de vue."
     },
     {
       "name": "plafond",
@@ -6418,11 +7056,11 @@
       "position": [
         8.1,
         1.7,
-        -2.3
+        -5.0
       ],
-      "yaw": 90.0,
-      "pitch": -7.0,
-      "_": "Le bloc sanitaire, depuis la baie, en diagonale : le lavabo et son miroir à gauche, les deux cabines en face, le néon qui grésille au-dessus. Il n'y avait ici ni lumière, ni porte, ni rien à regarder."
+      "yaw": 85.0,
+      "pitch": -4.0,
+      "_": "Le bloc sanitaire, depuis le sud du sas de lavabos, en enfilade. Elle etait a (8,10 ; -2,30) cap 90 : c'est-a-dire a 1 cm du plan de « cloison_wc_centre », qui coupe maintenant le bloc a z = -2,311 — la capture etait un aplat sombre. A (8,10 ; -5,00) cap 85 on remonte le sas et l'on voit ce qui a change : les DEUX portes coulissantes dans leurs deux baies, le refend entre elles, et au fond la baie de 3,42 m qui donne sur le hall."
     },
     {
       "name": "borne",
@@ -6449,24 +7087,24 @@
     },
     {
       "name": "sud",
-      "_atmo": "Le vide SUD, la poche la plus profonde du hall. On est entre l'estrade et les bancs du mur sud, face a la rangee sud de l'ilot.",
+      "_atmo": "Le vide SUD, la poche la plus profonde du hall. DEUX corrections. Le point etait a z = -6,20, qui est SUR l'estrade depuis qu'elle a repris ses 3,398 m de profondeur (z -6,379 a -2,981) : recule a -6,70, il est au pied de la marche. Et le cap passe de 0 a 90 : dans ce moteur la camera avance vers (cos lacet, sin lacet), donc 0 regarde +X, c'est-a-dire le salon, et non l'ilot que le nom de la vue annonce. Le releve de 2020 le signale pour cinq captures (§ 7) ; celle-ci est la seule que j'aie deja du deplacer, je la corrige donc en meme temps. Les quatre autres — bar, borne, billard, classement — sont dans le rapport.",
       "position": [
         0.0,
         1.7,
-        -6.2
+        -6.7
       ],
-      "yaw": 0.0,
+      "yaw": 90.0,
       "pitch": -3.0
     },
     {
       "name": "arrivee",
-      "_atmo": "Ce qu'on voit en SORTANT DU COULOIR. Le point etait a (6,12 ; 4,20), qui est aujourd'hui occupe par le comptoir d'accueil : plus aucune cellule foulable. Recale a la bouche du couloir, la ou le hall se decouvre.",
+      "_atmo": "Ce qu'on voit en SORTANT DU COULOIR — et desormais DANS le couloir, juste avant la trouee, pas apres. Le point etait a (5,60 ; 6,30) cap 215 : la joue ouest du couloir est pleine a cette cote depuis qu'il est un contour ferme, et la capture montrait un mur a 0,32 m. A (5,70 ; 4,60) cap 234, la trouee du pan coupe — milieu (5,50 ; 4,33) — est droit devant et le hall s'ouvre dedans.",
       "position": [
-        5.6,
+        5.7,
         1.7,
-        6.3
+        4.6
       ],
-      "yaw": 215.0,
+      "yaw": 234.0,
       "pitch": -4.0
     },
     {
@@ -6497,48 +7135,48 @@
   "soundZones": [
     {
       "name": "toilettes",
-      "_": "Carrelage du sol au plafond, deux mètres de large : c'est la pièce la plus réverbérante du décor, et de loin. Un pas y claque, et c'est ce qui fait qu'on entend qu'on a changé de pièce avant de la voir.",
+      "_": "Carrelage du sol au plafond : la piece la plus reverberante du decor. LA ZONE ETAIT AU SUD-OUEST — x -9,55..-6,20, z -7,10..-3,30 — alors que le bloc sanitaire est a l'EST depuis le commit 90f3d9e : 13,5 m plus loin, sur un morceau de hall en moquette. Elle epouse maintenant l'interieur mesure du bloc, x 7,379..11,852 et z -6,031..1,436 (walls[coquille_sanitaires], epaisseur 0,20).",
       "min": [
-        -9.55,
+        7.45,
         0.0,
-        -7.1
+        -5.95
       ],
       "max": [
-        -6.2,
+        11.8,
         2.9,
-        -3.3
+        1.4
       ],
       "wet": 0.42,
       "decay": 0.52
     },
     {
       "name": "sas_entree",
-      "_": "Le couloir d'entrée : étroit, dur, court. Une queue nette et brève — juste assez pour que le passage du dehors au dedans s'entende.",
+      "_": "Le couloir d'entree : etroit, dur, court. Recalee sur l'interieur du couloir tel qu'il est maintenant declare — x 5,284..6,953, z 3,746..12,638 — au lieu de x 5,00..9,55 sur z 3,20..7,10, qui debordait de 2,60 m a l'est du batiment et ne couvrait que le premier tiers du couloir.",
       "min": [
-        5.0,
+        5.35,
         0.0,
-        3.2
+        3.85
       ],
       "max": [
-        9.55,
+        6.9,
         2.9,
-        7.1
+        12.55
       ],
       "wet": 0.24,
       "decay": 0.3
     },
     {
       "name": "coin_billard",
-      "_": "Le coin ouest, dégagé et haut de plafond, contre deux murs nus. Moins que les toilettes, plus que l'allée.",
+      "_": "Le coin ouest, degage et haut de plafond, contre deux murs nus. Elle etait 4,1 m au NORD de la table : x -9,55..-5,40 et z -3,20..0,60, alors que la hitbox du billard de 2020 est x -6,553..-2,427 et z -5,894..-3,466 (room.c:2171). Recalee dessus, elargie de 0,20 m.",
       "min": [
-        -9.55,
+        -6.75,
         0.0,
-        -3.2
+        -6.1
       ],
       "max": [
-        -5.4,
+        -2.3,
         2.9,
-        0.6
+        -3.2
       ],
       "wet": 0.16,
       "decay": 0.22
