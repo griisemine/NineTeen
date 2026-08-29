@@ -956,9 +956,15 @@
     {
       "name": "comptoir",
       "texture": "desk.jpg",
-      "roughness": 0.42,
-      "uvMetres": 0.9,
-      "_": "Le motif du comptoir de 2020, à 2,6 m par répétition au lieu de 1,0. À un mètre il se lisait comme du bruit coloré ; à cette échelle on distingue les triangles, et c'est ce qu'ils sont."
+      "roughness": 0.38,
+      "uvMetres": 0.3,
+      "_": "Le motif de comptoir de 2020, et il a fallu deux corrections.\nD'abord l'ECHELLE : `desk.jpg` fait 490 px pour huit cellules de motif. A 2,6 m par repetition un triangle mesurait 32 cm — d'ou l'effet nappe de pique-nique. A 0,30 m il en fait 3,7, ce qui est la cote d'un vrai stratifie a motif geometrique des annees quatre-vingt.\nEnsuite la SATURATION. Meme a la bonne echelle, ce motif sortait comme l'objet le plus lumineux de la salle : cinq couleurs pures sur trois metres de comptoir, devant une enseigne au neon qu'il ecrasait. Le multiplicateur le ramene a 46 % — il redevient un plan de travail, c'est-a-dire un support, et l'oeil retourne a l'enseigne. Le motif reste, il cesse de crier.",
+      "baseColor": [
+        0.46,
+        0.44,
+        0.42,
+        1.0
+      ]
     },
     {
       "name": "cuir",
@@ -1038,7 +1044,14 @@
       "name": "classement_fond",
       "texture": "background_classement.png",
       "roughness": 0.4,
-      "fit": true
+      "fit": true,
+      "emissive": [
+        1.0,
+        0.9,
+        0.72
+      ],
+      "emissiveStrength": 1.6,
+      "_": "Le tableau derriere le comptoir. A 0,129 de reflectance sur 1,8 x 0,9 m, c'etait un TROU NOIR dans le mur du bar — la plus grande surface sombre du champ, juste sous l'enseigne. Un tableau de scores est retroeclaire : l'emissif est module par l'albedo texel par texel, donc le fond reste sombre et seul le lettrage s'allume."
     },
     {
       "name": "ciel",
@@ -1795,9 +1808,9 @@
     {
       "name": "suspension_comptoir",
       "at": [
-        -2.6,
-        1.4,
-        6.1
+        -4.35,
+        1.36,
+        6.2
       ],
       "color": [
         1.0,
@@ -3930,9 +3943,9 @@
     {
       "name": "suspension_comptoir",
       "at": [
-        -2.6,
-        1.9,
-        6.1
+        -4.35,
+        1.86,
+        6.2
       ],
       "yaw": 0.0,
       "model": "models/caged_hanging_light/caged_hanging_light.gltf",
@@ -3965,9 +3978,9 @@
     {
       "name": "ampoule_comptoir",
       "at": [
-        -2.6,
-        1.72,
-        6.1
+        -4.35,
+        1.68,
+        6.2
       ],
       "yaw": 0.0,
       "parts": [
