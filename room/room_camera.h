@@ -90,6 +90,26 @@ typedef struct room_camera {
     bool  crouch_held;
     bool  jump_requested;                   /* consommé par le pas suivant */
 
+    /*
+     * LA TROISIÈME PERSONNE.
+     *
+     * Ce n'est PAS un mode de caméra à part, et c'est le choix qui rend la
+     * chose petite : le joueur continue de se déplacer exactement comme avant,
+     * même capsule, même collision, même hauteur d'yeux. Seul le POINT DE VUE
+     * recule. Un mode séparé aurait dupliqué le déplacement, et deux
+     * déplacements finissent toujours par diverger — c'est déjà l'argument qui
+     * a fait garder une seule table de matériaux pour dix-neuf bornes.
+     *
+     * Conséquence à connaître : la portée des bras, le ramassage et le contrôle
+     * de portée continuent de partir de l'ŒIL, pas de la caméra. C'est ce qu'on
+     * veut — on interagit avec ce que le personnage atteint, pas avec ce que la
+     * caméra survole.
+     */
+    bool  third_person;
+    float third_distance;    /* recul, en mètres */
+    float third_height;      /* hauteur de visée au-dessus des pieds */
+    float third_shoulder;    /* décalage latéral : 0 = pile derrière */
+
     /* Mode orbite */
     ns_v3 orbit_center;
     float orbit_radius, orbit_height, orbit_speed, orbit_angle;
@@ -108,7 +128,17 @@ void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt);
 
 /* Construit la caméra de rendu pour l'image courante, `alpha` étant la
  * fraction de pas écoulée depuis le dernier tick. */
-ns_camera room_camera_resolve(const room_camera *c, float alpha);
+/*
+ * La caméra de rendu, à l'instant `alpha` entre deux pas.
+ *
+ * `bvh` NUL veut dire « donne-moi l'ŒIL » : pas de recul de troisième personne,
+ * et donc pas besoin de collision. Ce n'est pas une commodité, c'est la
+ * distinction qui compte — les bras et l'écoute appartiennent au CORPS, pas au
+ * point de vue. Un viewmodel posé depuis une caméra reculée de deux mètres
+ * flotterait devant le personnage, et le son se mettrait à venir de derrière
+ * lui.
+ */
+ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alpha);
 
 /*
  * L'état d'oscillation interpolé, pour qui a besoin de s'y accrocher — les bras

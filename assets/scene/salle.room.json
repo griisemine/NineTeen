@@ -1778,6 +1778,7 @@
     },
     {
       "name": "suspension_comptoir",
+      "_atmo": "SPEC-ATMOSPHERE §2.3 J demande x -4,35 -> -2,60, « sur l'axe de l'enseigne et au milieu du comptoir ». REFUSE, mesure a l'appui. Sur cet axe, de y 1,15 a 2,05, il y a le TABLEAU DES SCORES (`bar_accueil.parts[3]`, panneau 1,80 x 0,90 centre en (-2,60 ; 1,601 ; 6,958)) et, de 2,07 a 2,87, l'ENSEIGNE AU NEON. Le luminaire occupe y 1,54..1,86 : pose en x -2,60 il masque le milieu du tableau depuis `--view=bar`, ce qui defait le poste 12. Deux centimetres separent le haut du tableau du bas de l'enseigne : aucune hauteur ne degage. Et la premisse du §1.7 — « la flaque tombe hors cadre a droite » — est perimee : sur la capture d'aujourd'hui la flaque est DANS le cadre, a droite, et elle eclaire le boombox. Le luminaire reste donc a -4,35.",
       "at": [
         -4.35,
         1.36,
@@ -3042,20 +3043,22 @@
     {
       "_": "Un vrai canapé, 2,73 m de large. Il remplace quatre boîtes qui se lisaient comme quatre boîtes.",
       "_at": "AUDIT P-05. Il etait EMPALE sur `pilier_est_1` : intersection reelle de 0,0412 m3, mesuree par colonnes verticales de deux centimetres, et 352 des 357 sommets presents dans la boite du pilier etaient dans son solide. `check_solid_overlaps` le signalait deja au build sans l'arreter, parce que la regle n'est fatale que si une borne est en cause. Decale d'un metre a l'est et de 55 cm au sud, il degage le pilier de 7,8 cm et la plante de 12.", "name": "canape",
-      "at": [7.10, 0.0, -5.15],
-      "yaw": 205.0,
+      "_atmo": "SPEC-ATMOSPHERE poste 11 (§2.3 J). Il regarde les trois bornes est (x = 9,1 ; z de -1,2 a -2,8) a 1,80 m : on s'assoit pour voir jouer. YAW 90 ET NON 270, et c'est verifie en image : le modele `sofa_03` a son assise vers son +z local, et la table de conventions du §0.2 donne « face vers +x = yaw 90 ». A 270 le canape tournait le dos aux bornes qu'il est cense regarder. Emprise obtenue : x 6,84..7,76, z -2,97..-0,23 ; les caissons est occupent x 8,67..9,54, il reste donc 0,90 m de passage devant eux.",
+      "at": [7.30, 0.0, -1.60],
+      "yaw": 90.0,
       "model": "cc0/models/sofa_03/sofa_03.gltf",
       "material": "canape_tissu",
       "poi": "canape"
     },
     {
       "name": "table_basse",
+      "_atmo": "SPEC-ATMOSPHERE poste 11. La spec la posait en (6,30 ; -2,70) : roomgen ARRETE le build, « canape PENETRE table_basse ». Le canape fait 2,73 m et, tourne vers les bornes est, il occupe z -2,97..-0,23 sur x 6,84..7,76 ; la table, 1,54 m de long, y entre de 22 cm. Le trio de la spec ne tient pas dans la bande est, quel que soit le yaw du canape — l'emprise du canape est la meme a 90 et a 270. Le salon est donc range EN LIGNE le long de la bande est : canape au nord, table au milieu, fauteuil au sud. La table tombe sous `lights[suspension_salon]` (6,55 ; -3,90), ce qui est exactement ce que le commentaire de cette lampe declare vouloir eclairer.",
       "at": [
-        6.2,
+        7.30,
         0.0,
-        -3.2
+        -3.75
       ],
-      "yaw": 8.0,
+      "yaw": 12.0,
       "model": "models/CoffeeTable_01/CoffeeTable_01.gltf",
       "material": "table_salon",
       "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
@@ -3114,10 +3117,11 @@
     },
     {
       "name": "distributeur",
+      "_atmo": "SPEC-ATMOSPHERE poste 11 (§2.3 J) : « un distributeur de boissons se met SUR LE TRAJET, pas dans l'angle mort ». De (-9,20 ; 5,60) a (-9,25 ; -0,30), sur le mur ouest entre le tapis technique et le billard, vu de toute la travee ouest.\nEt une correction que le deplacement a rendue visible : les deux panneaux de facade etaient poses a z local 0,356 pour un caisson dont la demi-profondeur vaut 0,39 — ENFOUIS de 3,4 cm. Amene dans la lumiere, le distributeur etait une dalle noire sans un seul detail. Ils passent a 0,392, la meme marge de deux millimetres que la vitrine a lots et le monnayeur.",
       "at": [
-        -9.2,
+        -9.25,
         0.0,
-        5.6
+        -0.30
       ],
       "yaw": 90.0,
       "parts": [
@@ -3142,7 +3146,7 @@
           "at": [
             0.0,
             1.13,
-            0.356
+            0.392
           ],
           "size": [
             0.66,
@@ -3155,7 +3159,7 @@
           "at": [
             0.0,
             0.396,
-            0.356
+            0.392
           ],
           "size": [
             0.66,
@@ -3699,7 +3703,7 @@
       "parts": [
         {
           "type": "panel",
-          "material": "affiche_2",
+          "material": "affiche_5",
           "at": [
             0.0,
             0.0,
@@ -3864,7 +3868,7 @@
       "at": [
         -8.2,
         0.0,
-        1.2
+        1.80
       ],
       "yaw": 0.0,
       "parts": [
@@ -3922,6 +3926,7 @@
     },
     {
       "name": "cible_flechettes",
+      "_atmo": "NON DEPLACEE, contre le §2.3 J. Deux raisons. (1) Le §6 de la meme specification la nomme dans la liste « ce qu'il ne faut surtout pas toucher — positions inchangees » : la specification se contredit, et la liste de garde l'emporte. (2) Le motif ecrit en J — « le distributeur passerait devant » — ne tient pas : le distributeur mesure 0,86 x 0,78 et, pose en (-9,25 ; -0,30) avec yaw 90, il occupe z -0,73..0,13, soit 0,65 m avant d'atteindre la cible. J annonce z -0,93..0,53, ce qui ne correspond a aucune de ses cotes.",
       "at": [
         -9.52,
         1.68,
@@ -3945,12 +3950,13 @@
     },
     {
       "name": "fauteuil_salon",
+      "_atmo": "SPEC-ATMOSPHERE poste 11. « Reste en vis-a-vis oblique du canape sans lui masquer les bornes. » La cote de la spec (7,20 ; -3,60) est prise par la table basse une fois celle-ci degagee du canape ; le fauteuil descend donc au sud du groupe. Yaw 20 et non 300 : le modele `ArmChair_01` a lui aussi son assise vers son +z local, verifie en image sur l'ancienne pose.",
       "at": [
-        7.55,
+        7.30,
         0.0,
-        -4.05
+        -5.15
       ],
-      "yaw": 252.0,
+      "yaw": 20.0,
       "model": "models/ArmChair_01/ArmChair_01.gltf",
       "material": "fauteuil"
     },
@@ -3975,6 +3981,7 @@
     },
     {
       "name": "suspension_comptoir",
+      "_atmo": "SPEC-ATMOSPHERE §2.3 J demande x -4,35 -> -2,60, « sur l'axe de l'enseigne et au milieu du comptoir ». REFUSE, mesure a l'appui. Sur cet axe, de y 1,15 a 2,05, il y a le TABLEAU DES SCORES (`bar_accueil.parts[3]`, panneau 1,80 x 0,90 centre en (-2,60 ; 1,601 ; 6,958)) et, de 2,07 a 2,87, l'ENSEIGNE AU NEON. Le luminaire occupe y 1,54..1,86 : pose en x -2,60 il masque le milieu du tableau depuis `--view=bar`, ce qui defait le poste 12. Deux centimetres separent le haut du tableau du bas de l'enseigne : aucune hauteur ne degage. Et la premisse du §1.7 — « la flaque tombe hors cadre a droite » — est perimee : sur la capture d'aujourd'hui la flaque est DANS le cadre, a droite, et elle eclaire le boombox. Le luminaire reste donc a -4,35.",
       "at": [
         -4.35,
         1.86,

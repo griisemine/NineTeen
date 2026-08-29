@@ -1,6 +1,7 @@
 /* room_camera.c — caméra de la salle, simulée à pas fixe. */
 #include "room_camera.h"
 
+#include "ns_bvh.h"
 #include "ns_env.h"
 
 #include <SDL3/SDL.h>
@@ -71,6 +72,16 @@ void room_camera_init(room_camera *c, ns_v3 start, float yaw)
 
     c->grounded = false;
     c->ground_normal = ns_v3_make(0.0f, 1.0f, 0.0f);
+
+    /*
+     * La troisième personne, éteinte par défaut : ce jeu se joue devant une
+     * borne, et une borne se regarde de près. Elle s'allume dans `nineteen.env`
+     * ou par la touche F10.
+     */
+    c->third_person   = ns_env_bool ("vue.troisiemePersonne", false);
+    c->third_distance = ns_env_float("vue.distance",  2.60f);
+    c->third_height   = ns_env_float("vue.hauteur",   1.55f);
+    c->third_shoulder = ns_env_float("vue.epaule",    0.45f);
 
     c->orbit_radius = 13.0f;
     c->orbit_height = 4.2f;
@@ -316,7 +327,7 @@ void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt)
  * Résolution pour le rendu
  * -------------------------------------------------------------------------- */
 
-ns_camera room_camera_resolve(const room_camera *c, float alpha)
+ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alpha)
 {
     ns_camera cam;
     SDL_zero(cam);
@@ -354,6 +365,42 @@ ns_camera room_camera_resolve(const room_camera *c, float alpha)
         /* Roulis : incliner le vecteur « haut » plutôt que tourner la vue.
          * C'est ce que fait l'oreille interne, et ça ne perturbe pas la visée. */
         cam.up = ns_v3_norm(ns_v3_add(cam.up, ns_v3_scale(right, sinf(b.roll))));
+    }
+
+    /*
+     * LE RECUL de la troisième personne, appliqué en tout dernier — après
+     * l'oscillation, qui doit rester celle du CORPS et non celle de la caméra.
+     *
+     * Le point visé est à `third_height` au-dessus des pieds ; la caméra s'en
+     * écarte à reculons le long du regard, plus un décalage d'épaule. Sans ce
+     * décalage on vise exactement là où le personnage se tient, et il masque
+     * ce qu'on regarde.
+     */
+    if (c->mode == ROOM_CAM_PLAYER && c->third_person && bvh) {
+        const float eye = ns_lerpf(c->prev_eye_height, c->eye_height, alpha);
+        const ns_v3 feet = ns_v3_make(cam.position.x, cam.position.y - eye, cam.position.z);
+        const ns_v3 pivot = ns_v3_make(feet.x, feet.y + c->third_height, feet.z);
+        const ns_v3 right = ns_v3_norm(ns_v3_cross(cam.forward, ns_v3_make(0, 1, 0)));
+
+        ns_v3 want = ns_v3_add(pivot, ns_v3_scale(right, c->third_shoulder));
+        const ns_v3 back = ns_v3_scale(cam.forward, -1.0f);
+
+        /*
+         * La caméra ne traverse pas les murs, et c'est un rayon qui le dit.
+         *
+         * Sans lui, reculer de 2,60 m dans une allée de 1,80 m met le point de
+         * vue DANS la borne d'en face : on voit l'intérieur du meuble, ou pire,
+         * on voit à travers lui le reste de la salle. Le rayon part du pivot —
+         * qui est toujours dans le vide, puisque le personnage y tient — et
+         * s'arrête à ce qu'il touche, moins une marge.
+         */
+        float dist = c->third_distance;
+        const ns_ray_hit hit = ns_bvh_raycast(bvh, want, back, dist + 0.25f);
+        /* `back` est normalisé, donc `t` est bien une distance en mètres. */
+        if (hit.hit && hit.t < dist + 0.25f) {
+            dist = ns_maxf(0.35f, hit.t - 0.25f);
+        }
+        cam.position = ns_v3_add(want, ns_v3_scale(back, dist));
     }
 
     /* Plan proche généreux : la salle fait une trentaine de mètres, et avec le

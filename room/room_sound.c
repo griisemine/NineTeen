@@ -372,7 +372,7 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     if (!s->ready || !ns_audio_ready()) return;
 
     /* L'auditeur suit l'œil. `cam->position` EST l'œil depuis A6. */
-    const ns_camera view = room_camera_resolve(cam, 1.0f);
+    const ns_camera view = room_camera_resolve(cam, NULL, 1.0f);
     ns_audio_set_listener(view.position, view.forward, ns_v3_make(0.0f, 1.0f, 0.0f));
 
     /*

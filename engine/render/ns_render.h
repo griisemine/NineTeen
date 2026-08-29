@@ -16,6 +16,8 @@
 #ifndef NS_RENDER_H
 #define NS_RENDER_H
 
+struct ns_skin;
+
 #include "ns_rhi.h"
 #include "ns_scene.h"
 #include "ns_particles.h"
@@ -160,6 +162,34 @@ void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
 #define NS_MAX_LIVE_SCREENS 28
 
 /*
+ * Le PERSONNAGE : trente-deux os au plus.
+ *
+ * La borne est celle du budget d'uniforme, pas une limite du format glTF :
+ * trente-deux matrices font 2 Kio, ce que la contrainte de push d'uniformes
+ * accepte sur toutes les cibles. Un humanoïde sans doigts en demande une
+ * vingtaine — celui du jeu en a dix-neuf.
+ */
+#define NS_MAX_CHARACTER_JOINTS 32
+
+/*
+ * Ce qu'il faut pour dessiner le personnage à une image donnée : où il est, et
+ * comment son squelette est plié.
+ *
+ * Séparé du maillage, qui ne change jamais et monte au GPU une fois. C'est le
+ * même partage que le viewmodel — la géométrie appartient au moteur, la pose
+ * vient de `room/` — et c'est ce qui permet de poser le personnage sans rien
+ * savoir du rendu.
+ */
+typedef struct ns_character_draw {
+    bool  visible;
+    ns_m4 model;                                  /* repère du personnage -> monde */
+    ns_m4 joint[NS_MAX_CHARACTER_JOINTS];
+    int   joint_count;
+    float tint[3];                                /* multiplié à la texture */
+    float roughness, metallic;
+} ns_character_draw;
+
+/*
  * Fait afficher `texture` par le matériau `material`, en écrasant son albédo.
  *
  * C'est ce qui met un jeu qui tourne DANS l'écran d'une borne : la couche 2D
@@ -174,6 +204,19 @@ void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
  * `material = -1` retire la surcharge.
  */
 void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *texture);
+
+/*
+ * Monte le maillage du personnage au GPU. Une fois, au démarrage : le maillage
+ * ne change jamais, seules les matrices d'os bougent.
+ *
+ * Rend `false` et le DIT si quelque chose manque. Un personnage absent n'est pas
+ * fatal — le jeu se joue à la première personne, et c'est ce que fait
+ * l'appelant.
+ */
+bool ns_renderer_upload_character(ns_rhi *r, ns_renderer *rd, const struct ns_skin *skin);
+
+/* La pose de l'image courante. `NULL` ou `visible = false` : rien n'est dessiné. */
+void ns_renderer_set_character(ns_renderer *rd, const ns_character_draw *draw);
 
 /*
  * Déclare les zones de poussière. Passer `count = 0` éteint le système.

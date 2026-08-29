@@ -525,7 +525,7 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
                           ns_damp(vm->lean.z, lean_target.z, 9.0f, dt));
 
     /* --- cibles des poignets, en espace caméra --------------------------- */
-    const ns_camera resolved = room_camera_resolve(cam, 1.0f);
+    const ns_camera resolved = room_camera_resolve(cam, NULL, 1.0f);
     const vm_basis b = basis_of(&resolved);
     const room_view_bob bob = room_camera_bob(cam, 1.0f);
 
@@ -828,7 +828,7 @@ void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
     ns_viewmodel_pose_clear(out);
     if (!vm || !cam || cam->mode != ROOM_CAM_PLAYER || !vm->primed) return;
 
-    const ns_camera resolved = room_camera_resolve(cam, alpha);
+    const ns_camera resolved = room_camera_resolve(cam, NULL, alpha);
     const vm_basis b = basis_of(&resolved);
 
     const ns_v3 lean = ns_v3_lerp(vm->prev_lean, vm->lean, alpha);

@@ -106,4 +106,19 @@ float ns_skin_rest_height(const ns_skin *s);
  */
 void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max);
 
+/*
+ * L'instant du cycle où le personnage est le plus proche de DEBOUT, en secondes.
+ *
+ * Un cycle de marche n'a pas de pose de repos : il n'a que des poses de marche.
+ * Immobiliser le personnage sur la phase où on l'a arrêté le laisse en grand
+ * écart, ce qui se voit dès qu'on lâche les commandes.
+ *
+ * On cherche donc la « position de passage » — le moment où les deux pieds se
+ * croisent, jambes rassemblées. Elle est MESURÉE et non devinée : on balaie le
+ * cycle et on retient l'instant où les deux os les plus bas sont le plus
+ * proches horizontalement. Aucun nom d'os n'entre là-dedans, ce qui évite de
+ * dépendre de la convention de nommage d'un exportateur.
+ */
+float ns_skin_stand_time(const ns_skin *s);
+
 #endif /* NS_SKIN_H */

@@ -2,6 +2,11 @@
 #include "ns_render.h"
 #include "ns_shaders.h"
 #include "ns_particles.h"
+#include "ns_skin.h"
+
+/* stb_image est déjà compilé dans `ns_rhi.c` : ici on ne veut que les
+ * déclarations, pour décoder la texture embarquée du personnage. */
+#include "stb_image.h"
 #include "ns_viewmodel.h"
 
 #include <string.h>
@@ -73,6 +78,15 @@ typedef struct tonemap_ubo         { float settings[4]; float extra[4]; } tonema
 typedef struct debug_ubo           { int32_t mode[4]; float scale[4]; } debug_ubo;
 
 typedef struct denoise_ubo { float step[4]; } denoise_ubo;
+
+/* Doit correspondre EXACTEMENT au bloc `Character` de `character.vert`. Une
+ * divergence ici ne produit pas d'erreur : elle produit un personnage plié de
+ * travers, ce qu'on impute à l'animation. */
+typedef struct character_vs_ubo {
+    float view_proj[16];
+    float model[16];
+    float joint[NS_MAX_CHARACTER_JOINTS][16];
+} character_vs_ubo;
 
 typedef struct viewmodel_vs_ubo {
     float view_proj[16];
@@ -170,6 +184,14 @@ struct ns_renderer {
     SDL_GPUGraphicsPipeline *pipe_vol_composite;
     SDL_GPUComputePipeline  *pipe_exposure;
     SDL_GPUGraphicsPipeline *pipe_viewmodel;
+
+    /* Le PERSONNAGE : maillage monté une fois, pose renouvelée à chaque image. */
+    SDL_GPUGraphicsPipeline *pipe_character;
+    ns_buffer   char_vertices, char_indices;
+    ns_texture  char_albedo;
+    uint32_t    char_index_count;
+    bool        char_ready;
+    ns_character_draw character;
     SDL_GPUTextureFormat     tonemap_format;
 
     /* Tampon des lumières, réécrit à chaque image (elles scintillent). */
@@ -821,6 +843,244 @@ static SDL_GPUGraphicsPipeline *make_viewmodel_pipeline(ns_rhi *r, SDL_GPUTextur
 }
 
 /* Construit la géométrie des bras et la téléverse une fois pour toutes. */
+/*
+ * Le pipeline du PERSONNAGE.
+ *
+ * Deux différences avec celui du viewmodel, et elles disent tout le reste :
+ *
+ *  - cinq attributs au lieu de quatre. Les indices d'os partent en FLOTTANTS et
+ *    non en entiers : SDL3 n'expose pas de format d'attribut entier sur toutes
+ *    ses cibles, et un indice sur 32 os passe exactement dans la mantisse d'un
+ *    float — la conversion est sans perte, et le shader la défait par `ivec4`.
+ *
+ *  - il écrit dans la profondeur de LA SCÈNE, pas dans une profondeur à lui. Un
+ *    viewmodel a sa propre profondeur parce qu'il n'est pas dans le monde et ne
+ *    doit rien occulter ; un personnage EST dans le monde. Il doit disparaître
+ *    derrière une borne, et une borne doit disparaître derrière lui.
+ */
+static SDL_GPUGraphicsPipeline *make_character_pipeline(ns_rhi *r, SDL_GPUTextureFormat color)
+{
+    ns_shader_desc vsd, fsd;
+    if (!ns_shader_desc_fill("character.vert", &vsd)) return NULL;
+    if (!ns_shader_desc_fill("character.frag", &fsd)) return NULL;
+
+    SDL_GPUShader *vs = ns_shader_load(r, &vsd, SDL_GPU_SHADERSTAGE_VERTEX);
+    SDL_GPUShader *fs = ns_shader_load(r, &fsd, SDL_GPU_SHADERSTAGE_FRAGMENT);
+    if (!vs || !fs) {
+        if (vs) SDL_ReleaseGPUShader(ns_rhi_device(r), vs);
+        if (fs) SDL_ReleaseGPUShader(ns_rhi_device(r), fs);
+        return NULL;
+    }
+
+    SDL_GPUVertexBufferDescription vb;
+    SDL_zero(vb);
+    vb.slot = 0;
+    vb.pitch = sizeof(ns_skin_vertex);
+    vb.input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+
+    SDL_GPUVertexAttribute attrs[5];
+    SDL_zeroa(attrs);
+    attrs[0].location = 0; attrs[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;  attrs[0].offset = offsetof(ns_skin_vertex, position);
+    attrs[1].location = 1; attrs[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3;  attrs[1].offset = offsetof(ns_skin_vertex, normal);
+    attrs[2].location = 2; attrs[2].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;  attrs[2].offset = offsetof(ns_skin_vertex, uv);
+    /* Quatre octets lus comme quatre flottants : `UBYTE4` non normalisé rendrait
+     * 0..255 en entier, ce que le shader attend justement en flottant. */
+    attrs[3].location = 3; attrs[3].format = SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4;  attrs[3].offset = offsetof(ns_skin_vertex, joints);
+    attrs[4].location = 4; attrs[4].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4;  attrs[4].offset = offsetof(ns_skin_vertex, weights);
+
+    SDL_GPUColorTargetDescription target;
+    SDL_zero(target);
+    target.format = color;
+
+    SDL_GPUGraphicsPipelineCreateInfo info;
+    SDL_zero(info);
+    info.vertex_shader = vs;
+    info.fragment_shader = fs;
+    info.vertex_input_state.vertex_buffer_descriptions = &vb;
+    info.vertex_input_state.num_vertex_buffers = 1;
+    info.vertex_input_state.vertex_attributes = attrs;
+    info.vertex_input_state.num_vertex_attributes = 5;
+    info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+    info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK;
+    info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+    info.depth_stencil_state.enable_depth_test = true;
+    info.depth_stencil_state.enable_depth_write = true;
+    /* Reverse-Z, comme toute la scène : le plus PROCHE a la plus grande valeur. */
+    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_GREATER;
+    info.target_info.color_target_descriptions = &target;
+    info.target_info.num_color_targets = 1;
+    info.target_info.has_depth_stencil_target = true;
+    info.target_info.depth_stencil_format = FMT_DEPTH;
+
+    SDL_GPUGraphicsPipeline *p = SDL_CreateGPUGraphicsPipeline(ns_rhi_device(r), &info);
+    SDL_ReleaseGPUShader(ns_rhi_device(r), vs);
+    SDL_ReleaseGPUShader(ns_rhi_device(r), fs);
+    if (!p) NS_ERROR("pipeline du personnage refusé : %s", SDL_GetError());
+    return p;
+}
+
+bool ns_renderer_upload_character(ns_rhi *r, ns_renderer *rd, const struct ns_skin *skin)
+{
+    if (!r || !rd || !skin) return false;
+
+    if (ns_skin_joint_count(skin) > NS_MAX_CHARACTER_JOINTS) {
+        NS_WARN("personnage : %d os pour %d que le rendu accepte",
+                ns_skin_joint_count(skin), NS_MAX_CHARACTER_JOINTS);
+        return false;
+    }
+
+    uint32_t vcount = 0, icount = 0;
+    const ns_skin_vertex *verts = ns_skin_vertices(skin, &vcount);
+    const uint32_t *indices = ns_skin_indices(skin, &icount);
+    if (!verts || !indices || vcount == 0 || icount == 0) return false;
+
+    if (!rd->pipe_character) {
+        rd->pipe_character = make_character_pipeline(r, FMT_HDR);
+        if (!rd->pipe_character) return false;
+    }
+
+    bool ok = ns_buffer_create(r, &rd->char_vertices, NS_BUFFER_VERTEX,
+                               (uint32_t)(sizeof(ns_skin_vertex) * vcount), "sommets personnage");
+    ok = ok && ns_buffer_create(r, &rd->char_indices, NS_BUFFER_INDEX,
+                                (uint32_t)(sizeof(uint32_t) * icount), "indices personnage");
+    ok = ok && ns_buffer_upload(r, &rd->char_vertices, verts,
+                                (uint32_t)(sizeof(ns_skin_vertex) * vcount), 0);
+    ok = ok && ns_buffer_upload(r, &rd->char_indices, indices,
+                                (uint32_t)(sizeof(uint32_t) * icount), 0);
+    if (!ok) { NS_WARN("personnage : géométrie non téléversée"); return false; }
+
+    /*
+     * La texture, décodée depuis l'octet-flot du glTF.
+     *
+     * Elle n'est PAS passée par `texgen` comme le reste du décor, et c'est
+     * assumé : `texgen` dérive une normale et une carte ORM d'un albédo, ce qui
+     * suppose qu'on possède l'albédo à part. Ici l'image est DANS le fichier du
+     * personnage, et l'en extraire pour la re-cuire ferait un second exemplaire
+     * de la même donnée dans le dépôt — pour un objet qu'on regarde à deux
+     * mètres et qui n'a ni relief ni métal.
+     */
+    size_t img_size = 0;
+    const void *img = ns_skin_image(skin, &img_size);
+    if (img && img_size > 0) {
+        int w = 0, h = 0, comp = 0;
+        unsigned char *px = stbi_load_from_memory((const unsigned char *)img,
+                                                  (int)img_size, &w, &h, &comp, 4);
+        if (px) {
+            ns_texture_desc td;
+            SDL_zero(td);
+            td.width = (uint32_t)w;
+            td.height = (uint32_t)h;
+            td.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+            td.sampled = true;
+            td.name = "albédo personnage";
+            if (ns_texture_create(r, &rd->char_albedo, &td)) {
+                ns_texture_upload(r, &rd->char_albedo, px, (uint32_t)(w * h * 4));
+            }
+            stbi_image_free(px);
+        } else {
+            NS_WARN("personnage : image indécodable, il sortira blanc");
+        }
+    }
+
+    rd->char_index_count = icount;
+    rd->char_ready = true;
+    NS_INFO("personnage : %u sommets, %u triangles montés", vcount, icount / 3u);
+    return true;
+}
+
+void ns_renderer_set_character(ns_renderer *rd, const ns_character_draw *draw)
+{
+    if (!rd) return;
+    if (!draw) { rd->character.visible = false; return; }
+    rd->character = *draw;
+}
+
+/*
+ * La passe du personnage.
+ *
+ * Après l'éclairage et le brouillard, avant le viewmodel : il est DANS le monde,
+ * donc il doit recevoir la brume qui le sépare de la caméra — et les bras du
+ * joueur, qui ne sont pas dans le monde, passent après lui.
+ */
+static void pass_character(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
+                           const ns_camera *cam, const ns_m4 *view_proj,
+                           SDL_GPUTexture *target, uint32_t light_count)
+{
+    if (!rd->char_ready || !rd->pipe_character || !rd->character.visible) return;
+    if (rd->character.joint_count <= 0) return;
+
+    SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
+
+    SDL_GPUColorTargetInfo cti;
+    SDL_zero(cti);
+    cti.texture = target;
+    cti.load_op = SDL_GPU_LOADOP_LOAD;
+    cti.store_op = SDL_GPU_STOREOP_STORE;
+
+    /* La profondeur de la SCÈNE, chargée et non effacée : c'est elle qui fait
+     * que le personnage passe derrière une borne. */
+    SDL_GPUDepthStencilTargetInfo ds;
+    SDL_zero(ds);
+    ds.texture = rd->depth.handle;
+    ds.load_op = SDL_GPU_LOADOP_LOAD;
+    ds.store_op = SDL_GPU_STOREOP_STORE;
+
+    SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(cmd, &cti, 1, &ds);
+    SDL_BindGPUGraphicsPipeline(pass, rd->pipe_character);
+
+    SDL_GPUBufferBinding vb = { rd->char_vertices.handle, 0 };
+    SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
+    SDL_GPUBufferBinding ib = { rd->char_indices.handle, 0 };
+    SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT);
+
+    SDL_GPUTextureSamplerBinding tex;
+    SDL_zero(tex);
+    /* Sans texture, la scène en a une blanche : le personnage sort à sa
+     * teinte, ce qui vaut mieux qu'un échantillonneur non lié. */
+    tex.texture = rd->char_albedo.handle ? rd->char_albedo.handle
+                                        : scene->fallback_white.handle;
+    tex.sampler = ns_rhi_sampler(r, NS_SAMPLER_ANISO_REPEAT);
+    SDL_BindGPUFragmentSamplers(pass, 0, &tex, 1);
+
+    SDL_GPUBuffer *lights = rd->lights.handle;
+    SDL_BindGPUFragmentStorageBuffers(pass, 0, &lights, 1);
+
+    character_vs_ubo vu;
+    SDL_zero(vu);
+    SDL_memcpy(vu.view_proj, view_proj->m, sizeof vu.view_proj);
+    SDL_memcpy(vu.model, rd->character.model.m, sizeof vu.model);
+    for (int i = 0; i < rd->character.joint_count && i < NS_MAX_CHARACTER_JOINTS; ++i) {
+        SDL_memcpy(vu.joint[i], rd->character.joint[i].m, sizeof(float) * 16);
+    }
+    /* Les os NON employés reçoivent l'identité et non des zéros : une matrice
+     * nulle enverrait à l'origine du monde tout sommet qui la citerait par
+     * erreur, en tirant un triangle en travers de l'écran. */
+    for (int i = rd->character.joint_count; i < NS_MAX_CHARACTER_JOINTS; ++i) {
+        const ns_m4 id = ns_m4_identity();
+        SDL_memcpy(vu.joint[i], id.m, sizeof(float) * 16);
+    }
+    SDL_PushGPUVertexUniformData(cmd, 0, &vu, sizeof vu);
+
+    viewmodel_fs_ubo fu;
+    SDL_zero(fu);
+    fu.base_color[0] = rd->character.tint[0];
+    fu.base_color[1] = rd->character.tint[1];
+    fu.base_color[2] = rd->character.tint[2];
+    fu.base_color[3] = rd->character.roughness;
+    fu.camera[0] = cam->position.x;
+    fu.camera[1] = cam->position.y;
+    fu.camera[2] = cam->position.z;
+    fu.camera[3] = rd->character.metallic;
+    SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
+    fu.ambient[3] = rd->settings.ambient_intensity;
+    fu.counts[0] = (int32_t)light_count;
+    SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
+
+    SDL_DrawGPUIndexedPrimitives(pass, rd->char_index_count, 1, 0, 0, 0);
+    SDL_EndGPURenderPass(pass);
+}
+
 static void build_viewmodel(ns_rhi *r, ns_renderer *rd)
 {
     /* Relevé de 2048/4096 : les mains à doigts (six troncs chacune au lieu d'un)
@@ -1829,6 +2089,7 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                           lit, rd->depth.handle, rd->width, rd->height);
     }
 
+    pass_character(r, rd, scene, camera, &view_proj, lit, light_count);
     pass_viewmodel(r, rd, camera, &view, lit, viewmodel, light_count);
 
     /* --- 3c. Mesure de l'exposition ---

@@ -30,6 +30,7 @@
 
 #include "room_camera.h"
 #include "ns_env.h"
+#include "ns_skin.h"
 #include "room_attract.h"
 #include "room_hud.h"
 #include "room_menu.h"
@@ -1776,6 +1777,23 @@ int main(int argc, char **argv)
         }
     }
 
+    /*
+     * LE PERSONNAGE de la vue à la troisième personne.
+     *
+     * Absent, le jeu se joue à la première personne et le dit une fois : ce
+     * n'est pas une erreur, c'est un mode en moins. C'est aussi ce qui permet
+     * de livrer le jeu sans lui si sa licence posait un jour problème.
+     */
+    ns_skin *personnage = ns_skin_load("models/personnage/personnage.glb");
+    if (personnage && !ns_renderer_upload_character(rhi, renderer, personnage)) {
+        ns_skin_free(personnage);
+        personnage = NULL;
+    }
+    if (!personnage) {
+        NS_INFO("personnage indisponible : la troisième personne restera éteinte");
+        cam.third_person = false;
+    }
+
     room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
                           ? NULL : room_attract_create(rhi, &scene);
 
@@ -2241,6 +2259,19 @@ play_at_done: ;
                      * appui bref ne se perde pas entre deux pas. */
                     if (ev.key.key == SDLK_SPACE && !ev.key.repeat) cam.jump_requested = true;
                     break;
+                case SDLK_F10:
+                    /* La bascule première / troisième personne. Sans personnage
+                     * chargé elle ne fait rien, et elle le DIT — une touche qui
+                     * ne répond pas se prend pour une touche cassée. */
+                    if (!personnage) {
+                        NS_INFO("troisième personne : aucun personnage chargé");
+                    } else if (cam.mode == ROOM_CAM_PLAYER) {
+                        cam.third_person = !cam.third_person;
+                        NS_INFO("vue : %s personne",
+                                cam.third_person ? "troisième" : "première");
+                    }
+                    break;
+
                 case SDLK_F5:
                     cam.mode = (cam.mode == ROOM_CAM_FREE) ? ROOM_CAM_PLAYER : ROOM_CAM_FREE;
                     /* Repartir du sol : en passant du vol libre au mode joueur,
@@ -3032,7 +3063,91 @@ play_at_done: ;
                 continue;
             }
 
-            const ns_camera render_cam = room_camera_resolve(&cam, (float)clock.alpha);
+            const ns_camera render_cam = room_camera_resolve(&cam, &scene.bvh, (float)clock.alpha);
+
+            /*
+             * LA POSE DU PERSONNAGE.
+             *
+             * Sa phase d'animation vient de la DISTANCE PARCOURUE, pas du temps
+             * — exactement comme l'oscillation de la vue et le balancement des
+             * bras. C'est ce qui fait qu'un pas correspond à une foulée quelle
+             * que soit l'allure : régler `personnage.vitesseMarche` dans
+             * `nineteen.env` change la cadence des jambes sans qu'on ait rien
+             * d'autre à toucher. Piloter par le temps donnerait un personnage
+             * qui patine à basse vitesse et court sur place à haute.
+             *
+             * Le cycle importé fait une foulée complète — deux pas — sur sa
+             * durée, et `VM_STRIDE` vaut 1,55 m pour la même chose : la phase
+             * est donc le simple rapport des deux.
+             */
+            if (personnage && cam.third_person && cam.mode == ROOM_CAM_PLAYER) {
+                const room_view_bob b = room_camera_bob(&cam, (float)clock.alpha);
+                const float duree = ns_skin_duration(personnage);
+                static float repos = 0.0f;
+                float when;
+                if (b.amount > 0.02f) {
+                    when = (b.distance / 1.55f) * duree;
+                    repos = when;
+                } else {
+                    /*
+                     * À L'ARRÊT on RAMÈNE la phase vers la position de passage —
+                     * l'instant du cycle où les deux pieds se croisent, jambes
+                     * rassemblées. Elle est MESURÉE au chargement et non
+                     * devinée : on balaie le cycle et on retient l'instant où
+                     * les deux os les plus bas sont le plus proches.
+                     *
+                     * Geler la phase là où la marche s'est arrêtée laissait le
+                     * personnage en grand écart — vu sur capture. Laisser
+                     * tourner le cycle donnerait quelqu'un qui marche sur place,
+                     * ce qui est pire et ne s'arrête jamais.
+                     */
+                    const float debout = ns_skin_stand_time(personnage);
+                    repos = ns_damp(repos, debout, 6.0f, (float)clock.tick_seconds);
+                    when = repos;
+                }
+
+                ns_character_draw d;
+                SDL_zero(d);
+                d.visible = true;
+                d.joint_count = ns_skin_joint_count(personnage);
+                ns_skin_pose(personnage, when, d.joint, NS_MAX_CHARACTER_JOINTS);
+
+                /*
+                 * L'échelle vient du RÉGLAGE, pas du fichier : un personnage
+                 * importé n'a aucune raison d'être à la taille qu'on veut, et
+                 * la deviner d'après son nom serait une heuristique. On mesure
+                 * sa hauteur au repos et on l'amène à `personnage.taille`.
+                 */
+                const float haut = ns_skin_rest_height(personnage);
+                const float echelle = (haut > 0.01f) ? (cam.body_height_stand / haut) : 1.0f;
+
+                /* Les PIEDS, et le lacet de la caméra : le personnage regarde
+                 * là où le joueur regarde. */
+                const float eye = ns_lerpf(cam.prev_eye_height, cam.eye_height, (float)clock.alpha);
+                const ns_v3 feet = ns_v3_make(render_cam.position.x,
+                                              cam.position.y - eye,
+                                              render_cam.position.z);
+                float dyaw = cam.yaw - cam.prev_yaw;
+                while (dyaw >  NS_PI) dyaw -= NS_TAU;
+                while (dyaw < -NS_PI) dyaw += NS_TAU;
+                const float yaw = cam.prev_yaw + dyaw * (float)clock.alpha;
+
+                /* En troisième personne les PIEDS sont sous le pivot de la
+                 * caméra, pas sous elle : `render_cam.position` a reculé. On
+                 * repart donc de la position du corps. */
+                const ns_v3 sol = ns_v3_make(cam.position.x, cam.position.y - eye, cam.position.z);
+                (void)feet;
+
+                const ns_quat q = ns_quat_from_axis(ns_v3_make(0.0f, 1.0f, 0.0f), yaw);
+                d.model = ns_m4_trs(sol, q, ns_v3_splat(echelle));
+
+                d.tint[0] = d.tint[1] = d.tint[2] = 1.0f;
+                d.roughness = 0.72f;
+                d.metallic = 0.0f;
+                ns_renderer_set_character(renderer, &d);
+            } else {
+                ns_renderer_set_character(renderer, NULL);
+            }
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
@@ -3182,6 +3297,7 @@ play_at_done: ;
     }
 
     room_attract_destroy(rhi, attract);
+    ns_skin_free(personnage);
     ns_texture_destroy(rhi, &bar_rt);
     ns_texture_destroy(rhi, &screen_rt);
     /* `board_rt` n'était pas détruite. Une seule texture, libérée par le pilote

@@ -53,8 +53,11 @@ struct ns_skin {
 
     float           duration;
     float           rest_height;
+    float           stand_time;
 
-    void           *image;
+    /* L'image reste CONST : elle appartient au tampon de cgltf, qu'on garde
+     * vivant pour ça. La copier serait un demi-mégaoctet de plus pour rien. */
+    const void     *image;
     size_t          image_size;
 
     cgltf_data     *data;      /* gardé : les pistes pointent dans ses tampons */
@@ -372,7 +375,9 @@ ns_skin *ns_skin_load(const char *logical)
         if (sum > 1e-6f) { for (int k = 0; k < NS_SKIN_INFLUENCES; ++k) v->weights[k] /= sum; }
         else             { v->weights[0] = 1.0f; v->joints[0] = 0; }
     }
-    s->rest_height = (hi > lo) ? (hi - lo) : 1.0f;
+    /* Mesurée plus bas, une fois la pose de liaison appliquée : voir
+     * `measure_rest_height`. Les extrêmes bruts ne veulent rien dire. */
+    (void)lo; (void)hi;
 
     if (prim->indices) {
         s->index_count = (uint32_t)prim->indices->count;
@@ -394,7 +399,79 @@ ns_skin *ns_skin_load(const char *logical)
         if (tex && tex->image && tex->image->buffer_view) {
             const cgltf_buffer_view *bv = tex->image->buffer_view;
             const uint8_t *base = (const uint8_t *)bv->buffer->data;
-            if (base) { s->image = (void *)(base + bv->offset); s->image_size = bv->size; }
+            if (base) { s->image = base + bv->offset; s->image_size = bv->size; }
+        }
+    }
+
+    /*
+     * LA HAUTEUR, mesurée SOUS SA POSE et non sur ses sommets bruts.
+     *
+     * Les sommets d'un maillage pesé sont donnés dans le repère de la peau, qui
+     * n'a aucune raison d'être celui du monde — sur ce personnage-ci, deux
+     * nœuds portent une matrice, dont un changement de repère Z-haut vers
+     * Y-haut. Mesurer l'étendue en Y des sommets bruts mesure donc une
+     * PROFONDEUR, et l'appeler « hauteur » donne un facteur d'échelle faux.
+     *
+     * Constaté à l'image avant d'être compris : le personnage sortait deux fois
+     * trop grand et dominait les bornes. La bonne mesure est celle que le
+     * shader fera — appliquer les matrices d'os — donc on la fait pour de vrai,
+     * une fois, au chargement.
+     */
+    {
+        ns_m4 pose[NS_SKIN_MAX_JOINTS];
+        ns_skin_pose(s, 0.0f, pose, NS_SKIN_MAX_JOINTS);
+        float ylo = FLT_MAX, yhi = -FLT_MAX;
+        for (uint32_t i = 0; i < s->vert_count; ++i) {
+            const ns_skin_vertex *v = &s->verts[i];
+            float y = 0.0f;
+            for (int k = 0; k < NS_SKIN_INFLUENCES; ++k) {
+                const float w = v->weights[k];
+                if (w <= 0.0f) continue;
+                const ns_m4 *m = &pose[v->joints[k]];
+                y += w * (m->m[0][1] * v->position[0] + m->m[1][1] * v->position[1] +
+                          m->m[2][1] * v->position[2] + m->m[3][1]);
+            }
+            if (y < ylo) ylo = y;
+            if (y > yhi) yhi = y;
+        }
+        s->rest_height = (yhi > ylo) ? (yhi - ylo) : 1.0f;
+    }
+
+    /*
+     * LA POSE DE PASSAGE, mesurée. Voir `ns_skin_stand_time`.
+     *
+     * On repère d'abord les deux os les plus BAS de la pose de liaison — ce
+     * sont les pieds, quel que soit leur nom dans le fichier — puis on balaie
+     * le cycle et on retient l'instant où ils sont le plus proches
+     * horizontalement, jambes rassemblées.
+     */
+    {
+        ns_m4 pose[NS_SKIN_MAX_JOINTS];
+        ns_skin_pose(s, 0.0f, pose, NS_SKIN_MAX_JOINTS);
+        int pied_a = -1, pied_b = -1;
+        float ya = FLT_MAX, yb = FLT_MAX;
+        for (int j = 0; j < s->joint_count; ++j) {
+            /* La translation d'un os EN MONDE, une fois la liaison défaite :
+             * c'est la colonne de translation de world = pose * bind. */
+            const ns_m4 bind = ns_m4_inverse(s->inverse_bind[j]);
+            const ns_m4 w = ns_m4_mul(pose[j], bind);
+            const float y = w.m[3][1];
+            if (y < ya) { yb = ya; pied_b = pied_a; ya = y; pied_a = j; }
+            else if (y < yb) { yb = y; pied_b = j; }
+        }
+        s->stand_time = 0.0f;
+        if (pied_a >= 0 && pied_b >= 0) {
+            float best = FLT_MAX;
+            for (int k = 0; k < 96; ++k) {
+                const float t = s->duration * (float)k / 96.0f;
+                ns_skin_pose(s, t, pose, NS_SKIN_MAX_JOINTS);
+                const ns_m4 wa = ns_m4_mul(pose[pied_a], ns_m4_inverse(s->inverse_bind[pied_a]));
+                const ns_m4 wb = ns_m4_mul(pose[pied_b], ns_m4_inverse(s->inverse_bind[pied_b]));
+                const float dx = wa.m[3][0] - wb.m[3][0];
+                const float dz = wa.m[3][2] - wb.m[3][2];
+                const float ecart = dx * dx + dz * dz;
+                if (ecart < best) { best = ecart; s->stand_time = t; }
+            }
         }
     }
 
@@ -402,6 +479,8 @@ ns_skin *ns_skin_load(const char *logical)
             "%.2f de haut au repos",
             logical, s->vert_count, s->index_count / 3u, s->joint_count,
             (double)s->duration, (double)s->rest_height);
+    NS_INFO("personnage : pose de passage mesurée à %.3f s du cycle",
+            (double)s->stand_time);
     return s;
 }
 
@@ -431,6 +510,7 @@ const uint32_t *ns_skin_indices(const ns_skin *s, uint32_t *count)
 int   ns_skin_joint_count(const ns_skin *s) { return s ? s->joint_count : 0; }
 float ns_skin_duration(const ns_skin *s)    { return s ? s->duration : 0.0f; }
 float ns_skin_rest_height(const ns_skin *s) { return s ? s->rest_height : 1.0f; }
+float ns_skin_stand_time(const ns_skin *s)  { return s ? s->stand_time : 0.0f; }
 
 const void *ns_skin_image(const ns_skin *s, size_t *size)
 {

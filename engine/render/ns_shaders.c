@@ -18,6 +18,10 @@ const ns_shader_info ns_shader_table[] = {
     { "particle.vert",         NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "sprite.vert",           NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
     { "viewmodel.vert",  NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
+    /* Le personnage : un seul uniforme, mais gros — vue-projection, modèle et
+     * trente-deux matrices d'os, soit 2,1 Kio. Aucun échantillonneur côté
+     * sommets : la texture est lue par le fragment. */
+    { "character.vert",  NS_SHADER_STAGE_VERTEX,   0, 0, 0, 0, 0, 1,  0, 0, 0 },
 
     /* ------------------------------------------------------------ fragments */
     /* Aucun pipeline ne l'emploie aujourd'hui ; la table décrit le shader. */
@@ -39,6 +43,10 @@ const ns_shader_info ns_shader_table[] = {
     { "volumetric_composite.frag", NS_SHADER_STAGE_FRAGMENT, 3, 0, 0, 0, 0, 1,  0, 0, 0 },
     /* Aucune texture, mais le tampon des lumières — le même que l'éclairage. */
     { "viewmodel.frag",        NS_SHADER_STAGE_FRAGMENT, 0, 0, 1, 0, 0, 1,  0, 0, 0 },
+    /* Comme `viewmodel.frag`, plus UN échantillonneur : le personnage est
+     * texturé, les bras ne le sont pas. C'est ce qui décale le tampon de
+     * lumières au binding 1. */
+    { "character.frag",        NS_SHADER_STAGE_FRAGMENT, 1, 0, 1, 0, 0, 1,  0, 0, 0 },
     /* La couche 2D : un atlas, aucun tampon, aucun uniforme de fragment. La
      * couleur voyage dans le sommet, ce qui permet de teinter chaque quad sans
      * couper le lot. */
