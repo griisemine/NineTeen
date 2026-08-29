@@ -50,9 +50,26 @@ install(TARGETS nineteen RUNTIME DESTINATION bin)
 # 455 Mio, dont les `CMakeFiles`, les `CTestTestfile.cmake`, les WAV de contrôle
 # du mixeur et le répertoire intermédiaire de l'art généré. Un paquet qui
 # emporte ses gravats est un paquet qu'on n'a pas regardé.
-foreach(_dir scene materials sounds games)
+# `models` porte le PERSONNAGE de la vue a la troisieme personne : c'est le seul
+# modele lu A L'EXECUTION — les autres sont cuits dans `salle.gltf` au build.
+# L'oublier ne casse rien et ne dit rien : le jeu demarre, annonce « personnage
+# indisponible » dans un journal que personne ne lit, et la touche F10 ne fait
+# plus rien. C'est exactement le genre de panne muette qu'un paquet doit rendre
+# impossible.
+foreach(_dir scene materials sounds games models)
     install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION bin/assets)
 endforeach()
+
+# Les reglages du personnage, A COTE DU BINAIRE : c'est le premier des trois
+# endroits ou `ns_env_load` les cherche. Sans ce fichier le jeu tourne sur ses
+# valeurs par defaut — ce qui est correct — mais le joueur n'a rien a editer, et
+# la promesse « configurable sans recompiler » ne tient pas dans le paquet.
+install(FILES "${CMAKE_SOURCE_DIR}/nineteen.env" DESTINATION bin)
+
+# Ce qu'il faut lire pour jouer, et ce qu'il faut savoir sur les licences.
+install(FILES "${CMAKE_SOURCE_DIR}/docs/JOUER.md"
+              "${CMAKE_SOURCE_DIR}/assets/cc0/LICENSES.md"
+        DESTINATION .)
 
 # De quoi lancer le jeu depuis un menu, sur les bureaux qui en ont un.
 if(UNIX AND NOT APPLE)

@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.21)
 # makefile avec des `ifeq ($(UNAME), Darwin)` et des .o commités.
 # ---------------------------------------------------------------------------
 project(Nineteen
-    VERSION     15.0.0
+    VERSION     16.0.0
     DESCRIPTION "Salle d'arcade 3D et ses mini-jeux"
     LANGUAGES   C
 )
