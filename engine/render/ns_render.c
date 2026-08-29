@@ -1164,6 +1164,20 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                 live_screen = true;
                 break;
             }
+            /*
+             * Est-ce une DALLE, vivante ou non ? La question est distincte de la
+             * précédente, et c'est tout l'objet de L1 : une borne qu'on ne joue
+             * pas reste une borne, et son tube reste un tube.
+             *
+             * La scène le sait déjà — chaque borne déclare le matériau de sa
+             * dalle, et `roomgen` en CLONE un par borne. Boucler sur dix-neuf
+             * entiers à chaque changement de matériau coûte trois mille
+             * comparaisons par image : sous le bruit de mesure.
+             */
+            bool is_screen = live_screen;
+            for (uint32_t k = 0; !is_screen && k < scene->cabinet_count; ++k) {
+                is_screen = (scene->cabinets[k].screen_material == b->material);
+            }
             tex[1].texture = m ? texture_or(scene, m->normal_texture, scene->fallback_normal) : scene->fallback_normal.handle;
             tex[2].texture = m ? texture_or(scene, m->orm_texture, scene->fallback_orm) : scene->fallback_orm.handle;
             for (int k = 0; k < 3; ++k) tex[k].sampler = aniso;
@@ -1188,15 +1202,24 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
             mu.params[3] = (float)time;
 
             /*
-             * Le traitement de tube n'est appliqué QUE sur l'écran vivant.
+             * Le traitement de tube, sur TOUTE dalle — c'est le défaut que le
+             * propriétaire a nommé : « L'écran 2D des bornes n'est pas du tout
+             * pareil quand on joue et ne joue pas. Quand on ne joue pas il est
+             * moche et ressort de l'écran. »
              *
-             * On pourrait le mettre sur tous les matériaux d'écran, y compris les
-             * images fixes des dix-huit autres bornes. On ne le fait pas : la
-             * courbure déplace les UV, et une image fixe déjà cadrée pour la
-             * dalle se retrouverait rognée. L'écran qui tourne, lui, est rendu
-             * pour ça — c'est nous qui produisons son image.
+             * Il ressortait pour une raison précise : sans ce bloc, la dalle
+             * gardait son albédo de texture et son émissif plein. Elle était
+             * donc éclairée DEUX fois — une fois par ce qu'elle émet, une fois
+             * par les néons qui la traitaient comme une affiche blanche — sans
+             * verre sombre, sans lignes de balayage, sans assombrissement des
+             * coins. Un poster rétroéclairé collé sur le caisson.
+             *
+             * Ce qui l'interdisait était le rognage des images fixes par la
+             * courbure. `barrel()` rentre maintenant les UV avant de les
+             * pousser : plus rien n'est rogné, la raison tombe, et les dix-neuf
+             * bornes de la salle ont enfin le même écran.
              */
-            if (live_screen) {
+            if (is_screen) {
                 mu.screen[0] = rd->settings.screen_curvature;
                 mu.screen[1] = rd->settings.screen_scanlines;
                 mu.screen[2] = rd->settings.screen_glass;

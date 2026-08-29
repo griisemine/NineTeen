@@ -105,6 +105,26 @@ vec2 barrel(vec2 uv, float amount)
      * distance suffit — un tube cathodique n'est pas une lentille, et la racine
      * ne changerait rien de visible. */
     vec2 c = uv * 2.0 - 1.0;
+
+    /*
+     * La RENTRÉE préalable, et c'est elle qui débloque tout le reste.
+     *
+     * Sans elle, le barillet POUSSE les bords hors de la texture : au coin, où
+     * `dot(c, c)` vaut 2, le facteur est 1 + a/2, et ce qui dépasse revient en
+     * bande noire. C'était la raison invoquée pour ne courber QUE la dalle
+     * vivante — « une image fixe déjà cadrée pour la dalle se retrouverait
+     * rognée » — et le prix en était que dix-huit bornes sur dix-neuf
+     * n'avaient pas de tube du tout. Le motif était juste, la correction non :
+     * il suffisait de rentrer d'abord de l'inverse exact.
+     *
+     * `k` résout k (1 + a k² / 2) = 1. Deux tours du point fixe suffisent :
+     * à la courbure employée (0,16) ils donnent 0,9358 pour 0,9347 exact, soit
+     * un dixième de pour cent — un huitième de pixel sur une dalle de 512.
+     */
+    float k = 1.0 / (1.0 + amount * 0.5);
+    k = 1.0 / (1.0 + amount * 0.5 * k * k);
+    c *= k;
+
     c *= 1.0 + amount * dot(c, c) * 0.25;
     return c * 0.5 + 0.5;
 }
