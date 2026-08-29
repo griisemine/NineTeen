@@ -50,11 +50,18 @@
     },
     {
       "name": "sol_sombre",
-      "texture": "moquette_noire.jpg",
+      "texture": "moquette.jpg",
       "roughness": 0.96,
       "metallic": 0.0,
       "uvMetres": 1.5,
-      "footstep": "estrade"
+      "footstep": "estrade",
+      "emissive": [
+        1.0,
+        0.86,
+        0.62
+      ],
+      "emissiveStrength": 0.23,
+      "_atmo": "SPEC-ATMOSPHERE poste 8 (§1.8). L'estrade portait `moquette_noire.jpg`, reflectance mesuree 0,0031 : la surface LA PLUS SOMBRE du decor. En 2020 elle etait le DEUXIEME emetteur de la salle — `salle.mtl:4`, materiau `Material` sur `CENTRE_MACHINE_SOL_Cube`, `map_Kd moquette.jpg`, `Ke 0.229790`. C'etait une inversion exacte de l'ADN. La texture revient, avec sa cible de de-cuisson ALBEDO_moquette 0,10, et l'emissif reprend sa valeur de 2020 a 0,23. `moquette_noire.jpg` passe en echange dans `retiredTextures` : plus aucun materiau ne l'emploie."
     },
     {
       "name": "sol_toilettes",
@@ -1327,8 +1334,8 @@
       "why": "un marbre NOIR veiné de blanc, posé sur les cinq poutres qui barrent le tiers haut de presque toutes les vues. C'est bien la texture de 2020, mais elle y valait 0,011 de réflectance : elle n'a jamais été VUE, son aspect est donc accidentel et non caractéristique. Remplacée par painted_metal_shutter.jpg, déjà dans l'arbre, teintée en acier peint brun chaud."
     },
     {
-      "file": "moquette.jpg",
-      "why": "la boucle bordeaux qui avait remplacé le tapis néon de 2020 sur le sol du hall. Elle a été choisie sur une comparaison d'octets sRGB — 47 contre 30 — c'est-à-dire sur une échelle perceptuelle et non sur une réflectance. En linéaire, floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292 : le tapis néon était déjà 34 % plus clair. Il n'y avait donc rien à gagner, et l'objet le plus reconnaissable de la salle à perdre."
+      "file": "moquette_noire.jpg",
+      "why": "la boucle noire posée sur l'estrade par la reconstruction. Réflectance mesurée 0,0031 : la surface la plus sombre du décor, sur le seul carré de sol que le joueur regarde en face. Or l'estrade de 2020 portait `moquette.jpg` et un `Ke` de 0,2298 — elle était le deuxième émetteur de la salle. La règle de DESIGN-SALLE §1.4 s'applique telle quelle : une texture qui réfléchissait trois pour mille n'a jamais été VUE, son aspect est accidentel. Elle sort du décor et `moquette.jpg` reprend sa place (SPEC-ATMOSPHERE poste 8)."
     },
     {
       "file": "gris_foncer.jpg",

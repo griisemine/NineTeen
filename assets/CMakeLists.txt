@@ -78,7 +78,11 @@ file(GLOB CC0_MODELS CONFIGURE_DEPENDS
 file(GLOB BLENDER_MODELS CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.gltf"
      "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.bin"
-     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.json")
+     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.json"
+     # Le PERSONNAGE est un glTF BINAIRE — maillage, squelette, animation et
+     # texture dans un seul fichier. C'est le bon format pour lui : ses parties
+     # n'ont aucun sens separement, et un .glb ne peut pas arriver a moitie.
+     "${CMAKE_CURRENT_SOURCE_DIR}/models/*/*.glb")
 
 #
 # L'art latéral d'une borne, DESSINÉ plutôt que téléchargé.
@@ -710,8 +714,27 @@ add_custom_command(
     VERBATIM
 )
 
+# ---------------------------------------------------------------------------
+# Le PERSONNAGE, copie a cote du jeu
+# ---------------------------------------------------------------------------
+# Les autres modeles ne sont PAS copies : roomgen les lit dans l'arbre source et
+# cuit leur geometrie dans `salle.gltf`. Le personnage, lui, est lu A
+# L'EXECUTION — son squelette s'anime, on ne peut pas le cuire — il doit donc
+# se trouver a cote du jeu comme n'importe quelle donnee.
+add_custom_command(
+    OUTPUT  "${GEN}/models/personnage/personnage.glb"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/models/personnage"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/models/personnage/personnage.glb"
+            "${GEN}/models/personnage/personnage.glb"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/models/personnage/personnage.glb"
+    COMMENT "Personnage : maillage pese, squelette et animation"
+    VERBATIM
+)
+
 add_custom_target(nineteen_assets ALL
     DEPENDS
+        "${GEN}/models/personnage/personnage.glb"
         "${GEN}/scene/salle.gltf"
         "${GEN}/scene/salle.nsbvh"
         "${GEN}/scene/salle.lights.json"

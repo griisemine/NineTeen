@@ -143,3 +143,46 @@ Parce que `git clone && cmake --build` doit marcher **hors ligne** — c'est la
 promesse tenue depuis A2b, et un `FetchContent` d'assets la casserait au premier
 build. 2,6 Mio ajoutés au dépôt sont le prix de cette promesse, et c'est un prix
 raisonnable.
+
+## Le personnage
+
+`assets/models/personnage/personnage.glb` — **CesiumMan**, © 2017 Cesium,
+[Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/legalcode).
+Récupéré depuis le dépôt officiel `KhronosGroup/glTF-Sample-Assets`.
+
+**CC-BY, et non CC0 : l'attribution est OBLIGATOIRE.** Elle est portée ici, et
+elle doit l'être aussi partout où le jeu est distribué — écran de crédits,
+page de téléchargement, archive. Ce n'est pas une formalité : c'est la
+condition à laquelle on a le droit de s'en servir.
+
+### Pourquoi celui-là, et pourquoi importé
+
+Tout le reste de ce jeu est généré : la salle est décrite, les bras du joueur
+sont écrits en C, les enseignes sont dessinées par `marqueeart`. Ce choix a une
+raison — pas de format à inventer, pas de licence à démêler, reconstructible
+partout — et il tient tant qu'un objet se décrit en quelques dizaines de lignes.
+
+Un personnage humain ne s'y prête pas. Il faut un maillage cousu, des POIDS par
+sommet vers un squelette, et un cycle de marche : c'est du travail d'artiste et
+d'animateur, pas d'arithmétique. On importe donc, et le propriétaire l'a
+demandé explicitement — « prend des personnages déjà existant que tu vas animé ».
+
+CesiumMan a été retenu sur quatre critères, dans cet ordre :
+
+1. **une licence claire et compatible** — CC-BY, attribuée ici. `BrainStem`,
+   le seul autre humanoïde animé du lot, est sous EULA Poser : écarté ;
+2. **une peau et une animation dans un seul fichier** — 19 os, 57 canaux, un
+   cycle de deux secondes, 3 273 sommets et 4 672 triangles. À l'échelle de ce
+   moteur, c'est un budget de décor, pas de personnage principal ;
+3. **il vient du dépôt d'exemples de Khronos**, c'est-à-dire du jeu de fichiers
+   sur lequel les lecteurs glTF sont éprouvés. Un défaut de chargement est donc
+   NOTRE défaut, ce qui rend le déboguage possible ;
+4. **il expose ce qui casse un lecteur naïf** : deux de ses nœuds portent une
+   matrice au lieu d'un triplet translation/rotation/échelle — `Z_UP` pour le
+   changement de repère, `Armature` pour la pose du squelette. Les ignorer
+   couche le personnage sur le flanc. `ns_skin` les traite, et
+   `tests/test_skin.c` le vérifie.
+
+L'animation qu'il porte est une marche. Les autres allures — l'arrêt, la course
+— sont dérivées d'elle au runtime plutôt que téléchargées : c'est la part
+« que tu vas animer » de la demande.

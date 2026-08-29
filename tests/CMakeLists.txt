@@ -76,6 +76,19 @@ nineteen_set_warnings(ns_test_ik)
 nineteen_apply_sanitizers(ns_test_ik)
 add_test(NAME ik COMMAND ns_test_ik)
 
+# Le personnage articulé. Il lit un VRAI fichier — c'est justement la lecture
+# qu'on vérifie — donc il reçoit le dossier des assets en argument.
+#
+# Les trois défauts qu'il cherche sont muets : un indice d'os hors bornes envoie
+# un sommet à l'autre bout de la salle, des poids qui ne somment pas à un font
+# gonfler le personnage selon la pose, un NaN fait disparaître un membre. Aucun
+# ne produit d'erreur, tous produisent une image fausse qu'on impute au rendu.
+add_executable(ns_test_skin test_skin.c)
+target_link_libraries(ns_test_skin PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_skin)
+nineteen_apply_sanitizers(ns_test_skin)
+add_test(NAME peau COMMAND ns_test_skin "${CMAKE_BINARY_DIR}/assets")
+
 # Le mixeur, rendu dans un WAV plutôt que vers un périphérique.
 #
 # C'est ce test qui rend vraie une phrase que `docs/CHANGELOG-V15.md` a affirmée

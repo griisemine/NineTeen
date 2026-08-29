@@ -26,6 +26,8 @@ add_library(nineteen_engine STATIC
 
     anim/ns_ik.c
 
+    anim/ns_skin.c
+
     audio/ns_audio.c
 
     sprite/ns_sprite.c

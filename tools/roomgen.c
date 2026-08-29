@@ -56,6 +56,9 @@
 #define RG_MAX_CABINETS    24        /* NS_MAX_CABINETS */
 #define RG_MAX_POIS        32        /* NS_MAX_POI */
 #define RG_MAX_SOLIDS     512        /* obstacles suivis pour le contrôle des points de vue */
+/* Remonté ici depuis la section des murs : la coquille est gardée dans
+ * `rg_builder`, qui est déclaré avant elle. */
+#define RG_MAX_WALL_POINTS 64
 #define RG_MAX_TRIANGLES 250000
 
 /* Angles de lissage. Une arête sous ce seuil est adoucie, au-dessus elle reste
@@ -158,11 +161,67 @@ typedef enum rg_solid_kind {
     RG_SOLID_PROP
 } rg_solid_kind;
 
+/* Quatre noms d'assemblage par objet. Une poutre repose sur deux familles de
+ * piliers ; au-delà de quatre, ce n'est plus un assemblage, c'est un objet mal
+ * placé qui déclare tout ce qu'il touche. */
+#define RG_MAX_TRAVERSE 4
+
 typedef struct rg_solid {
     char          name[64];
     ns_aabb       bounds;
     rg_solid_kind kind;
+
+    /*
+     * De quoi retrouver la GÉOMÉTRIE de l'objet, et pas seulement sa boîte.
+     *
+     * `emit_object` a déjà tout écrit dans les deux réservoirs partagés du
+     * constructeur — les sommets dans `verts`, les indices dans `prim_blocks` —
+     * et n'en gardait aucune trace par objet. On garde ici les bornes, ce qui
+     * ne coûte rien et rend deux contrôles possibles : `check_inside_shell`
+     * peut nommer LE SOMMET fautif, et `check_solid_overlaps` peut confirmer un
+     * recouvrement AU TRIANGLE.
+     *
+     * La différence est mesurée, pas supposée : sur les huit paires que l'audit
+     * de placement a retestées au triangle, DEUX ne se pénétraient pas du tout
+     * (canapé/fauteuil, 0,3202 m³ de boîtes communes ; canapé/table basse,
+     * 0,0892 m³). Un contrôle qui crie faux une fois sur quatre finit lu en
+     * diagonale.
+     */
+    size_t vert_begin, vert_end;   /* intervalle dans `b->verts` */
+    size_t prim_block;             /* index dans `b->prim_blocks` */
+    size_t tri_count;
+
+    /* Assume d'être posé HORS du bâtiment. Voir `check_inside_shell`. */
+    bool outside_ok;
+
+    /*
+     * Les assemblages VOULUS, déclarés par le nom de l'autre pièce :
+     *
+     *     { "name": "poutre", ..., "traverse": ["pilier_ouest", "pilier_est"] }
+     *
+     * C'est toute la différence avec la tolérance d'avant, qui était une
+     * CATÉGORIE (« tout sauf les bornes ») : une nouvelle intersection ne peut
+     * plus se glisser dans une catégorie préexistante, il faut l'écrire.
+     */
+    char   traverse[RG_MAX_TRAVERSE][64];
+    size_t traverse_count;
+
+    /*
+     * Sur quoi l'objet repose, déclaré. Vide = non déclaré, et le contrôle de
+     * pose ne dit alors rien de cet objet — voir `check_grounded`.
+     */
+    char pose[16];       /* "sol", "meuble", "mur", "suspendu", "libre" */
+    char pose_sur[64];   /* le meuble nommé, quand `pose` vaut "meuble" */
 } rg_solid;
+
+/* Un sol déclaré, gardé pour savoir sur quoi un objet est censé poser. Les
+ * sols ne sont pas des solides — on marche dessus, ils ne bouchent rien — mais
+ * ils sont le support par défaut de tout ce qui est posé. */
+#define RG_MAX_FLOORS 16
+typedef struct rg_floor {
+    char  name[64];
+    float centre[2], size[2], y;
+} rg_floor;
 
 typedef struct rg_builder {
     tool_vec verts;         /* gltf_vertex — un seul pool, partagé (cf. gltf_write.h) */
@@ -215,6 +274,29 @@ typedef struct rg_builder {
     size_t   solid_count;
 
     /*
+     * LA COQUILLE, en ligne médiane, telle que `parse_walls` l'a lue.
+     *
+     * C'est le seul contour FERMÉ de la description — les deux cloisons sont
+     * des polylignes ouvertes — donc l'enveloppe du bâtiment. Le parement
+     * intérieur s'en déduit en rentrant de `thickness / 2` ; on garde la
+     * médiane plutôt que le polygone rentré parce que rentrer un polygone
+     * concave demande de traiter les angles rentrants, alors que la distance
+     * signée à la médiane, elle, est exacte partout.
+     *
+     * Quatre objets se sont retrouvés SUR LE TROTTOIR faute de ce contrôle —
+     * le comptoir d'accueil, une poubelle, une applique et son ampoule — et
+     * deux sources de lumière éclairaient la rue. Rien ne le disait : un objet
+     * dehors ne produit ni erreur, ni avertissement ; il manque simplement là
+     * où il devait être.
+     */
+    ns_v2  shell[RG_MAX_WALL_POINTS];
+    size_t shell_count;
+    float  shell_thickness;
+
+    rg_floor floors[RG_MAX_FLOORS];
+    size_t   floor_count;
+
+    /*
      * La géométrie des LUMINAIRES, gardée à part pour un seul contrôle : une
      * lumière posée à l'intérieur d'un solide fermé s'éteint elle-même.
      *
@@ -239,6 +321,11 @@ typedef struct rg_builder {
      * la main dans la description — c'est précisément le genre de doublon qui
      * finit par mentir. */
     ns_aabb last_bounds;
+    /* Et où sa géométrie est rangée, pour que `record_solid` puisse la
+     * retrouver. Même raison que `last_bounds` : l'émission sait, l'appelant
+     * ne saurait pas le recalculer sans recopier la moitié d'`emit_object`. */
+    size_t  last_vert_begin, last_vert_end;
+    size_t  last_prim_block, last_tri_count;
 
     /*
      * Les répertoires où chercher une texture nommée. Il y en a deux : les 58
@@ -254,16 +341,51 @@ typedef struct rg_builder {
     size_t      retired_count;  /* images déclarées volontairement inemployées */
 } rg_builder;
 
-/* Enregistre le dernier objet émis comme obstacle. Appelé explicitement par les
- * sections qui produisent du volume plein, jamais par les autres. */
-static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind)
+/*
+ * Enregistre le dernier objet émis comme obstacle. Appelé explicitement par les
+ * sections qui produisent du volume plein, jamais par les autres.
+ *
+ * `e` est l'entrée JSON dont l'objet sort : c'est là que se lisent les
+ * échappatoires déclaratives (`outsideOk`, `traverse`) et la pose. Les faire
+ * transiter par ici plutôt que par trois lectures recopiées dans `parse_boxes`,
+ * `parse_cabinets` et `parse_props` garde une seule définition de chaque clé —
+ * trois copies d'une même lecture finissent par diverger d'un défaut.
+ */
+static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind,
+                         const tool_json *doc, const tool_json_value *e)
 {
     if (b->solid_count >= RG_MAX_SOLIDS) return;   /* le contrôle n'est pas critique */
     rg_solid *s = &b->solids[b->solid_count++];
+    memset(s, 0, sizeof *s);
     /* Tronqué sciemment : ce nom ne sert qu'aux messages, pas à un appariement. */
     snprintf(s->name, sizeof s->name, "%.63s", name);
     s->bounds = b->last_bounds;
     s->kind = kind;
+
+    s->vert_begin = b->last_vert_begin;
+    s->vert_end   = b->last_vert_end;
+    s->prim_block = b->last_prim_block;
+    s->tri_count  = b->last_tri_count;
+
+    if (!e) return;
+    s->outside_ok = tool_json_get_bool(doc, e, "outsideOk", false);
+
+    const tool_json_value *tr = tool_json_get(doc, e, "traverse");
+    const int tr_count = tool_json_array_count(doc, tr);
+    if (tr_count > RG_MAX_TRAVERSE) {
+        tool_fatalf("« %s » déclare %d assemblages « traverse », %d au maximum.\n"
+                    "  Un objet qui doit déclarer plus de quatre pièces traversées "
+                    "n'est pas assemblé : il est mal placé.",
+                    name, tr_count, RG_MAX_TRAVERSE);
+    }
+    for (int i = 0; i < tr_count; ++i) {
+        tool_json_string_at(doc, tr, i, s->traverse[s->traverse_count],
+                            sizeof s->traverse[0]);
+        if (s->traverse[s->traverse_count][0]) s->traverse_count++;
+    }
+
+    tool_json_get_string(doc, e, "pose", s->pose, sizeof s->pose);
+    tool_json_get_string(doc, e, "poseSur", s->pose_sur, sizeof s->pose_sur);
 }
 
 /*
@@ -378,32 +500,56 @@ static void check_fixture_naming(const rg_builder *b)
  * séance, et qu'il est indétectable à la lecture : la lumière est déclarée, sa
  * couleur est juste, son intensité est juste, et elle n'éclaire rien.
  */
-static bool light_is_enclosed(const geo_mesh *m, ns_v3 p,
-                              int *odd_out, float *near_out)
+/*
+ * Le cœur du test, sur une soupe de triangles quelconque.
+ *
+ * Il est séparé de `light_is_enclosed` parce que TROIS contrôles s'en servent
+ * désormais, sur deux rangements d'indices différents : les luminaires
+ * accumulés dans un `geo_mesh` (des `geo_tri`, quatre mots par triangle, le
+ * quatrième portant le matériau) et les objets rangés dans un bloc de
+ * primitives (trois mots par triangle). D'où `stride`, en mots de 32 bits :
+ * une seule routine plutôt qu'une copie par rangement, et une copie d'un
+ * lancer de rayons est une copie qui finit par diverger d'un epsilon.
+ *
+ * `need` est le nombre de rayons impairs qu'il faut atteindre. Passé > 0, la
+ * boucle s'arrête dès que le verdict est acquis dans un sens ou dans l'autre —
+ * un point DEHORS ne décroche en général aucun rayon impair et se règle en
+ * quatre rayons sur sept. Passé à 0, les sept rayons sont tirés quoi qu'il
+ * arrive et `near_out` porte alors le minimum sur les sept : c'est ce dont
+ * `check_lights_not_enclosed` a besoin, sa seconde condition portant sur cette
+ * distance-là.
+ */
+#define RG_PARITY_RAYS 7
+
+static int parity_odd_rays(const gltf_vertex *v, const uint32_t *idx, size_t stride,
+                           size_t tri_count, ns_v3 p, int need, float *near_out)
 {
     /* Sept directions non alignées sur les axes : un rayon axial longe trop
      * souvent une arête de boîte, et donne alors un compte au hasard. */
-    static const ns_v3 dirs[7] = {
+    static const ns_v3 dirs[RG_PARITY_RAYS] = {
         { 0.7137f,  0.4472f,  0.5395f }, { -0.6325f,  0.5477f,  0.5477f },
         { 0.5164f, -0.7746f,  0.3651f }, { -0.4082f, -0.4082f,  0.8165f },
         { 0.9129f,  0.2582f, -0.3162f }, { -0.3015f,  0.9045f, -0.3015f },
         { 0.2673f, -0.5345f, -0.8018f },
     };
-    const gltf_vertex *v = (const gltf_vertex *)m->verts.data;
-    const geo_tri *t = (const geo_tri *)m->tris.data;
 
     int odd = 0;
     float nearest = 1e9f;
 
-    for (int d = 0; d < 7; ++d) {
+    for (int d = 0; d < RG_PARITY_RAYS; ++d) {
+        if (need > 0) {
+            if (odd >= need) break;                          /* acquis */
+            if (odd + (RG_PARITY_RAYS - d) < need) break;    /* hors d'atteinte */
+        }
         int hits = 0;
-        for (size_t k = 0; k < m->tris.count; ++k) {
-            const ns_v3 a = ns_v3_make(v[t[k].i[0]].position[0], v[t[k].i[0]].position[1],
-                                       v[t[k].i[0]].position[2]);
-            const ns_v3 bb = ns_v3_make(v[t[k].i[1]].position[0], v[t[k].i[1]].position[1],
-                                        v[t[k].i[1]].position[2]);
-            const ns_v3 c = ns_v3_make(v[t[k].i[2]].position[0], v[t[k].i[2]].position[1],
-                                       v[t[k].i[2]].position[2]);
+        for (size_t k = 0; k < tri_count; ++k) {
+            const uint32_t *t = idx + k * stride;
+            const ns_v3 a = ns_v3_make(v[t[0]].position[0], v[t[0]].position[1],
+                                       v[t[0]].position[2]);
+            const ns_v3 bb = ns_v3_make(v[t[1]].position[0], v[t[1]].position[1],
+                                        v[t[1]].position[2]);
+            const ns_v3 c = ns_v3_make(v[t[2]].position[0], v[t[2]].position[1],
+                                       v[t[2]].position[2]);
             float dist = 0.0f, bu = 0.0f, bv = 0.0f;
             if (ns_ray_triangle(p, dirs[d], a, bb, c, 1e9f, &dist, &bu, &bv)) {
                 hits++;
@@ -412,6 +558,20 @@ static bool light_is_enclosed(const geo_mesh *m, ns_v3 p,
         }
         if (hits & 1) odd++;
     }
+    if (near_out) *near_out = nearest;
+    return odd;
+}
+
+static bool light_is_enclosed(const geo_mesh *m, ns_v3 p,
+                              int *odd_out, float *near_out)
+{
+    const gltf_vertex *v = (const gltf_vertex *)m->verts.data;
+    /* Un `geo_tri` est trois indices puis son matériau : quatre mots. */
+    const uint32_t *idx = (const uint32_t *)m->tris.data;
+
+    float nearest = 1e9f;
+    const int odd = parity_odd_rays(v, idx, sizeof(geo_tri) / sizeof(uint32_t),
+                                    m->tris.count, p, 0, &nearest);
     if (odd_out) *odd_out = odd;
     if (near_out) *near_out = nearest;
 
@@ -475,9 +635,402 @@ static void check_lights_not_enclosed(const rg_builder *b)
     if (checked) printf("  %zu lumière(s) vérifiée(s) hors de leur luminaire\n", checked);
 }
 
+/* ========================================================================== */
+/* C-01 — rien ne sort du bâtiment                                            */
+/* ========================================================================== */
+
+/*
+ * Point dans le polygone, par parité de croisements — le même théorème de
+ * Jordan que `parity_odd_rays`, en plan et donc sans vote : un contour de plan
+ * est fermé par construction, là où un maillage de décor ne l'est pas.
+ *
+ * Les coordonnées de plan suivent la convention de tout le fichier : `.x` est
+ * X, `.y` est **Z**.
+ */
+static bool plan_inside(const ns_v2 *poly, size_t n, float x, float z)
+{
+    bool in = false;
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        if ((poly[i].y > z) != (poly[j].y > z)) {
+            const float t = (z - poly[i].y) / (poly[j].y - poly[i].y);
+            if (x < poly[i].x + t * (poly[j].x - poly[i].x)) in = !in;
+        }
+    }
+    return in;
+}
+
+static float plan_segment_distance(ns_v2 a, ns_v2 c, float x, float z)
+{
+    const float dx = c.x - a.x, dz = c.y - a.y;
+    const float len2 = dx * dx + dz * dz;
+    float t = 0.0f;
+    if (len2 > 1e-12f) {
+        t = ((x - a.x) * dx + (z - a.y) * dz) / len2;
+        t = ns_clampf(t, 0.0f, 1.0f);
+    }
+    const float px = a.x + t * dx - x, pz = a.y + t * dz - z;
+    return sqrtf(px * px + pz * pz);
+}
+
+/*
+ * Distance SIGNÉE d'un point à la ligne médiane de la coquille : positive
+ * dedans, négative dehors. `seg_out` reçoit le segment le plus proche, pour que
+ * le message d'erreur puisse montrer le pan de mur concerné plutôt qu'un
+ * chiffre seul.
+ *
+ * On mesure à la médiane et on décale ensuite de `thickness / 2`, plutôt que de
+ * construire le polygone rentré : rentrer un polygone concave demande de
+ * traiter les angles rentrants (le pan coupé en est un cas limite), alors que
+ * la distance à la médiane est exacte partout et ne dépend d'aucun cas.
+ */
+static float shell_signed_distance(const rg_builder *b, float x, float z, size_t *seg_out)
+{
+    float best = 1e9f;
+    size_t seg = 0;
+    for (size_t i = 0; i < b->shell_count; ++i) {
+        const ns_v2 a = b->shell[i];
+        const ns_v2 c = b->shell[(i + 1) % b->shell_count];
+        const float d = plan_segment_distance(a, c, x, z);
+        if (d < best) { best = d; seg = i; }
+    }
+    if (seg_out) *seg_out = seg;
+    return plan_inside(b->shell, b->shell_count, x, z) ? best : -best;
+}
+
+/*
+ * LA DETTE DE PLACEMENT, mesurée, nommée, et qui ne peut que diminuer.
+ *
+ * Deux objets de la salle sont AUJOURD'HUI hors du bâtiment, et ce n'est pas
+ * une découverte de ce contrôle : l'audit les a mesurés (P-14, P-23) et le plan
+ * les porte en toutes lettres dans « Ce qui reste ouvert ». Leur correction est
+ * une modification de la DESCRIPTION, qui ne m'appartient pas ici.
+ *
+ * Le choix est donc entre trois états, et deux sont mauvais :
+ *
+ *   - ne pas écrire le contrôle : c'est ce qui a mis quatre objets sur le
+ *     trottoir ;
+ *   - l'écrire et casser le build : le contrôle serait retiré dans l'heure par
+ *     celui qu'il bloque, et on retomberait sur le premier état ;
+ *   - l'écrire, et nommer ici les deux défauts connus AVEC leur mesure.
+ *
+ * Le troisième laisse le contrôle fatal pour tout le reste — c'est-à-dire pour
+ * le prochain objet qui sortira. La tolérance ne porte que sur un nom ET une
+ * cote : un objet de la liste qui s'éloignerait davantage redevient fatal, et
+ * la liste avertit dès que le défaut est corrigé, pour qu'on retire la ligne.
+ * Elle ne peut donc ni s'étendre en silence, ni survivre à sa raison d'être.
+ *
+ * Sa place définitive est la description : `"outsideOk": true` si c'est voulu,
+ * une coordonnée corrigée sinon. Cette liste est un passage, pas une adresse.
+ */
+typedef struct rg_outside_debt {
+    const char *name;
+    float       beyond;   /* mètres au-delà du parement intérieur, mesurés */
+    const char *why;
+} rg_outside_debt;
+
+static const rg_outside_debt RG_OUTSIDE_DEBT[] = {
+    { "poutre_5", 1.048f,
+      "AUDIT P-14 : la cinquième poutre traverse le pan coupé et ressort dehors" },
+    { "tapis_technique", 0.350f,
+      "AUDIT P-23 : le tapis technique traverse le mur ouest" },
+};
+#define RG_OUTSIDE_DEBT_COUNT (sizeof RG_OUTSIDE_DEBT / sizeof RG_OUTSIDE_DEBT[0])
+
+/*
+ * C-01 — chaque sommet de chaque objet est dans le bâtiment.
+ *
+ * La règle : un sommet doit être à l'intérieur du parement intérieur, ou à
+ * moins de `wallThickness` derrière lui. Cette marge n'est pas une commodité,
+ * c'est le cas normal : une affiche mord dans son mur, un tableau électrique
+ * s'y encastre, un about de poutre s'y appuie. Au-delà du parement EXTÉRIEUR,
+ * en revanche, il n'y a plus de mur : il y a la rue.
+ *
+ * Ce contrôle est le plus rentable du lot. À lui seul il aurait attrapé six des
+ * vingt-trois défauts de l'audit de placement, dont quatre des cinq bloquants —
+ * le comptoir d'accueil à 1,04 m dehors, la poubelle à 0,80 m, l'applique et
+ * son ampoule sur la face extérieure du mur de brique, et le lavabo dont les
+ * axes intervertis faisaient sortir le plan de 15 cm.
+ *
+ * Ce qu'il NE regarde pas : les sols et le plafond. Ils débordent de 1,55 m à
+ * l'est, c'est mesuré, et ce n'est pas un défaut de placement — personne ne va
+ * là-bas. Il ne porte donc que sur les solides : boîtes, bornes et props.
+ */
+#define RG_SHELL_SLACK 0.001f   /* 1 mm : le bruit du flottant, pas une tolérance */
+
+static void check_inside_shell(const rg_builder *b)
+{
+    if (b->shell_count < 3) {
+        tool_warnf("aucun contour fermé dans « walls » : le contrôle « rien ne sort "
+                   "du bâtiment » n'a rien vérifié. C'est le pire état d'un contrôle.");
+        return;
+    }
+
+    const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
+    const float t = b->shell_thickness;
+    size_t checked = 0, tolerated = 0;
+    bool debt_seen[RG_OUTSIDE_DEBT_COUNT];
+    memset(debt_seen, 0, sizeof debt_seen);
+
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (s->outside_ok) continue;
+        checked++;
+
+        float worst = -1e9f;
+        ns_v3 worst_p = ns_v3_zero();
+        size_t worst_seg = 0;
+        for (size_t k = s->vert_begin; k < s->vert_end; ++k) {
+            const float x = verts[k].position[0], z = verts[k].position[2];
+            size_t seg = 0;
+            /* `beyond` compte depuis le PAREMENT INTÉRIEUR, qui est à
+             * `thickness / 2` de la médiane, du côté de la salle. */
+            const float beyond = t * 0.5f - shell_signed_distance(b, x, z, &seg);
+            if (beyond > worst) {
+                worst = beyond;
+                worst_p = ns_v3_make(verts[k].position[0], verts[k].position[1],
+                                     verts[k].position[2]);
+                worst_seg = seg;
+            }
+        }
+        if (worst <= t + RG_SHELL_SLACK) continue;
+
+        /* Le pan de parement le plus proche, rentré de la demi-épaisseur, pour
+         * que le message montre le mur dont il parle. */
+        const ns_v2 a = b->shell[worst_seg];
+        const ns_v2 c = b->shell[(worst_seg + 1) % b->shell_count];
+        float nx = c.y - a.y, nz = -(c.x - a.x);
+        const float nl = sqrtf(nx * nx + nz * nz);
+        if (nl > 1e-9f) { nx /= nl; nz /= nl; }
+        const float mx = (a.x + c.x) * 0.5f, mz = (a.y + c.y) * 0.5f;
+        if (!plan_inside(b->shell, b->shell_count, mx + nx * 0.01f, mz + nz * 0.01f)) {
+            nx = -nx; nz = -nz;
+        }
+        const float in_ax = a.x + nx * t * 0.5f, in_az = a.y + nz * t * 0.5f;
+        const float in_cx = c.x + nx * t * 0.5f, in_cz = c.y + nz * t * 0.5f;
+
+        const rg_outside_debt *debt = NULL;
+        for (size_t d = 0; d < RG_OUTSIDE_DEBT_COUNT; ++d) {
+            if (strcmp(RG_OUTSIDE_DEBT[d].name, s->name) != 0) continue;
+            debt_seen[d] = true;
+            if (worst <= RG_OUTSIDE_DEBT[d].beyond + RG_SHELL_SLACK) debt = &RG_OUTSIDE_DEBT[d];
+            break;
+        }
+        if (debt) {
+            tolerated++;
+            tool_warnf("« %s » est à %.3f m au-delà du parement intérieur "
+                       "(%.2f m dehors) — dette connue : %s",
+                       s->name, (double)worst, (double)(worst - t), debt->why);
+            continue;
+        }
+
+        tool_fatalf("« %s » est à %.2f m AU-DELÀ du parement intérieur (%.2f m dehors).\n"
+                    "  pire sommet   (%.2f, %.2f, %.2f)\n"
+                    "  parement le plus proche : de (%.2f, %.2f) à (%.2f, %.2f)\n"
+                    "  Un objet dehors n'est pas invisible : il se voit depuis la rue, "
+                    "et il MANQUE là où il devait être.\n"
+                    "  Un objet a le droit de mordre dans son mur — %.2f m ici — mais "
+                    "pas de le traverser.\n"
+                    "  Si c'est voulu, l'écrire : \"outsideOk\": true.",
+                    s->name, (double)worst, (double)(worst - t),
+                    (double)worst_p.x, (double)worst_p.y, (double)worst_p.z,
+                    (double)in_ax, (double)in_az, (double)in_cx, (double)in_cz,
+                    (double)t);
+    }
+
+    for (size_t d = 0; d < RG_OUTSIDE_DEBT_COUNT; ++d) {
+        if (debt_seen[d]) continue;
+        tool_warnf("« %s » ne sort plus du bâtiment : la dette est payée, retirer "
+                   "sa ligne de `RG_OUTSIDE_DEBT` dans tools/roomgen.c (%s)",
+                   RG_OUTSIDE_DEBT[d].name, RG_OUTSIDE_DEBT[d].why);
+    }
+    printf("  %zu objet(s) confronté(s) au parement intérieur, %zu toléré(s) par la "
+           "dette déclarée\n", checked, tolerated);
+}
+
+/* ========================================================================== */
+/* C-02 — deux solides ne se pénètrent pas                                    */
+/* ========================================================================== */
+
+/*
+ * Un nom déclaré vaut pour toute sa série. « pilier_ouest » désigne les cinq
+ * `pilier_ouest_1..5` : `instance_name` numérote les exemplaires d'une
+ * déclaration répétée, et exiger d'écrire les cinq noms ferait d'une
+ * déclaration juste une liste qu'on oublie de rallonger le jour où le sixième
+ * pilier arrive. Un nom exact reste évidemment accepté.
+ */
+static bool name_matches_series(const char *declared, const char *instance)
+{
+    if (strcmp(declared, instance) == 0) return true;
+    const size_t n = strlen(declared);
+    if (strncmp(declared, instance, n) != 0 || instance[n] != '_') return false;
+    for (const char *c = instance + n + 1; *c; ++c) {
+        if (*c < '0' || *c > '9') return false;
+    }
+    return instance[n + 1] != '\0';
+}
+
+static bool pair_is_declared(const rg_solid *A, const rg_solid *B)
+{
+    for (size_t i = 0; i < A->traverse_count; ++i) {
+        if (name_matches_series(A->traverse[i], B->name)) return true;
+    }
+    for (size_t i = 0; i < B->traverse_count; ++i) {
+        if (name_matches_series(B->traverse[i], A->name)) return true;
+    }
+    return false;
+}
+
+/*
+ * Un point est-il dans le solide ? Même parité que pour les luminaires, avec
+ * DEUX différences, et chacune a sa raison.
+ *
+ * La majorité, 4 rayons sur 7 : c'est le critère avec lequel l'audit de
+ * placement a mesuré ses pénétrations, et le reprendre tel quel rend ses
+ * chiffres reproductibles ici. Pour un luminaire on descend à 2 sur 7, parce
+ * qu'un abat-jour ouvert par le bas ne renvoie pas de majorité.
+ *
+ * Pas de condition de distance : un sommet planté au milieu d'un canapé de
+ * 2,73 m est loin de toute surface, et la condition des 25 cm — qui vaut pour
+ * une source, occultée seulement si le verre est là — l'aurait déclaré dehors.
+ */
+static bool solid_contains_point(const rg_builder *b, const rg_solid *s, ns_v3 p)
+{
+    if (s->tri_count == 0) return false;
+    if (p.x < s->bounds.min.x || p.x > s->bounds.max.x
+     || p.y < s->bounds.min.y || p.y > s->bounds.max.y
+     || p.z < s->bounds.min.z || p.z > s->bounds.max.z) return false;
+
+    const geo_primitives *g = &TOOL_VEC_AT(&b->prim_blocks, geo_primitives, s->prim_block);
+    const gltf_vertex *v = (const gltf_vertex *)b->verts.data;
+    return parity_odd_rays(v, g->storage, 3, s->tri_count, p, 4, NULL) >= 4;
+}
+
+/* Le premier sommet de A qui est dans le solide de B, s'il y en a un. On
+ * s'arrête au premier : le verdict est acquis, et compter les suivants coûte
+ * un lancer de rayons par sommet pour un chiffre que le message n'emploie pas. */
+static bool first_vertex_inside(const rg_builder *b, const rg_solid *A, const rg_solid *B,
+                                ns_v3 *out)
+{
+    const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
+    for (size_t k = A->vert_begin; k < A->vert_end; ++k) {
+        const ns_v3 p = ns_v3_make(verts[k].position[0], verts[k].position[1],
+                                   verts[k].position[2]);
+        if (solid_contains_point(b, B, p)) { if (out) *out = p; return true; }
+    }
+    return false;
+}
+
+/*
+ * LES PAIRES DÉJÀ CONNUES, sur le modèle de `RG_OUTSIDE_DEBT` et pour la même
+ * raison : le contrôle s'écrit ici, la description se corrige ailleurs.
+ *
+ * Deux natures, et elles ne se confondent pas :
+ *
+ *   - les ASSEMBLAGES, qui sont JUSTES et n'attendent que leur déclaration
+ *     `"traverse"` dans la description. Une ampoule est dans sa douille, un
+ *     robinet est monté dans sa vasque, une enseigne est fixée à son comptoir.
+ *     Ces six-là ne sont pas une dette : ce sont des `"traverse"` qui n'ont pas
+ *     encore été écrits, et le jour où ils le seront, ces lignes disparaîtront
+ *     sans que rien ne change au verdict.
+ *   - les DÉFAUTS, mesurés, ouverts, et qu'on ne masque pas : deux viennent de
+ *     l'audit de placement (P-16, P-18), DEUX ONT ÉTÉ TROUVÉS PAR CE CONTRÔLE
+ *     et sont nés de la correction d'autres défauts — la poubelle sortie de la
+ *     rue est entrée dans un pilier, le bureau sorti de la rue est entré dans
+ *     le battant de la porte. C'est la démonstration la plus courte de ce que
+ *     vaut un contrôle : deux corrections faites à la main, deux nouveaux
+ *     défauts, aucun signalement.
+ *
+ * Les deux tables nomment des PAIRES, jamais des catégories : c'est exactement
+ * le reproche fait au contrôle d'avant, dont la tolérance « tout sauf les
+ * bornes » laissait passer un canapé empalé sur un poteau de béton.
+ */
+typedef struct rg_overlap_pair {
+    const char *a, *b;
+    const char *why;
+} rg_overlap_pair;
+
+static const rg_overlap_pair RG_OVERLAP_ASSEMBLY[] = {
+    { "bar_accueil", "enseigne_nineteen",
+      "l'enseigne est fixée au comptoir (2 sommets, 3,40 x 0,014 x 0,033 m)" },
+    { "lavabo_toilettes", "robinet_toilettes",
+      "le robinet est monté dans la vasque (216 sommets sur 288)" },
+    { "lavabo_toilettes", "flaque_toilettes",
+      "la flaque passe sous le meuble (24 sommets, 8 mm de haut)" },
+    { "applique_sas", "ampoule_sas",
+      "l'ampoule est dans sa douille (0,00030 m³ de boîtes communes)" },
+    { "suspension_comptoir", "ampoule_comptoir",
+      "l'ampoule est dans sa douille (0,00041 m³)" },
+    { "suspension_salon", "ampoule_salon",
+      "l'ampoule est dans sa douille (0,00041 m³)" },
+};
+#define RG_OVERLAP_ASSEMBLY_COUNT \
+    (sizeof RG_OVERLAP_ASSEMBLY / sizeof RG_OVERLAP_ASSEMBLY[0])
+
+static const rg_overlap_pair RG_OVERLAP_DEBT[] = {
+    { "bar_accueil", "boombox",
+      "AUDIT P-16 : le boombox est enfoncé de 2,3 cm dans le plateau du "
+      "comptoir (109 sommets sur 2 410)" },
+    { "pilier_est_2", "table_basse",
+      "AUDIT P-18 : la table basse pénètre le pilier (58 sommets sur 62)" },
+    { "pilier_est_5", "poubelle_sas",
+      "TROUVÉ PAR CE CONTRÔLE : la poubelle est ENTIÈREMENT dans le pilier — "
+      "1 422 sommets sur 1 422, 0,046 m³ de boîtes communes. Sortie de la rue "
+      "(P-02), elle est entrée dans un poteau de béton" },
+    { "bureau", "porte_entree_battant",
+      "TROUVÉ PAR CE CONTRÔLE : le comptoir d'accueil occupe le débattement du "
+      "battant — 36 sommets sur 144, 0,398 m³ de boîtes communes. Sorti de la "
+      "rue (P-01), il est entré dans la porte" },
+};
+#define RG_OVERLAP_DEBT_COUNT (sizeof RG_OVERLAP_DEBT / sizeof RG_OVERLAP_DEBT[0])
+
+static const rg_overlap_pair *pair_in_table(const rg_overlap_pair *table, size_t count,
+                                            const rg_solid *A, const rg_solid *B)
+{
+    for (size_t i = 0; i < count; ++i) {
+        const rg_overlap_pair *d = &table[i];
+        if ((name_matches_series(d->a, A->name) && name_matches_series(d->b, B->name))
+         || (name_matches_series(d->a, B->name) && name_matches_series(d->b, A->name))) {
+            return d;
+        }
+    }
+    return NULL;
+}
+
+/*
+ * C-02 — la boîte englobante PRÉ-FILTRE, le triangle TRANCHE.
+ *
+ * Ce contrôle existait, et il faisait deux choses discutables. Il ne comparait
+ * que des boîtes englobantes : sur les huit paires que l'audit a retestées au
+ * triangle, DEUX ne se pénétraient pas du tout — le canapé et le fauteuil
+ * partagent 0,3202 m³ de boîtes sans qu'aucun de leurs 2 759 sommets candidats
+ * ne soit dans l'autre. Et il n'était fatal que si une BORNE était en cause,
+ * ce qui a laissé passer un canapé empalé sur un poteau de béton, 0,0412 m³
+ * d'intersection réelle, en simple avertissement pendant tout un palier.
+ *
+ * Donc : la boîte reste le pré-filtre, parce que c'est ce qu'elle sait faire et
+ * que c'est gratuit ; toute paire qui la passe est confirmée au triangle par la
+ * parité de `parity_odd_rays` ; et une pénétration confirmée est FATALE, sauf
+ * si la paire est déclarée par son nom.
+ *
+ * CE QU'IL NE VOIT PAS, et c'est mesuré plutôt que supposé. Le critère est
+ * « un SOMMET de A dans le solide de B » : il ne voit donc pas deux volumes qui
+ * se croisent sans qu'aucun sommet ne tombe dans l'autre. Le cas existe dans
+ * cette salle — les cinq poutres traversent leurs dix piliers sur
+ * 0,48 x 0,20 x 0,42 m, et AUCUNE des dix paires n'est confirmée : les sommets
+ * de la poutre sont à ses deux bouts, à neuf mètres de là, et le haut du pilier
+ * (2,92 m) passe au-dessus du dessus de la poutre (2,90 m). C'est le prix du
+ * critère qui supprime les fausses alertes, et il se paierait en testant aussi
+ * les ARÊTES contre les triangles. Il n'y a aucun sous-entendu ici : les dix
+ * paires poutre/pilier passent, et ce n'est pas parce qu'elles sont tolérées.
+ */
 static void check_solid_overlaps(const rg_builder *b)
 {
-    size_t warned = 0;
+    size_t boxes = 0, declared = 0, assembled = 0, tolerated = 0, clear = 0;
+    bool debt_seen[RG_OVERLAP_DEBT_COUNT];
+    bool asm_seen[RG_OVERLAP_ASSEMBLY_COUNT];
+    memset(debt_seen, 0, sizeof debt_seen);
+    memset(asm_seen, 0, sizeof asm_seen);
+
     for (size_t i = 0; i < b->solid_count; ++i) {
         for (size_t j = i + 1; j < b->solid_count; ++j) {
             const rg_solid *A = &b->solids[i], *B = &b->solids[j];
@@ -492,19 +1045,18 @@ static void check_solid_overlaps(const rg_builder *b)
              || oz <= RG_OVERLAP_TOLERANCE) {
                 continue;                       /* disjoints sur au moins un axe */
             }
+            boxes++;
 
             /*
-             * Fatal dès qu'une BORNE est en cause, et seulement là.
+             * La BORNE reste jugée à la boîte, et c'est le seul cas.
              *
-             * Une borne doit se tenir dans du vide : on ne joue pas sur un
-             * caisson encastré dans son voisin. Le reste s'imbrique légitimement
-             * — une poutre repose sur ses piliers, un tabouret glisse sous un
-             * comptoir, une affiche se plaque contre un mur. Le premier essai de
-             * ce contrôle refusait la poutre et son pilier, ce qui aurait
-             * transformé un garde-fou utile en bruit qu'on apprend à ignorer.
+             * Ce n'est pas la même propriété que la pénétration : une borne doit
+             * se tenir dans du VIDE — on ne joue pas sur un caisson dont le
+             * voisin recouvre la façade, même sans un triangle en commun. Le
+             * contrôle d'avant avait raison sur ce point-là, on le garde tel
+             * quel plutôt que de l'affaiblir en passant tout au triangle.
              */
-            const bool fatal = (A->kind == RG_SOLID_CABINET) || (B->kind == RG_SOLID_CABINET);
-            if (fatal) {
+            if (A->kind == RG_SOLID_CABINET || B->kind == RG_SOLID_CABINET) {
                 tool_fatalf("« %s » et « %s » occupent le même volume : "
                             "recouvrement de %.3f x %.3f x %.3f m\n"
                             "  %s : [%.2f %.2f %.2f] - [%.2f %.2f %.2f]\n"
@@ -517,15 +1069,73 @@ static void check_solid_overlaps(const rg_builder *b)
                             (double)B->bounds.min.x, (double)B->bounds.min.y, (double)B->bounds.min.z,
                             (double)B->bounds.max.x, (double)B->bounds.max.y, (double)B->bounds.max.z);
             }
-            if (warned < 8) {
-                tool_warnf("« %s » et « %s » se recouvrent de %.2f x %.2f x %.2f m "
-                           "(structure ou mobilier : toléré)",
-                           A->name, B->name, (double)ox, (double)oy, (double)oz);
-                warned++;
+
+            if (pair_is_declared(A, B)) { declared++; continue; }
+
+            ns_v3 hit = ns_v3_zero();
+            const rg_solid *in = NULL, *of = NULL;
+            if (first_vertex_inside(b, A, B, &hit))      { in = A; of = B; }
+            else if (first_vertex_inside(b, B, A, &hit))  { in = B; of = A; }
+            if (!in) { clear++; continue; }
+
+            const rg_overlap_pair *asmb = pair_in_table(RG_OVERLAP_ASSEMBLY,
+                                                        RG_OVERLAP_ASSEMBLY_COUNT, A, B);
+            if (asmb) {
+                asm_seen[(size_t)(asmb - RG_OVERLAP_ASSEMBLY)] = true;
+                assembled++;
+                continue;
             }
+
+            const rg_overlap_pair *debt = pair_in_table(RG_OVERLAP_DEBT,
+                                                        RG_OVERLAP_DEBT_COUNT, A, B);
+            if (debt) {
+                const size_t k = (size_t)(debt - RG_OVERLAP_DEBT);
+                if (!debt_seen[k]) {
+                    tool_warnf("« %s » et « %s » se pénètrent (%.3f x %.3f x %.3f m "
+                               "de boîtes communes) — défaut connu, non corrigé : %s",
+                               A->name, B->name, (double)ox, (double)oy, (double)oz,
+                               debt->why);
+                    debt_seen[k] = true;
+                }
+                tolerated++;
+                continue;
+            }
+
+            tool_fatalf("« %s » PÉNÈTRE « %s » : le sommet (%.3f, %.3f, %.3f) de "
+                        "« %s » est dans le solide de « %s ».\n"
+                        "  boîtes communes : %.3f x %.3f x %.3f m\n"
+                        "  Confirmé au triangle, pas à la boîte : la parité de sept "
+                        "rayons donne au moins quatre comptes impairs.\n"
+                        "  Deux meubles bord à bord sont voulus ; un meuble DANS un "
+                        "autre est une faute de frappe sur une coordonnée.\n"
+                        "  Si l'assemblage est voulu — une poutre sur son pilier — "
+                        "le déclarer par son nom : \"traverse\": [\"%s\"].",
+                        in->name, of->name,
+                        (double)hit.x, (double)hit.y, (double)hit.z,
+                        in->name, of->name,
+                        (double)ox, (double)oy, (double)oz, of->name);
         }
     }
-    if (warned >= 8) tool_infof("... et d'autres recouvrements de mobilier");
+
+    /* Une ligne de tolérance qui ne sert plus est une tolérance qui, un jour,
+     * couvrira autre chose que ce pour quoi elle a été écrite. Les deux tables
+     * le disent d'elles-mêmes. */
+    for (size_t k = 0; k < RG_OVERLAP_DEBT_COUNT; ++k) {
+        if (debt_seen[k]) continue;
+        tool_warnf("« %s » et « %s » ne se pénètrent plus : retirer leur ligne de "
+                   "`RG_OVERLAP_DEBT` dans tools/roomgen.c",
+                   RG_OVERLAP_DEBT[k].a, RG_OVERLAP_DEBT[k].b);
+    }
+    for (size_t k = 0; k < RG_OVERLAP_ASSEMBLY_COUNT; ++k) {
+        if (asm_seen[k]) continue;
+        tool_warnf("« %s » et « %s » ne se pénètrent plus : retirer leur ligne de "
+                   "`RG_OVERLAP_ASSEMBLY` dans tools/roomgen.c",
+                   RG_OVERLAP_ASSEMBLY[k].a, RG_OVERLAP_ASSEMBLY[k].b);
+    }
+    printf("  %zu paire(s) de boîtes communes : %zu sans pénétration réelle, "
+           "%zu assemblage(s) (%zu déclaré(s) dans la description), %zu défaut(s) "
+           "connu(s) non corrigé(s)\n",
+           boxes, clear, assembled + declared, declared, tolerated);
 }
 
 /* Comme `material_index`, mais rend −1 au lieu d'arrêter l'outil : pour les
@@ -611,6 +1221,10 @@ static void emit_object(rg_builder *b, const char *name, geo_mesh *m, float smoo
     mesh->prim_count = prims.count;
 
     b->triangle_count += geo_mesh_tri_count(m);
+    b->last_vert_begin = base;
+    b->last_vert_end   = b->verts.count;
+    b->last_prim_block = b->prim_blocks.count - 1;
+    b->last_tri_count  = geo_mesh_tri_count(m);
     b->last_bounds = geo_mesh_bounds(m);
     b->bounds = ns_aabb_union(b->bounds, b->last_bounds);
 
@@ -798,6 +1412,16 @@ static void parse_floors(rg_builder *b, const tool_json *doc, const tool_json_va
         uv.offset_u = centre[0];
         uv.offset_v = centre[1];
 
+        /* Gardé pour `check_grounded` : un objet posé au sol touche CE sol-là,
+         * et l'outil est le seul à connaître les deux. */
+        if (b->floor_count < RG_MAX_FLOORS && up) {
+            rg_floor *f = &b->floors[b->floor_count++];
+            snprintf(f->name, sizeof f->name, "%.63s", name);
+            f->centre[0] = centre[0]; f->centre[1] = centre[1];
+            f->size[0] = size[0]; f->size[1] = size[1];
+            f->y = y;
+        }
+
         geo_mesh m; geo_mesh_init(&m);
         geo_plane(&m, size[0], size[1], nx, nz, up, &uv, mat);
 
@@ -815,7 +1439,6 @@ static void parse_floors(rg_builder *b, const tool_json *doc, const tool_json_va
 /* Murs                                                                       */
 /* ========================================================================== */
 
-#define RG_MAX_WALL_POINTS   64
 #define RG_MAX_WALL_OPENINGS 16
 
 static size_t read_plan_points(const tool_json *doc, const tool_json_value *e,
@@ -900,6 +1523,21 @@ static void parse_walls(rg_builder *b, const tool_json *doc, const tool_json_val
         const float over = tool_json_get_float(doc, e, "uvMetres", 0.0f);
         if (over > 0.0f) d.uv = geo_uv_tile(over);
 
+        /*
+         * La COQUILLE, gardée pour `check_inside_shell`.
+         *
+         * Le premier contour FERMÉ est l'enveloppe du bâtiment : les cloisons
+         * intérieures sont des polylignes ouvertes, elles ne séparent pas un
+         * dedans d'un dehors. On la reconnaît donc à sa fermeture plutôt qu'à
+         * son nom — un contrôle qui dépend d'un nom cesse de fonctionner le
+         * jour où quelqu'un renomme.
+         */
+        if (d.closed && b->shell_count == 0 && point_count >= 3) {
+            for (size_t k = 0; k < point_count; ++k) b->shell[k] = points[k];
+            b->shell_count = point_count;
+            b->shell_thickness = d.thickness;
+        }
+
         geo_mesh m; geo_mesh_init(&m);
         geo_wall_run(&m, &d);
         emit_object(b, name, &m, RG_SMOOTH_HARD);
@@ -968,7 +1606,7 @@ static void parse_boxes(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[GLTF_MAX_NAME];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name, RG_SOLID_BOX);
+            record_solid(b, name, RG_SOLID_BOX, doc, e);
         }
     }
 }
@@ -1522,7 +2160,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         geo_mesh_append(&placed, &local, &x, -1);
         geo_mesh_free(&local);
         emit_object(b, name, &placed, RG_SMOOTH_HARD);
-        record_solid(b, name, RG_SOLID_CABINET);
+        record_solid(b, name, RG_SOLID_CABINET, doc, e);
 
         /* Report du repère local vers le monde. Le lacet suit la convention de
          * `geo_xform` : X' = X cos + Z sin, Z' = -X sin + Z cos. */
@@ -1878,7 +2516,7 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
                 geo_mesh_append(&b->props_mesh, &placed, &id, -1);
             }
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name, RG_SOLID_PROP);
+            record_solid(b, name, RG_SOLID_PROP, doc, e);
 
             /* Un point d'intérêt déclaré : le moteur cessera de repérer le
              * billard et le canapé en cherchant des sous-chaînes dans les noms de
@@ -2620,6 +3258,7 @@ int main(int argc, char **argv)
     parse_props(&b, &doc, root);
 
     /* Après tout le mobilier, avant d'écrire quoi que ce soit. */
+    check_inside_shell(&b);
     check_solid_overlaps(&b);
     check_lights_not_enclosed(&b);
     check_fixture_naming(&b);
