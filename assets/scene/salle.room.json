@@ -499,6 +499,35 @@
       "_": "Les billes. Une table de billard sans bille est un meuble ; avec trois billes posées, c'est une partie interrompue — et c'est ce qui distingue une salle vécue d'un plan d'architecte."
     },
     {
+      "name": "billard_queue",
+      "_atmo": "SPEC-ATMOSPHERE poste 24 (§1.11). Equivalent de `canne` (salle.mtl:487), le seul materiau de queue de 2020 : Kd (0,311 ; 0,101 ; 0,048), un bois rouge sombre de 0,142 de luminance. Repris en multiplicateur sur `bois.jpg`, deja de-cuite a 0,17 : le produit sort a 0,119, soit la valeur de 2020 a 16 % pres, sans importer une image pour un objet de trois centimetres de diametre.",
+      "texture": "bois.jpg",
+      "baseColor": [
+        1.08,
+        0.62,
+        0.42,
+        1.0
+      ],
+      "roughness": 0.3,
+      "metallic": 0.0,
+      "uvMetres": 0.5
+    },
+    {
+      "name": "billard_craie",
+      "_atmo3": "Le TROISIEME materiau que le poste 24 demande de retrouver, `de_qui_billard` (salle.mtl:509), n'a pas besoin d'equivalent NEUF : il en a deja un. Ses douze sommets, releves dans `salle.obj`, forment un rectangle emissif de 1,48 x 0,64 m a 2,38 m au-dessus de la table (Ke 1,0 ; 0,485 ; 0,082) plus un capuchon de 4 mm sur la craie. C'est la LAMPE du billard, et `materials[billard_ampoule]` — emissif (1,0 ; 0,78 ; 0,52) x 2,2, porte par `props[suspension_billard]` — la rend depuis qu'on a rendu son luminaire a la source. Le poste 24 est donc tenu par deux materiaux ajoutes, pas trois.",
+      "_atmo": "SPEC-ATMOSPHERE poste 24. Equivalent de `bleu.001` (salle.mtl:477), Kd (0,014 ; 0,030 ; 0,800) : le cube de craie bleue, 3,6 x 2,3 x 3,4 cm dans le modele de 2020 — mesure sur les douze sommets de son groupe dans `salle.obj`. Mate, parce qu'une craie l'est.",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.1,
+        0.22,
+        0.86,
+        1.0
+      ],
+      "roughness": 0.9,
+      "metallic": 0.0,
+      "uvMetres": 0.05
+    },
+    {
       "name": "borne_grille",
       "texture": "metal_plate_02.jpg",
       "roughness": 0.38,
@@ -2195,6 +2224,59 @@
   ],
   "boxes": [
     {
+      "name": "socle_pilier_ouest",
+      "_atmo": "SPEC-ATMOSPHERE poste 16 (§2.3 H). Dix dalles rouges qui sortent du sol sans embase se lisent comme des volumes poses. Une plinthe de 14 cm — la meme cote que `mouldings[plinthe_est]` — les raccorde au sol et fait qu'on les lit comme de la construction. Debord de 4 cm sur les quatre faces (0,56 pour un pilier de 0,48). `traverse` est declare parce que le pilier plonge de 14 cm DANS le socle : c'est un assemblage voulu, et roomgen exige qu'on l'ecrive plutot que de le tolerer par categorie.",
+      "at": [
+        -5.4,
+        0.0,
+        -4.8
+      ],
+      "size": [
+        0.56,
+        0.14,
+        0.56
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.01,
+      "traverse": [
+        "pilier_ouest"
+      ],
+      "repeat": {
+        "count": 5,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      }
+    },
+    {
+      "name": "socle_pilier_est",
+      "at": [
+        5.4,
+        0.0,
+        -4.8
+      ],
+      "size": [
+        0.56,
+        0.14,
+        0.56
+      ],
+      "material": "bois_noir",
+      "chamfer": 0.01,
+      "traverse": [
+        "pilier_est"
+      ],
+      "repeat": {
+        "count": 5,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      }
+    },
+    {
       "name": "pilier_ouest",
       "at": [
         -5.4,
@@ -2242,6 +2324,7 @@
       }
     },
     {
+      "_audit": "AUDIT P-14. La cinquieme repetition sortait du batiment par le pan coupe : 1,048 m au-dela du parement, 0,85 m sur le trottoir, et un about de poutre claire se voyait depuis la rue au-dessus du linteau. Quatre repetitions ici ; la cinquieme est declaree a part, arretee au parement.\nA noter, mesure par l'historien sur salle.obj : AUCUNE poutre de plafond n'existe dans le modele de 2020. Les seize materiaux nommes poutre* y servent des cadres d'affiche et une cloison. Ces poutres sont une invention de la reconstruction — bonne pour le bati, mais qu'on ne peut pas justifier par la fidelite.",
       "name": "poutre",
       "at": [
         0.0,
@@ -2256,7 +2339,7 @@
       "material": "poutre",
       "chamfer": 0.01,
       "repeat": {
-        "count": 5,
+        "count": 4,
         "step": [
           0.0,
           0.0,
@@ -2264,6 +2347,14 @@
         ]
       },
       "_": "19,30 m : la portée réelle de la salle. Elle en faisait 22,20 et traversait les deux murs de 1,45 m — une taille non redimensionnée quand la salle a rétréci."
+    },
+    {
+      "_": "La cinquieme, arretee au parement du pan coupe.",
+      "name": "poutre_5",
+      "at": [-0.74, 2.7, 4.8],
+      "size": [17.82, 0.2, 0.42],
+      "material": "poutre",
+      "chamfer": 0.01
     },
     {
       "name": "estrade",
@@ -2912,6 +3003,7 @@
     },
     {
       "name": "billard_billes",
+      "_": "Trois billes posees, pas rangees en triangle : une partie interrompue, pas une table de demonstration. Elles etaient toutes les trois BLANCHES (SPEC-ATMOSPHERE §1.11) ; elles prennent trois teintes de jeu — la blanche, la bleue, la rouge — sur des materiaux qui existaient deja. Les trois positions sont recalculees pour degager la queue : la plus proche est a 14 cm de son axe, pour 4,5 cm de somme des rayons.",
       "at": [
         -7.2,
         0.0,
@@ -2919,45 +3011,58 @@
       ],
       "yaw": 12.0,
       "parts": [
-        {
-          "_": "Trois billes posées, pas rangées en triangle : une partie interrompue, pas une table de démonstration.",
-          "type": "sphere",
-          "material": "billard_bille",
-          "at": [
-            -0.42,
-            0.791,
-            0.18
-          ],
-          "radius": 0.029,
-          "sides": 12,
-          "rings": 7
-        },
-        {
-          "type": "sphere",
-          "material": "billard_bille",
-          "at": [
-            0.31,
-            0.791,
-            -0.24
-          ],
-          "radius": 0.029,
-          "sides": 12,
-          "rings": 7
-        },
-        {
-          "type": "sphere",
-          "material": "billard_bille",
-          "at": [
-            0.58,
-            0.791,
-            0.09
-          ],
-          "radius": 0.029,
-          "sides": 12,
-          "rings": 7
-        }
+        { "_": "la blanche, celle qu'on joue", "type": "sphere", "material": "billard_bille", "at": [-0.60, 0.786, -0.15], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "bleu", "at": [-0.30, 0.786, 0.38], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "bouton_rouge", "at": [-0.05, 0.786, -0.05], "radius": 0.029, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "billard_triangle",
+      "_atmo": "SPEC-ATMOSPHERE poste 24 (§1.11) : « trois billes blanches sans numero ni triangle ». Le triangle est au point de mouche, a +0,47 du centre : trois barres de bois autour de six billes en pyramide, la noire au coeur. Les billes ne portent pas de CHIFFRE — il faudrait une planche par numero, donc une texture par bille — mais elles portent chacune leur couleur de jeu, ce qui est ce qu'on lit d'une bille a plus d'un metre. Le pas de 5,02 cm entre rangees est 0,029 x racine(3) : c'est l'empilement compact de spheres de 29 mm, pas une valeur choisie.",
+      "at": [
+        -7.2,
+        0.0,
+        -1.6
       ],
-      "_": "Trois billes posees, pas rangees en triangle : une partie interrompue, pas une table de demonstration."
+      "yaw": 12.0,
+      "parts": [
+        { "_": "les trois barres du triangle, posees sur le drap (0,784) — a 0,787, trois millimetres au-dessus : a la cote exacte du drap leurs sommets bas comptent DANS le solide de la table et roomgen arrete le build", "type": "box", "material": "billard_bois", "at": [0.4725, 0.787, 0.05], "yaw": -34.6, "size": [0.19, 0.022, 0.014], "chamfer": 0.003 },
+        { "type": "box", "material": "billard_bois", "at": [0.4725, 0.787, -0.05], "yaw": 34.6, "size": [0.19, 0.022, 0.014], "chamfer": 0.003 },
+        { "type": "box", "material": "billard_bois", "at": [0.560, 0.787, 0.0], "yaw": 90.0, "size": [0.24, 0.022, 0.014], "chamfer": 0.003 },
+        { "_": "la pointe", "type": "sphere", "material": "jaune", "at": [0.418, 0.786, 0.0], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "bouton_jaune", "at": [0.468, 0.786, 0.029], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "_": "la noire au coeur, comme au jeu", "type": "sphere", "material": "borne_noir", "at": [0.468, 0.786, -0.029], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "bouton_rouge", "at": [0.518, 0.786, 0.0], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "bleu", "at": [0.518, 0.786, 0.058], "radius": 0.029, "sides": 12, "rings": 7 },
+        { "type": "sphere", "material": "billard_bille", "at": [0.518, 0.786, -0.058], "radius": 0.029, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "billard_craie",
+      "_atmo": "SPEC-ATMOSPHERE poste 24. Le cube de craie de 2020 (`bleu.001`), pose sur la bande : y 0,848, c'est-a-dire le POINT LE PLUS HAUT du modele de table — rien n'est donc enfonce dedans. A x local +0,80, z +0,66, il est sur le bois de la bande et non sur le drap (demi-largeur du drap 0,55, de la table 0,764).",
+      "at": [
+        -7.2,
+        0.0,
+        -1.6
+      ],
+      "yaw": 12.0,
+      "parts": [
+        { "type": "box", "material": "billard_craie", "at": [0.80, 0.848, 0.66], "yaw": 18.0, "size": [0.036, 0.023, 0.034], "chamfer": 0.002 }
+      ]
+    },
+    {
+      "name": "billard_queue",
+      "_atmo": "SPEC-ATMOSPHERE poste 24. La queue, posee EN TRAVERS DU DRAP : c'est le signe d'une partie interrompue, et c'est ce que le §1.11 reclame. Un cone de 1,449 m, 32 mm au talon et 15 mm en fleche, plus la virole claire au bout. Son axe est a 0,803 : le drap est a 0,784 et le rayon au talon vaut 0,016, elle affleure donc a 3 mm — a 0,800 pile, ses sommets bas comptaient DANS le solide de la table et roomgen arretait le build. Le prop est declare a part avec son propre yaw parce qu'un morceau ne peut pas cumuler proprement yaw et pitch ; son `at` est le TALON et le `pitch 90` couche le cylindre le long du +z local.",
+      "at": [
+        -8.084,
+        0.0,
+        -0.952
+      ],
+      "yaw": 122.2,
+      "parts": [
+        { "type": "cylinder", "material": "billard_queue", "at": [0.0, 0.803, 0.0], "radius": 0.016, "radiusTop": 0.0075, "height": 1.429, "sides": 10, "pitch": 90.0 },
+        { "_": "la virole", "type": "cylinder", "material": "billard_repere", "at": [0.0, 0.803, 1.429], "radius": 0.0078, "height": 0.02, "sides": 10, "pitch": 90.0 }
+      ]
     },
     {
       "name": "bar_accueil",
@@ -3757,8 +3862,9 @@
     },
     {
       "name": "affiche_sud_b",
+      "_atmo": "De x 1,20 a 2,40 : le tableau de la semaine (SPEC-ATMOSPHERE §2.3 E) occupe x -1,26..1,26 sur ce mur, et l'affiche tombait DANS son cadre. Elle reste entre le tableau et `affiche_sud_c` (x 4,27..4,93), au-dessus du banc sud-est.",
       "at": [
-        1.2,
+        2.4,
         1.53,
         -7.08
       ],
@@ -3783,6 +3889,7 @@
     },
     {
       "name": "affiche_sud_c",
+      "_atmo": "`affiche_5` -> `affiche_2`. Le §2.3 J donne `affiche_5` a `affiche_ouest_b` pour casser la paire du mur ouest (§1.6) ; applique tel quel, il met deux fois la meme planche dans la salle et laisse `poster_2.png` sur AUCUNE surface — roomgen ne le voit pas, parce que le materiau reste declare. Le mot echange ici rend le compte exact : chaque affiche est employee une fois, et `affiche_1` et `affiche_2` ne sont plus sur le meme mur, ce qui etait tout le motif du §1.6.",
       "at": [
         4.6,
         1.36,
@@ -3792,7 +3899,7 @@
       "parts": [
         {
           "type": "panel",
-          "material": "affiche_5",
+          "material": "affiche_2",
           "at": [
             0.0,
             0.0,
@@ -3879,9 +3986,10 @@
       ]
     },
     {
+      "_audit": "AUDIT P-23. Il debordait de 0,350 m au-dela du parement interieur, soit 15 cm dehors. Rentre de 20 cm.",
       "name": "tapis_technique",
       "at": [
-        -8.2,
+        -8.0,
         0.0,
         1.80
       ],
@@ -4204,6 +4312,17 @@
       ]
     },
     {
+      "name": "tableau_semaine",
+      "_atmo": "SPEC-ATMOSPHERE poste 16 (§2.3 E). Le mur sud est un aplat de 19,3 x 2,4 m sans un objet ; DESIGN-SALLE §4.2 demande une deuxieme lecture des scores. Elle se lit depuis la rangee sud de l'ilot (6,6 m) et depuis l'entree par la trouee centrale.\nECART ASSUME SUR LA PLANCHE. La specification demande une image dessinee par `marqueeart --titre=\"MEILLEURS DE LA SEMAINE\"`, donc une texture de plus dans `assets/CMakeLists.txt` — hors du mandat de ce lot. Le tableau porte donc `classement_fond`, le materiau que le moteur PILOTE (cle `scoreboard` en tete de ce fichier, `room_hud_draw_scoreboard`) : la salle a deja un tableau vivant au bar, et un second panneau du meme materiau montre le meme classement EN DIRECT, sans un octet ajoute. C'est litteralement la « deuxieme lecture des scores » demandee, et elle bouge.\nCotes : la planche fait 2,40 x 1,20, soit le 2:1 exact de la cible de rendu (640 x 320) — la cote de la spec, 2,20 x 0,90, aurait etire le lettrage de 22 %. Cadre de 0,92 a 2,24 m, bandeau lumineux a 2,29, sous la cimaise (2,42).",
+      "at": [0.00, 1.58, -7.04],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cadre, en retrait. Sa face arriere touche le parement du mur sud (z -7,10), sa face avant sort a -7,04.", "type": "box", "material": "borne_cadre", "at": [0.00, -0.66, -0.03], "size": [2.52, 1.32, 0.06], "chamfer": 0.008 },
+        { "_": "la planche. Un panel est centre sur son at, et sa normale est en +Z local : a yaw 0 elle regarde la salle.", "type": "panel", "material": "classement_fond", "at": [0.00, 0.00, 0.002], "size": [2.40, 1.20] },
+        { "type": "panel", "material": "panneau_lumineux", "at": [0.00, 0.71, 0.004], "size": [2.50, 0.10] }
+      ]
+    },
+    {
       "name": "monnayeur",
       "_": "SPEC-ATMOSPHERE §2.3 B, poste 7. Le comptoir occupe x -5,5..0,3 et z 5,85..6,75 ; le monnayeur se pose dans son prolongement, a 0,65 m de son extremite est, dos au mur nord (z = 7,2 en ligne mediane, parement a 7,10 ; le corps s'arrete a 6,85). En sortant du sas — l'ouverture est en x = 4,6, z de 4,6 a 6,0 — c'est le premier objet eclaire du champ, a 3,4 m du bord de la trouee. On entre, on prend ses jetons, on joue. La bande `panneau_lumineux` est ce qui le rend trouvable de l'autre bout de la salle : c'est le seul materiau emissif du decor qui ne soit ni un ecran ni une dalle de plafond. La suspension du meme nom etait deja posee — elle pendait AU-DESSUS DU VIDE ; elle a enfin quelque chose a eclairer.",
       "at": [0.95, 0.0, 6.55],
@@ -4380,11 +4499,56 @@
       ],
       "yaw": 90.0,
       "pitch": 0.0,
-      "_pitch": "ZERO, et c'est le point : le tangage etait ecrit -34 a la main ici. C'etait une QUATRIEME copie du meme calcul — --play-at le fait, l'entree en partie le fait, et cette capture le recopiait fige. Le moteur pose maintenant le regard sur la dalle des qu'on arrive devant une borne, donc cette capture n'a plus rien a declarer : elle demande le mode joueur avec --pose et laisse le moteur cadrer. Si le cadrage se degrade un jour, l'image le montrera au lieu de le masquer derriere une constante recopiee.",
+      "_pitch": "ZERO, et c'est le point : le tangage etait ecrit -34 a la main ici. C'etait une QUATRIEME copie du meme calcul — --play-at le fait, l'entree en partie le fait, et cette capture le recopiait fige. Le moteur pose maintenant le regard sur la dalle des qu'on arrive devant une borne, donc cette capture n'a plus rien a declarer.\nCONSEQUENCE A CONNAITRE, et elle a ete mesuree : le moteur ne pose le regard QU'EN MODE JOUEUR. Cette capture doit donc etre prise avec --pose=idle, qui impose ce mode. Sans lui la camera reste libre a tangage nul, le marquee remplit le cadre, et 17,0 % des pixels brulent. Avec, on retombe a 7,5 %, dans la cible.\n    --view=borne              -> mediane 57,6, 17,0 %% au-dessus de 200\n    --view=borne --pose=idle  -> mediane 44,6,  7,5 %%\nC'est la lecon que main.c porte deja : une verification qui emprunte un chemin que le joueur n'emprunte pas ne verifie rien.",
       "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`."
     },
     {
+      "name": "centre",
+      "_atmo": "SPEC-ATMOSPHERE poste 25 (§2.3 L). Une vue non capturee est une vue non controlee, et les trois grands vides du hall n'en avaient aucune. Celle-ci tient le vide NORD, la bande de 4,2 m entre le comptoir et l'ilot : on est au milieu, entre les deux bancs dos a dos, et on regarde la face nord de l'ilot. La trouee centrale laisse voir, dans l'axe, l'estrade, la borne de classement et le tableau du mur sud a onze metres — les trois lectures que le §2.3 E annonce.",
+      "position": [
+        0.0,
+        1.7,
+        2.6
+      ],
+      "yaw": 270.0,
+      "pitch": -4.0
+    },
+    {
+      "name": "sud",
+      "_atmo": "Le vide SUD, la poche la plus profonde du hall. On est entre l'estrade et les bancs du mur sud, face a la rangee sud de l'ilot.",
+      "position": [
+        0.0,
+        1.7,
+        -5.4
+      ],
+      "yaw": 90.0,
+      "pitch": -3.0
+    },
+    {
+      "name": "arrivee",
+      "_atmo": "Ce qu'on voit en SORTANT DU SAS, ce que ne cadre ni `entree` (qui est dans le sas) ni `allee` (qui est deja au milieu de l'ilot). C'est la vue de recette du poste 7 : le monnayeur doit y etre, eclaire, a moins de 4 m.",
+      "position": [
+        4.2,
+        1.7,
+        5.2
+      ],
+      "yaw": 200.0,
+      "pitch": -4.0
+    },
+    {
+      "name": "travee",
+      "_atmo": "La travee OUEST, entre le bar et le billard : les trois bornes du mur ouest de trois quarts, le mur, la corniche. C'est la vue de recette des postes 15 (collisions de palette) et 19 (les neons en corniche).",
+      "position": [
+        -6.2,
+        1.7,
+        3.6
+      ],
+      "yaw": 200.0,
+      "pitch": -5.0
+    },
+    {
       "name": "orbite",
+      "_atmo": "SPEC-ATMOSPHERE poste 25 : hauteur 2,35 -> 1,72. A 2,35 m la camera etait AU-DESSUS des marquees et sous les poutres — elle ne cadrait ni les uns ni les autres, et c'est la vue dont la mediane est la plus basse des neuf (11). A 1,72 elle est a hauteur d'oeil, la seule hauteur dont on sache juger. Le rayon reste 6,5 : au-dela, le cercle sort du mur nord (z = 7,2).",
       "position": [
         0.0,
         0.0,
@@ -4392,7 +4556,7 @@
       ],
       "orbit": true,
       "radius": 6.5,
-      "height": 2.35
+      "height": 1.72
     }
   ],
   "_zones": "Les zones de réverbération. Ce qu'elles portent est ce qu'on ENTEND quand on y est : un bloc sanitaire carrelé rend, un sas étroit claque, la salle en moquette avale. Hors de toute zone, le mixage est sec — c'est le cas de l'essentiel du hall, et c'est voulu : une salle d'arcade est pleine de gens et de meubles, elle ne résonne pas.",

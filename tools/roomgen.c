@@ -1018,12 +1018,6 @@ static const rg_named_pair RG_OVERLAP_DEBT[] = {
     { "bar_accueil", "boombox",
       "AUDIT P-16 : le boombox est enfoncé de 2,3 cm dans le plateau du "
       "comptoir (109 sommets sur 2 410)" },
-    { "pilier_est_2", "table_basse",
-      "AUDIT P-18 : la table basse pénètre le pilier (58 sommets sur 62)" },
-    { "pilier_est_5", "poubelle_sas",
-      "TROUVÉ PAR CE CONTRÔLE : la poubelle est ENTIÈREMENT dans le pilier — "
-      "1 422 sommets sur 1 422, 0,046 m³ de boîtes communes. Sortie de la rue "
-      "(P-02), elle est entrée dans un poteau de béton" },
     { "bureau", "porte_entree_battant",
       "TROUVÉ PAR CE CONTRÔLE : le comptoir d'accueil occupe le débattement du "
       "battant — 36 sommets sur 144, 0,398 m³ de boîtes communes. Sorti de la "
