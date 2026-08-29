@@ -1534,7 +1534,7 @@
       "_": "Le sas. Chaud lui aussi : c'est la première lumière du jeu, elle doit donner envie d'entrer plutôt que de reculer."
     },
     {
-      "_atmo": "SPEC-ATMOSPHERE poste 18. Le poste 7 de DESIGN-SALLE visait 55 a 70 de mediane pour les WC et n'a jamais atteint que 25 : deux corrections y avaient ete appliquees ensemble et une seule etait justifiee. La portee de 3,6 divisait a elle seule l'eclairement moyen par 2,4. 4,4, intensite inchangee.",
+      "_atmo": "SPEC-ATMOSPHERE poste 18, corrige APRES mesure. Le poste 7 de DESIGN-SALLE visait 55 a 70 de mediane pour les WC et n'a jamais atteint que 25 ; le poste 18 attribuait l'ecart a la seule portee, 3,6 au lieu de 4,4, et annoncait un facteur 2,4 a intensite inchangee. Mesure : la portee seule fait passer la mediane de 19 a 20,6. C'etait la moitie du diagnostic. En sondant l'intensite : 60 donne 36,7 et 100 donne 51,5 ; 120 pose la piece dans sa cible. Un bloc sanitaire est l'endroit le PLUS eclaire d'une salle d'arcade — c'est le seul ou l'on ne joue pas.",
       "name": "plafonnier_toilettes",
       "at": [
         -7.9,
@@ -1546,7 +1546,7 @@
         0.94,
         0.86
       ],
-      "intensity": 30.0,
+      "intensity": 120.0,
       "range": 4.4,
       "radius": 0.3,
       "flicker": true,
@@ -3212,12 +3212,9 @@
       ]
     },
     {
+      "_audit": "AUDIT P-07. Meme faute que le lavabo, axes X et Z intervertis : la radio se presentait de TRANCHE au mur et sa facade regardait le sud. Sans `yaw` sur le panneau, sa normale est le +Z local, que le lacet du prop envoie sur +X — c'est-a-dire dans la salle.",
       "name": "radio_murale",
-      "at": [
-        -9.48,
-        1.53,
-        3.6
-      ],
+      "at": [-9.50, 1.53, 3.6],
       "yaw": 90.0,
       "poi": "radio",
       "anchor": [
@@ -3234,36 +3231,24 @@
             0.0,
             0.0
           ],
-          "size": [
-            0.1,
-            0.24,
-            0.4
-          ],
+          "size": [0.4, 0.24, 0.1],
           "chamfer": 0.012
         },
         {
           "type": "panel",
           "material": "radio",
-          "at": [
-            0.048,
-            0.113,
-            0.0
-          ],
+          "at": [0.0, 0.113, 0.052],
           "size": [
             0.36,
             0.22
-          ],
-          "yaw": 90
+          ]
         }
       ]
     },
     {
+      "_audit": "AUDIT P-04. Ses axes X et Z etaient INTERVERTIS : le plan de 1,40 m partait perpendiculairement au mur ouest et le TRAVERSAIT de 35 cm, donc 15 cm dans la rue. La convention de ce fichier est qu'un prop regarde son +Z local ; elle etait violee ici et sur la radio murale, et c'est le meme defaut deux fois. Le dos du meuble tombe maintenant exactement sur le parement. Cette correction en regle une SECONDE : le panneau « sol mouille » etait plante dans le meuble, et la facade reculant de -8,50 a -9,03 il degage de 34 cm.",
       "name": "lavabo_toilettes",
-      "at": [
-        -9.2,
-        0.0,
-        -4.4
-      ],
+      "at": [-9.29, 0.0, -4.4],
       "yaw": 90.0,
       "poi": "toilettes",
       "anchor": [
@@ -3280,11 +3265,7 @@
             0.0,
             0.0
           ],
-          "size": [
-            0.52,
-            0.86,
-            1.4
-          ],
+          "size": [1.4, 0.86, 0.52],
           "chamfer": 0.012
         },
         {
@@ -3295,25 +3276,15 @@
             0.815,
             0.0
           ],
-          "size": [
-            0.44,
-            1.2
-          ],
+          "size": [1.2, 0.44],
           "pitch": -90
         },
         {
           "type": "panel",
           "material": "miroir",
-          "at": [
-            0.226,
-            1.46,
-            0.0
-          ],
-          "size": [
-            1.3,
-            0.9
-          ],
-          "yaw": 90
+          "at": [0.0, 1.46, -0.259],
+          "material": "miroir",
+          "size": [1.3, 0.9]
         }
       ]
     },
@@ -3346,11 +3317,7 @@
     },
     {
       "name": "robinet_toilettes",
-      "at": [
-        -9.05,
-        0.0,
-        -4.4
-      ],
+      "at": [-9.42, 0.0, -4.4],
       "yaw": 90.0,
       "_": "Le robinet qui goutte. La goutte elle-même est une particule et un son : A8. Ici il n'y a que le col de cygne — sans lui, le lavabo est un bloc de marbre creusé.",
       "parts": [
@@ -3403,12 +3370,9 @@
       ]
     },
     {
+      "_audit": "AUDIT P-08. Il etait ENTERRE dans la cloison : quatre centimetres suffisaient a le faire disparaitre de moitie.",
       "name": "panneau_restrooms",
-      "at": [
-        -7.85,
-        1.72,
-        -3.52
-      ],
+      "at": [-7.85, 1.72, -3.48],
       "yaw": 0.0,
       "_": "Sur la cloison, côté salle, à gauche de la baie. Un panel et non une boîte : une boîte aurait porté le même panneau sur ses six faces, à l'envers sur trois.",
       "parts": [
@@ -3506,6 +3470,7 @@
       "_": "Les joues et la cuvette seulement : les portes sont déclarées à part, parce que `repeat` les rendrait identiques et que c'est exactement ce qu'on ne veut pas."
     },
     {
+      "_audit": "AUDIT P-06. Les vantaux etaient SUSPENDUS a 1,02 m du sol et depassaient leurs joues de 77 cm. 15 cm de jeu sous la porte est la cote d'une cabine sanitaire courante, et le vantail reste alors sous les joues.",
       "name": "porte_cabine_1",
       "at": [
         -8.14,
@@ -3518,11 +3483,7 @@
         {
           "type": "box",
           "material": "cabine_panneau",
-          "at": [
-            0.44,
-            1.06,
-            0.0
-          ],
+          "at": [0.44, 0.15, 0.0],
           "size": [
             0.88,
             1.72,
@@ -3560,11 +3521,7 @@
         {
           "type": "box",
           "material": "cabine_panneau",
-          "at": [
-            0.44,
-            1.06,
-            0.0
-          ],
+          "at": [0.44, 0.15, 0.0],
           "size": [
             0.88,
             1.72,
@@ -3633,12 +3590,9 @@
       ]
     },
     {
+      "_audit": "AUDIT P-15. Il etait aux SEPT DIXIEMES dans le mur plein : on ne voyait de la sortie de secours qu'une tranche verte. Ramene sur le parement interieur, 12 cm en avant de la ligne mediane le long de la normale rentrante, et remonte a 2,42 pour s'inscrire entierement au-dessus du linteau — comme un vrai bloc de secours.",
       "name": "panneau_sortie",
-      "at": [
-        7.91,
-        2.34,
-        5.42
-      ],
+      "at": [7.82, 2.42, 5.34],
       "yaw": 225.0,
       "parts": [
         {
