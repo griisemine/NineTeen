@@ -153,7 +153,7 @@ moi, pas par celui qui a fait le travail.
 |---|---|---|---|
 | L1 | L'écran, un seul rendu | les 19 dalles passent par le tube ; capture attract et capture en jeu indiscernables en traitement | **fermé** (88fd75c) |
 | L2 | Le panneau de commande | aucun bouton ne franchit l'axe ; layout de matériel réel ; le second bouton du démineur existe | **fermé** (428511f) |
-| L3 | Les flancs et le liseré | plus de trame matelassée sur de la tôle ; le T-molding cesse de prendre l'œil avant le caisson | ouvert |
+| L3 | Les flancs et le liseré | plus de trame matelassée sur de la tôle ; le T-molding cesse de prendre l'œil avant le caisson | **fermé** (L3) |
 | L4 | Les bras | bras + avant-bras + main, coude et poignet réels ; la main se REFERME sur la boule | **fermé** (a97cbfa) |
 | L5 | L'ergonomie | l'écran est DANS le cadre quand on se plante devant une borne | **fermé** (2bd97c4) |
 | L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre ; contrôle au build | ouvert |
@@ -161,9 +161,9 @@ moi, pas par celui qui a fait le travail.
 | L8 | La recette finale | les 8 jeux, le réseau, le duel, les 35 tests, et une passe de jeu réelle | ouvert |
 | L9 | Les écrans vivants | les dix-huit bornes non jouées jouent leur propre partie | **fermé** (a26f95b) |
 | L10 | L'écran incrusté | le meuble est CREUSÉ ; on voit les parois du creux autour de l'image | **fermé** (428511f) |
-| L11 | L'enseigne au néon | « NINETEEN » est un vrai néon, pas une image peinte | ouvert |
-| L12 | L'écran plat du bar | il affiche le classement et les scores en direct, au lieu d'être noir | ouvert |
-| L13 | Les objets accrochés | rien ne flotte : la lampe pend du plafond, pas dans le vide | ouvert |
+| L11 | L'enseigne au néon | « NINETEEN » est un vrai néon, pas une image peinte | **fermé** (741856e) |
+| L12 | L'écran plat du bar | il affiche le classement et les scores en direct, au lieu d'être noir | **fermé** (6ef43f2) |
+| L13 | Les objets accrochés | rien ne flotte : la lampe pend du plafond, pas dans le vide | **fermé** (50fbfe6) |
 
 ## Qui contrôle quoi
 
@@ -255,3 +255,24 @@ l'horizon. **Elle était huit dixièmes de degré sous le bord bas du cadre.** L
 défaut n'était dans aucune cote du meuble — toutes sont dans les plages du
 matériel réel — mais dans le fait que le moteur ne posait le regard qu'à
 l'entrée en partie, un instant sur cinq.
+
+
+## L'atmosphère, poste par poste
+
+`docs/SPEC-ATMOSPHERE.md` classe vingt-cinq postes par effet décroissant. État :
+
+| # | poste | état | mesure |
+|---|---|---|---|
+| 1 | six suspensions basses | en cours | — |
+| 2 | bancs, baby-foot, mange-debout, vitrine | en cours | — |
+| 3 | le plafond cesse d'être une pergola | **fait** | teinte 0,84 → 0,30, trame 0,6 → 1,2 m |
+| 4 | le liseré cesse d'être magenta | **fait** | saturation 0,93 → 0,22 |
+| 5 | le sol arrête de faire la lumière | **fait** | émissif 0,25 → 0,10, motif 0,60 → 0,40 m |
+| 6 | les flancs portent la couleur de leur caisson | **fait** | saturation 0,42 → 0,70 ; losange 18,75 → 6,6 cm |
+| 10 | les écrans portent à 3,4 m | **fait** | couverture 70,2 → 88,7 m² |
+| 12 | le tableau du bar | **fait**, autrement | rendu VIVANT plutôt que repeint — voir L12 |
+
+Médiane de luminance de `--view=allee`, mesurée à chaque étape avec
+`scratchpad/lum.py` : 53,5 au départ, 54,7 après le plafond, 49,6 après les
+flancs, **50,6** après la portée des écrans. Le critère du designer était
+« ≥ 42 ».
