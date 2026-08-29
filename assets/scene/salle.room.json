@@ -4575,7 +4575,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             0.87,
@@ -4586,11 +4586,12 @@
             0.04,
             0.07
           ],
-          "chamfer": 0.008
+          "chamfer": 0.008,
+          "_": "`chasse` porte `toilette_push.jpg` : la PLAQUE DE CHASSE de 2020, avec le mot PUSH dessus. Sur la plaque d'une cabine — un `panel`, une seule face — c'est juste. Employee comme metal generique, elle ecrit PUSH sur un robinet, et sur une BOITE elle l'ecrit sur les six faces, a l'envers sur trois : la poignee de la porte des toilettes affichait le mot en miroir, a hauteur d'oeil, sur la porte qu'on ouvre. C'est la lecon deja ecrite chez `panneau_restrooms` — une boite aurait porte le meme panneau sur ses six faces. Ces pieces-la prennent donc du chrome ; la plaque de chasse ne reste que la ou elle dit quelque chose."
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             1.0,
@@ -4605,7 +4606,7 @@
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             1.1,
@@ -4633,7 +4634,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             0.87,
@@ -4648,7 +4649,7 @@
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             1.0,
@@ -4663,7 +4664,7 @@
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.0,
             1.1,
@@ -4873,7 +4874,7 @@
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.8,
             1.02,
@@ -4915,7 +4916,7 @@
         },
         {
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             0.8,
             1.02,
@@ -4959,7 +4960,7 @@
         {
           "_": "la poignee encastree, cote lavabos",
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             -0.03,
             1.05,
@@ -5003,7 +5004,7 @@
         {
           "_": "la poignee encastree, cote lavabos — au sud, la porte glissant vers le sud",
           "type": "box",
-          "material": "chasse",
+          "material": "borne_chrome",
           "at": [
             -0.03,
             1.05,
