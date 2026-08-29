@@ -310,15 +310,29 @@ static void test_walk_swing_follows_distance(void)
           "opposition exacte : %.4f et %.4f devraient s'annuler", (double)dr, (double)dl);
 }
 
-/* Le bout du doigt d'un segment de main : son origine est le POIGNET, et la main
- * fait 10 cm. Le maillage est modelé le long de −Z local, donc le bout est
- * l'origine moins la troisième colonne, mise à l'échelle par la longueur. */
+/*
+ * Le bout du doigt d'un segment de main, demandé AU MAILLAGE.
+ *
+ * Il se calculait ici : « l'origine moins la troisième colonne, mise à
+ * l'échelle par la longueur », c'est-à-dire le poignet prolongé d'une longueur
+ * de main le long de l'axe. C'était exact tant que la main était plate et ses
+ * doigts droits. Elle est maintenant modélisée fléchie, et le bout du majeur
+ * est à six centimètres et demi côté paume de cet axe : la formule mesurait un
+ * point de l'espace où il n'y a plus de doigt.
+ *
+ * Un test qui mesure au mauvais endroit est pire qu'un test absent — il a
+ * échoué ici en accusant l'IK, dont ce n'était pas la faute. On demande donc au
+ * moteur où est son bout de doigt, ce qui laisse au test le seul rôle qu'il
+ * doit avoir : vérifier que la pose l'amène sur la commande.
+ */
 static ns_v3 fingertip(const ns_viewmodel_pose *pose, int hand)
 {
     const ns_m4 *h = &pose->segment[hand];
-    const ns_v3 wrist = ns_v3_make(h->m[3][0], h->m[3][1], h->m[3][2]);
-    const ns_v3 dir = ns_v3_make(-h->m[2][0], -h->m[2][1], -h->m[2][2]);
-    return ns_v3_add(wrist, ns_v3_scale(dir, pose->length[hand]));
+    const ns_v3 p = ns_viewmodel_fingertip(hand == NS_VM_HAND_R);
+    return ns_v3_make(
+        h->m[0][0] * p.x + h->m[1][0] * p.y + h->m[2][0] * p.z + h->m[3][0],
+        h->m[0][1] * p.x + h->m[1][1] * p.y + h->m[2][1] * p.z + h->m[3][1],
+        h->m[0][2] * p.x + h->m[1][2] * p.y + h->m[2][2] * p.z + h->m[3][2]);
 }
 
 static void test_sequence(void)
@@ -375,17 +389,12 @@ static void test_sequence(void)
         }
 
         /*
-         * On mesure le BOUT DU DOIGT, pas le poignet. La matrice du segment
-         * `HAND` a pour origine le poignet, et la main fait 10 cm : mesurer là
+         * On mesure le BOUT DU DOIGT, pas le poignet : mesurer au poignet
          * reviendrait à exiger que le poignet touche le bouton, c'est-à-dire à
-         * demander une pose fausse. Le segment est modelé le long de −Z local,
-         * donc le bout est à l'origine moins la troisième colonne, mise à
-         * l'échelle par la longueur.
+         * demander une pose fausse. Et on le demande au maillage plutôt que de
+         * le recalculer — voir `fingertip()`.
          */
-        const ns_m4 *h = &pose.segment[NS_VM_HAND_R];
-        const ns_v3 wrist = ns_v3_make(h->m[3][0], h->m[3][1], h->m[3][2]);
-        const ns_v3 dir = ns_v3_make(-h->m[2][0], -h->m[2][1], -h->m[2][2]);
-        const ns_v3 tip = ns_v3_add(wrist, ns_v3_scale(dir, pose.length[NS_VM_HAND_R]));
+        const ns_v3 tip = fingertip(&pose, NS_VM_HAND_R);
         if (vm.state == ROOM_VM_INSERT) {
             closest_coin = ns_minf(closest_coin, ns_v3_dist(tip, cab.coin_slot));
         }

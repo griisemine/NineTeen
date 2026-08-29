@@ -26,6 +26,30 @@
 #include "ns_math.h"
 #include "ns_scene.h"
 
+/*
+ * Les LONGUEURS des trois segments d'un bras, en mètres, et pourquoi elles sont
+ * ici plutôt que dans `room/`.
+ *
+ * Le maillage est modélisé sur une longueur de 1 le long de −Z, et c'est la
+ * pose qui porte la vraie longueur (`length[]`, appliquée par `viewmodel.vert`).
+ * Tant qu'un membre était un tube droit, la convention suffisait : les normales
+ * d'un prisme sont radiales, un étirement en Z ne les touche pas.
+ *
+ * Une main à doigts REPLIÉS n'a pas cette chance. Ses normales ont une
+ * composante en Z, et un étirement les fausserait — il faudrait une inverse
+ * transposée que le shader n'a pas, et qu'il n'a pas pour de bonnes raisons.
+ *
+ * La sortie est de modéliser en MILLIMÈTRES puis de diviser Z par la longueur
+ * du segment : le shader remultiplie par la même valeur, le produit est
+ * l'identité, et les normales traversent intactes. Cela ne tient QUE si les
+ * deux valeurs sont la même. Elles le sont parce qu'elles sont ici :
+ * `room_viewmodel.c` définit ses `VM_*` à partir de ces constantes, et un
+ * désaccord ne peut plus s'installer par distraction.
+ */
+#define NS_VM_UPPER_M  0.320f    /* épaule -> coude */
+#define NS_VM_FORE_M   0.270f    /* coude -> poignet */
+#define NS_VM_HAND_M   0.135f    /* poignet -> bout du majeur, DOIGTS REPLIÉS */
+
 typedef enum ns_viewmodel_segment {
     NS_VM_SLEEVE_L = 0,   /* manche : de l'épaule au coude */
     NS_VM_FOREARM_L,      /* avant-bras : du coude au poignet */
@@ -54,6 +78,18 @@ typedef struct ns_viewmodel_pose {
      * défaut du moteur. */
     float fov_y_degrees;
 } ns_viewmodel_pose;
+
+/*
+ * Le bout du MAJEUR dans le repère de la main, doigts repliés — c'est-à-dire le
+ * point que l'IK doit amener sur le bouton, sur la fente ou sur la boule.
+ *
+ * Il est CALCULÉ à partir des cotes du maillage, jamais recopié. La main est
+ * modélisée fléchie : son bout de doigt n'est plus sur l'axe du segment mais
+ * six centimètres côté paume, et une pose qui viserait « le poignet plus une
+ * longueur de main » manquerait sa cible d'autant. C'est exactement ce qui est
+ * arrivé la première fois — les deux mains flottaient sous les commandes.
+ */
+ns_v3 ns_viewmodel_fingertip(bool right);
 
 /* Poser une pose neutre : rien de dessiné. Un `SDL_zero` ferait la même chose,
  * mais l'appelant ne doit pas avoir à le savoir. */

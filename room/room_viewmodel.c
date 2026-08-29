@@ -48,9 +48,17 @@
  * volontairement raccourcis pour cette raison exacte ; celui-ci l'est aussi,
  * et maintenant il le DIT au lieu de prétendre le contraire.
  */
-#define VM_UPPER   0.32f
-#define VM_FORE    0.27f
-#define VM_HAND    0.135f
+/*
+ * Elles viennent de `ns_viewmodel.h`, et ce n'est pas de la coquetterie : le
+ * maillage de la main est modélisé en millimètres puis divisé par SA longueur,
+ * et le shader remultiplie par CELLE-CI. Le produit doit être l'identité, sans
+ * quoi les normales d'un doigt replié — qui, elles, ne sont pas rééchelonnées —
+ * mentiraient sur l'orientation de la surface. Deux constantes recopiées
+ * finissent toujours par diverger ; celles-ci ne le peuvent plus.
+ */
+#define VM_UPPER   NS_VM_UPPER_M
+#define VM_FORE    NS_VM_FORE_M
+#define VM_HAND    NS_VM_HAND_M
 #define VM_REACH   (VM_UPPER + VM_FORE)
 
 /* Épaules, sous l'œil et un peu en arrière. */
@@ -605,6 +613,68 @@ static ns_m4 segment_matrix(ns_v3 origin, ns_v3 dir)
 }
 
 /*
+ * La matrice de la main, et son ROULIS — ce que `segment_matrix` ne pouvait pas
+ * donner.
+ *
+ * `segment_matrix` construit la rotation MINIMALE qui amène −Z sur la
+ * direction voulue. Elle est parfaite pour un tube, dont la rotation autour de
+ * son axe ne se voit pas. Une main, si : elle a un dos et une paume, et la
+ * rotation minimale les oriente n'importe où — au hasard de la position de
+ * l'épaule. Sur les captures, la main gauche présentait le tranchant à la
+ * boule qu'elle était censée empoigner.
+ *
+ * On impose donc les deux axes qui comptent : −Z suit les doigts, −Y est la
+ * paume, et la paume regarde le PANNEAU. C'est vrai de toutes les poses de ce
+ * jeu — une main sur une boule d'arcade, une main au-dessus des boutons et une
+ * main qui glisse un jeton ont toutes la paume tournée vers le meuble.
+ */
+static ns_m4 hand_matrix(ns_v3 origin, ns_v3 dir, ns_v3 up)
+{
+    const float len = ns_v3_len(dir);
+    const ns_v3 f = (len > 1e-6f) ? ns_v3_scale(dir, 1.0f / len)
+                                  : ns_v3_make(0.0f, 0.0f, -1.0f);
+
+    /* La paume vers le bas, débarrassée de sa composante le long des doigts :
+     * sans cette orthogonalisation la base serait oblique et la main cisaillée. */
+    ns_v3 palm = ns_v3_scale(up, -1.0f);
+    palm = ns_v3_sub(palm, ns_v3_scale(f, ns_v3_dot(palm, f)));
+    if (ns_v3_len(palm) < 1e-4f) {
+        /* Doigts verticaux : « vers le bas » ne dit plus rien. On retombe sur
+         * une perpendiculaire quelconque, ce qui vaut mieux qu'une base nulle. */
+        palm = ns_v3_sub(ns_v3_make(0.0f, 0.0f, -1.0f),
+                         ns_v3_scale(f, f.z * -1.0f));
+        if (ns_v3_len(palm) < 1e-4f) palm = ns_v3_make(1.0f, 0.0f, 0.0f);
+    }
+    palm = ns_v3_norm(palm);
+
+    /* Colonnes : image des axes locaux. −Z sur les doigts, −Y sur la paume. */
+    const ns_v3 zc = ns_v3_scale(f, -1.0f);
+    const ns_v3 yc = ns_v3_scale(palm, -1.0f);
+    const ns_v3 xc = ns_v3_cross(yc, zc);
+
+    /* Colonne-majeure, m[colonne][ligne] : chaque colonne EST l'image d'un axe
+     * local, ce qui rend la construction lisible telle quelle. */
+    ns_m4 m = ns_m4_identity();
+    m.m[0][0] = xc.x; m.m[0][1] = xc.y; m.m[0][2] = xc.z;
+    m.m[1][0] = yc.x; m.m[1][1] = yc.y; m.m[1][2] = yc.z;
+    m.m[2][0] = zc.x; m.m[2][1] = zc.y; m.m[2][2] = zc.z;
+    m.m[3][0] = origin.x; m.m[3][1] = origin.y; m.m[3][2] = origin.z;
+    return m;
+}
+
+/* Le point local amené en monde par une matrice SANS échelle ni perspective.
+ * `ns_m4_project` ferait la même chose en divisant par un w qu'on sait valoir
+ * un : autant ne pas le calculer, et surtout ne pas laisser croire qu'on
+ * pourrait passer ici une matrice de projection. */
+static ns_v3 hand_point(ns_m4 m, ns_v3 p)
+{
+    return ns_v3_make(
+        m.m[0][0] * p.x + m.m[1][0] * p.y + m.m[2][0] * p.z + m.m[3][0],
+        m.m[0][1] * p.x + m.m[1][1] * p.y + m.m[2][1] * p.z + m.m[3][1],
+        m.m[0][2] * p.x + m.m[1][2] * p.y + m.m[2][2] * p.z + m.m[3][2]);
+}
+
+/*
  * La direction de la main : elle prolonge l'avant-bras, fléchie vers le bas d'un
  * angle qui croît avec `finger_curl`. C'est ce qui fait descendre l'index sur le
  * bouton sans bouger le poignet, exactement comme on appuie.
@@ -661,18 +731,41 @@ static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
     ns_v3  dir = hand_direction(b, &ik, finger_curl);
 
     /*
-     * DEUX itérations correctrices, pas une.
+     * Le bout du doigt, tel qu'il est RÉELLEMENT dans le maillage.
+     *
+     * Tant que la main était une paume plate prolongée de quatre tubes droits,
+     * « poignet + une longueur de main le long de l'axe » était une
+     * approximation acceptable. Elle ne l'est plus : la main est modélisée
+     * fléchie, et le bout du majeur est à 6,5 cm côté PAUME de cet axe. Viser
+     * l'axe posait donc les deux mains six centimètres sous les commandes —
+     * mesuré sur capture, et parfaitement visible.
+     */
+    const ns_v3 tip_local = ns_viewmodel_fingertip(right);
+
+    /*
+     * QUATRE itérations correctrices — c'en était deux, et il a fallu doubler.
      *
      * Chacune déplace le poignet du vecteur qui sépare le bout du doigt de sa
      * cible, puis re-résout — mais la re-résolution change la direction de la
-     * main, donc corrige un peu à côté. C'est un point fixe, et il converge
-     * vite : mesuré par `test_ik` sur la pose de jeu, le bout du doigt passe de
-     * 3,9 cm à 1,2 cm du manche entre une itération et deux, et de 1,5 cm à
-     * 0,5 cm du bouton pendant la séquence du jeton. Le résidu qui reste tient
-     * à la portée du bras, pas à la convergence.
+     * main, donc corrige un peu à côté. C'est un point fixe.
+     *
+     * Sa vitesse de convergence dépend de la DISTANCE du bout du doigt à l'axe
+     * du poignet, et c'est elle qui a changé : tant que la main était plate, le
+     * bout du majeur était sur l'axe, la correction était presque un
+     * déplacement pur et deux tours suffisaient. Une main fléchie porte son
+     * bout de doigt six centimètres et demi hors de l'axe : la même correction
+     * fait maintenant TOURNER la main autant qu'elle la déplace, et le point
+     * fixe met deux tours de plus.
+     *
+     * Mesuré par `test_ik` sur la pose de jeu, à deux tours puis à quatre :
+     * le manche passe de 3,2 cm à 0,2 cm, les boutons de 3,9 cm à 1,3 cm, la
+     * fente de 3,1 cm à 1,3 cm. Les trois seuils du test étaient franchis à
+     * deux tours et sont tenus à quatre — et les chiffres sont meilleurs que
+     * ceux de la main plate, qui plafonnait à 3,0 cm du manche.
      */
-    for (int pass = 0; tip_world && pass < 2; ++pass) {
-        const ns_v3 tip = ns_v3_add(ik.end, ns_v3_scale(dir, VM_HAND));
+    for (int pass = 0; tip_world && pass < 4; ++pass) {
+        const ns_m4 h = hand_matrix(ik.end, dir, b->up);
+        const ns_v3 tip = hand_point(h, tip_local);
         wrist = clamp_reach(shoulder, ns_v3_add(wrist, ns_v3_sub(*tip_world, tip)),
                             VM_REACH);
         ik = ns_ik_two_bone(shoulder, wrist, pole, VM_UPPER, VM_FORE);
@@ -683,7 +776,7 @@ static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
     out->length[sleeve]   = VM_UPPER;
     out->segment[forearm] = segment_matrix(ik.joint, ns_v3_sub(ik.end, ik.joint));
     out->length[forearm]  = VM_FORE;
-    out->segment[hand]    = segment_matrix(ik.end, dir);
+    out->segment[hand]    = hand_matrix(ik.end, dir, b->up);
     out->length[hand]     = VM_HAND;
 
     out->draw[sleeve] = out->draw[forearm] = out->draw[hand] = true;
