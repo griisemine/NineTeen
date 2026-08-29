@@ -1340,7 +1340,22 @@ static void add_cabinet_screen_lights(ns_scene *s)
          * caisson au-dessus de la dalle passe de 129 à zéro.
          */
         l->intensity = 30.0f;
-        l->range = 2.8f;
+        /*
+         * La PORTÉE, 2,8 -> 3,4, et l'intensité ne bouge pas.
+         *
+         * L'intention déclarée de la salle est que « l'essentiel de la lumière
+         * vient des DIX-NEUF ÉCRANS ». Mesurée, elle était vraie à 96 % sur un
+         * plan à 90 cm devant une dalle — et fausse partout ailleurs : nulle au
+         * point médian du sol, et au-dessus de 20 % sur seulement 70 m² des 250
+         * du hall. Les écrans éclairaient là où l'on JOUE, pas là où l'on
+         * MARCHE, et c'est entre les deux que la salle paraissait morte.
+         *
+         * 3,4 m est le rayon qui fait se recouvrir les halos de deux bornes
+         * voisines : la couverture passe de 70,2 à 88,7 m². L'intensité reste
+         * à 30 précisément pour que la borne devant laquelle on se tient ne
+         * change pas — c'est la portée qui manquait, pas la puissance.
+         */
+        l->range = 3.4f;
         l->type = NS_LIGHT_POINT;
         l->shadow_index = -1;
         /* Un écran de borne fait ~40 cm de diagonale : c'est une source étendue,
