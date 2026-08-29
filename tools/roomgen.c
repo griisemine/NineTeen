@@ -48,7 +48,7 @@
  * ce tableau et un changement de matériau de plus par lot, ce qui ne se mesure
  * pas face à 600 tirages.
  */
-#define RG_MAX_MATERIALS   128
+#define RG_MAX_MATERIALS   192   /* releve de 128 : huit modeles CC0 de plus, et les dix-neuf clones de dalle poussaient a 131 */
 #define RG_MAX_TEXTURE_DIRS 4
 #define RG_MAX_TEXTURES    128   /* relevé de 64 : les douze albédos des modèles CC0 ont fait déborder */
 #define RG_MAX_LIGHTS     128        /* NS_MAX_LIGHTS */

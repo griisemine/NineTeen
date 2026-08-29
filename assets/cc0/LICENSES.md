@@ -57,37 +57,60 @@ versionné, la normale et l'ORM sont dérivées au build par `texgen`.
 | `bar_chair_round_01` | [Poly Haven](https://polyhaven.com/a/bar_chair_round_01) | CC0 1.0 | Deux tabourets au comptoir |
 | `sofa_03` | [Poly Haven](https://polyhaven.com/a/sofa_03) | CC0 1.0 | Le canapé du coin salon |
 | `korean_fire_extinguisher_01` | [Poly Haven](https://polyhaven.com/a/korean_fire_extinguisher_01) | CC0 1.0 | L'extincteur du mur est |
+| `ArmChair_01` | [Poly Haven](https://polyhaven.com/a/ArmChair_01) | CC0 1.0 | Le fauteuil, face au canapé |
+| `CoffeeTable_01` | [Poly Haven](https://polyhaven.com/a/CoffeeTable_01) | CC0 1.0 | La table basse du salon |
+| `potted_plant_01` | [Poly Haven](https://polyhaven.com/a/potted_plant_01) | CC0 1.0 | La plante de l'angle sud-est |
+| `boombox` | [Poly Haven](https://polyhaven.com/a/boombox) | CC0 1.0 | Le poste sur le comptoir |
+| `metal_trash_can` | [Poly Haven](https://polyhaven.com/a/metal_trash_can) | CC0 1.0 | La poubelle du sas |
+| `dartboard` | [Poly Haven](https://polyhaven.com/a/dartboard) | CC0 1.0 | La cible du coin billard |
+| `WetFloorSign_01` | [Poly Haven](https://polyhaven.com/a/WetFloorSign_01) | CC0 1.0 | Devant les toilettes |
+| `industrial_caged_sconce` | [Poly Haven](https://polyhaven.com/a/industrial_caged_sconce) | CC0 1.0 | L'applique du sas |
+| `caged_hanging_light` | [Poly Haven](https://polyhaven.com/a/caged_hanging_light) | CC0 1.0 | Les suspensions du comptoir et du salon |
 
-### La borne, qui n'est PAS dans ce tableau
+### Comment ils entrent, et ce qui a été trouvé en le faisant
 
-`assets/models/borne/borne.gltf` est le seul modèle du dépôt qui ne vienne de
-nulle part : il est **construit par `assets/blender/borne.py`**, un script versionné
-et relisible, et le `.gltf` est un résultat de build qu'on regénère par
+`assets/blender/import_cc0.py` fait le passage, et ce n'est pas un import direct.
+Trois choses s'y règlent, chacune apprise sur pièce :
 
-```sh
-/Applications/Blender.app/Contents/MacOS/Blender --background \
-    --python assets/blender/borne.py -- --out assets/models/borne/borne.gltf
-```
+1. **La décimation.** Ces modèles sont taillés pour le cinéma : la plante en fait
+   176 226 triangles, la poubelle 13 960. Le décimateur de Blender les ramène au
+   budget déclaré — 1 100 à 4 200 selon l'objet — en mode COLLAPSE, jamais en
+   « non planaire » qui garderait les faces plates et détruirait les courbes,
+   c'est-à-dire l'inverse de ce qu'on veut sur un fauteuil ou une plante.
 
-Il est donc sous la licence du dépôt, sans tiers ni attribution.
+   C'est aussi ce qui règle le poste « un décimateur de maillage » que le journal
+   réclamait depuis A2b, sans avoir à en écrire un en C.
 
-La reconstruction est **déterministe** : relancer la commande ci-dessus rend des
-fichiers octet pour octet identiques (vérifié au `shasum` sur les trois). Le
-`.gltf` versionné n'est donc pas une source qu'on retoucherait à la main, c'est
-un résultat qu'on peut jeter et refaire — et un diff sur ce fichier signale un
-vrai changement de géométrie, jamais du bruit d'export.
+2. **Les VARIANTES posées côte à côte.** Poly Haven livre souvent plusieurs
+   versions d'un objet dans le même fichier — une poubelle propre et une
+   rouillée, plusieurs appliques — simplement décalées les unes des autres. Les
+   fusionner donne un objet deux fois trop large, et c'est mesuré : la poubelle
+   sortait à **1,78 m** de large et l'applique à **1,22 m**, pour des objets qui
+   en font 0,4 et 0,25. Le script ne garde donc que l'objet le plus proche de
+   l'origine et ce qui TOUCHE sa boîte — un poste de radio a un corps et des
+   haut-parleurs, et ceux-là se chevauchent.
 
-**Pourquoi il n'est pas importé.** La référence désignée est
-[free3d 5523](https://free3d.com/fr/3d-model/arcade-cabinet-5523.html). Fait
-vérifié : ce modèle **coûte 19 $ et sa licence est « Royalty Free — Editorial
-only »**. « Editorial only » interdit l'usage dans un produit : il n'est pas
-distribuable dans un jeu, **même acheté**. Ce n'est pas une préférence, c'est la
-licence. La borne est donc **reproduite d'après ses images publiques**, mesurées
-au pixel ; aucun octet du modèle payant n'entre dans ce dépôt, et les douze vues
-de référence n'y sont pas copiées non plus — elles sont sous droits.
+3. **L'échelle**, quand elle est fausse, se corrige à l'import et pas dans la
+   description de la salle : c'est le modèle qui est à la mauvaise cote, pas son
+   emploi.
 
-Coût : **4 992 triangles** par borne, contre 18 330 pour la référence. Elle est
-faite pour un rendu de catalogue ; on en met dix-neuf dans une salle temps réel.
+Et une leçon qui n'est pas du ressort du script : **un budget trop serré casse
+un objet fin**. La suspension en cage décimée à 1 100 triangles ne rendait plus
+qu'une plaque plate — les barreaux d'une cage sont des tubes minces, et il n'en
+restait rien. À 3 200 elle redevient une cage.
+
+### Ce qui n'est pas gardé
+
+Les matériaux du modèle sont **jetés** : la salle décide de la matière, comme
+pour tous les autres props. C'est ce qui garde une seule table de matériaux,
+donc un seul endroit où régler l'aspect du décor.
+
+Deux textures d'origine ont d'ailleurs été écartées après coup. La table basse
+est un meuble peint **turquoise**, et dans une salle tamisée au tungstène c'était
+le seul objet froid du champ : il tirait l'œil hors du coin salon au lieu de l'y
+garder. La teinter ne suffisait pas — un multiplicateur ne peut pas rendre chaud
+ce qui est cyan, il ne fait que l'assombrir — elle porte donc le placage de chêne
+déjà dans l'arbre, passé par les UV du modèle.
 
 ### Pourquoi si peu, alors que le mécanisme en accepte autant qu'on veut
 

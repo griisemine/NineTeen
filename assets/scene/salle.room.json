@@ -1222,6 +1222,116 @@
         1.0
       ],
       "_": "Les visees incrustees dans les chapeaux, trois par demi-longueur. Ce sont elles qui font qu'un chapeau de bois n'est pas une planche."
+    },
+    {
+      "name": "boombox_corps",
+      "texture": "boombox_diff_1k.jpg",
+      "roughness": 0.52,
+      "metallic": 0.25,
+      "fit": true,
+      "_": "Le poste sur le comptoir. Une salle d'arcade a toujours une radio derriere le bar : c'est elle qui explique la musique."
+    },
+    {
+      "name": "poubelle",
+      "texture": "metal_trash_can_diff_1k.jpg",
+      "roughness": 0.62,
+      "metallic": 0.55,
+      "fit": true,
+      "_": "La poubelle du sas. Sans elle, l'entree est un decor ; avec elle, c'est un endroit ou des gens passent."
+    },
+    {
+      "name": "cible_flechettes",
+      "texture": "dartboard_diff_1k.jpg",
+      "roughness": 0.78,
+      "metallic": 0.0,
+      "fit": true,
+      "_": "La cible de flechettes du coin billard. Le meme geste que la table : on ne vient pas ici que pour les bornes."
+    },
+    {
+      "name": "plante",
+      "texture": "potted_plant_01_diff_1k.jpg",
+      "roughness": 0.86,
+      "metallic": 0.0,
+      "fit": true,
+      "_": "La plante du coin salon. C'est l'objet qui dit « quelqu'un s'occupe de ce lieu » plus vite que n'importe quel autre."
+    },
+    {
+      "name": "fauteuil",
+      "texture": "armchair_01_diff_1k.jpg",
+      "roughness": 0.88,
+      "metallic": 0.0,
+      "fit": true,
+      "_": "Le fauteuil, en face du canape. Un canape seul est un meuble ; deux assises qui se regardent sont un coin ou l'on s'assoit."
+    },
+    {
+      "name": "table_salon",
+      "texture": "black_oak_veneer.jpg",
+      "roughness": 0.46,
+      "metallic": 0.0,
+      "fit": true,
+      "_": "La vraie table basse, au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied.\nElle ne porte PAS sa planche d'origine : le modele CC0 est un meuble peint TURQUOISE, et dans une salle tamisee au tungstene c'etait le seul objet froid du champ — il tirait l'oeil hors du coin salon au lieu de l'y garder. Teinter ne suffisait pas : un multiplicateur ne peut pas rendre chaud ce qui est cyan, il ne fait que l'assombrir. Elle prend donc le placage de chene deja dans l'arbre, passe par les UV du modele — un fil de bois est ce qu'il y a de plus tolerant a un depliage qu'on n'a pas dessine soi-meme.",
+      "baseColor": [
+        1.32,
+        1.02,
+        0.72,
+        1.0
+      ]
+    },
+    {
+      "name": "panneau_sol_mouille",
+      "texture": "wetfloorsign_01_diff_1k.jpg",
+      "roughness": 0.4,
+      "metallic": 0.0,
+      "fit": true,
+      "_": "Le panneau jaune devant les toilettes. Il raconte a lui seul qu'un lieu est entretenu et qu'il vit."
+    },
+    {
+      "name": "applique_cage",
+      "texture": "industrial_caged_sconce_diff_1k.jpg",
+      "roughness": 0.42,
+      "metallic": 0.62,
+      "fit": true,
+      "baseColor": [
+        0.58,
+        0.54,
+        0.48,
+        1.0
+      ],
+      "_": "L'applique en cage. Un luminaire INDUSTRIEL, et c'est ce que doit etre un luminaire de salle d'arcade : une cage d'acier autour d'une ampoule nue, pas un lustre. Elle porte de la lumiere dans les coins que le plafond n'atteint pas, et elle la porte VISIBLEMENT — la salle s'interdit depuis A5 d'avoir une source sans objet."
+    },
+    {
+      "name": "suspension_cage",
+      "texture": "caged_hanging_light_diff_1k.jpg",
+      "roughness": 0.42,
+      "metallic": 0.62,
+      "fit": true,
+      "baseColor": [
+        0.58,
+        0.54,
+        0.48,
+        1.0
+      ],
+      "_": "La suspension en cage, au-dessus du comptoir. Meme famille que l'applique, meme raison."
+    },
+    {
+      "name": "ampoule_cage",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.22,
+      "metallic": 0.0,
+      "uvMetres": 0.2,
+      "baseColor": [
+        1.0,
+        0.88,
+        0.68,
+        1.0
+      ],
+      "emissive": [
+        1.0,
+        0.82,
+        0.56
+      ],
+      "emissiveStrength": 2.4,
+      "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible."
     }
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
@@ -1664,6 +1774,57 @@
         1.1,
         0.55
       ]
+    },
+    {
+      "name": "applique_sas",
+      "at": [
+        8.9,
+        2.08,
+        5.97
+      ],
+      "color": [
+        1.0,
+        0.8,
+        0.56
+      ],
+      "intensity": 62.0,
+      "range": 4.2,
+      "radius": 0.1,
+      "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13)."
+    },
+    {
+      "name": "suspension_comptoir",
+      "at": [
+        -2.6,
+        1.54,
+        6.1
+      ],
+      "color": [
+        1.0,
+        0.83,
+        0.62
+      ],
+      "intensity": 74.0,
+      "range": 4.4,
+      "radius": 0.12,
+      "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13)."
+    },
+    {
+      "name": "suspension_salon",
+      "at": [
+        6.55,
+        1.62,
+        -3.9
+      ],
+      "color": [
+        1.0,
+        0.79,
+        0.54
+      ],
+      "intensity": 85.0,
+      "range": 4.2,
+      "radius": 0.11,
+      "_": "1,78 m : SOUS l'ampoule (qui occupe 1,84 a 1,92) et sous la cage. Une source posee dans son propre luminaire est integralement occultee par lui — le lancer de rayons ne connait pas les materiaux emissifs. Ce piege a coute deux fois dans ce projet."
     }
   ],
   "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
@@ -2791,38 +2952,9 @@
         -3.2
       ],
       "yaw": 8.0,
-      "parts": [
-        {
-          "type": "box",
-          "material": "bois",
-          "at": [
-            0.0,
-            0.339,
-            0.0
-          ],
-          "size": [
-            0.92,
-            0.05,
-            0.56
-          ],
-          "chamfer": 0.012
-        },
-        {
-          "type": "box",
-          "material": "borne_cadre",
-          "at": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "size": [
-            0.06,
-            0.36,
-            0.46
-          ],
-          "chamfer": 0.008
-        }
-      ]
+      "model": "models/CoffeeTable_01/CoffeeTable_01.gltf",
+      "material": "table_salon",
+      "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
     },
     {
       "name": "bureau",
@@ -3714,6 +3846,178 @@
         "extincteur_corps",
         "extincteur_verre",
         "extincteur_papier"
+      ]
+    },
+    {
+      "name": "boombox",
+      "at": [
+        -4.6,
+        1.025,
+        6.25
+      ],
+      "yaw": 196.0,
+      "model": "models/boombox/boombox.gltf",
+      "material": "boombox_corps"
+    },
+    {
+      "name": "poubelle_sas",
+      "at": [
+        7.95,
+        0.0,
+        6.05
+      ],
+      "yaw": 0.0,
+      "model": "models/metal_trash_can/metal_trash_can.gltf",
+      "material": "poubelle"
+    },
+    {
+      "name": "cible_flechettes",
+      "at": [
+        -9.52,
+        1.68,
+        -1.6
+      ],
+      "yaw": 90.0,
+      "model": "models/dartboard/dartboard.gltf",
+      "material": "cible_flechettes"
+    },
+    {
+      "name": "plante_salon",
+      "at": [
+        8.9,
+        0.0,
+        -5.6
+      ],
+      "yaw": 0.0,
+      "model": "models/potted_plant_01/potted_plant_01.gltf",
+      "material": "plante",
+      "_": "Dans l'angle sud-est, derriere le canape. Le premier placement la mettait dans la borne 17 — le controle de chevauchement de roomgen l'a dit tout de suite, avec les trois cotes du recouvrement."
+    },
+    {
+      "name": "fauteuil_salon",
+      "at": [
+        7.55,
+        0.0,
+        -4.05
+      ],
+      "yaw": 252.0,
+      "model": "models/ArmChair_01/ArmChair_01.gltf",
+      "material": "fauteuil"
+    },
+    {
+      "name": "panneau_sol_mouille",
+      "at": [
+        -8.45,
+        0.0,
+        -4.15
+      ],
+      "yaw": 62.0,
+      "model": "models/WetFloorSign_01/WetFloorSign_01.gltf",
+      "material": "panneau_sol_mouille"
+    },
+    {
+      "name": "applique_sas",
+      "at": [
+        8.9,
+        2.15,
+        6.42
+      ],
+      "yaw": 180.0,
+      "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
+      "material": "applique_cage",
+      "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur."
+    },
+    {
+      "name": "suspension_comptoir",
+      "at": [
+        -2.6,
+        1.9,
+        6.1
+      ],
+      "yaw": 0.0,
+      "model": "models/caged_hanging_light/caged_hanging_light.gltf",
+      "material": "suspension_cage",
+      "_": "Au-dessus du comptoir. Une suspension basse sur un bar est ce qui le designe comme un endroit ou l'on s'accoude."
+    },
+    {
+      "name": "ampoule_sas",
+      "at": [
+        8.9,
+        2.12,
+        6.3
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.035,
+          "sides": 10,
+          "rings": 6
+        }
+      ]
+    },
+    {
+      "name": "ampoule_comptoir",
+      "at": [
+        -2.6,
+        1.72,
+        6.1
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.04,
+          "sides": 10,
+          "rings": 6
+        }
+      ]
+    },
+    {
+      "name": "suspension_salon",
+      "at": [
+        6.55,
+        1.98,
+        -3.9
+      ],
+      "yaw": 14.0,
+      "model": "models/caged_hanging_light/caged_hanging_light.gltf",
+      "material": "suspension_cage",
+      "_": "Une SUSPENSION basse au-dessus du coin salon, et pas une applique murale.\nL'applique etait sur le mur est, a trois metres du canape : a cette distance, l'attenuation en 1/d2 divise son eclairement par neuf, et tripler son intensite ne montait la mediane du coin que de 11 a 13. Ce n'etait pas la lampe qui etait faible, c'etait la distance. Une suspension a 1,2 m au-dessus de la table basse eclaire ce qu'on veut eclairer — exactement le raisonnement de la lampe du billard."
+    },
+    {
+      "name": "ampoule_salon",
+      "at": [
+        6.55,
+        1.8,
+        -3.9
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.04,
+          "sides": 10,
+          "rings": 6
+        }
       ]
     }
   ],
