@@ -1345,6 +1345,34 @@
       ],
       "emissiveStrength": 2.4,
       "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible."
+    },
+    {
+      "name": "cabine_panneau",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.36,
+      "metallic": 0.06,
+      "uvMetres": 0.55,
+      "baseColor": [
+        0.28,
+        0.4,
+        0.42,
+        1.0
+      ],
+      "_": "Les cloisons et les portes de cabine. Elles etaient en MARBRE — le meme materiau que le plan du lavabo, parce qu'il n'y en avait qu'un pour tout le bloc. Un WC public entierement en marbre se lit comme un hall d'hotel, pas comme des toilettes de salle d'arcade. Un stratifie peint, dans le vert-bleu terne qui est la couleur canonique de la cabine publique — et qui sert au passage l'idee que les toilettes sont la seule piece FROIDE du lieu, ce que le tube fluo vert etablissait deja tout seul."
+    },
+    {
+      "name": "miroir",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.08,
+      "metallic": 0.3,
+      "uvMetres": 1.0,
+      "baseColor": [
+        1.02,
+        1.06,
+        1.12,
+        1.0
+      ],
+      "_": "Le miroir au-dessus du lavabo. C'etait une dalle de MARBRE : un rectangle blanc mat de 1,3 x 0,9 m, la plus grande surface du champ, et rien n'y disait qu'on etait cense s'y voir.\nMetallique a 0,92 et lisse a 0,045 — un vrai miroir — il sortait NOIR : les reflexions lancees ne tournent qu'au palier ultra, et un metal pur sans rien a reflechir n'a plus de diffus pour le sauver. A 0,30 de metal et 0,08 de rugosite, il garde un albedo clair ET accroche le tube fluo en un reflet net : c'est ce reflet qui fait lire un miroir, exactement comme celui de la vitre fait lire une dalle de borne."
     }
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
@@ -1922,6 +1950,60 @@
       ],
       "brightness": 0.303,
       "_": "Le comptoir, le seul endroit vraiment éclairé de la salle."
+    },
+    {
+      "name": "poussiere_salon",
+      "min": [
+        4.6,
+        0.9,
+        -6.2
+      ],
+      "max": [
+        9.4,
+        2.6,
+        -2.0
+      ],
+      "density": 0.5,
+      "drift": [
+        -0.015,
+        -0.009,
+        0.012
+      ],
+      "size": 0.014,
+      "color": [
+        1.0,
+        0.84,
+        0.62
+      ],
+      "brightness": 0.26,
+      "_": "Le coin salon. Il n'avait pas de zone parce qu'il n'avait pas de lumiere : la poussiere repond au CARRE de l'eclairement, donc semer des grains dans le noir ne donne rien. Maintenant qu'une suspension y tombe, les grains la rendent visible — c'est le faisceau qu'on voit, pas la lampe."
+    },
+    {
+      "name": "poussiere_sas",
+      "min": [
+        5.4,
+        0.9,
+        4.2
+      ],
+      "max": [
+        9.4,
+        2.6,
+        7.0
+      ],
+      "density": 0.4,
+      "drift": [
+        0.02,
+        -0.007,
+        -0.014
+      ],
+      "size": 0.013,
+      "color": [
+        1.0,
+        0.86,
+        0.66
+      ],
+      "brightness": 0.24,
+      "_": "Le sas d'entree, sous son applique. C'est la premiere chose qu'on voit du jeu, et c'est le seul endroit ou l'on regarde la salle de loin : des grains dans l'embrasure donnent sa profondeur au passage."
     }
   ],
   "_sols": "Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement.",
@@ -3223,7 +3305,7 @@
         },
         {
           "type": "panel",
-          "material": "marbre",
+          "material": "miroir",
           "at": [
             0.226,
             1.46,
@@ -3366,7 +3448,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "marbre",
+          "material": "cabine_panneau",
           "at": [
             -0.478,
             0.113,
@@ -3381,7 +3463,7 @@
         },
         {
           "type": "box",
-          "material": "marbre",
+          "material": "cabine_panneau",
           "at": [
             0.478,
             0.113,
@@ -3437,7 +3519,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "marbre",
+          "material": "cabine_panneau",
           "at": [
             0.44,
             1.06,
@@ -3479,7 +3561,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "marbre",
+          "material": "cabine_panneau",
           "at": [
             0.44,
             1.06,
