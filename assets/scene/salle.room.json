@@ -554,27 +554,27 @@
     {
       "name": "borne_noir",
       "texture": "painted_panel.jpg",
-      "roughness": 0.34,
-      "metallic": 0.15,
-      "uvMetres": 0.3,
+      "roughness": 0.68,
+      "metallic": 0.03,
+      "uvMetres": 0.16,
       "baseColor": [
-        0.055,
-        0.052,
-        0.058,
+        0.048,
+        0.046,
+        0.05,
         1.0
       ],
-      "_": "Le plastique NOIR d'une borne : bandeau de marquee, panneau haut-parleurs, cadre d'écran, porte à monnayeur. B1 avait éclairci « borne_cadre » parce qu'aucune lumière ne rend visible un caisson noir — la leçon valait pour le CAISSON, pas pour ces pièces-là. Un cadre sombre autour d'une dalle lumineuse est précisément ce qui fait lire l'écran comme un écran ; le contraste vient de la dalle, pas du cadre. 5,5 % d'albédo avec un peu de spéculaire : ça se lit noir sous la lumière chaude et ça accroche quand même un reflet, là où un noir pur resterait un trou."
+      "_": "Le plastique NOIR d'une borne : bandeau de marquee, panneau haut-parleurs, cadre d'ecran, porte a monnayeur. C'est 1,75 m2 mesures dans Blender, la DEUXIEME surface de la borne apres le caisson.\nIl etait a 0,34 de rugosite et 0,15 de metal, avec une texture pavee tous les 30 cm : a cette echelle et ce brillant, le bandeau au-dessus de l'ecran renvoyait une tole martelee luisante. Sur la reference c'est un plastique MAT, et c'est ce mat qui fait ressortir la dalle. 0,68 de rugosite, 0,03 de metal, pave a 16 cm : le grain devient un moletage de plastique injecte, il accroche encore un reflet rasant, il ne brille plus."
     },
     {
       "name": "borne_commande",
       "texture": "panneau_borne.png",
-      "roughness": 0.52,
+      "roughness": 0.58,
       "metallic": 0.05,
       "fit": true,
       "baseColor": [
-        0.78,
-        0.26,
-        0.21,
+        0.44,
+        0.13,
+        0.11,
         1.0
       ],
       "_": "La sérigraphie du panneau, dessinée par `tools/panelart`. Les dix-neuf bornes portaient le `bordeaux.jpg` de 2020 en pavage : un APLAT, sans bord, sans motif, sans repère — sur la plus grande surface que le joueur ait sous les yeux quand il joue, plus grande que la dalle. La planche est en niveaux de gris et c'est `baseColor` qui donne le rouge : la forme vient du dessin, la couleur du matériau, exactement comme le flanc. `fit` parce que le panneau est un quad à UV 0..1 : un pavage remettrait un motif qui ne connaît pas les bords de la pièce qu'il habille."
