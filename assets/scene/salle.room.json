@@ -31,11 +31,12 @@
   "_pas": "`footstep` donne la banque de sons de pas d'un matériau. Elle est DÉCLARÉE et non déduite du nom de la texture : c'est précisément l'erreur qu'`obj2gltf` faisait pour les familles de matériaux, où `sol_moquette` employant `floor.jpg` ressortait ciré. Un matériau sans `footstep` est un matériau sur lequel on ne marche pas ; le moteur retombe alors sur `moquette`.",
   "materials": [
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 5. Une moquette n'emet pas de lumiere. A 0,25 elle en emettait assez pour delaver les bas de bornes, et son motif bouclait tous les 60 cm au lieu des 40 d'une vraie moquette d'arcade. L'emissif reste NON NUL a 0,10, parce que les motifs fluo d'une moquette d'arcade sont bel et bien phosphorescents sous la lumiere noire : c'est de l'ADN de 2020, et on ne l'eteint pas.",
       "name": "sol",
       "texture": "floor.jpg",
       "roughness": 0.94,
       "metallic": 0.0,
-      "uvMetres": 2.4,
+      "uvMetres": 1.6,
       "_albedo": "Le tapis NÉON de 2020, remis. La raison invoquée pour l'avoir abandonné était arithmétiquement fausse : elle comparait des moyennes d'OCTETS sRGB (30 pour floor.jpg contre 47 pour moquette.jpg), c'est-à-dire une échelle perceptuelle, alors qu'une réflectance est une grandeur LINÉAIRE — l'erreur exacte contre laquelle texgen.c met en garde. Mesuré en linéaire : floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292. Le tapis néon est donc 34 % PLUS CLAIR que la boucle bordeaux qui l'a remplacé, et la salle a perdu son objet le plus reconnaissable pour rien. Les deux passent d'ailleurs par la dé-cuisson (ALBEDO_floor 0,11) et ressortent à moins de 1 % l'un de l'autre.",
       "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
       "footstep": "moquette",
@@ -44,7 +45,7 @@
         0.92,
         0.84
       ],
-      "emissiveStrength": 0.25,
+      "emissiveStrength": 0.10,
       "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1."
     },
     {
@@ -107,11 +108,12 @@
       "footstep": "beton"
     },
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 3. Le plafond reflechissait 3,2 fois le sol : la surface la PLUS CLAIRE de la salle, en haut du champ, sous une teinte jaune-ocre a 0,84 de rouge, avec trois trames superposees (rails a 0,60, texture a 0,60, poutres a 2,40). Ca ne se lit pas comme un plafond de salle d'arcade, ca se lit comme une pergola de jardin. Un plafond de salle d'arcade est SOMBRE, et c'est ce qui fait que les ecrans sont ce qu'on voit. La teinte tombe a 0,30 et la trame passe a 1,2 m : un pave de faux plafond, pas un caillebotis.",
       "name": "plafond",
       "texture": "plafond.jpg",
       "roughness": 0.82,
       "metallic": 0.0,
-      "uvMetres": 0.6,
+      "uvMetres": 1.2,
       "emissive": [
         1.0,
         0.94,
@@ -120,12 +122,7 @@
       "emissiveStrength": 0.0,
       "_": "Motif art déco bleu nuit à liserés dorés. Il était déjà là en 2020 et on ne l'a jamais vu : son matériau portait Ke 1 1 1, donc l'émissif écrasait l'albédo et le plafond sortait en aplat blanc. Posé ici en dalles de 0,60 m, soit une répétition par dalle — trente fois la densité de texels de l'ancien.",
       "_emissif": "0 depuis A5, et la béquille a sauté comme annoncé. Elle valait 0,30 : un plafond de 6 % d'albédo éclairé par des sources situées DANS son propre plan ne reçoit rien, le cosinus étant nul, et l'illumination indirecte ne tourne qu'au palier « ultra » (le compute la gate sur mode >= 3). Ce qui rend le plafond lisible n'est donc PAS le rebond du sol comme je l'avais écrit : c'est la diffusion volumétrique devant lui, plus l'adaptation d'exposition qui cesse de le brûler. Mesuré sur la capture `plafond`, pas supposé — et la valeur de 0,30 n'y changeait d'ailleurs presque rien, 0,30 x 6 % faisant 0,018.",
-      "baseColor": [
-        0.84,
-        0.78,
-        0.31,
-        1.0
-      ]
+      "baseColor": [0.30, 0.26, 0.13, 1.0]
     },
     {
       "name": "rail",
@@ -134,12 +131,7 @@
       "metallic": 0.3,
       "uvMetres": 0.3,
       "_": "Profilé en T du plafond. Toujours pas `noir.jpg`, qui est littéralement (0,0,0).",
-      "baseColor": [
-        0.52,
-        0.52,
-        0.54,
-        1.0
-      ]
+      "baseColor": [0.26, 0.24, 0.22, 1.0]
     },
     {
       "name": "plenum",
@@ -646,15 +638,11 @@
     },
     {
       "_": "Le JONC DE CHANT, et c'est le détail qui manquait le plus. Un T-molding est un bourrelet de plastique vif qui court sur tous les chants du caisson — l'arête avant, l'arête arrière, le pourtour du marquee, le tour du panneau de commande — et c'est à lui qu'on reconnaît une borne d'arcade avant d'en lire la couleur. La borne n'en avait aucun : elle présentait des arêtes vives de caisson peint, c'est-à-dire une armoire. Magenta comme sur la référence, très peu rugueux : le jonc est du plastique moulé brillant, et c'est son liseré de lumière qui dessine la silhouette de la borne à travers toute l'allée.",
+      "_atmo": "SPEC-ATMOSPHERE poste 4. Mesure : a 0,93 de saturation c'etait le materiau LE PLUS SATURE du decor, et il courait identique sur toute la silhouette des DIX-NEUF bornes. Un jonc de chant dessine le contour du meuble ; il n'a pas a etre la premiere chose que l'oeil trouve dans le cadre. Blanc casse a 0,22 de saturation : le contour reste, la criardise part.",
       "name": "borne_tmolding",
       "texture": "painted_panel.jpg",
-      "baseColor": [
-        0.78,
-        0.06,
-        0.55,
-        1.0
-      ],
-      "roughness": 0.22,
+      "baseColor": [0.86, 0.83, 0.78, 1.0],
+      "roughness": 0.52,
       "metallic": 0.0,
       "uvMetres": 0.1
     },
@@ -2154,15 +2142,15 @@
         16.2
       ],
       "y": 3.1,
-      "tile": 0.6,
+      "tile": 1.2,
       "railWidth": 0.038,
-      "railDrop": 0.042,
+      "railDrop": 0.016,
       "plenum": 0.38,
       "_missing": "Une dalle retirée, qui montre le vide et un câble. C'est ce qui fait lire le plafond comme un vrai plafond suspendu plutôt que comme une texture de plafond.",
       "missing": [
         [
-          28,
-          20
+          14,
+          10
         ]
       ]
     }
