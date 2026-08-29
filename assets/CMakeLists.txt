@@ -175,11 +175,54 @@ add_custom_command(
 # `marqueeart` les dessine avec la fonte DU JEU (`engine/sprite/ns_font5x7.h`).
 # Chaque teinte est celle de la laque du caisson correspondant, pour qu'une
 # borne se reconnaisse d'aussi loin par son enseigne que par sa couleur.
+set(MARQUEE_ART "")
+
+# L'ENSEIGNE DE LA SALLE, en vrai neon.
+#
+# Elle portait `nineteen_name.jpg` : une image peinte, avec ombre portee et
+# contour dessine. Le proprietaire l'a demandee « ecrite en neon ». Un neon
+# n'est pas un lettrage clair sur fond sombre — c'est un TUBE de verre nu de
+# douze millimetres devant un panneau noir, dont le halo porte loin. C'est le
+# mode `--neon` de marqueeart, ajoute pour ca.
+#
+# Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le
+# plus sature du decor, et l'enseigne doit se detacher des murs chauds, pas s'y
+# ajouter.
+set(_neon "${GEN}/sideart/nineteen_neon.png")
+add_custom_command(
+    OUTPUT  "${_neon}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND marqueeart --titre=NINETEEN --neon "--teinte=0.24,0.78,1.0"
+            --width=2048 --height=512 "${_neon}"
+    DEPENDS marqueeart
+    COMMENT "Enseigne au neon : nineteen_neon.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/scene/textures/nineteen_neon.png"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_neon}" "${GEN}/scene/textures/nineteen_neon.png"
+    DEPENDS "${_neon}"
+    VERBATIM
+)
+# `--strength=0.35` : le panneau est PLAT. Le relief deduit du contraste y
+# graverait les tubes en creux, or un tube de neon est en saillie devant sa
+# tole — et de toute facon on le regarde a trois metres.
+add_custom_command(
+    OUTPUT  "${GEN}/materials/nineteen_neon${_map_n}" "${GEN}/materials/nineteen_neon${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.35 "${_neon}" "${GEN}/materials"
+    DEPENDS texgen "${_neon}"
+    COMMENT "Materiau PBR : nineteen_neon"
+    VERBATIM
+)
+list(APPEND MARQUEE_ART "${_neon}" "${GEN}/scene/textures/nineteen_neon.png"
+                        "${GEN}/materials/nineteen_neon${_map_n}"
+                        "${GEN}/materials/nineteen_neon${_map_orm}")
+
 set(MARQUEE_shooter  "SHOOTER"  "1.0,0.36,0.14")
 set(MARQUEE_demineur "DEMINEUR" "1.0,0.74,0.20")
 set(MARQUEE_pacman   "PAC-MAN"  "1.0,0.84,0.16")
 set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
-set(MARQUEE_ART "")
 foreach(jeu shooter demineur pacman piano)
     list(GET MARQUEE_${jeu} 0 _titre)
     list(GET MARQUEE_${jeu} 1 _teinte)
@@ -220,9 +263,15 @@ file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-# +6 : l'art latéral, la sérigraphie de panneau et les quatre enseignes de
-# borne, dessinés juste au-dessus.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 6")
+# +7 : l'art latéral, la sérigraphie de panneau, les quatre enseignes de borne
+# et l'enseigne au néon de la salle, dessinés juste au-dessus.
+#
+# Ce compte est un INVARIANT vérifié par roomgen, pas une constante décorative :
+# ajouter une texture sans le mettre à jour arrête le build avec « 84 pour 83
+# présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
+# c'est le comportement voulu — une texture générée que la salle n'emploie pas,
+# ou une texture employée qui n'est pas générée, sont deux pannes muettes.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 7")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"

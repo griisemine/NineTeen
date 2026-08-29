@@ -1030,18 +1030,7 @@
       "emissiveStrength": 2.6,
       "fit": true
     },
-    {
-      "name": "enseigne",
-      "texture": "nineteen_name.jpg",
-      "roughness": 0.35,
-      "emissive": [
-        1.0,
-        0.9,
-        0.6
-      ],
-      "emissiveStrength": 2.2,
-      "fit": true
-    },
+    {"_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le plus sature du decor, et une enseigne doit se detacher des murs chauds plutot que s'y ajouter. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.", "name": "enseigne", "texture": "nineteen_neon.png", "roughness": 0.30, "emissive": [1.0, 1.0, 1.0], "emissiveStrength": 2.4, "fit": true},
     {
       "name": "classement_fond",
       "texture": "background_classement.png",

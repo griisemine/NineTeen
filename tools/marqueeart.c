@@ -69,7 +69,19 @@ typedef struct plaque {
     int   len;
     float x0, y0;     /* coin haut-gauche du texte, en pixels */
     float cell;       /* côté d'un pixel de fonte */
+    bool  neon;       /* tube fin sur panneau sombre, plutôt que plaque pleine */
 } plaque;
+
+/* Distance d'un point au segment [a, b]. Le classique, écrit une fois. */
+static float dist_segment(float px, float py, float ax, float ay, float bx, float by)
+{
+    const float vx = bx - ax, vy = by - ay;
+    const float wx = px - ax, wy = py - ay;
+    const float l2 = vx * vx + vy * vy;
+    float t = (l2 > 1e-9f) ? (wx * vx + wy * vy) / l2 : 0.0f;
+    if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+    return hypotf(px - (ax + vx * t), py - (ay + vy * t));
+}
 
 static float distance_au_texte(const plaque *p, float px, float py, float portee)
 {
@@ -93,13 +105,82 @@ static float distance_au_texte(const plaque *p, float px, float py, float portee
             /* Le centre de la cellule pleine. */
             const float cx = p->x0 + ((float)col + 0.5f) * p->cell;
             const float cy = p->y0 + ((float)row + 0.5f) * p->cell;
-            /* Distance à la CELLULE (un carré), pas à son centre : sans ça les
-             * traits épais se creusent en chapelet de disques. */
-            const float dx = fabsf(px - cx) - p->cell * 0.5f;
-            const float dy = fabsf(py - cy) - p->cell * 0.5f;
-            const float ax = dx > 0.0f ? dx : 0.0f;
-            const float ay = dy > 0.0f ? dy : 0.0f;
-            const float d = sqrtf(ax * ax + ay * ay);
+
+            float d;
+            if (p->neon) {
+                /*
+                 * LE SQUELETTE, et c'est ce qui distingue un néon d'une plaque.
+                 *
+                 * Un tube de verre fait douze millimètres : sur une enseigne de
+                 * trois mètres, c'est un trait BEAUCOUP plus fin qu'une cellule
+                 * de fonte. Prendre la distance à la cellule pleine donne un
+                 * trait large d'une cellule entière — et avec le halo d'un
+                 * néon par-dessus, les huit lettres fusionnent en une barre
+                 * blanche. Mesuré : c'est exactement ce qu'on obtenait.
+                 *
+                 * On mesure donc la distance à la LIGNE MOYENNE : le centre de
+                 * la cellule, plus les segments qui le joignent à ses voisines
+                 * allumées. Un tube quelconque en sort, d'épaisseur choisie et
+                 * continu là où les cellules se touchent — ce qu'un simple
+                 * chapelet de disques ne donnerait pas.
+                 */
+                d = hypotf(px - cx, py - cy);
+                /* Vers la droite : la voisine peut être dans la lettre suivante
+                 * si l'espacement l'y met, mais alors elle n'est pas allumée —
+                 * `sub >= COLS` a déjà écarté la colonne d'espacement. */
+                if (sub + 1 < NS_FONT5X7_COLS && (glyphe(p->texte[ch])[sub + 1] & (1u << row))) {
+                    const float e = dist_segment(px, py, cx, cy, cx + p->cell, cy);
+                    if (e < d) d = e;
+                }
+                if (row + 1 < NS_FONT5X7_ROWS && (bits & (1u << (row + 1)))) {
+                    const float e = dist_segment(px, py, cx, cy, cx, cy + p->cell);
+                    if (e < d) d = e;
+                }
+                /*
+                 * Les DIAGONALES, et sans elles le tube se casse.
+                 *
+                 * Une fonte 5x7 fait ses obliques en ESCALIER : les cellules
+                 * d'un jambage de « N » ou de « M » ne se touchent que par le
+                 * coin. Joindre seulement la droite et le bas laisse donc un
+                 * trou à chaque marche — parfaitement visible sur le premier
+                 * essai, où le N et le M étaient coupés en trois morceaux.
+                 *
+                 * On ne joint la diagonale QUE si les deux cellules
+                 * orthogonales sont éteintes : sinon on doublerait un coin déjà
+                 * plein et on l'épaissirait, ce qui donne un renflement à
+                 * chaque angle droit.
+                 */
+                if (row + 1 < NS_FONT5X7_ROWS && sub + 1 < NS_FONT5X7_COLS) {
+                    const uint8_t droite = glyphe(p->texte[ch])[sub + 1];
+                    const bool diag = (droite & (1u << (row + 1))) != 0;
+                    const bool orth = ((bits & (1u << (row + 1))) != 0)
+                                   || ((droite & (1u << row)) != 0);
+                    if (diag && !orth) {
+                        const float e = dist_segment(px, py, cx, cy,
+                                                     cx + p->cell, cy + p->cell);
+                        if (e < d) d = e;
+                    }
+                }
+                if (row > 0 && sub + 1 < NS_FONT5X7_COLS) {
+                    const uint8_t droite = glyphe(p->texte[ch])[sub + 1];
+                    const bool diag = (droite & (1u << (row - 1))) != 0;
+                    const bool orth = ((bits & (1u << (row - 1))) != 0)
+                                   || ((droite & (1u << row)) != 0);
+                    if (diag && !orth) {
+                        const float e = dist_segment(px, py, cx, cy,
+                                                     cx + p->cell, cy - p->cell);
+                        if (e < d) d = e;
+                    }
+                }
+            } else {
+                /* Distance à la CELLULE (un carré), pas à son centre : sans ça
+                 * les traits épais se creusent en chapelet de disques. */
+                const float dx = fabsf(px - cx) - p->cell * 0.5f;
+                const float dy = fabsf(py - cy) - p->cell * 0.5f;
+                const float ax = dx > 0.0f ? dx : 0.0f;
+                const float ay = dy > 0.0f ? dy : 0.0f;
+                d = sqrtf(ax * ax + ay * ay);
+            }
             if (d < best) best = d;
         }
     }
@@ -110,6 +191,7 @@ int main(int argc, char **argv)
 {
     int width = 1024, height = 256;
     const char *titre = NULL, *out_path = NULL;
+    bool neon = false;
     float hue[3] = { 1.00f, 0.42f, 0.12f };   /* la teinte du gaz */
 
     for (int i = 1; i < argc; ++i) {
@@ -121,6 +203,7 @@ int main(int argc, char **argv)
                 tool_fatalf("--teinte attend r,g,b entre 0 et 1");
             }
         }
+        else if (strcmp(argv[i], "--neon") == 0)         neon = true;
         else if (!out_path) out_path = argv[i];
     }
     if (!titre || !out_path) {
@@ -129,7 +212,9 @@ int main(int argc, char **argv)
             "usage : %s --titre=NOM [options] <sortie.png>\n"
             "  --titre=NOM       le nom du jeu, en majuscules\n"
             "  --teinte=r,g,b    la couleur du gaz (défaut 1,0.42,0.12)\n"
-            "  --width=N --height=N  dimensions (défaut 1024x256)\n", argv[0]);
+            "  --width=N --height=N  dimensions (défaut 1024x256)\n"
+            "  --neon            tube de verre nu sur panneau sombre, et non\n"
+            "                    plaque de plexiglas rétroéclairée\n", argv[0]);
         return 2;
     }
     if (width < 64 || height < 32) tool_fatalf("planche trop petite");
@@ -159,9 +244,28 @@ int main(int argc, char **argv)
     p.cell = cell;
     p.x0 = ((float)width - (float)colonnes * cell) * 0.5f;
     p.y0 = ((float)height - (float)NS_FONT5X7_ROWS * cell) * 0.5f;
+    p.neon = neon;
 
-    const float portee = cell * 2.2f;          /* la portée du halo */
-    const float liseré = cell * 0.34f;
+    /*
+     * DEUX objets differents, et il fallait les distinguer.
+     *
+     * Un MARQUEE de borne est une plaque de plexiglas retroeclairee : toute la
+     * plaque s'allume, le lettrage est epais, et le fond garde la teinte du jeu.
+     * C'est ce que ce programme faisait, et c'est juste pour ce qu'on lui
+     * demandait.
+     *
+     * Un NEON n'est pas ca du tout. C'est un tube de verre nu devant un panneau
+     * SOMBRE : seul le tube brille, il est FIN — douze millimetres, donc un
+     * trait de trois pixels sur une enseigne de trois metres —, et son halo
+     * porte loin en se saturant. Le fond ne s'allume pas ; il recoit seulement
+     * ce que le tube lui renvoie.
+     *
+     * Rendre un neon avec les reglages d'un marquee donne exactement ce qu'on
+     * avait : une plaque lumineuse a gros lettrage, qui se lit comme une
+     * enseigne de kebab et pas comme un neon de bar.
+     */
+    const float portee = cell * (neon ? 3.4f : 2.2f);   /* la portee du halo */
+    const float liseré = cell * (neon ? 0.26f : 0.34f); /* la demi-epaisseur du tube */
 
     unsigned char *px = (unsigned char *)malloc((size_t)width * height * 3);
     if (!px) tool_fatalf("mémoire épuisée");
@@ -177,7 +281,10 @@ int main(int argc, char **argv)
              * le haut de la plaque sur presque toutes les bornes.
              */
             const float v = fy / (float)height;
-            const float fond = 0.055f + 0.075f * (1.0f - v) * (1.0f - v);
+            /* Le panneau d'un neon est SOMBRE, et c'est ce qui fait le neon :
+             * sans noir autour, un tube n'est qu'un trait clair. */
+            const float fond = neon ? 0.012f
+                                    : 0.055f + 0.075f * (1.0f - v) * (1.0f - v);
             float r = hue[0] * fond, g = hue[1] * fond, b = hue[2] * fond;
 
             /* Le cadre : deux filets, comme sur une vraie plaque sérigraphiée. */
@@ -185,7 +292,9 @@ int main(int argc, char **argv)
             const float by = fy < (float)height * 0.5f ? fy : (float)height - fy;
             const float bord = bx < by ? bx : by;
             const float e = cell * 0.22f;
-            if (bord > e * 1.6f && bord < e * 2.4f) {
+            /* Pas de filet serigraphie sur un neon : le panneau est nu, et le
+             * seul contour qui existe est celui des tubes. */
+            if (!neon && bord > e * 1.6f && bord < e * 2.4f) {
                 r += hue[0] * 0.22f; g += hue[1] * 0.22f; b += hue[2] * 0.22f;
             }
 
@@ -193,7 +302,7 @@ int main(int argc, char **argv)
             const float d = distance_au_texte(&p, fx, fy, portee);
             if (d < portee) {
                 /* Cœur : presque blanc, c'est le verre saturé du tube. */
-                const float coeur = clamp01((liseré - d) / (cell * 0.22f));
+                const float coeur = clamp01((liseré - d) / (cell * (neon ? 0.09f : 0.22f)));
                 /* Halo : décroissance en cloche sur la portée. */
                 const float t = d / portee;
                 /* 7,5 et non 4,5 : a une decroissance trop lente, le halo
@@ -201,7 +310,29 @@ int main(int argc, char **argv)
                  * coupure y dessine le RECTANGLE de recherche autour de
                  * chaque lettre. Ici il est retombe a 0,0004 avant la
                  * coupure, donc sous le quantum de l'octet. */
-                const float halo = expf(-t * t * 7.5f) * 0.80f;
+                /*
+                 * Le halo d'un néon est plus fort et plus étalé : un tube de
+                 * verre rayonne dans toutes les directions, une plaque
+                 * rétroéclairée ne rayonne que par sa face.
+                 *
+                 * Et il est RAMENÉ À ZÉRO à la portée. Le commentaire d'origine
+                 * avait raison sur le fond — une décroissance qui n'a pas fini
+                 * de tomber dessine le rectangle de recherche autour de chaque
+                 * lettre — mais sa parade était de choisir un exposant assez
+                 * grand pour passer sous le quantum de l'octet. Elle ne tient
+                 * plus dès qu'on veut un halo plus doux : à k = 5, le résidu
+                 * vaut 0,0071, soit deux niveaux sur 255, et les huit blocs
+                 * réapparaissent. Mesuré sur le second essai.
+                 *
+                 * On soustrait donc la valeur au bord et on renormalise : le
+                 * halo vaut exactement zéro à la coupure, quel que soit `k`, et
+                 * l'exposant redevient un réglage d'aspect au lieu d'être une
+                 * contrainte numérique.
+                 */
+                const float k_halo = neon ? 5.0f : 7.5f;
+                const float bord_h = expf(-k_halo);
+                const float halo = ((expf(-t * t * k_halo) - bord_h) / (1.0f - bord_h))
+                                 * (neon ? 1.05f : 0.80f);
 
                 const float k = clamp01(halo + coeur);
                 r += (hue[0] + coeur * (1.0f - hue[0])) * k;

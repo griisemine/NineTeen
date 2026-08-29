@@ -48,12 +48,13 @@ rue.**
 
 **3. La pénétration réelle.** Le recouvrement de boîtes englobantes ne prouve rien sur
 deux objets tournés. Les paires suspectes ont donc été retestées au triangle, par la même
-parité de rayons que `light_is_enclosed` (`tools/roomgen.c:379`) : un sommet de A est
+parité de rayons que `light_is_enclosed` (`tools/roomgen.c:381`) : un sommet de A est
 compté dedans si au moins 4 rayons sur 7 traversent B un nombre impair de fois. Le volume
 d'intersection du canapé et du pilier est calculé par colonnes verticales de 2 cm sur
 l'emprise exacte du pilier.
 
-**4. L'œil.** Vingt-deux cadrages, dont treize à hauteur d'œil de joueur (1,70 m), rendus
+**4. L'œil.** Vingt-quatre cadrages regardés, dont **seize à hauteur d'œil de joueur**
+(1,70 m), rendus
 en `--quality=high` (lancer de rayons) en 3200 × 1800. Le préambule commun :
 
 ```sh
@@ -62,7 +63,7 @@ en `--quality=high` (lancer de rayons) en 3200 × 1800. Le préambule commun :
 ```
 
 **Convention de lacet, à ne pas confondre.** Un prop regarde `(sin yaw, cos yaw)` —
-`parse_props`, `tools/roomgen.c:1875`. La caméra, elle, regarde `(cos yaw, sin yaw)` :
+`parse_props`, `tools/roomgen.c:1861`. La caméra, elle, regarde `(cos yaw, sin yaw)` :
 vérifié sur les quatre vues nommées `billard`, `allee`, `bar` et `entree`, dont le sujet
 n'est au centre du cadre qu'avec cette lecture. Les `--yaw=` cités plus bas suivent la
 convention **caméra**.
@@ -81,7 +82,7 @@ convention **caméra**.
 | P-06 | `porte_cabine_1`, `porte_cabine_2` | portes de cabine suspendues **à un mètre du sol**, dépassant les joues | bas à **1,02 m**, haut à **2,78 m** contre 2,013 m pour les joues, soit **+76,7 cm** | visible |
 | P-07 | `radio_murale` | axes X et Z intervertis **et** face tournée de 90° : elle regarde le sud, pas la salle | **13,0 cm** enterrés dans le mur, **27 cm** en saillie ; normale du panneau = −Z au lieu de +X | visible |
 | P-08 | `panneau_restrooms` | panneau d'épaisseur nulle posé **dans** la cloison : invisible | **2,0 cm** derrière le parement | visible |
-| P-09 | `sol_toilettes` | le carrelage s'arrête à 70 cm de la cloison : de la **moquette d'arcade** dans le bloc sanitaire | carrelage jusqu'à x = −7,00 ; cloison à x = −6,30 ; **2,38 m²** de moquette (0,70 × 3,40 m) | visible |
+| P-09 | `sol_toilettes` | le carrelage ne va ni jusqu'à la cloison est ni jusqu'à la cloison nord : de la **moquette d'arcade** dans le bloc sanitaire | **3,15 m² sur 11,05**, soit **28,5 %** de la pièce | visible |
 | P-10 | `suspension_comptoir`, `suspension_salon` | suspensions **accrochées à rien** : les chaînes s'arrêtent en l'air | **1,198 m** et **1,078 m** de vide jusqu'au sous-face du plafond (3,058 m) | visible |
 | P-11 | `ampoule_comptoir`, `ampoule_salon` | l'ampoule est **au-dessus** de son abat-jour | base de l'ampoule à 1,680 m pour un abat-jour finissant vers 1,60 m : **+8 cm** (idem au salon) | visible |
 | P-12 | `porte_entree_battant` | le battant s'enfonce sous le sol et ne monte pas au linteau | **−4,7 cm** sous le sol ; sommet à 2,213 m pour un linteau à 2,30 m, soit **8,7 cm de jour** | visible |
@@ -158,7 +159,7 @@ poubelle métallique.
 "at": [5.30, 0.0, 4.70],  "modelOffset": [0.0, -0.109, 0.0]
 ```
 
-`modelOffset` est la clé prévue pour ça (`tools/roomgen.c:1683`) : le calage vertical d'un
+`modelOffset` est la clé prévue pour ça (`tools/roomgen.c:1700`) : le calage vertical d'un
 modèle importé n'appartient pas à `at`.
 
 ---
@@ -197,7 +198,7 @@ lights "applique_sas": { "at": [5.27, 2.06, 6.40] }
 lights "neon_mur_est": { "at": [8.90, 2.20, -4.00], "repeat": { "count": 3, "step": [0.0, 0.0, 3.6] } }
 ```
 
-L'emplacement proposé est à 1,60 m du point de vue `entree` (6,30 ; 1,70 ; 6,00), donc
+L'emplacement proposé est à 1,71 m du point de vue `entree` (6,30 ; 1,70 ; 6,00), donc
 hors de la capsule qui avait fait refuser le premier essai.
 
 ---
@@ -270,7 +271,7 @@ attention : « pilier_est_1 » et « canape » se recouvrent de 0.48 x 1.12 x 0.
 ```
 
 Il ne l'arrête pas, parce que la règle actuelle n'est fatale que si une **borne** est en
-cause (`tools/roomgen.c:498`). Le raisonnement écrit à côté est juste — « une poutre repose
+cause (`tools/roomgen.c:506`). Le raisonnement écrit à côté est juste — « une poutre repose
 sur ses piliers, un tabouret glisse sous un comptoir » — mais il tolère du même geste un
 canapé dans un poteau. Voir le contrôle C-04 plus bas.
 
@@ -370,7 +371,7 @@ derrière un mur opaque ne rend rien.
 
 ---
 
-### P-09 — Deux mètres carrés de moquette d'arcade dans le bloc sanitaire
+### P-09 — Trois mètres carrés de moquette d'arcade dans le bloc sanitaire
 
 **Ce qu'on voit.** `--pos=-9.20,1.70,-5.30 --yaw=-8 --pitch=-8` et
 `--pos=-8.90,1.05,-4.55 --yaw=-56 --pitch=-16` : au pied de la cloison carrelée, à
@@ -381,31 +382,45 @@ hall, cerise comprise.
 figure déjà, avec l'explication « ils se recouvrent au lieu de se joindre ». **Mesuré,
 c'est faux : les trois sols sont disjoints, exactement comme le fichier l'annonce.**
 
-| sol | emprise en x | emprise en z |
-|---|---|---|
-| `sol_toilettes` | −11,10 → **−7,00** | −8,10 → −4,00 |
-| `sol_hall` | **−7,00** → 11,10 | −8,10 → 8,10 |
+| sol | matériau | emprise en x | emprise en z |
+|---|---|---|---|
+| `sol_toilettes` | `sol_toilettes` (carrelage) | −11,10 → **−7,00** | −8,10 → **−4,00** |
+| `sol_couloir` | `sol` (moquette) | −11,10 → −7,00 | −4,00 → 8,10 |
+| `sol_hall` | `sol` (moquette) | **−7,00** → 11,10 | −8,10 → 8,10 |
 
-Il n'y a ni recouvrement ni coplanarité. Le vrai défaut est ailleurs : **le bloc sanitaire
-va jusqu'à x = −6,30** (parement intérieur de la cloison `cloison_toilettes`, ligne
-médiane x = −6,20). Le carrelage s'arrête donc **70 cm trop tôt**, et
-0,70 × 3,40 = **2,38 m²** de la pièce sont couverts par le sol du hall. Ce n'est pas
-cosmétique : `footstep` est déclaré par matériau, donc on marche aussi sur de la moquette
-au son dans une pièce carrelée.
+Il n'y a ni recouvrement ni coplanarité, et une grille de 10 cm sur les 26 415 points
+intérieurs de la salle le confirme : **zéro trou, zéro double couverture**.
 
-La piste proposée par R-15 — ajouter une plinthe — ne masquerait rien, puisque la bande
-est au milieu de la pièce et non contre un mur.
+Le vrai défaut est ailleurs : **le bloc sanitaire va jusqu'à x = −6,30 et jusqu'à
+z = −3,70** (parements intérieurs de `cloison_toilettes`, lignes médianes x = −6,20 et
+z = −3,60). Le carrelage s'arrête avant les deux, et par **deux** bandes, pas une :
+
+| bande | provenance | emprise | aire |
+|---|---|---|---:|
+| est | `sol_hall` | x −7,00 → −6,30 sur z −7,10 → −3,70 | **2,38 m²** |
+| nord | `sol_couloir` | z −4,00 → −3,70 sur x −9,55 → −7,00 | **0,77 m²** |
+
+Soit **3,15 m² de moquette d'arcade sur les 11,05 m² de la pièce — 28,5 %**. Mesuré par
+échantillonnage à 10 cm : 71,8 % de carrelage, 28,2 % de moquette.
+
+Ce n'est pas cosmétique : `footstep` est déclaré **par matériau**, donc plus d'un quart
+du bloc sanitaire sonne aussi comme de la moquette.
+
+La piste proposée par R-15 — ajouter une plinthe — ne masquerait rien : la bande est est
+au milieu de la pièce, et la bande nord traverse la baie.
 
 **Correction**, en gardant la disjonction des trois rectangles :
 
 ```json
-"sol_hall":      { "centre": [2.40, 0.0],   "size": [17.40, 16.20] }   // x −6,30 → 11,10
-"sol_couloir":   { "centre": [-8.70, 2.05], "size": [4.80, 12.10] }    // x −11,10 → −6,30
-"sol_toilettes": { "centre": [-8.70, -6.05],"size": [4.80, 4.10] }     // x −11,10 → −6,30
+"sol_hall":      { "centre": [2.40, 0.0],    "size": [17.40, 16.20] }  // x −6,30 → 11,10
+"sol_couloir":   { "centre": [-8.70, 2.20],  "size": [4.80, 11.80] }   // x −11,10 → −6,30, z −3,70 → 8,10
+"sol_toilettes": { "centre": [-8.70, -5.90], "size": [4.80, 4.40] }    // x −11,10 → −6,30, z −8,10 → −3,70
 ```
 
-La nouvelle jonction hall/couloir tombe à x = −6,30 entre deux rectangles du **même**
-matériau `sol` : elle est invisible, et les trois rectangles restent disjoints.
+Vérifié : les trois restent disjoints (`sol_hall` à x ≥ −6,30, les deux autres à
+x ≤ −6,30 ; `sol_toilettes` à z ≤ −3,70, `sol_couloir` à z ≥ −3,70) et leur union couvre
+exactement la même emprise qu'aujourd'hui. Les deux nouvelles jonctions tombent entre
+rectangles du **même** matériau `sol` : elles sont invisibles.
 
 ---
 
@@ -428,7 +443,7 @@ rails en T) et 4528 à 3,100 (les dalles).
 Le fichier sait pourtant faire : `suspension_billard` déclare explicitement son câble —
 un `cylinder` de rayon 0,008 et de hauteur 1,0 posé à y = 1,90, qui monte donc à 2,90 et
 rejoint la poutre. Les deux autres suspensions sont des `model`, et roomgen interdit à un
-prop d'être à la fois un modèle et un empilement de morceaux (`tools/roomgen.c:1688`) :
+prop d'être à la fois un modèle et un empilement de morceaux (`tools/roomgen.c:1715`) :
 le câble a disparu avec la conversion en modèle.
 
 **Correction.** Deux props supplémentaires, sur le modèle de la manœuvre déjà employée
@@ -464,7 +479,7 @@ l'abat-jour. `ampoule_salon` reproduit exactement le même écart (abat-jour 1,6
 médiane 1,705, ampoule à 1,800).
 
 Une sphère de prop est **posée sur son `at.y`** : le profil de `geo_revolve` est écrit
-`sinf(a) * r0 + r0`, avec le commentaire « posée sur Y = 0 » (`tools/roomgen.c:1778`).
+`sinf(a) * r0 + r0`, avec le commentaire « posée sur Y = 0 » (`tools/roomgen.c:1818`).
 
 **Correction**, −14 cm sur les deux :
 
@@ -642,7 +657,7 @@ Les quatre néons muraux sont peut-être voulus nus — un tube caché derrière
 est un parti pris légitime. Mais il faut alors l'écrire, ce qui est exactement ce que
 demande le contrôle C-07 ci-dessous.
 
-**3. Le carrelage manque sur 2,38 m² du bloc sanitaire.** Voir P-09 : ce n'est pas un
+**3. Le carrelage manque sur 3,15 m² du bloc sanitaire, soit 28,5 % de la pièce.** Voir P-09 : ce n'est pas un
 objet de trop, c'est un objet trop petit.
 
 ---
@@ -708,7 +723,7 @@ en cause**, ce qui laisse passer un canapé empalé sur un poteau de 0,0412 m³.
    gratuit.
 2. Toute paire qui passe le pré-filtre est confirmée au **triangle**, en réemployant
    `light_is_enclosed` : un sommet de A dans le solide de B. La routine existe déjà
-   (`tools/roomgen.c:379`), elle est écrite pour des maillages non étanches, et elle est
+   (`tools/roomgen.c:381`), elle est écrite pour des maillages non étanches, et elle est
    justement documentée pour ça.
 3. Fatal dès qu'un sommet est confirmé dedans, **sauf** si la paire est déclarée.
 
@@ -834,23 +849,38 @@ ressemble pas à sa cause.
 
 ---
 
-### C-08 — `check_floor_coverage` : le sol couvre la salle, une fois
+### C-08 — `check_floor_material` : une pièce a un sol, pas deux
 
 **Attrape** P-09.
 
-**Règle.** Échantillonner l'intérieur du polygone des parements sur une grille de 10 cm et
-compter, pour chaque point, le nombre de rectangles de `floors` qui le couvrent.
+**Attention à la règle qu'on est tenté d'écrire.** La première version de ce contrôle,
+dans mon propre brouillon, comptait le nombre de rectangles de `floors` couvrant chaque
+point : zéro = trou, deux = coplanarité. Je l'ai écrite, puis exécutée — **grille de
+10 cm, 26 415 points intérieurs, zéro trou et zéro double couverture.** Elle n'attrape pas
+P-09. La couverture est parfaite ; c'est le **matériau** qui est faux.
 
-- **0** : un trou. Aujourd'hui : 238 points, soit **2,38 m²**, dans le bloc sanitaire.
-- **2 ou plus** : deux surfaces coplanaires. Aujourd'hui : aucun.
+C'est le même piège que le R-15 de `REVUE-STRICTE.md`, qui a vu la moquette et en a conclu
+que les sols se recouvraient. Le symptôme ressemble à un défaut de couverture et n'en est
+pas un.
 
-Le fichier **affirme déjà cette propriété en prose**, dans le commentaire de `floors` :
-« Trois rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se
-disputent le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en
-mouvement. » C'est une invariante écrite, jamais vérifiée — et la moitié qui n'était pas
-vérifiée est celle qui a lâché : pas le recouvrement, mais le **trou**. Le rapport R-15,
-qui a vu le symptôme, a d'ailleurs conclu au recouvrement, faute d'un contrôle qui aurait
-dit lequel des deux.
+**La règle qui attrape.** Le fichier déclare déjà ses pièces : `soundZones` les nomme
+(`toilettes`, `sas_entree`, `coin_billard`) et les borne par une boîte. Pour chaque zone,
+échantillonner son emprise au sol et exiger que **tous** les rectangles de `floors` qui la
+couvrent partagent un seul matériau — ou que la zone déclare la liste qu'elle accepte :
+
+```json
+{ "name": "toilettes", "min": [...], "max": [...], "sol": "sol_toilettes" }
+```
+
+Aujourd'hui, la zone `toilettes` mélange `sol_toilettes` (62,4 %), `sol_hall` (23,5 %) et
+`sol_couloir` (14,1 %) : trois rectangles, deux matériaux, dans une pièce déclarée
+carrelée.
+
+**Le contrôle de couverture reste à écrire quand même**, mais comme garde-fou et non comme
+correctif : le commentaire de `floors` **affirme la propriété en prose** — « Trois
+rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires se disputent
+le tampon de profondeur, et le scintillement qui en résulte ne se voit qu'en mouvement » —
+et personne ne la vérifie. Elle est vraie aujourd'hui. C'est le bon moment.
 
 ---
 
@@ -922,8 +952,9 @@ moins une capture :
 - **10 visibles** — P-06 à P-15.
 - **8 mineurs** — P-16 à P-23.
 
-Trois entrées supplémentaires en « À vérifier », dont **aucune n'est comptée** faute
-d'avoir été confirmée à l'œil.
+Quatre entrées supplémentaires en « À vérifier », dont **aucune n'est comptée** : A-1 et
+A-3 sont mesurées mais pas confirmées à l'œil, A-2 est vue mais depuis un point que le
+joueur n'atteint pas, A-4 est vue et confirmée mais n'est pas un défaut de placement.
 
 Neuf contrôles proposés pour `tools/roomgen.c`. Les trois premiers — C-01 (hors du
 bâtiment), C-02 (recouvrement au triangle), C-03 (ce qui est posé touche son support) —
