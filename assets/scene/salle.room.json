@@ -4211,7 +4211,8 @@
         -1.278
       ],
       "yaw": 90.0,
-      "pitch": -34.0,
+      "pitch": 0.0,
+      "_pitch": "ZERO, et c'est le point : le tangage etait ecrit -34 a la main ici. C'etait une QUATRIEME copie du meme calcul — --play-at le fait, l'entree en partie le fait, et cette capture le recopiait fige. Le moteur pose maintenant le regard sur la dalle des qu'on arrive devant une borne, donc cette capture n'a plus rien a declarer : elle demande le mode joueur avec --pose et laisse le moteur cadrer. Si le cadrage se degrade un jour, l'image le montrera au lieu de le masquer derriere une constante recopiee.",
       "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`."
     },
     {

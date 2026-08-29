@@ -824,6 +824,23 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
  * est acquis AVANT qu'on se demande s'il y a un réseau. C'était l'erreur de
  * fond de 2020 — sans serveur, la partie n'existait pas.
  */
+/*
+ * Le tangage qui met une dalle au centre du cadre.
+ *
+ * Il se calculait EN TROIS ENDROITS — `--play-at=`, l'entrée en partie, et la
+ * capture nommée `borne` qui l'écrivait carrément à la main dans le JSON. Trois
+ * copies d'un même calcul, dont une figée dans un fichier de données : c'est la
+ * configuration exacte qui laisse deux d'entre elles dériver sans que rien ne
+ * le dise.
+ */
+static float pitch_onto(ns_v3 eye, ns_v3 target)
+{
+    const float ex = target.x - eye.x;
+    const float ey = target.y - eye.y;
+    const float ez = target.z - eye.z;
+    return atan2f(ey, ns_maxf(0.05f, sqrtf(ex * ex + ez * ez)));
+}
+
 static uint32_t finish_run(ns_runlog *log, int64_t run_ms,
                            const ns_game_api *api, const void *game,
                            const char *difficulty,
@@ -1507,6 +1524,16 @@ int main(int argc, char **argv)
      * imposé en permanence, il enlève le droit de regarder ailleurs.
      */
     float look_pitch = 0.0f, look_settle = 0.0f;
+    /*
+     * La borne sur laquelle le regard est DÉJÀ descendu.
+     *
+     * Sans cette mémoire, se planter devant une borne rabattrait le tangage à
+     * chaque image : la tête serait clouée sur la dalle et le joueur ne
+     * pourrait plus regarder ailleurs sans lutter. On ne pose le regard qu'au
+     * moment où l'on ARRIVE devant une borne, et on rend la tête aussitôt
+     * après — c'est le geste qu'on fait vraiment, et une seule fois.
+     */
+    const ns_cabinet *gazed_at = NULL;
     /*
      * Le journal de la partie en cours, et son horloge de simulation.
      *
@@ -2245,14 +2272,8 @@ play_at_done: ;
                              * le geste qu'on fait devant une vraie borne ; le
                              * lui arracher ensuite ne l'est pas.
                              */
-                            {
-                                const float ex = near->screen_center.x - cam.position.x;
-                                const float ey = near->screen_center.y - cam.position.y;
-                                const float ez = near->screen_center.z - cam.position.z;
-                                const float flat = sqrtf(ex * ex + ez * ez);
-                                look_pitch = atan2f(ey, ns_maxf(0.05f, flat));
-                                look_settle = 0.33f;
-                            }
+                            look_pitch  = pitch_onto(cam.position, near->screen_center);
+                            look_settle = 0.33f;
                             /*
                              * On reste EN 3D : le jeu tourne dans la dalle de la
                              * borne, et la tête reste libre. C'est toute la
@@ -2453,6 +2474,38 @@ play_at_done: ;
                                     ? (int32_t)game_api->score(game) : 0);
         }
 
+        /*
+         * POSER LE REGARD EN ARRIVANT DEVANT UNE BORNE.
+         *
+         * C'est le second des deux moments qui manquaient, et le plus visible.
+         * Le champ vertical vaut 62°, donc un demi-champ de 31,0° ; planté sur
+         * l'ancre que la borne déclare, le centre de sa dalle est à 31,8° sous
+         * l'horizon. Elle est DE HUIT DIXIÈMES DE DEGRÉ sous le bord bas du
+         * cadre : on se plantait devant une borne et on ne voyait pas du tout
+         * son écran. Ce qui occupait le milieu de l'image, à 48 cm de l'œil,
+         * c'était le marquee.
+         *
+         * « la hauteur du personnage ne permet pas d'être bien positionné à
+         * hauteur des bornes d'arcade » décrit exactement ça — et le défaut
+         * n'est pas dans les cotes du meuble, qui sont toutes dans les plages
+         * du matériel réel. Il est dans le fait que le moteur savait déjà
+         * baisser les yeux, mais seulement au démarrage d'une partie : un
+         * instant sur cinq.
+         */
+        if (!in_game && cam.mode == ROOM_CAM_PLAYER && !opt.play_at) {
+            const ns_cabinet *front = room_viewmodel_target(&scene, &cam);
+            if (front != gazed_at) {
+                if (front && front->screen_material >= 0) {
+                    look_pitch  = pitch_onto(cam.position, front->screen_center);
+                    /* Plus lent qu'à l'entrée en partie : on s'approche, on ne
+                     * s'assoit pas. Un demi-second se lit comme un regard qui
+                     * descend, un tiers comme une caméra qu'on empoigne. */
+                    look_settle = 0.50f;
+                }
+                gazed_at = front;
+            }
+        }
+
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
             room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
@@ -2619,6 +2672,18 @@ play_at_done: ;
                 }
                 if (gev.die) {
                     ns_audio_play(sfx_die, NS_BUS_SFX, 0.8f, 1.0f);
+                    /*
+                     * Le troisième moment qui manquait : la partie est finie, et
+                     * le tangage restait où le joueur l'avait laissé. On perd
+                     * une partie en regardant ailleurs, et l'écran de fin — le
+                     * score, le record, l'invite à recommencer — se joue hors
+                     * cadre. On repose donc le regard sur la dalle, exactement
+                     * comme à l'entrée.
+                     */
+                    if (playing_cab && !fullscreen_game && cam.mode == ROOM_CAM_PLAYER) {
+                        look_pitch  = pitch_onto(cam.position, playing_cab->screen_center);
+                        look_settle = 0.45f;
+                    }
                     last_rank = finish_run(runlog, run_ms, game_api, game,
                                            game_hard ? "hard" : "normal",
                                            opt.player, opt.offline, opt.autoplay);
