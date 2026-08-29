@@ -900,10 +900,11 @@
       "uvMetres": 0.8
     },
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 17. Le poste 9 de DESIGN-SALLE demandait 0,9 et a ete applique a 0,3 : le triangle Memphis mesurait 3,8 cm au lieu de 11 a 13. A cette echelle un motif graphique cesse d'etre un motif et devient un GRAIN — c'est ce qui faisait grouiller le devant du bar dans le champ. Depassement d'un facteur trois, corrige.",
       "name": "comptoir",
       "texture": "desk.jpg",
       "roughness": 0.38,
-      "uvMetres": 0.3,
+      "uvMetres": 0.9,
       "_": "Le motif de comptoir de 2020, et il a fallu deux corrections.\nD'abord l'ECHELLE : `desk.jpg` fait 490 px pour huit cellules de motif. A 2,6 m par repetition un triangle mesurait 32 cm — d'ou l'effet nappe de pique-nique. A 0,30 m il en fait 3,7, ce qui est la cote d'un vrai stratifie a motif geometrique des annees quatre-vingt.\nEnsuite la SATURATION. Meme a la bonne echelle, ce motif sortait comme l'objet le plus lumineux de la salle : cinq couleurs pures sur trois metres de comptoir, devant une enseigne au neon qu'il ecrasait. Le multiplicateur le ramene a 46 % — il redevient un plan de travail, c'est-a-dire un support, et l'oeil retourne a l'enseigne. Le motif reste, il cesse de crier.",
       "baseColor": [
         0.46,
@@ -913,14 +914,10 @@
       ]
     },
     {
+      "_atmo": "Le developpeur l'a signale en livrant : les assises sortaient CREME et non rouge. `cuir_rouge.jpg` est une texture pale, et un multiplicateur quasi gris [0,55 ; 0,50 ; 0,50] ne la teinte pas — il l'eclaircit. Trois grandes surfaces claires (deux bancs et le baby-foot) au meme endroit du hall, c'etait beaucoup de blanc dans une salle qu'on veut tamisee. Ce materiau ne sert qu'aux quatre bancs neufs, il se retouche donc sans effet de bord.",
       "name": "cuir",
       "texture": "cuir_rouge.jpg",
-      "baseColor": [
-        0.55,
-        0.5,
-        0.5,
-        1.0
-      ],
+      "baseColor": [0.66, 0.14, 0.13, 1.0],
       "roughness": 0.52,
       "uvMetres": 0.9
     },
@@ -1090,6 +1087,7 @@
       ]
     },
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 13, applique APRES verification et pas comme il etait ecrit. La specification disait de remplacer la texture parce qu'elle mesurait 0,0030 de reflectance et que c'etait « un aplat de 1 x 1 pixel ». C'etait vrai de l'etat d'ORIGINE ; `bordeau_uni.jpg` est retire depuis, et ce materiau porte deja `lacquered_wood.jpg`, une vraie texture. Sa premisse etait donc perimee, et l'appliquer telle quelle orphelinait une texture — ce qu'a dit l'invariant de comptage de roomgen, « 83 employees pour 84 presentes ». La vraie cause du caisson noir n'etait pas la texture mais le MULTIPLICATEUR, a 0,40 de rouge et 0,07 de vert. 0,62 / 0,13 / 0,17 : le jukebox redevient bordeaux au lieu d'etre une silhouette.",
       "name": "bordeau_uni",
       "texture": "lacquered_wood.jpg",
       "roughness": 0.42,
@@ -1156,6 +1154,10 @@
         1.0
       ],
       "_": "Les quatre pieces d'angle et les six cercles de poche. C'est le seul metal de la table, et c'est lui qui accroche la suspension : sans lui les poches disparaissent dans le bois."
+    },
+    {
+      "_": "Le terrain du baby-foot. Il empruntait `billard_repere`, qui est le lisere creme du billard : un terrain de baby-foot est VERT, et c'est ce vert qui le distingue d'une table a langer vue de loin. Materiau a lui plutot que multiplicateur sur celui du billard : les deux meubles n'ont aucune raison de partager une teinte.",
+      "name": "babyfoot_terrain", "texture": "painted_panel.jpg", "roughness": 0.34, "metallic": 0.0, "uvMetres": 0.5, "baseColor": [0.10, 0.34, 0.14, 1.0]
     },
     {
       "name": "billard_repere",
@@ -1392,6 +1394,7 @@
       "_": "Tungstène. C'était (0,86 ; 0,90 ; 1,00) — un néon de bureau — et à 62 pour 4,6 m l'allée restait un couloir bleu. C'est le luminaire qui décide de l'ambiance : il porte la chaleur ET la lisibilité."
     },
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 9, corrige apres mesure. La specification demandait 34 pour une portee de 3,4 ; appliquee telle quelle elle FAIT TOMBER la mediane de --view=allee a 32 alors que son propre critere de recette exige 42, et celle de --view=borne de 69 a 44 alors que le poste 3 exige qu'elle ne bouge pas. La specification se contredisait, et le developpeur l'a dit au lieu de corriger en douce.\nLa decomposition, mesuree separement : a portee inchangee, l'intensite seule fait 53 -> 33 ; a intensite inchangee, la portee seule fait 53 -> 50. C'est l'intensite qui coute tout, la portee coute trois points. 54 / 3,4 tient les deux criteres d'un coup : allee 42, borne 59. Le diagnostic du poste tenait — ces rampes sont a l'aplomb de l'ilot et lavent le fond du champ plutot que d'eclairer les bornes — mais son chiffre etait trop fort de vingt.",
       "name": "rampe_ilot_nord",
       "at": [
         -2.4,
@@ -1403,8 +1406,8 @@
         0.79,
         0.54
       ],
-      "intensity": 74.0,
-      "range": 4.6,
+      "intensity": 54.0,
+      "range": 3.4,
       "radius": 0.32,
       "flicker": false,
       "ceilingPanel": true,
@@ -1420,7 +1423,8 @@
           0.0
         ]
       },
-      "_": "Trois plafonniers au-dessus de l'allée nord de l'îlot, là où le joueur se tient pour jouer sur la rangée qui regarde +Z."
+      "_": "Trois plafonniers au-dessus de l'allée nord de l'îlot, là où le joueur se tient pour jouer sur la rangée qui regarde +Z.",
+      "_poste_9": "SPEC-ATMOSPHERE §3.5 (b) : 74 -> 34 et 4,6 -> 3,4. Les six exemplaires sont à l'APLOMB EXACT de l'îlot : sur une face verticale de caisson leur cosinus d'incidence est presque nul, elles n'éclairent pas la borne, elles lavent le fond du champ derrière elle. Elles pesaient 444 d'intensité, 21 % du budget déclaré, pour un éclairement au sol de 0,49 à l'aplomb — sept fois moins que la suspension du billard qui est deux fois moins puissante. Ce qui manquait n'était pas de la puissance en hauteur mais des lampes à hauteur d'homme (§3.5 a)."
     },
     {
       "name": "rampe_ilot_sud",
@@ -1434,8 +1438,8 @@
         0.79,
         0.54
       ],
-      "intensity": 74.0,
-      "range": 4.6,
+      "intensity": 54.0,
+      "range": 3.4,
       "radius": 0.32,
       "flicker": false,
       "ceilingPanel": true,
@@ -1530,6 +1534,7 @@
       "_": "Le sas. Chaud lui aussi : c'est la première lumière du jeu, elle doit donner envie d'entrer plutôt que de reculer."
     },
     {
+      "_atmo": "SPEC-ATMOSPHERE poste 18. Le poste 7 de DESIGN-SALLE visait 55 a 70 de mediane pour les WC et n'a jamais atteint que 25 : deux corrections y avaient ete appliquees ensemble et une seule etait justifiee. La portee de 3,6 divisait a elle seule l'eclairement moyen par 2,4. 4,4, intensite inchangee.",
       "name": "plafonnier_toilettes",
       "at": [
         -7.9,
@@ -1542,7 +1547,7 @@
         0.86
       ],
       "intensity": 30.0,
-      "range": 3.6,
+      "range": 4.4,
       "radius": 0.3,
       "flicker": true,
       "ceilingPanel": true,
@@ -1556,7 +1561,7 @@
       "name": "neon_mur_ouest",
       "at": [
         -8.9,
-        2.2,
+        2.58,
         -4.0
       ],
       "color": [
@@ -1564,9 +1569,9 @@
         0.6,
         1.0
       ],
-      "intensity": 40.0,
+      "intensity": 24.0,
       "range": 4.2,
-      "radius": 0.55,
+      "radius": 0.9,
       "repeat": {
         "count": 3,
         "step": [
@@ -1575,13 +1580,14 @@
           4.0
         ]
       },
-      "_": "Accent froid sur base chaude — donc visible. Sur base froide il disparaissait."
+      "_": "Accent froid sur base chaude — donc visible. Sur base froide il disparaissait.",
+      "_poste_19": "SPEC-ATMOSPHERE §3.5 (c). À 2,20 m avec un rayon de 0,55 il lavait LE MUR, deuxième plus grande surface du décor, en bleu : sur `travee_ouest` le mur kaki virait au vert-de-gris, seule lumière froide d'un décor dont le mandat dit « couleurs chaudes ». Remonté à 2,58 il éclaire la corniche (3,10) et le haut du mur, au-dessus de la cimaise (2,42) ; rayon 0,90 parce que c'est un TUBE et pas une ampoule ; intensité 24 parce que le bleu est la seule teinte froide de la salle. L'est reste à 40 : le magenta est chaud."
     },
     {
       "name": "neon_mur_est",
       "at": [
         8.9,
-        2.2,
+        2.58,
         -2.0
       ],
       "color": [
@@ -1591,7 +1597,7 @@
       ],
       "intensity": 40.0,
       "range": 4.2,
-      "radius": 0.55,
+      "radius": 0.9,
       "repeat": {
         "count": 3,
         "step": [
@@ -1796,6 +1802,59 @@
       "range": 4.2,
       "radius": 0.11,
       "_": "1,78 m : SOUS l'ampoule (qui occupe 1,84 a 1,92) et sous la cage. Une source posee dans son propre luminaire est integralement occultee par lui — le lancer de rayons ne connait pas les materiaux emissifs. Ce piege a coute deux fois dans ce projet."
+    },
+    {
+      "name": "suspension_banc_ouest",
+      "at": [-2.40, 1.75, 2.45],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 110.0,
+      "range": 3.6,
+      "radius": 0.1,
+      "_": "SPEC-ATMOSPHERE §3.5 (a), poste 1. SIX suspensions basses, une par lieu du §2.3. Le raisonnement est celui du billard, mesuré : une dalle de faux plafond à 2,74 m, 74 d'intensité et 4,6 m de portée donne 0,49 d'éclairement au sol ; la suspension du billard, à 1,56 m, 150 et 4,2, en donne 3,74 — sept fois et demie plus pour deux fois l'intensité. Le facteur qui travaille est le carré de la distance, pas le réglage. Une salle tamisée ne se règle pas en baissant les plafonniers, elle se règle en DESCENDANT LES LAMPES À LA HAUTEUR DES GENS.",
+      "_occlusion": "1,75 m, c'est-à-dire SOUS l'abat-jour (qui ouvre à 1,84) et sous l'ampoule (sphère posée à 1,83, donc de 1,83 à 1,92). Le lancer de rayons ne connaît pas les matériaux émissifs : une source posée dans son luminaire s'éteint elle-même, et monter l'intensité n'y change RIEN. Même décalage que la suspension du billard, qui est ce profil-ci descendu de 19 cm."
+    },
+    {
+      "name": "suspension_banc_est",
+      "at": [2.40, 1.75, 2.45],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 110.0,
+      "range": 3.6,
+      "radius": 0.1
+    },
+    {
+      "name": "suspension_babyfoot",
+      "at": [-4.00, 1.75, 2.80],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 110.0,
+      "range": 3.6,
+      "radius": 0.1,
+      "_": "À l'aplomb du plateau du baby-foot (0,87 m) : une lampe de table de jeu, pas un plafonnier."
+    },
+    {
+      "name": "suspension_banc_sud_o",
+      "at": [-4.00, 1.75, -6.40],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 110.0,
+      "range": 3.6,
+      "radius": 0.1,
+      "_": "La bande sud était la poche la plus profonde de la salle — 5,12 m de tout meuble. Un banc dans le noir ne se voit pas : les postes 1 et 2 sont indissociables."
+    },
+    {
+      "name": "suspension_banc_sud_e",
+      "at": [3.00, 1.75, -6.40],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 110.0,
+      "range": 3.6,
+      "radius": 0.1
+    },
+    {
+      "name": "suspension_monnayeur",
+      "at": [0.95, 1.90, 6.55],
+      "color": [1.0, 0.78, 0.50],
+      "intensity": 70.0,
+      "range": 2.8,
+      "radius": 0.1,
+      "_": "Le bout est du comptoir, là où le §2.3 B pose le monnayeur (poste 7, pas encore fait). Plus haute et plus faible que les cinq autres : on s'y tient debout, on ne s'y assoit pas. Son luminaire est le même, remonté de 15 cm."
     }
   ],
   "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
@@ -4032,6 +4091,198 @@
           "sides": 10,
           "rings": 6
         }
+      ]
+    },
+    {
+      "name": "banc_ilot_ouest",
+      "_": "SPEC-ATMOSPHERE §2.3 A, l'objet qui manque le plus. Deux assises dos a dos autour d'un dossier commun. La rangee nord de l'ilot est a z +0,44 et regarde +z : un joueur debout devant elle a les pieds a z 1,34, et l'assise a 2,45 le place a 1,1 m derriere lui — la distance a laquelle on voit l'ecran par-dessus son epaule. A x -2,40 le banc est en face du bloc de trois bornes 7-8-9 et laisse libre la trouee centrale x [-1,2 ; 1,2] : la fuyante de `allee` n'est pas bouchee. Le dos de l'autre assise regarde le bar : on s'y assoit avec un verre. `cuir` etait declare et employe par PERSONNE — c'est du skai rouge de 2020, sans un octet ajoute au depot.",
+      "at": [-2.40, 0.0, 2.45],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "les deux joues", "type": "box", "material": "bois_noir", "at": [-0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
+        { "type": "box", "material": "bois_noir", "at": [0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
+        { "_": "le dossier commun aux deux assises", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, 0.00], "size": [1.80, 0.46, 0.10], "chamfer": 0.010 },
+        { "_": "assise nord, regarde le bar", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 },
+        { "_": "assise sud, regarde l'ilot", "type": "box", "material": "cuir", "at": [0.00, 0.40, -0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 }
+      ]
+    },
+    {
+      "name": "banc_ilot_est",
+      "_": "Le symetrique, en face du bloc 10-11-12.",
+      "at": [2.40, 0.0, 2.45],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "les deux joues", "type": "box", "material": "bois_noir", "at": [-0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
+        { "type": "box", "material": "bois_noir", "at": [0.80, 0.00, 0.00], "size": [0.10, 0.40, 0.94], "chamfer": 0.008 },
+        { "_": "le dossier commun aux deux assises", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, 0.00], "size": [1.80, 0.46, 0.10], "chamfer": 0.010 },
+        { "_": "assise nord, regarde le bar", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 },
+        { "_": "assise sud, regarde l'ilot", "type": "box", "material": "cuir", "at": [0.00, 0.40, -0.25], "size": [1.80, 0.08, 0.40], "chamfer": 0.012 }
+      ]
+    },
+    {
+      "name": "babyfoot",
+      "_": "SPEC-ATMOSPHERE §2.3 C. Le troisieme jeu sans ecran, avec le billard et la cible : les trois forment une diagonale ouest, ce qui donne a cette moitie de la salle une raison d'etre traversee. Il s'arrete a x -4,70, le pilier ouest commence a -5,16 : 0,46 m de passage. Un baby-foot et pas un flipper — un flipper est une machine, et le joueur se demanderait pourquoi elle ne se lance pas.",
+      "at": [-4.00, 0.0, 2.80],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "quatre pieds", "type": "box", "material": "bois_noir", "at": [-0.62, 0.00, -0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
+        { "type": "box", "material": "bois_noir", "at": [0.62, 0.00, -0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
+        { "type": "box", "material": "bois_noir", "at": [-0.62, 0.00, 0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
+        { "type": "box", "material": "bois_noir", "at": [0.62, 0.00, 0.31], "size": [0.09, 0.62, 0.09], "chamfer": 0.006 },
+        { "_": "la caisse, dessus a 0,86", "type": "box", "material": "bois", "at": [0.00, 0.62, 0.00], "size": [1.40, 0.24, 0.76], "chamfer": 0.012 },
+        { "_": "le terrain : panneau couche, normale +Z basculee en +Y par pitch -90", "type": "panel", "material": "babyfoot_terrain", "at": [0.00, 0.865, 0.00], "size": [1.22, 0.62], "pitch": -90 },
+        { "_": "huit barres, ecrites une par une : `repeat` n'existe pas sur un morceau de prop. `roll -90` et non +90 : la matrice de geo_mesh.c (R = Ry.Rx.Rz, vecteur ligne) envoie le +Y local sur le -X monde a roll +90, donc la barre partirait du mauvais cote.", "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.28], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.20], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.12], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, -0.04], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.04], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.12], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.20], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [-0.55, 0.93, 0.28], "radius": 0.011, "height": 1.10, "sides": 8, "roll": -90 }
+      ]
+    },
+    {
+      "name": "banc_sud_ouest",
+      "_": "SPEC-ATMOSPHERE §2.3 D. La bande sud est la poche la plus profonde du hall : 5,12 m de tout meuble en (-4,4 ; -7,2). Elle est aussi DERRIERE la borne de classement, qui regarde +z : c'est l'endroit d'ou l'on voit a la fois le tableau des scores et toute la rangee sud de l'ilot. On y va apres une partie — aujourd'hui jamais, parce qu'il n'y a rien.",
+      "at": [-4.00, 0.0, -6.80],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.", "type": "box", "material": "bois_noir", "at": [-1.10, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
+        { "type": "box", "material": "bois_noir", "at": [1.10, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
+        { "_": "le dossier, adosse au mur", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, -0.20], "size": [2.40, 0.62, 0.10], "chamfer": 0.010 },
+        { "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.05], "size": [2.40, 0.08, 0.40], "chamfer": 0.012 }
+      ]
+    },
+    {
+      "name": "banc_sud_est",
+      "_": "Le second banc de la bande sud, plus court, sous le plafonnier sud.",
+      "at": [3.00, 0.0, -6.80],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.", "type": "box", "material": "bois_noir", "at": [-0.90, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
+        { "type": "box", "material": "bois_noir", "at": [0.90, 0.00, 0.05], "size": [0.10, 0.40, 0.60], "chamfer": 0.008 },
+        { "_": "le dossier, adosse au mur", "type": "box", "material": "bois_noir", "at": [0.00, 0.44, -0.20], "size": [2.00, 0.62, 0.10], "chamfer": 0.010 },
+        { "_": "assise unique, regarde le nord donc la salle. z local +0,05 et non +0,25 : voir le rapport — a +0,25 il restait un trou de 20 cm entre l'assise et le dossier, visible en capture.", "type": "box", "material": "cuir", "at": [0.00, 0.40, 0.05], "size": [2.00, 0.08, 0.40], "chamfer": 0.012 }
+      ]
+    },
+    {
+      "name": "mange_debout_nord",
+      "_": "SPEC-ATMOSPHERE §2.3 F. Plateau a 1,06 m : la hauteur a laquelle on pose un verre sans se pencher. Trois primitives, et c'est le signe le plus fiable qu'une salle est UTILISEE. Celui-ci occupe la poche 5 (2,0 ; 3,5), entre l'ilot et le bar.",
+      "at": [1.60, 0.0, 3.90],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.", "type": "cylinder", "material": "borne_noir", "at": [0, 0.00, 0], "radius": 0.28, "height": 0.03, "sides": 20 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [0, 0.03, 0], "radius": 0.035, "height": 0.99, "sides": 12 },
+        { "type": "cylinder", "material": "bois", "at": [0, 1.02, 0], "radius": 0.31, "height": 0.04, "sides": 24 }
+      ]
+    },
+    {
+      "name": "mange_debout_ouest",
+      "_": "Celui-ci occupe la poche 4 (-5,7 ; 2,5), sur le passage bar -> billard.",
+      "at": [-6.90, 0.0, 3.30],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.", "type": "cylinder", "material": "borne_noir", "at": [0, 0.00, 0], "radius": 0.28, "height": 0.03, "sides": 20 },
+        { "type": "cylinder", "material": "borne_chrome", "at": [0, 0.03, 0], "radius": 0.035, "height": 0.99, "sides": 12 },
+        { "type": "cylinder", "material": "bois", "at": [0, 1.02, 0], "radius": 0.31, "height": 0.04, "sides": 24 }
+      ]
+    },
+    {
+      "name": "poubelle_ilot",
+      "_": "SPEC-ATMOSPHERE §2.3 G. Au debouche nord de la trouee centrale, emprise x -1,75..-1,35 : elle marque le coin sans mordre sur le couloir libre x [-1,2 ; 1,2]. Une poubelle en bord d'allee est ce qui distingue un plan d'architecte d'un lieu ou l'on boit.",
+      "_modelOffset": "Le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero : sans ce calage la poubelle flotte de onze centimetres. Meme valeur que `poubelle_sas`, d'ou le defaut avait ete releve (AUDIT P-02).",
+      "modelOffset": [0.0, -0.109, 0.0],
+      "at": [-1.55, 0.0, 1.55],
+      "yaw": 0.0,
+      "model": "models/metal_trash_can/metal_trash_can.gltf",
+      "material": "poubelle"
+    },
+    {
+      "name": "poubelle_sud",
+      "_": "Celle de la bande sud, au bout du banc ouest.",
+      "_modelOffset": "Le point le plus bas du modele importe est a y 0,1087 pour un `at` a zero : sans ce calage la poubelle flotte de onze centimetres. Meme valeur que `poubelle_sas`, d'ou le defaut avait ete releve (AUDIT P-02).",
+      "modelOffset": [0.0, -0.109, 0.0],
+      "at": [-1.90, 0.0, -6.75],
+      "yaw": 0.0,
+      "model": "models/metal_trash_can/metal_trash_can.gltf",
+      "material": "poubelle"
+    },
+    {
+      "name": "vitrine_lots",
+      "_": "SPEC-ATMOSPHERE §2.3 I. Le point le plus desert du hall apres la bande sud etait (9,6 ; 4,2) a 4,93 m de tout meuble : la bande coincee entre la cloison du sas et les bornes est. C'est aussi le premier mur qu'on longe en sortant du sas. La vitrine habille 1,8 m de cloison, elle porte une bande lumineuse a 1,84 m qui balise la sortie, et elle donne une raison de regarder a gauche. Le caisson est un cadre PEINT et non un vitrage : le moteur n'a pas de transparence ici.",
+      "at": [7.60, 0.0, 3.95],
+      "yaw": 180.0,
+      "parts": [
+        { "_": "le socle plein", "type": "box", "material": "laque_sombre", "at": [0.00, 0.00, 0.00], "size": [1.80, 0.86, 0.42], "chamfer": 0.012 },
+        { "type": "box", "material": "borne_cadre", "at": [0.00, 0.86, 0.00], "size": [1.80, 0.94, 0.42], "chamfer": 0.008 },
+        { "_": "les lots, en facade. La face avant du caisson est en z local +0,21.", "type": "panel", "material": "affiche_6", "at": [0.00, 1.28, 0.212], "size": [1.62, 0.76] },
+        { "type": "panel", "material": "panneau_lumineux", "at": [0.00, 1.84, 0.212], "size": [1.76, 0.10] }
+      ]
+    },
+    {
+      "name": "suspension_banc_ouest",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [-2.40, 0.0, 2.45],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "suspension_banc_est",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [2.40, 0.0, 2.45],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "suspension_babyfoot",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [-4.00, 0.0, 2.80],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "suspension_banc_sud_o",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [-4.00, 0.0, -6.40],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "suspension_banc_sud_e",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [3.00, 0.0, -6.40],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.06, 0], "radius": 0.008, "height": 1.04, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.84, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.83, 0], "radius": 0.045, "sides": 12, "rings": 7 }
+      ]
+    },
+    {
+      "name": "suspension_monnayeur",
+      "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
+      "at": [0.95, 0.0, 6.55],
+      "yaw": 0.0,
+      "parts": [
+        { "_": "le cable", "type": "cylinder", "material": "bois_noir", "at": [0, 2.21, 0], "radius": 0.008, "height": 0.89, "sides": 8 },
+        { "_": "l'abat-jour, ouvert vers le bas pour qu'on voie l'ampoule dedans", "type": "cylinder", "material": "billard_abatjour", "at": [0, 1.99, 0], "radius": 0.28, "radiusTop": 0.10, "height": 0.22, "sides": 20, "capBottom": false, "capTop": true },
+        { "type": "sphere", "material": "ampoule_cage", "at": [0, 1.98, 0], "radius": 0.045, "sides": 12, "rings": 7 }
       ]
     }
   ],
