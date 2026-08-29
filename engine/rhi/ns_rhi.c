@@ -59,6 +59,10 @@ struct ns_rhi {
 
     bool headless;
     bool vsync;
+
+    /* La définition DEMANDÉE. Elle ne sert qu'en headless — voir
+     * `ns_rhi_drawable_size`, qui explique pourquoi elle doit y faire foi. */
+    uint32_t req_width, req_height;
 };
 
 /* ========================================================================== */
@@ -156,6 +160,8 @@ ns_rhi *ns_rhi_create(const ns_rhi_desc *desc)
     if (!r) return NULL;
 
     r->headless = desc->headless;
+    r->req_width  = (uint32_t)(desc->width  > 0 ? desc->width  : 1280);
+    r->req_height = (uint32_t)(desc->height > 0 ? desc->height : 720);
     r->vsync    = desc->vsync;
 
     /*
@@ -259,8 +265,33 @@ SDL_GPUTexture       *ns_rhi_swapchain_texture(ns_rhi *r) { return r->swapchain;
 SDL_GPUTextureFormat  ns_rhi_swapchain_format(ns_rhi *r) { return r->sc_format; }
 uint64_t              ns_rhi_frame_index(ns_rhi *r) { return r->frame_index; }
 
+/*
+ * EN HEADLESS, C'EST LA DÉFINITION DEMANDÉE QUI FAIT FOI.
+ *
+ * `SDL_GetWindowSizeInPixels` interroge une fenêtre. Quand elle est CACHÉE —
+ * c'est ce que `--headless` en fait — le système n'a aucune raison de lui
+ * accorder la taille demandée, et macOS rend celle de l'écran : mesuré ici,
+ * `--width=640 --height=360`, `1600x900` et `2560x1440` rendaient tous les
+ * trois 3024x1964, la définition native de la dalle. Toutes les captures de ce
+ * projet ont donc été prises à une définition que personne n'avait choisie, et
+ * qui change avec l'écran de celui qui construit — deux images comparées d'une
+ * machine à l'autre ne comparaient rien.
+ *
+ * Il n'y a pas de swapchain en headless : le rendu vise des cibles hors écran,
+ * dont cette fonction donne la taille. Rien n'oblige donc à suivre la fenêtre,
+ * et tout oblige à suivre ce qu'on a demandé.
+ *
+ * Fenêtre visible, en revanche, la vérité EST la fenêtre : l'utilisateur la
+ * redimensionne, le système applique sa densité de pixels, et une valeur
+ * mémorisée serait périmée dès la première poignée tirée.
+ */
 void ns_rhi_drawable_size(ns_rhi *r, uint32_t *w, uint32_t *h)
 {
+    if (r->headless) {
+        if (w) *w = r->req_width;
+        if (h) *h = r->req_height;
+        return;
+    }
     int iw = 0, ih = 0;
     SDL_GetWindowSizeInPixels(r->window, &iw, &ih);
     if (w) *w = (uint32_t)(iw > 0 ? iw : 0);
