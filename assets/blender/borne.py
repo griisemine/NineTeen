@@ -158,9 +158,44 @@ Y_DOS = 1.700
 # `roomgen` la pose lui-même : elle reçoit la texture de la partie au runtime et
 # doit rester un `geo_panel` d'un matériau cloné par borne. Le script ne fait
 # que dire OÙ, pour que la cote ne soit pas écrite deux fois.
-ECRAN_W = 0.62
-ECRAN_H = 0.349           # 16:9, comme la cible de rendu 512x288
-ECRAN_Y = 1.290
+#
+# L'inclinaison et la position sont DÉDUITES de la face du cadre, jamais
+# écrites. Elles l'étaient : `ECRAN_INCL = radians(21.6)` d'un côté, et de
+# l'autre une face allant de (0,170 ; 1,098) à (0,050 ; 1,430), dont
+# l'inclinaison réelle vaut 19,87°. Deux chiffres pour une seule surface, et ils
+# n'étaient pas d'accord — la dalle penchait de 1,7° de plus que le meuble qui
+# la porte.
+#
+# Pire, la dalle FLOTTAIT : elle était posée à `sin(21,6°) x h/2 + 12 mm` devant
+# la face, soit 76,2 mm dans le vide, et dépassait de son ouverture de 22,2 mm
+# par le haut. En vue rasante on voyait la cavité du cadre DERRIÈRE l'image.
+#
+# On la centre donc dans son ouverture et on la décale le long de la NORMALE de
+# la face, ce qui est la seule façon qu'une plaque inclinée reste plaquée.
+# La PROFONDEUR du creux. C'est la cote qui règle le reproche « on voit les
+# écrans comme planés au-dessus de la borne et non inclus dans la borne » : un
+# tube ne se pose pas sur une face, il se REGARDE AU FOND D'UN CAISSON. 35 mm
+# suffisent à ce que les quatre parois du creux soient visibles sous tous les
+# angles de jeu, et c'est l'ordre de grandeur d'un vrai encadrement de tube.
+ECRAN_CREUX = 0.035
+
+_ecran_dz = Z_ECRAN_HAUT - Z_CADRE_BAS
+_ecran_dy = Y_ECRAN_HAUT - Y_CADRE_BAS
+_ecran_l  = math.hypot(_ecran_dz, _ecran_dy)     # longueur de la face, sur la pente
+ECRAN_INCL = math.atan2(-_ecran_dz, _ecran_dy)   # bascule vers l'arrière, en radians
+
+# La normale de la face, dans le plan (z, y) : elle monte en reculant, donc sa
+# normale sort vers le joueur et vers le haut.
+ECRAN_NZ = _ecran_dy / _ecran_l
+ECRAN_NY = -_ecran_dz / _ecran_l
+
+# 16:9, comme la cible de rendu 512x288, et taillée pour laisser un VRAI cadre :
+# 26,5 mm en haut et en bas, 84 mm de chaque côté. La dalle remplissait son
+# ouverture à 7 mm près, ce qui ne laissait la place d'aucun encadrement — et un
+# tube sans encadrement se lit comme une affiche, quel que soit le reste.
+ECRAN_H = 0.300
+ECRAN_W = ECRAN_H * 16.0 / 9.0                   # 0,5333
+ECRAN_Y = (Y_CADRE_BAS + Y_ECRAN_HAUT) * 0.5     # centrée dans son ouverture
 
 # --- la quincaillerie -------------------------------------------------
 PORTE_W = 0.250           # mesurée : 103 px de 0,00258 m
@@ -168,12 +203,46 @@ PORTE_H = 0.550           # mesurée : 276 px
 PORTE_Y = 0.130           # bas de la porte
 PORTE_EP = 0.020          # en SAILLIE sur la face : mesurée à l'ombre portée
 
-MANCHE_DX = 0.155         # écartement des deux postes depuis l'axe
+# --- le panneau de commande, UN SEUL POSTE -----------------------------
+#
+# Il en portait DEUX, et c'était faux pour trois raisons cumulées, chacune
+# suffisante (docs/SPEC-BORNE.md §2) :
+#
+#   - le moteur n'a qu'un joueur. `games.h` déclare quatre directions et UN
+#     bouton d'action ; aucune borne ne peut recevoir deux joueurs ;
+#   - le duel de ce jeu est DISTANT, par un relais TCP. Jamais deux joueurs sur
+#     le même meuble ;
+#   - le poste de droite n'avait aucune ancre. Personne, jamais, ne pouvait le
+#     toucher.
+#
+# Et géométriquement il ne tenait pas : le bouton le plus à droite sortait à
+# x = +0,3621 quand la tôle percée s'arrête à ±0,3505 et le jonc de chant à
+# ±0,3600. Il était vissé DANS LE VIDE, 11,6 mm hors du meuble — mesuré dans le
+# glTF exporté, et visible sur une capture zoomée où la pastille chevauche le
+# liseré.
+#
+# Le layout retenu est celui d'un upright Midway un joueur — Pac-Man, Donkey
+# Kong, Galaga — et non un Vewlix ou un Sega P1, qui sont des panneaux de jeu de
+# combat : aucun des huit jeux portés ne lit six boutons.
 BOULE_R = 0.021
 
-BOUTON_R = 0.0165
-BOUTON_PAS_X = 0.052
-BOUTON_PAS_Z = 0.052
+# La ligne de commande, à 75 mm du nez SUR LA PENTE. Un panneau réel garde 60 à
+# 90 mm de tôle nue devant la première commande : c'est là que se pose le talon
+# de la main. Le modèle en avait 31,5.
+Z_COMMANDES = 0.3626      # Z_NEZ - 0.075 * cos(pente)
+Z_START     = 0.3007      # 140 mm derrière le nez, sur la pente
+
+MANCHE_X  = -0.085        # le manche, à gauche de l'axe
+BOUTON_X  = (0.045, 0.085)   # ACTION, puis le secondaire
+START_X   =  0.000        # sur l'axe de la borne
+
+# 30 mm, la cote nommée du matériel réel (Sanwa OBSF-30, Seimitsu PS-14-G). Les
+# 33 mm d'avant n'étaient pas faux en soi — c'est la COLLERETTE d'un bouton
+# Happ — mais le modèle la peignait de la couleur du capuchon, donc la pastille
+# se lisait 10 % trop grosse.
+BOUTON_R  = 0.0150
+BOUTON_H  = 0.008         # 5 mm de saillie une fois enfoncé de 3 : c'en était 9
+START_R   = 0.0120        # 24 mm, un OBSF-24
 
 # =====================================================================
 # Les matériaux
@@ -198,9 +267,13 @@ MATERIAUX = [
     "monnayeur",    # 7  la tôle de la porte à monnaie
     "bouton_a",     # 8
     "bouton_b",     # 9
-    "manche_bleu",  # 10 le poste de gauche
-    "manche_rouge", # 11 le poste de droite
+    "manche_bleu",  # 10 la boule du manche
+    "manche_rouge", # 11 le bouton START — le matériau que le poste supprimé libère
     "chrome",       # 12 tige de manche, rondelle, serrures
+    # Les inserts rouges de la porte à monnaie. Ils portaient `bouton_a` : peindre
+    # les boutons d'action en bleu repeignait la porte à monnaie, ce qui n'a
+    # aucun sens et se voyait sur les bornes aux teintes vives.
+    "insert",       # 13
 ]
 MI = {nom: i for i, nom in enumerate(MATERIAUX)}
 
@@ -335,7 +408,12 @@ def profil_caisson():
     p += [
         (Z_NEZ, Y_NEZ, "panneau"),                    # le nez, puis la tôle
         (Z_PANNEAU_FOND, Y_PANNEAU_FOND, "noir"),     # -> lèvre du cadre
-        (Z_CADRE_BAS, Y_CADRE_BAS, "noir"),           # -> face du cadre d'écran
+        # None : ce segment n'est PAS émis par l'extrusion. C'est la face du
+        # cadre d'écran, et `cadre_ecran()` la reconstruit percée d'une
+        # ouverture et creusée derrière. Émettre les deux donnerait une tôle
+        # pleine DEVANT le creux — c'est-à-dire exactement l'écran posé par
+        # dessus qu'on cherche à supprimer.
+        (Z_CADRE_BAS, Y_CADRE_BAS, None),             # -> face du cadre d'écran (percée)
         (Z_ECRAN_HAUT, Y_ECRAN_HAUT, "noir"),         # -> la casquette
         (Z_HP_HAUT, Y_HP_HAUT, "noir"),               # -> le dessous du marquee
         (Z_MARQUEE, Y_MARQUEE_BAS, "marquee"),        # -> la face du marquee
@@ -362,6 +440,8 @@ def caisson():
     faces, mats = [], []
     for i in range(n):
         j = (i + 1) % n
+        if p[i][2] is None:
+            continue          # voir `profil_caisson` : la face du cadre est percée
         faces.append((i, j, n + j, n + i))
         mats.append(MI[p[i][2]])
 
@@ -384,6 +464,77 @@ def caisson():
 # =====================================================================
 # Les pièces rapportées
 # =====================================================================
+
+def cadre_ecran():
+    """La face du cadre, PERCÉE, et le creux derrière elle.
+
+    Le reproche exact : « On voit les écrans comme planés au-dessus de la borne
+    d'arcade et non inclus dans la borne d'arcade — la 3D de la borne devrait
+    être creusée pour que l'écran semble incrusté. »
+
+    Il était fondé deux fois. D'abord la dalle FLOTTAIT : elle était décalée en
+    Z de `sin(incl) x h/2 + 12 mm`, soit 76 mm devant la face, ce qui n'est le
+    décalage d'aucune surface — sur un plan incliné, s'écarter veut dire suivre
+    la NORMALE. Ensuite, et c'est le fond du reproche, il n'y avait rien à
+    incruster DANS : la face du cadre était une tôle pleine, et la dalle une
+    plaque posée devant. Corriger le flottement seul aurait donné une plaque
+    plaquée — mieux, mais toujours pas un tube.
+
+    On perce donc la face et on creuse. Quatre bandes d'encadrement dans le plan
+    de la face, quatre parois de 35 mm vers l'arrière, un fond. La dalle est
+    posée par `roomgen` AU FOND de ce caisson : sous tous les angles de jeu on
+    voit les parois du creux autour de l'image, et c'est ça qui fait « écran
+    encastré » plutôt que « écran ajouté ».
+
+    Repère : la face court de (Z_CADRE_BAS, Y_CADRE_BAS) à (Z_ECRAN_HAUT,
+    Y_ECRAN_HAUT). On travaille dans son plan, en (`t` le long de la face, `x`
+    en largeur), et on convertit au dernier moment.
+    """
+    uz = (Z_ECRAN_HAUT - Z_CADRE_BAS) / _ecran_l    # le long de la face, vers le haut
+    uy = (Y_ECRAN_HAUT - Y_CADRE_BAS) / _ecran_l
+    mz = (Z_CADRE_BAS + Z_ECRAN_HAUT) * 0.5         # le milieu de la face
+    my = (Y_CADRE_BAS + Y_ECRAN_HAUT) * 0.5
+
+    def pt(x, t, d):
+        """(largeur, position sur la face depuis son milieu, enfoncement)."""
+        z = mz + uz * t - ECRAN_NZ * d
+        y = my + uy * t - ECRAN_NY * d
+        return (x, av(z), y)
+
+    hw, ht = HW - 0.0095, _ecran_l * 0.5    # le bord de la face, jonc déduit
+    ow, ot = ECRAN_W * 0.5, ECRAN_H * 0.5   # le bord de l'ouverture
+
+    # --- les quatre bandes d'encadrement, dans le plan de la face ---
+    bandes = [
+        ((-hw, -ht), ( hw, -ot)),   # bas
+        ((-hw,  ot), ( hw,  ht)),   # haut
+        ((-hw, -ot), (-ow,  ot)),   # gauche
+        (( ow, -ot), ( hw,  ot)),   # droite
+    ]
+    for (i, ((x0, t0), (x1, t1))) in enumerate(bandes):
+        v = [pt(x0, t0, 0.0), pt(x1, t0, 0.0), pt(x1, t1, 0.0), pt(x0, t1, 0.0)]
+        piece("cadre_%d" % i, v, [(0, 1, 2, 3)], MI["noir"], None)
+
+    # --- les quatre parois du creux, et le fond ---
+    #
+    # L'ordre des sommets est choisi pour que la normale regarde VERS
+    # L'INTÉRIEUR du creux : ce sont des parois qu'on voit de face quand on est
+    # devant la borne, pas des faces extérieures.
+    coins = [(-ow, -ot), (ow, -ot), (ow, ot), (-ow, ot)]
+    for k in range(4):
+        (xa, ta) = coins[k]
+        (xb, tb) = coins[(k + 1) % 4]
+        v = [pt(xa, ta, 0.0), pt(xb, tb, 0.0),
+             pt(xb, tb, ECRAN_CREUX), pt(xa, ta, ECRAN_CREUX)]
+        piece("creux_%d" % k, v, [(3, 2, 1, 0)], MI["noir"], None)
+
+    # Le FOND, 4 mm derrière la dalle. Sans lui on verrait à travers la borne
+    # dès que la dalle n'est pas rendue — et c'est le cas au chargement, pendant
+    # la fraction de seconde où aucune texture n'est encore posée.
+    d = ECRAN_CREUX + 0.004
+    v = [pt(-ow, -ot, d), pt(ow, -ot, d), pt(ow, ot, d), pt(-ow, ot, d)]
+    piece("fond_ecran", v, [(0, 1, 2, 3)], MI["noir"], None)
+
 
 def plinthe():
     """En retrait de 3 cm : c'est l'ombre de ce retrait qui fait qu'une borne
@@ -469,7 +620,7 @@ def porte_monnayeur():
         x = cote * 0.038
         # L'insert rouge, et la fente noire à sa gauche.
         boite("insert_%d" % cote, x + 0.006, y_fente, zs + 0.010,
-              0.034, 0.048, 0.006, MI["bouton_a"])
+              0.034, 0.048, 0.006, MI["insert"])
         boite("fente_%d" % cote, x - 0.017, y_fente, zs + 0.010,
               0.005, 0.044, 0.006, MI["noir"])
 
@@ -506,88 +657,94 @@ PANNEAU_PITCH = math.atan2(Y_PANNEAU_FOND - Y_NEZ, Z_NEZ - Z_PANNEAU_FOND)
 
 
 def commandes():
-    """Deux postes de jeu : deux manches à boule et deux blocs de six boutons.
+    """UN poste de jeu : un manche à boule, deux boutons, un START.
 
-    La borne paramétrique n'avait qu'un manche et quatre pastilles. La
-    référence en montre deux de chaque côté, et c'est ce qui dit qu'on joue à
-    DEUX sur une borne d'arcade.
+    Le pourquoi d'un seul poste est dans le bloc de constantes ci-dessus, et le
+    détail chiffré dans docs/SPEC-BORNE.md §2. En deux mots : le moteur n'a
+    qu'un joueur, le duel de ce jeu est distant, et le second poste n'avait
+    aucune ancre — personne ne pouvait le toucher.
+
+    Ce que le poste supprimé libère, ce n'est pas du vide : c'est 242 mm de tôle
+    nue à gauche et 250 à droite, et c'est exactement ce à quoi ressemble un
+    panneau d'upright un joueur. Sur une Ms. Pac-Man le manche est seul au
+    milieu de 56 cm. Cette tôle porte la sérigraphie que `tools/panelart`
+    dessine déjà — le titre, « 1 PLAYER », la légende des boutons — et le
+    layout d'avant ne lui laissait pas la place.
     """
     ancres = {}
 
     # Pas de tôle rapportée : le stratifié du panneau EST le segment du profil
     # qui va du nez au fond, et ce segment porte déjà le matériau « panneau ».
-    # Une plaque en plus ferait double emploi — et la première version la posait
-    # à plat avant de la faire basculer par la rotation de l'objet, c'est-à-dire
-    # autour de l'origine du monde et non de la plaque : elle partait à un mètre
-    # devant la borne, en travers. Ce qui est déjà dans le profil se décrit dans
-    # le profil.
-    z_manche = Z_NEZ - 0.042
-    for (cote, mat) in ((-1, "manche_bleu"), (1, "manche_rouge")):
-        x = cote * MANCHE_DX
-        y0 = panneau_y(z_manche)
-        # La rondelle anti-poussière, à demi enfoncée : 6 mm sous la surface,
-        # ce qui la fait tenir au lieu de flotter.
-        #
-        # 24 mm de rayon, et c'est une correction : elle en faisait 34, soit un
-        # disque de 68 mm quand la boule qui le coiffe en fait 42. Dans la
-        # pénombre de l'allée les deux se confondaient en une seule masse
-        # sombre, et le manche se lisait comme un champignon posé sur la tôle.
-        # Sur la référence la rondelle est un simple jonc sous la boule.
-        cylindre("rondelle_%d" % cote, x, y0 - 0.006, z_manche,
-                 0.024, 0.021, 0.007, MI["chrome"], pitch=PANNEAU_PITCH)
-        # La tige est CHROMÉE sur la référence, pas de la couleur de la boule —
-        # et pas non plus du métal sombre des grilles, où elle disparaissait.
-        cylindre("tige_%d" % cote, x, y0 + 0.000, z_manche,
-                 0.009, 0.008, 0.062, MI["chrome"], pitch=PANNEAU_PITCH,
-                 chapeau=False)
-        # La boule : un demi-cercle continu, très légèrement aplati en bas là
-        # où elle coiffe sa tige — une boule d'arcade est moulée sur son insert.
-        prof = []
-        for k in range(7):
-            a = -math.pi * 0.5 + math.pi * (k / 6.0)
-            prof.append((math.cos(a) * BOULE_R,
-                         math.sin(a) * BOULE_R * (0.86 if math.sin(a) < 0 else 1.0)))
-        yb = y0 + 0.062 + BOULE_R * 0.86
-        revolution("boule_%d" % cote, x, yb, z_manche, prof, MI[mat])
-        if cote < 0:
-            # Le SOMMET de la boule : le point qu'on touche, comme `panneau`
-            # désigne le dessus des pastilles et `coin` la fente. La pose des
-            # bras y ajoute la paume — c'est elle qui sait de quelle longueur
-            # est une main.
-            ancres["stick"] = [x, yb + BOULE_R, z_manche]
+    # Ce qui est dans le profil se décrit dans le profil.
 
-    # Les boutons : deux rangées de trois par poste, décalées comme sur la
-    # référence. Ils sont VIFS : quatre pastilles bordeaux sur un panneau
-    # bordeaux étaient invisibles, et un bouton d'arcade a précisément pour
-    # fonction de se trouver sans être cherché.
-    # Les deux blocs partent à DROITE de leur manche, pas en miroir l'un de
-    # l'autre : sur la référence les six pastilles du poste de gauche sont à
-    # droite de la boule bleue, exactement comme celles du poste de droite le
-    # sont de la boule rouge. C'est la main droite qui appuie, dans les deux cas.
-    sx = sy = sz = 0.0
-    n = 0
-    for cote in (-1, 1):
-        base = cote * MANCHE_DX + 0.075
-        for rang in range(2):
-            z = Z_NEZ - 0.030 - rang * BOUTON_PAS_Z
-            for col in range(3):
-                x = base + col * BOUTON_PAS_X + rang * 0.012
-                y = panneau_y(z)
-                mat = "bouton_b" if (rang == 0 and col == 1) else "bouton_a"
-                cylindre("bouton_%d_%d_%d" % (cote, rang, col),
-                         x, y - 0.003, z, BOUTON_R, BOUTON_R * 0.85, 0.012,
-                         MI[mat], pitch=PANNEAU_PITCH)
-                # L'ancre désigne le bloc du poste de GAUCHE : c'est celui dont
-                # le manche porte l'ancre `stick`. Les deux mains du joueur
-                # doivent tomber sur le MÊME poste — main gauche au manche,
-                # main droite aux pastilles.
-                if cote < 0:
-                    sx += x
-                    sy += y
-                    sz += z
-                    n += 1
-    # Le doigt touche le DESSUS des pastilles, pas leur centre.
-    ancres["panel"] = [sx / n, sy / n + 0.012, sz / n]
+    # --- le manche --------------------------------------------------------
+    x = MANCHE_X
+    y0 = panneau_y(Z_COMMANDES)
+
+    # La rondelle anti-poussière, à demi enfoncée : 6 mm sous la surface, ce qui
+    # la fait tenir au lieu de flotter.
+    cylindre("rondelle", x, y0 - 0.006, Z_COMMANDES,
+             0.024, 0.021, 0.007, MI["chrome"], pitch=PANNEAU_PITCH)
+
+    # La tige : 12 mm de diamètre sur 38 mm visibles.
+    #
+    # Elle faisait 18 mm de diamètre sur 62 mm — c'est-à-dire un levier de
+    # vitesse. Un arbre de manche d'arcade est un tube de 10 à 13 mm, et il ne
+    # sort de la rondelle que de 35 à 40 mm : au-delà, la boule culmine trop
+    # haut et le poignet du joueur ne peut plus se poser sur la tôle. Elle
+    # montait à 101 mm au-dessus du panneau ; elle culmine maintenant à 77.
+    cylindre("tige", x, y0, Z_COMMANDES,
+             0.006, 0.0055, 0.038, MI["chrome"], pitch=PANNEAU_PITCH,
+             chapeau=False)
+
+    # La boule : un demi-cercle continu, très légèrement aplati en bas là où
+    # elle coiffe sa tige — une boule d'arcade est moulée sur son insert.
+    prof = []
+    for k in range(7):
+        a = -math.pi * 0.5 + math.pi * (k / 6.0)
+        prof.append((math.cos(a) * BOULE_R,
+                     math.sin(a) * BOULE_R * (0.86 if math.sin(a) < 0 else 1.0)))
+    yb = y0 + 0.038 + BOULE_R * 0.86
+    revolution("boule", x, yb, Z_COMMANDES, prof, MI["manche_bleu"])
+
+    # Le SOMMET de la boule : le point qu'on touche, comme `panel` désigne le
+    # dessus du bouton et `coin` la fente. La pose des bras y ajoute la paume.
+    ancres["stick"] = [x, yb + BOULE_R, Z_COMMANDES]
+
+    # --- les deux boutons -------------------------------------------------
+    #
+    # DEUX, et le second n'est pas décoratif : `games/demineur/demineur.c`
+    # documente lui-même qu'il ne peut pas poser de drapeau « parce que le
+    # second bouton qu'il faudrait n'existe pas sur le panneau ». Le panneau en
+    # portait douze, et aucun n'était déclaré. En voici un.
+    #
+    # Entraxe 40 mm : la collerette d'un OBSF-30 fait 35 mm, donc 36 est le
+    # plancher physique où deux collerettes se touchent. 40 laisse 10 mm de tôle
+    # entre deux capuchons, ce qui les fait lire comme deux boutons distincts à
+    # deux mètres — et il n'y a aucune raison de serrer quand il n'y en a que
+    # deux.
+    for (i, bx) in enumerate(BOUTON_X):
+        yb2 = panneau_y(Z_COMMANDES)
+        cylindre("bouton_%d" % i, bx, yb2 - 0.003, Z_COMMANDES,
+                 BOUTON_R, BOUTON_R * 0.88, BOUTON_H,
+                 MI["bouton_a" if i == 0 else "bouton_b"], pitch=PANNEAU_PITCH)
+
+    # `panel` cesse d'être le barycentre de six pastilles — un point qui n'était
+    # AUCUN bouton, et sur lequel l'index venait donc se poser entre deux — et
+    # devient le dessus de celui qu'on presse.
+    ancres["panel"] = [BOUTON_X[0], panneau_y(Z_COMMANDES) + BOUTON_H * 0.5,
+                       Z_COMMANDES]
+
+    # --- le START ---------------------------------------------------------
+    #
+    # Il n'y en avait aucun, et une borne sans START n'existe pas : c'est le
+    # bouton que la sérigraphie désigne par « PUSH START », celui qui répond au
+    # jeton. Il est plus petit (24 mm contre 30) et en retrait, comme sur tout
+    # panneau réel — on ne le presse pas en jouant.
+    cylindre("start", START_X, panneau_y(Z_START) - 0.003, Z_START,
+             START_R, START_R * 0.88, BOUTON_H,
+             MI["manche_rouge"], pitch=PANNEAU_PITCH)
+
     return ancres
 
 
@@ -764,6 +921,7 @@ def main():
         bpy.data.materials.new(nom)
 
     caisson()
+    cadre_ecran()
     plinthe()
     grilles_hp()
     enseigne()
@@ -816,14 +974,18 @@ def main():
                    "main : les cotes viennent du script, qui produit aussi le "
                    "glTF. « materials » donne l'ordre attendu par roomgen.")
 
-    # La dalle est posée par roomgen sur la face du cadre, à sa hauteur.
-    # La face court de (Z_CADRE_BAS, Y_CADRE_BAS) à (Z_ECRAN_HAUT, Y_ECRAN_HAUT) :
-    # on l'interpole, puis on ajoute la marge que l'inclinaison réclame — le bord
-    # HAUT de la dalle recule de sin(incl) x h/2, et sans cette marge il
-    # repasserait DANS le meuble, ce qui a déjà coûté le tiers haut de l'image.
-    t = (ECRAN_Y - Y_CADRE_BAS) / (Y_ECRAN_HAUT - Y_CADRE_BAS)
-    zf = Z_CADRE_BAS + (Z_ECRAN_HAUT - Z_CADRE_BAS) * t
-    ancres["screen"][2] = zf + math.sin(ECRAN_INCL) * ECRAN_H * 0.5 + 0.012
+    # La dalle, AU FOND DU CREUX que `cadre_ecran()` vient de tailler.
+    #
+    # Elle était translatée en Z de `sin(incl) x h/2 + 12 mm`, ce qui n'est le
+    # décalage d'aucune surface : sur une face inclinée, s'écarter veut dire
+    # suivre la NORMALE, pas l'axe des Z. Le résultat était une dalle à 76,2 mm
+    # DEVANT son cadre — l'écran « planné au-dessus de la borne » du rapport.
+    #
+    # Elle recule maintenant de `ECRAN_CREUX` le long de la normale, c'est-à-dire
+    # qu'elle est posée au fond du caisson, avec 35 mm de parois tout autour.
+    zf = (Z_CADRE_BAS + Z_ECRAN_HAUT) * 0.5      # le milieu de la face
+    ancres["screen"][1] = ECRAN_Y - ECRAN_NY * ECRAN_CREUX
+    ancres["screen"][2] = zf - ECRAN_NZ * ECRAN_CREUX
 
     with open(os.path.join(os.path.dirname(out), "borne.ancres.json"), "w",
               encoding="utf-8") as fp:

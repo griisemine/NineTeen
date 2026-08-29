@@ -1,24 +1,24 @@
 {
   "stick": [
-    -0.155,
-    1.0865539759036142,
-    0.392
+    -0.085,
+    1.0719997590361445,
+    0.3626
   ],
   "panel": [
-    -0.02200000000000001,
-    1.001991967871486,
-    0.37800000000000006
+    0.045,
+    0.9989397590361446,
+    0.3626
   ],
   "screen": [
     0.0,
-    1.29,
-    0.17684014408203053
+    1.2521026990592328,
+    0.0770841340638771
   ],
   "screenSize": [
-    0.62,
-    0.349
+    0.5333333333333333,
+    0.3
   ],
-  "screenTilt": 0.3769911184307752,
+  "screenTilt": 0.3468348975810078,
   "coin": [
     -0.055,
     0.6160000000000001,
@@ -37,8 +37,9 @@
     "bouton_b",
     "manche_bleu",
     "manche_rouge",
-    "chrome"
+    "chrome",
+    "insert"
   ],
-  "triangles": 4992,
+  "triangles": 3354,
   "_": "Écrit par assets/blender/borne.py. Ne pas retoucher à la main : les cotes viennent du script, qui produit aussi le glTF. « materials » donne l'ordre attendu par roomgen."
 }

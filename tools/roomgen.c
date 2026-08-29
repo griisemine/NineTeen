@@ -1413,6 +1413,15 @@ static void build_cabinet(rg_builder *b, geo_mesh *out, const tool_json *doc,
         else if (!strcmp(n, "panneau"))      mi = panel;
         else if (!strcmp(n, "marquee"))      mi = marq;
         else if (!strcmp(n, "monnayeur"))    mi = dark;
+        /* Les inserts rouges de la porte a monnaie. Ils partageaient
+         * `bouton_a` : peindre les boutons d'action repeignait la porte a
+         * monnaie. Facultatif, et il retombe sur le bouton d'action — ce qui
+         * est exactement l'ancien comportement pour une salle qui ne le
+         * declare pas. */
+        else if (!strcmp(n, "insert")) {
+            const int ins = material_index_opt(b, "borne_insert");
+            mi = (ins >= 0) ? ins : btn_a;
+        }
         else if (!strcmp(n, "bouton_a"))     mi = btn_a;
         else if (!strcmp(n, "bouton_b"))     mi = btn_b;
         else if (!strcmp(n, "manche_bleu"))  mi = (bleu_i  >= 0) ? bleu_i  : btn_b;
@@ -1583,9 +1592,24 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         /* Le joueur se plante à l'HORIZONTALE : on prend la direction du meuble
          * (s, c) et pas la normale de la dalle, qui pointe maintenant un peu
          * vers le haut et le reculerait de quelques centimètres. */
-        cab->player_anchor[0] = cab->panel_centre[0] + s * 0.46f;
+        /*
+         * L'ABSCISSE vient de la borne, la DISTANCE vient du panneau.
+         *
+         * Les deux venaient du panneau, et c'était juste tant que `panel`
+         * désignait le barycentre de six pastilles réparties autour de l'axe.
+         * `panel` désigne maintenant le dessus du bouton d'ACTION, qui est à
+         * 45 mm à droite : le joueur se serait planté 45 mm hors de l'axe de
+         * l'écran qu'il regarde, pour être en face du bouton qu'il presse.
+         *
+         * On se plante devant une borne, pas devant son bouton. La distance,
+         * elle, reste celle du panneau : c'est lui qu'il faut atteindre.
+         */
+        const float reach_z = cab->panel_centre[0] * s + cab->panel_centre[2] * c;
+        const float axis_z  = at[0] * s + at[2] * c;
+        const float depth   = reach_z - axis_z;   /* avancée du panneau sur l'axe */
+        cab->player_anchor[0] = at[0] + s * (depth + 0.46f);
         cab->player_anchor[1] = at[1];
-        cab->player_anchor[2] = cab->panel_centre[2] + c * 0.46f;
+        cab->player_anchor[2] = at[2] + c * (depth + 0.46f);
 
         b->cabinet_count++;
     }
