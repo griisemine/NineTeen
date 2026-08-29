@@ -1,6 +1,8 @@
 /* room_camera.c — caméra de la salle, simulée à pas fixe. */
 #include "room_camera.h"
 
+#include "ns_env.h"
+
 #include <SDL3/SDL.h>
 
 /* Limite du tangage : juste en deçà de la verticale, sinon la base de la
@@ -36,22 +38,36 @@ void room_camera_init(room_camera *c, ns_v3 start, float yaw)
      * `room/main.c` remplace ces valeurs par les mêmes converties à l'échelle du
      * décor chargé — l'ancienne salle est en unités Blender, pas en mètres.
      */
-    c->eye_height_stand  = 1.70f;
-    c->eye_height_crouch = 1.31f;
+    /*
+     * TOUTES CES COTES SONT RÉGLABLES SANS RECOMPILER, par `nineteen.env`.
+     *
+     * Ce ne sont pas des constantes de moteur : ce sont les proportions et les
+     * allures d'un PERSONNAGE, c'est-à-dire exactement ce qu'on règle par
+     * essais successifs. Les avoir en dur imposait trois minutes de compilation
+     * par essai, ce qui revient à ne pas les régler du tout.
+     *
+     * Les valeurs écrites ici restent les DÉFAUTS, et elles sont toujours
+     * justifiées : le fichier absent, le jeu se comporte exactement comme
+     * avant. Voir `nineteen.env` pour ce que chacune veut dire.
+     */
+    c->eye_height_stand  = ns_env_float("personnage.tailleOeil",        1.70f);
+    c->eye_height_crouch = ns_env_float("personnage.tailleOeilAccroupi", 1.31f);
     c->eye_height = c->prev_eye_height = c->eye_height_stand;
 
-    c->body_radius        = 0.32f;
-    c->body_height_stand  = 1.82f;    /* le sommet du crâne, pas les yeux */
-    c->body_height_crouch = 1.42f;
-    c->step_height        = 0.35f;    /* une marche d'escalier confortable */
-    c->gravity            = 9.81f;
-    c->jump_speed         = 3.0f;     /* ~46 cm de détente */
+    c->body_radius        = ns_env_float("personnage.rayon",          0.32f);
+    /* Le sommet du crâne, pas les yeux : c'est lui qui cogne les linteaux. */
+    c->body_height_stand  = ns_env_float("personnage.taille",         1.82f);
+    c->body_height_crouch = ns_env_float("personnage.tailleAccroupi", 1.42f);
+    /* Une marche d'escalier confortable. */
+    c->step_height        = ns_env_float("personnage.marche",         0.35f);
+    c->gravity            = ns_env_float("personnage.gravite",        9.81f);
+    c->jump_speed         = ns_env_float("personnage.saut",           3.0f);   /* ~46 cm */
 
-    c->speed_walk   = 1.4f;
-    c->speed_run    = 3.3f;
-    c->speed_crouch = 0.75f;
-    c->mouse_sensitivity = 0.0022f;
-    c->fov_y = 62.0f;
+    c->speed_walk   = ns_env_float("personnage.vitesseMarche",    1.4f);
+    c->speed_run    = ns_env_float("personnage.vitesseCourse",    3.3f);
+    c->speed_crouch = ns_env_float("personnage.vitesseAccroupi",  0.75f);
+    c->mouse_sensitivity = ns_env_float("vue.sensibiliteSouris",  0.0022f);
+    c->fov_y = ns_env_float("vue.champVertical", 62.0f);
 
     c->grounded = false;
     c->ground_normal = ns_v3_make(0.0f, 1.0f, 0.0f);

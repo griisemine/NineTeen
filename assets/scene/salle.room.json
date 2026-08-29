@@ -4174,6 +4174,20 @@
       ]
     },
     {
+      "name": "monnayeur",
+      "_": "SPEC-ATMOSPHERE §2.3 B, poste 7. Le comptoir occupe x -5,5..0,3 et z 5,85..6,75 ; le monnayeur se pose dans son prolongement, a 0,65 m de son extremite est, dos au mur nord (z = 7,2 en ligne mediane, parement a 7,10 ; le corps s'arrete a 6,85). En sortant du sas — l'ouverture est en x = 4,6, z de 4,6 a 6,0 — c'est le premier objet eclaire du champ, a 3,4 m du bord de la trouee. On entre, on prend ses jetons, on joue. La bande `panneau_lumineux` est ce qui le rend trouvable de l'autre bout de la salle : c'est le seul materiau emissif du decor qui ne soit ni un ecran ni une dalle de plafond. La suspension du meme nom etait deja posee — elle pendait AU-DESSUS DU VIDE ; elle a enfin quelque chose a eclairer.",
+      "at": [0.95, 0.0, 6.55],
+      "yaw": 180.0,
+      "poi": "monnayeur",
+      "parts": [
+        { "_": "le corps. Il occupe z local -0,30 a +0,30 : la face avant est donc en z local +0,30, et un panel a sa normale en +Z local — les quatre pieces de facade se posent a z ~ +0,30. Avec yaw 180 cette face regarde le monde en -z, c'est-a-dire la salle.", "type": "box", "material": "laque_sombre", "at": [0.00, 0.00, 0.00], "size": [0.70, 1.42, 0.60], "chamfer": 0.014 },
+        { "_": "la facade, face locale +z", "type": "panel", "material": "jaune", "at": [0.00, 1.02, 0.302], "size": [0.52, 0.34] },
+        { "_": "le bandeau qui le rend trouvable", "type": "panel", "material": "panneau_lumineux", "at": [0.00, 1.34, 0.302], "size": [0.56, 0.14] },
+        { "_": "la sebile a jetons", "type": "box", "material": "borne_noir", "at": [-0.11, 0.62, 0.315], "size": [0.22, 0.10, 0.03], "chamfer": 0.004 },
+        { "_": "le bouton de rendu, couche a plat contre la facade", "type": "cylinder", "material": "bouton_rouge", "at": [0.18, 0.72, 0.31], "radius": 0.028, "height": 0.02, "sides": 12, "pitch": 90.0 }
+      ]
+    },
+    {
       "name": "suspension_banc_ouest",
       "_": "Le luminaire de la source du meme nom. La salle s'interdit une lumiere sans objet visible : cable, abat-jour tronconique ouvert vers le bas, ampoule emissive. Copie des trois pieces de `props[suspension_billard]`, remontees de 19 cm. Le cable s'arrete a 3,10 : le plan des dalles du plafond (`ceilings[plafond].y`).",
       "at": [-2.40, 0.0, 2.45],

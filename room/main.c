@@ -29,6 +29,7 @@
 #include "ns_scores.h"
 
 #include "room_camera.h"
+#include "ns_env.h"
 #include "room_attract.h"
 #include "room_hud.h"
 #include "room_menu.h"
@@ -42,6 +43,7 @@
 
 typedef struct options {
     bool        headless;
+    const char *env_path;   /* --env= : le fichier de reglages du personnage */
     const char *screenshot;
     int         frames;
     int         width, height;
@@ -92,6 +94,9 @@ static void print_usage(const char *exe)
         "Nineteen %s — salle d'arcade\n"
         "usage : %s [options]\n\n"
         "  --headless           pas de fenêtre visible (rendu hors écran)\n"
+        "  --env=CHEMIN         fichier de réglages (défaut : nineteen.env,\n"
+        "                       cherché dans le dossier courant, puis à côté du\n"
+        "                       binaire, puis dans les assets)\n"
         "  --screenshot=CHEMIN  écrit une capture PNG puis quitte\n"
         "  --frames=N           nombre d'images à rendre avant la capture (défaut 4)\n"
         "  --width=N --height=N résolution (défaut 1600x900)\n"
@@ -268,6 +273,8 @@ static bool parse_options(int argc, char **argv, options *o)
             return false;
         } else if (SDL_strcmp(a, "--headless") == 0) {
             o->headless = true;
+        } else if (SDL_strncmp(a, "--env=", 6) == 0) {
+            o->env_path = a + 6;
         } else if (SDL_strncmp(a, "--screenshot=", 13) == 0) {
             o->screenshot = a + 13;
         } else if (SDL_strncmp(a, "--frames=", 9) == 0) {
@@ -1270,6 +1277,18 @@ int main(int argc, char **argv)
     ns_log_set_level(NS_LOG_INFO);
     NS_INFO("Nineteen %s — démarrage", NINETEEN_VERSION);
 
+    /*
+     * Les REGLAGES DU PERSONNAGE, avant toute chose qui pourrait en lire un.
+     *
+     * Apres `ns_paths_init` — qui monte les dossiers de donnees, et c'est l'un
+     * des endroits ou le fichier est cherche — et avant `ns_config_init`, la
+     * camera, le viewmodel et la scene, qui sont ses lecteurs.
+     */
+    ns_env_load(opt.env_path);
+    /* Les cotes de bras sont lues tout de suite : elles doivent l'être même
+     * quand aucune image ne dessine de bras — voir room_viewmodel.c. */
+    room_viewmodel_read_env();
+
     ns_config_init("settings.cfg");
 
     /* La ligne de commande gagne sur la configuration, la configuration gagne
@@ -2094,6 +2113,14 @@ play_at_done: ;
                     "(essayer --view=borne)", opt.pose);
         }
     }
+
+    /*
+     * Le contrôle des réglages, ICI et pas ailleurs : tous les lecteurs ont
+     * lu, la boucle n'a pas commencé. Une clé mal orthographiée est silencieuse
+     * par construction — la valeur par défaut s'applique et rien ne change —
+     * et c'est exactement le genre de silence que ce dépôt supprime.
+     */
+    ns_env_report_unread();
 
     ns_clock clock;
     ns_clock_init(&clock, NS_DEFAULT_TICK_HZ);

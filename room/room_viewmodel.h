@@ -159,4 +159,10 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt);
 void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
                          float alpha, ns_viewmodel_pose *out);
 
+/*
+ * Relit les cotes de bras dans `nineteen.env`. À appeler UNE fois au démarrage,
+ * avant toute pose — voir le commentaire de `g_vm_upper`.
+ */
+void room_viewmodel_read_env(void);
+
 #endif /* NS_ROOM_VIEWMODEL_H */

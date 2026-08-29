@@ -11,6 +11,7 @@ add_library(nineteen_engine STATIC
     core/ns_clock.c
     core/ns_paths.c
     core/ns_config.c
+    core/ns_env.c
     core/ns_json.c
 
     rhi/ns_rhi.c

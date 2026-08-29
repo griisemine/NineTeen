@@ -19,6 +19,8 @@
  */
 #include "room_viewmodel.h"
 
+#include "ns_env.h"
+
 #include "ns_core.h"
 #include "ns_ik.h"
 
@@ -56,8 +58,46 @@
  * mentiraient sur l'orientation de la surface. Deux constantes recopiées
  * finissent toujours par diverger ; celles-ci ne le peuvent plus.
  */
-#define VM_UPPER   NS_VM_UPPER_M
-#define VM_FORE    NS_VM_FORE_M
+/*
+ * Le manche et l'avant-bras sont RÉGLABLES par `nineteen.env` ; la main NON, et
+ * il faut dire pourquoi.
+ *
+ * Le maillage est modelé sur une longueur de 1 et le shader l'étire en Z par
+ * `length[]`. Sur un tube c'est sans danger : ses normales sont radiales, donc
+ * un étirement en Z ne les touche pas. Sur la MAIN, qui est modelée doigts
+ * repliés, les normales ont une composante en Z — les étirer les fausserait, et
+ * il faudrait une inverse transposée que le shader n'a pas.
+ *
+ * Une main se redimensionnerait donc UNIFORMÉMENT, ce que le pipeline ne sait
+ * pas faire aujourd'hui. Plutôt qu'un réglage qui abîmerait l'éclairage sans le
+ * dire, il n'y a pas de réglage. C'est écrit ici et dans `nineteen.env`.
+ */
+/*
+ * Lues UNE FOIS, au démarrage, et gardées.
+ *
+ * Pas par économie — un `strcmp` sur quinze clés ne se mesure pas — mais parce
+ * qu'une longueur de bras doit être STABLE pendant toute la session : elle
+ * entre dans `VM_REACH`, dont on se sert pour décider qu'une commande est hors
+ * d'atteinte et pour le dire dans le journal. Une valeur relue à chaque image
+ * serait la même à chaque image, mais rien ne le garantirait.
+ *
+ * Et il y a une seconde raison, trouvée en mesurant : lues paresseusement,
+ * elles ne l'étaient QUE si des bras étaient posés. Un rendu sans bras — une
+ * capture en caméra libre — laissait donc le contrôle de réglages annoncer
+ * « personne ne lit personnage.bras », ce qui est faux et ce qui aurait fini
+ * par faire ignorer un avertissement juste.
+ */
+static float g_vm_upper = NS_VM_UPPER_M;
+static float g_vm_fore  = NS_VM_FORE_M;
+
+void room_viewmodel_read_env(void)
+{
+    g_vm_upper = ns_env_float("personnage.bras",      NS_VM_UPPER_M);
+    g_vm_fore  = ns_env_float("personnage.avantBras", NS_VM_FORE_M);
+}
+
+#define VM_UPPER   g_vm_upper
+#define VM_FORE    g_vm_fore
 #define VM_HAND    NS_VM_HAND_M
 #define VM_REACH   (VM_UPPER + VM_FORE)
 
