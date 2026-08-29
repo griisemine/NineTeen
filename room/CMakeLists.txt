@@ -11,7 +11,11 @@ add_executable(nineteen
     room_door.c
 )
 
-target_link_libraries(nineteen PRIVATE nineteen::engine nineteen::games)
+# `nineteen::games` porte deja `nineteen::engine` en PUBLIC (games/CMakeLists.txt:25) :
+# le renommer ici le poserait DEUX FOIS sur la ligne d'edition de liens, et `ld` le dit
+# a chaque cible (« ignoring duplicate libraries »). Un avertissement qui sort a chaque
+# build est un avertissement que plus personne ne lit.
+target_link_libraries(nineteen PRIVATE nineteen::games)
 target_include_directories(nineteen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 nineteen_set_warnings(nineteen)
 nineteen_apply_sanitizers(nineteen)

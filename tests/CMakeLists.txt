@@ -77,7 +77,7 @@ add_test(NAME camera COMMAND ns_test_camera "${CMAKE_BINARY_DIR}/assets")
 # table du serveur Go. Sans lui, un nom générique côté client faisait rejeter la
 # partie entière — silencieusement, l'envoi étant « au mieux, jamais bloquant ».
 add_executable(ns_test_scores test_scores.c)
-target_link_libraries(ns_test_scores PRIVATE nineteen::engine nineteen::games)
+target_link_libraries(ns_test_scores PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_scores)
 nineteen_apply_sanitizers(ns_test_scores)
 add_test(NAME scores COMMAND ns_test_scores)
@@ -200,7 +200,7 @@ nineteen_apply_sanitizers(ns_test_asteroid)
 add_test(NAME asteroid COMMAND ns_test_asteroid)
 
 add_executable(ns_test_tetris test_tetris.c)
-target_link_libraries(ns_test_tetris PRIVATE nineteen::games nineteen::engine)
+target_link_libraries(ns_test_tetris PRIVATE nineteen::games)
 target_include_directories(ns_test_tetris PRIVATE "${CMAKE_SOURCE_DIR}/games/tetris")
 # Le test relit le fichier de 2020 pour vérifier que la table en est bien la
 # copie : il lui faut donc son chemin, et pas une copie de plus.
@@ -405,7 +405,7 @@ set_tests_properties(online PROPERTIES TIMEOUT 60)
 # qu'il JOUE réellement une partie : un duel qu'on vérifie sur des événements
 # fabriqués à la main ne vérifie pas un duel.
 add_executable(ns_test_duel test_duel.c)
-target_link_libraries(ns_test_duel PRIVATE nineteen::engine nineteen::games)
+target_link_libraries(ns_test_duel PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_duel)
 nineteen_apply_sanitizers(ns_test_duel)
 add_test(NAME duel COMMAND ns_test_duel)
@@ -423,7 +423,7 @@ set_tests_properties(duel PROPERTIES TIMEOUT 60)
 # écrites une fois en C et une fois en Go. Le classement en ligne a payé trois
 # défauts pour avoir sauté cette étape-là.
 add_executable(ns_test_lockstep test_lockstep.c)
-target_link_libraries(ns_test_lockstep PRIVATE nineteen::engine nineteen::games)
+target_link_libraries(ns_test_lockstep PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_lockstep)
 nineteen_apply_sanitizers(ns_test_lockstep)
 add_test(NAME lockstep COMMAND ns_test_lockstep)
@@ -445,7 +445,7 @@ add_test(NAME cartes-plafonnees
 # n'importe quelle forme de duel, et elle n'était pas mesurée — j'affirmais
 # même qu'elle l'était. Voir `docs/RESEAU-TEMPS-REEL.md`.
 add_executable(ns_test_replay test_replay.c)
-target_link_libraries(ns_test_replay PRIVATE nineteen::engine nineteen::games)
+target_link_libraries(ns_test_replay PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_replay)
 nineteen_apply_sanitizers(ns_test_replay)
 add_test(NAME replay COMMAND ns_test_replay)
