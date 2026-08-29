@@ -185,6 +185,29 @@ add_custom_command(
 # `marqueeart` les dessine avec la fonte DU JEU (`engine/sprite/ns_font5x7.h`).
 # Chaque teinte est celle de la laque du caisson correspondant, pour qu'une
 # borne se reconnaisse d'aussi loin par son enseigne que par sa couleur.
+#
+# RECETTE VISUELLE — LES HUIT AUTRES. Le poste ci-dessus a été fait à moitié :
+# il a couvert les quatre jeux SANS planche, et laissé les quatre qui EN
+# AVAIENT UNE, parce que leur matériau `marquee_*` était renseigné. Il l'était
+# avec la mauvaise image. `flappy.jpg`, `tetris.jpg`, `asteroid.jpg` et
+# `snake.jpg` ne sont pas des enseignes : ce sont les ATLAS DE CAISSON de 2020,
+# la peau du meuble mise à plat — deux joues, un bandeau d'écran, un flanc, et
+# le nom du jeu en bandeau vertical dans le coin droit. Posés en `fit` sur une
+# enseigne de 0,62 x 0,155 m, ils y écrasaient l'atlas entier : le joueur lisait
+# deux oiseaux coupés et un aplat vert, jamais « FLAPPY ». Vu à 40 cm de l'œil
+# sous `--play-at=borne_arcade_1`, où l'enseigne occupe le haut du cadre pendant
+# toute la partie.
+#
+# Les huit bornes concernées : 1 et 12 (flappy), 2 et 11 (tetris), 3 et 10
+# (asteroid), 5 et 8 (snake). Le compte est le même que celui de `pub.jpg`, et
+# la cause aussi : une image disponible employée pour boucher un trou.
+#
+# Les quatre atlas SORTENT DONC DU DÉCOR, et c'est dit par écrit : le
+# caisson d'une borne est `painted_panel.jpg` teinté, son flanc est
+# `flanc_borne.png` sérigraphié. La reconstruction avait déjà abandonné les
+# peaux de 2020 partout ailleurs ; le marquee était le dernier endroit où l'une
+# d'elles restait accrochée, et elle y était fausse. Elles passent dans
+# `retiredTextures` avec leur motif, comme `pub.jpg` avant elles.
 set(MARQUEE_ART "")
 
 # L'ENSEIGNE DE LA SALLE, en vrai neon.
@@ -229,11 +252,74 @@ list(APPEND MARQUEE_ART "${_neon}" "${GEN}/scene/textures/nineteen_neon.png"
                         "${GEN}/materials/nineteen_neon${_map_n}"
                         "${GEN}/materials/nineteen_neon${_map_orm}")
 
+# LE BLOC DE SECOURS, au-dessus de la porte du sas.
+#
+# Il portait `exit.png`, et `exit.png` n'est pas une pancarte : c'est une
+# CAPTURE D'ÉCRAN DU MENU du jeu de 2020 — un cartouche « ECHAP » bleu, un
+# bouton gris « Q : Quitter », un bouton rouge « D : Deconnexion », arrondis et
+# antialiasés comme une interface. Elle était collée à 2,42 m sur le linteau,
+# émissive à 2,6, verte, au-dessus de la seule porte de la salle. C'est la même
+# faute que `pub.jpg` et `coming_soon.jpg` : le seul fichier disponible employé
+# pour boucher un trou, et qui reste en place parce que personne ne l'ouvre.
+# Vu en capture libre à 2,4 m du linteau, on lit les deux boutons.
+#
+# 1024 x 394, soit le 2,6:1 du panneau déclaré (0,52 x 0,20 m) : les images de
+# ce dépôt qui ne sont pas au format de leur support sont justement celles qui
+# n'ont jamais été regardées.
+#
+# Mode MARQUEE et non `--neon`, et la capture a tranché. `--neon` a été essayé
+# d'abord, par analogie avec l'enseigne de la salle : le halo est DESSINÉ DANS
+# LA PLANCHE, il occupe la même fraction de l'image quelle que soit la taille du
+# support, et sur un panneau de 0,52 m vu à 2,40 m il mange les lettres. Baisser
+# l'émissif de 2,6 à 0,8 n'y change rien — on lisait toujours une bouillie
+# verte. Un bloc de secours n'est de toute façon pas un tube nu : c'est une
+# PLAQUE RÉTROÉCLAIRÉE, verte, avec le mot en réserve dedans, c'est-à-dire
+# exactement ce que le mode marquee dessine — le même objet qu'un marquee de
+# borne, en plus petit.
+set(_sortie "${GEN}/sideart/bloc_sortie.png")
+add_custom_command(
+    OUTPUT  "${_sortie}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND marqueeart --titre=SORTIE "--teinte=0.20,0.86,0.36"
+            --width=1024 --height=394 "${_sortie}"
+    DEPENDS marqueeart
+    COMMENT "Bloc de secours : bloc_sortie.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/scene/textures/bloc_sortie.png"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_sortie}" "${GEN}/scene/textures/bloc_sortie.png"
+    DEPENDS "${_sortie}"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/materials/bloc_sortie${_map_n}" "${GEN}/materials/bloc_sortie${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.35 "${_sortie}" "${GEN}/materials"
+    DEPENDS texgen "${_sortie}"
+    COMMENT "Materiau PBR : bloc_sortie"
+    VERBATIM
+)
+list(APPEND MARQUEE_ART "${_sortie}" "${GEN}/scene/textures/bloc_sortie.png"
+                        "${GEN}/materials/bloc_sortie${_map_n}"
+                        "${GEN}/materials/bloc_sortie${_map_orm}")
+
 set(MARQUEE_shooter  "SHOOTER"  "1.0,0.36,0.14")
 set(MARQUEE_demineur "DEMINEUR" "1.0,0.74,0.20")
 set(MARQUEE_pacman   "PAC-MAN"  "1.0,0.84,0.16")
 set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
-foreach(jeu shooter demineur pacman piano)
+# Les quatre teintes ajoutées suivent la même règle que les quatre premières :
+# c'est la laque du flanc, remontée juste assez pour qu'une plaque rétroéclairée
+# ne sorte pas grise. ASTEROID fait exception et c'est le caisson qui le veut :
+# `flanc_asteroid` vaut 0,16 / 0,16 / 0,20, un noir — une enseigne de cette
+# couleur ne se lirait pas. Elle prend le blanc bleuté du vaisseau et des
+# étoiles de son propre écran. SNAKE est décalé vers le jaune-vert pour ne pas
+# se confondre, dans la même rangée, avec le vert de FLAPPY.
+set(MARQUEE_flappy   "FLAPPY"   "0.22,0.88,0.40")
+set(MARQUEE_tetris   "TETRIS"   "0.34,0.52,1.0")
+set(MARQUEE_asteroid "ASTEROID" "0.72,0.80,1.0")
+set(MARQUEE_snake    "SNAKE"    "0.66,0.94,0.26")
+foreach(jeu shooter demineur pacman piano flappy tetris asteroid snake)
     list(GET MARQUEE_${jeu} 0 _titre)
     list(GET MARQUEE_${jeu} 1 _teinte)
     set(_png "${GEN}/sideart/marquee_${jeu}.png")
@@ -334,9 +420,15 @@ file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
 list(LENGTH _cc0_textures  _n_cc0)
-# +9 : l'art latéral, la sérigraphie de panneau, les quatre enseignes de borne,
-# l'enseigne au néon de la salle et les DEUX ÉCRANS D'ATTENTE de Pac-Man et
-# Piano, dessinés juste au-dessus.
+# +14 : l'art latéral, la sérigraphie de panneau, les HUIT enseignes de borne,
+# l'enseigne au néon de la salle, le bloc de secours du sas et les DEUX ÉCRANS
+# D'ATTENTE de Pac-Man et Piano, dessinés juste au-dessus.
+#
+# Il valait +9. Les cinq de plus sont les quatre enseignes qui manquaient
+# — FLAPPY, TETRIS, ASTEROID, SNAKE — et « bloc_sortie.png ». Les cinq images
+# qu'elles remplacent sortent du décor en même temps : les quatre atlas de
+# caisson et « exit.png ». Le total accordé ne bouge donc que de +5, celui des
+# cinq planches ajoutées, et les cinq retirées sont dans `retiredTextures`.
 #
 # Les deux écrans font sortir `coming_soon.jpg` et `chargement.png` du décor :
 # elles passent dans `retiredTextures` avec leur motif, et le total accordé ne
@@ -347,7 +439,7 @@ list(LENGTH _cc0_textures  _n_cc0)
 # présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
 # c'est le comportement voulu — une texture générée que la salle n'emploie pas,
 # ou une texture employée qui n'est pas générée, sont deux pannes muettes.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 9")
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 14")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"

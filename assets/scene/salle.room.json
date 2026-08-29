@@ -880,8 +880,9 @@
       "fit": true
     },
     {
+      "_": "RECETTE VISUELLE. Elle portait « flappy.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre deux oiseaux coupes en deux et un aplat vert, jamais le mot « FLAPPY ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
       "name": "marquee_flappy",
-      "texture": "flappy.jpg",
+      "texture": "marquee_flappy.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -892,8 +893,9 @@
       "fit": true
     },
     {
+      "_": "RECETTE VISUELLE. Elle portait « snake.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre trois verts differents et une queue de serpent tronquee, jamais le mot « SNAKE ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
       "name": "marquee_snake",
-      "texture": "snake.jpg",
+      "texture": "marquee_snake.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -904,8 +906,9 @@
       "fit": true
     },
     {
+      "_": "RECETTE VISUELLE. Elle portait « tetris.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre trois pans de bleu et une colonne de tetrominos couchee, jamais le mot « TETRIS ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
       "name": "marquee_tetris",
-      "texture": "tetris.jpg",
+      "texture": "marquee_tetris.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -916,8 +919,9 @@
       "fit": true
     },
     {
+      "_": "RECETTE VISUELLE. Elle portait « asteroid.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre un champ d'etoiles repete avec des coutures visibles, jamais le mot « ASTEROID ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
       "name": "marquee_asteroid",
-      "texture": "asteroid.jpg",
+      "texture": "marquee_asteroid.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -1069,16 +1073,18 @@
       "fit": true
     },
     {
+      "_": "RECETTE VISUELLE. Le bloc de secours du sas portait « exit.png », et « exit.png » est une CAPTURE D'ECRAN DU MENU de 2020 : un cartouche bleu « ECHAP », un bouton gris « Q : Quitter », un bouton rouge « D : Deconnexion », coins arrondis et lettres antialiasees. Elle etait emissive a 2,6 au-dessus de la seule porte de la salle, et a 2,4 m du linteau on lit les deux boutons. C'est la faute de « pub.jpg » et de « coming_soon.jpg » une troisieme fois : le seul fichier disponible pour boucher un trou. Remplacee par une planche dessinee par `tools/marqueeart` au format du panneau declare (0,52 x 0,20 m, soit 2,6:1) : une plaque retroeclairee verte avec le mot SORTIE en reserve dedans, c'est-a-dire le meme objet qu'un marquee de borne, en plus petit. Le mode `--neon` a ete essaye d'abord et rejete en capture : son halo est dessine DANS la planche, il occupe la meme fraction de l'image quelle que soit la taille du support, et sur 0,52 m vu a 2,40 m il mangeait les lettres. Voir `_emis` pour la force, qui bouge elle aussi.",
       "name": "sortie",
-      "texture": "exit.png",
+      "texture": "bloc_sortie.png",
       "roughness": 0.35,
       "emissive": [
-        0.3,
         1.0,
-        0.4
+        1.0,
+        1.0
       ],
-      "emissiveStrength": 2.6,
-      "fit": true
+      "emissiveStrength": 0.55,
+      "fit": true,
+      "_emis": "Emissif ramene de [0,3 ; 1,0 ; 0,4] x 2,6 a [1 ; 1 ; 1] x 0,55, et c'est la PLANCHE qui l'impose. « exit.png » etait une capture d'ecran grise : multiplier un gris moyen par 2,6 donnait une lueur. « bloc_sortie.png » est une plaque retroeclairee verte a lettres en reserve — elle porte deja sa teinte et sa clarte, et le meme reglage cumulait deux fois le vert. Teinte neutre, comme chez l'enseigne NINETEEN, et 0,55 : un bloc de secours doit se voir de loin dans un sas sombre sans bruler a 2,40 m."
     },
     {
       "_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le plus sature du decor, et une enseigne doit se detacher des murs chauds plutot que s'y ajouter. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.",
@@ -1468,17 +1474,18 @@
     },
     {
       "name": "miroir",
-      "texture": "painted_panel.jpg",
-      "roughness": 0.08,
-      "metallic": 0.3,
-      "uvMetres": 1.0,
+      "texture": "black_oak_veneer.jpg",
+      "roughness": 0.05,
+      "metallic": 0.35,
+      "uvMetres": 4.0,
       "baseColor": [
-        1.02,
-        1.06,
-        1.12,
+        0.3,
+        0.335,
+        0.4,
         1.0
       ],
-      "_": "Le miroir au-dessus du lavabo. C'etait une dalle de MARBRE : un rectangle blanc mat de 1,3 x 0,9 m, la plus grande surface du champ, et rien n'y disait qu'on etait cense s'y voir.\nMetallique a 0,92 et lisse a 0,045 — un vrai miroir — il sortait NOIR : les reflexions lancees ne tournent qu'au palier ultra, et un metal pur sans rien a reflechir n'a plus de diffus pour le sauver. A 0,30 de metal et 0,08 de rugosite, il garde un albedo clair ET accroche le tube fluo en un reflet net : c'est ce reflet qui fait lire un miroir, exactement comme celui de la vitre fait lire une dalle de borne."
+      "_": "Le miroir au-dessus du lavabo. C'etait une dalle de MARBRE : un rectangle blanc mat de 1,3 x 0,9 m, la plus grande surface du champ, et rien n'y disait qu'on etait cense s'y voir.\nMetallique a 0,92 et lisse a 0,045 — un vrai miroir — il sortait NOIR : les reflexions lancees ne tournent qu'au palier ultra, et un metal pur sans rien a reflechir n'a plus de diffus pour le sauver. A 0,30 de metal et 0,08 de rugosite, il garde un albedo clair ET accroche le tube fluo en un reflet net : c'est ce reflet qui fait lire un miroir, exactement comme celui de la vitre fait lire une dalle de borne.",
+      "_recette": "RECETTE VISUELLE, ET LA CAPTURE EST SANS APPEL : « painted_panel.jpg » est un panneau de BETON PEINT, taches et grumeaux compris. Cadre de face au-dessus du lavabo hommes, le miroir sortait en dalle beige-gris mate de 1,30 x 0,90 m, plus claire que le carrelage blanc qui l'entoure et couverte de coulures. Ce n'etait plus du marbre, mais c'etait du beton : le poste precedent avait corrige la RUGOSITE et le METAL sans changer l'IMAGE, si bien que le reflet net qu'il decrit se posait sur des taches de mur.\nCe moteur n'a pas de reflexion hors du palier ultra. On ne fabrique donc pas un miroir : on fabrique un VERRE TEINTE, qui est ce qu'un miroir montre quand il n'a rien a montrer. Trois choses le font lire, et les trois ensemble :\n  — l'IMAGE. « black_oak_veneer.jpg » est la seule texture unie de l'arbre. A 4,00 m de pavage sur un panneau de 1,30, on n'en voit qu'un tiers de tuile : le fil du bois devient deux ondes larges et douces, qui se lisent comme le trouble d'une glace, la ou les taches du beton se lisaient comme un mur.\n  — la VALEUR. 0,30 / 0,335 / 0,40 : un tiers de ce que la faience renvoie, et froid. Un miroir dans des toilettes tamisees est SOMBRE ; c'est d'etre plus clair que son mur qui trahissait la dalle.\n  — le BORD. Le panneau n'avait aucun cadre : il flottait sur la faience comme une affiche. Un dormant chrome de 4 cm l'entoure maintenant (« cadre du miroir » chez les deux lavabos), et c'est lui qui dit qu'il y a un objet et pas un aplat.\nMetal 0,35 et rugosite 0,05 — le commentaire ci-dessous ecrit 0,30 et 0,08, qui etaient les siens : au-dela de ce voisinage le panneau sort noir, faute de quoi que ce soit a reflechir, et c'est sa mesure a lui qui borne encore le reglage."
     }
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
@@ -1534,6 +1541,26 @@
     {
       "file": "marron_foncer.jpg",
       "why": "aplat 24x24 ; la radio est en bois, elle prend un placage de chêne"
+    },
+    {
+      "file": "exit.png",
+      "why": "la capture d'ecran du MENU de 2020 — « ECHAP », « Q : Quitter », « D : Deconnexion » — employee comme bloc de secours au-dessus de la porte du sas, emissive a 2,6. Ce n'a jamais ete une pancarte. 420 x 210, ni le format d'un bloc de secours ni celui du panneau qui la portait. Remplacee par « bloc_sortie.png », dessinee par `tools/marqueeart` (recette visuelle). Le fichier reste dans `legacy/`."
+    },
+    {
+      "file": "flappy.jpg",
+      "why": "l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat : deux oiseaux, un aplat vert et un bandeau vertical « Flappy Bird » dans le coin droit. Employe en `fit` comme ENSEIGNE, il ecrasait tout cela sur une plaque de 0,62 x 0,155 m, et huit bornes sur dix-neuf portaient donc une enseigne illisible ; a 40 cm de l'oeil sous `--play-at=`, elle tient le haut du cadre pendant toute la partie. Le caisson et le flanc ne l'employaient deja plus : ils sont en « painted_panel.jpg » teinte et en « flanc_borne.png ». Remplace par une planche dessinee par `tools/marqueeart` avec la fonte du jeu (recette visuelle). Le fichier reste dans `legacy/`, et la salle `--room=legacy` continue de l'employer par `assets/scene/cabinets.json`."
+    },
+    {
+      "file": "tetris.jpg",
+      "why": "l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat : trois pans de bleu, une colonne de tetrominos et un bandeau « TETRIS » dans le coin droit. Employe en `fit` comme ENSEIGNE, il ecrasait tout cela sur une plaque de 0,62 x 0,155 m, et huit bornes sur dix-neuf portaient donc une enseigne illisible ; a 40 cm de l'oeil sous `--play-at=`, elle tient le haut du cadre pendant toute la partie. Le caisson et le flanc ne l'employaient deja plus : ils sont en « painted_panel.jpg » teinte et en « flanc_borne.png ». Remplace par une planche dessinee par `tools/marqueeart` avec la fonte du jeu (recette visuelle). Le fichier reste dans `legacy/`, et la salle `--room=legacy` continue de l'employer par `assets/scene/cabinets.json`."
+    },
+    {
+      "file": "asteroid.jpg",
+      "why": "l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat : un champ d'etoiles, un vaisseau et un bandeau vertical dans le coin droit. Employe en `fit` comme ENSEIGNE, il ecrasait tout cela sur une plaque de 0,62 x 0,155 m, et huit bornes sur dix-neuf portaient donc une enseigne illisible ; a 40 cm de l'oeil sous `--play-at=`, elle tient le haut du cadre pendant toute la partie. Le caisson et le flanc ne l'employaient deja plus : ils sont en « painted_panel.jpg » teinte et en « flanc_borne.png ». Remplace par une planche dessinee par `tools/marqueeart` avec la fonte du jeu (recette visuelle). Le fichier reste dans `legacy/`, et la salle `--room=legacy` continue de l'employer par `assets/scene/cabinets.json`."
+    },
+    {
+      "file": "snake.jpg",
+      "why": "l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat : trois verts, des fruits, un serpent et un bandeau « Snake » dans le coin droit. Employe en `fit` comme ENSEIGNE, il ecrasait tout cela sur une plaque de 0,62 x 0,155 m, et huit bornes sur dix-neuf portaient donc une enseigne illisible ; a 40 cm de l'oeil sous `--play-at=`, elle tient le haut du cadre pendant toute la partie. Le caisson et le flanc ne l'employaient deja plus : ils sont en « painted_panel.jpg » teinte et en « flanc_borne.png ». Remplace par une planche dessinee par `tools/marqueeart` avec la fonte du jeu (recette visuelle). Le fichier reste dans `legacy/`, et la salle `--room=legacy` continue de l'employer par `assets/scene/cabinets.json`."
     }
   ],
   "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources. Ici quatre plafonniers faibles balisent la circulation, des néons colorés rasent les murs, et l'essentiel de la lumière vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines qui éclairent.",
@@ -1749,6 +1776,26 @@
           3.6
         ]
       }
+    },
+    {
+      "_": "RECETTE VISUELLE. Le bloc sanitaire n'avait QU'UNE lampe, « plafonnier_toilettes » a (9,80 ; -4,00), et elle est dans le bloc HOMMES. Le bloc FEMMES occupe x 9,00..11,85 et z -2,31..1,44 : son centre est a 4,0 m de cette lampe et son lavabo a 5,06 m, pour une portee de 4,40. La moitie nord des toilettes n'etait donc eclairee par AUCUN luminaire — elle ne vivait que de l'ambiante, ce qui est exactement le defaut que ce fichier reproche ailleurs aux lumieres sans lampe, pris a l'envers : une piece sans lumiere. Le joueur y va : le controle d'accessibilite compte le bloc dans les 118 m2 atteignables. Memes couleur, meme format de pave et meme portee que sa jumelle du sud, posee au centre du bloc et sous le plafond du hall, qui s'arrete a x = 11,10.",
+      "name": "plafonnier_toilettes_nord",
+      "at": [
+        10.2,
+        2.74,
+        -0.45
+      ],
+      "color": [
+        0.86,
+        0.94,
+        0.86
+      ],
+      "intensity": 120.0,
+      "range": 4.4,
+      "panelSize": [
+        0.9,
+        0.45
+      ]
     },
     {
       "name": "neon_mur_ouest",
@@ -2605,6 +2652,27 @@
       "railWidth": 0.038,
       "railDrop": 0.016,
       "plenum": 0.38
+    },
+    {
+      "_": "RECETTE VISUELLE. Le plafond du hall couvre x -11,10..11,10 ; la coquille des sanitaires va jusqu'a x = 11,952. Les 85 derniers centimetres du bloc n'avaient donc PAS de plafond — et c'est exactement la bande ou sont poses les DEUX plans de lavabo (x 11,332..11,852) et leurs miroirs. Capture prise au zenith au-dessus du lavabo hommes : la trame s'arrete net et le reste du champ est un vide noir. C'est le meme oubli que celui de « plafond_sas », au bout du couloir, une porte plus loin. Cette bande-ci prend le relais exactement ou l'autre s'arrete — x 11,10 a 12,00, sans recouvrement, deux surfaces coplanaires se disputant le tampon de profondeur.",
+      "name": "plafond_sanitaires",
+      "material": "plafond",
+      "railMaterial": "rail",
+      "panelMaterial": "panneau_lumineux",
+      "voidMaterial": "plenum",
+      "centre": [
+        11.55,
+        -2.3
+      ],
+      "size": [
+        0.9,
+        8.0
+      ],
+      "y": 3.1,
+      "tile": 1.2,
+      "railWidth": 0.038,
+      "railDrop": 0.016,
+      "plenum": 0.38
     }
   ],
   "boxes": [
@@ -3378,35 +3446,18 @@
       "materialPanel": "borne_commande",
       "screen": "ecran_pacman",
       "marquee": "marquee_pacman",
-      "_x": "-6,48 et non -6,621 comme en 2020 : les socles des pilastres, larges de 0,566, atteignent x = -7,017, et le dos d'une borne a -6,621 tombe a -7,061. Le controle l'a chiffre au millimetre — 44 x 134 x 238 mm de recouvrement. En 2020 les pilastres du mur ouest et les deux bornes ne se genaient pas parce qu'il n'y en avait que deux, posees entre eux ; a six, la rangee croise la grille. 14 cm suffisent a degager."
+      "_x": "-6,48 et non -6,621 comme en 2020 : les socles des pilastres, larges de 0,566, atteignent x = -7,017, et le dos d'une borne a -6,621 tombe a -7,061. Le controle l'a chiffre au millimetre — 44 x 134 x 238 mm de recouvrement. En 2020 les pilastres du mur ouest et les deux bornes ne se genaient pas parce qu'il n'y en avait que deux, posees entre eux ; a six, la rangee croise la grille. 14 cm suffisent a degager.",
+      "_jeux": "RECETTE VISUELLE — L'ORDRE DES SIX, ET NON LEUR NOMBRE. La rangee lisait PAC-MAN / PIANO / PAC-MAN / PIANO / PAC-MAN / PIANO, une alternance stricte sur six caissons alignes au meme pas, avec six enseignes identiques deux a deux. Vue de face depuis « classement » et de trois quarts depuis « sud », elle se lit comme une liste generee : aucune vraie salle ne pose ses machines en damier, elle pose les doublons COTE A COTE, parce qu'on les livre par deux et qu'on les branche sur la meme rampe. Les jeux des bornes 14 et 15, puis 17 et 18, sont donc echanges — l'ordre devient PAC-MAN, PAC-MAN, PIANO, PIANO, PIANO, PAC-MAN : deux bancs et un isole. Le COMPTE ne bouge pas (trois de chaque), ni les places, ni les cotes, ni les difficultes. Rien ici n'est un releve de 2020 : le mur ouest n'en portait que DEUX, et les six sont une invention assumee juste au-dessus ; leur ordre l'est donc aussi, et il valait mieux qu'il n'ait pas l'air tire d'une boucle."
     },
     {
       "name": "borne_arcade_14",
       "slot": 14,
-      "game": "piano",
-      "difficulty": "normal",
-      "at": [
-        -6.48,
-        0,
-        -2.013
-      ],
-      "yaw": 90.0,
-      "materialBody": "caisson_piano",
-      "materialSide": "flanc_piano",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_piano",
-      "marquee": "marquee_piano"
-    },
-    {
-      "name": "borne_arcade_15",
-      "slot": 15,
       "game": "pacman",
       "difficulty": "normal",
       "at": [
         -6.48,
         0,
-        -1.071
+        -2.013
       ],
       "yaw": 90.0,
       "materialBody": "caisson_pacman",
@@ -3415,6 +3466,24 @@
       "materialPanel": "borne_commande",
       "screen": "ecran_pacman",
       "marquee": "marquee_pacman"
+    },
+    {
+      "name": "borne_arcade_15",
+      "slot": 15,
+      "game": "piano",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        -1.071
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_piano",
+      "materialSide": "flanc_piano",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_piano",
+      "marquee": "marquee_piano"
     },
     {
       "name": "borne_arcade_16",
@@ -3437,30 +3506,12 @@
     {
       "name": "borne_arcade_17",
       "slot": 17,
-      "game": "pacman",
-      "difficulty": "normal",
-      "at": [
-        -6.48,
-        0,
-        0.813
-      ],
-      "yaw": 90.0,
-      "materialBody": "caisson_pacman",
-      "materialSide": "flanc_pacman",
-      "materialTrim": "borne_cadre",
-      "materialPanel": "borne_commande",
-      "screen": "ecran_pacman",
-      "marquee": "marquee_pacman"
-    },
-    {
-      "name": "borne_arcade_18",
-      "slot": 18,
       "game": "piano",
       "difficulty": "normal",
       "at": [
         -6.48,
         0,
-        1.755
+        0.813
       ],
       "yaw": 90.0,
       "materialBody": "caisson_piano",
@@ -3469,6 +3520,24 @@
       "materialPanel": "borne_commande",
       "screen": "ecran_piano",
       "marquee": "marquee_piano"
+    },
+    {
+      "name": "borne_arcade_18",
+      "slot": 18,
+      "game": "pacman",
+      "difficulty": "normal",
+      "at": [
+        -6.48,
+        0,
+        1.755
+      ],
+      "yaw": 90.0,
+      "materialBody": "caisson_pacman",
+      "materialSide": "flanc_pacman",
+      "materialTrim": "borne_cadre",
+      "materialPanel": "borne_commande",
+      "screen": "ecran_pacman",
+      "marquee": "marquee_pacman"
     },
     {
       "_": "Le poste de classement, sur l'estrade centrale — et la phrase qui etait ici melangeait deux bornes.\nCE QU'IL Y A VRAIMENT EN (0 ; -4,541) DANS 2020 : la borne 15, un caisson COMING SOON (FLAPPY_BIRD_HARD.015_Cube.072) dont `detecterMachine` renvoie 0 — injouable (legacy/room/room.c:2409-2413). Le CLASSEMENT est la borne 16 : un MONITEUR POSE SUR LE COMPTOIR, dalle x -0,412..0,412, y 1,449..1,910, z 5,091..5,184 (Cube.046_Cube.003 et son capot Cube.060_Cube.013), regarde depuis z 4,301..4,786 face au nord (room.c:2417), cible de cadrage (0 ; 4,797) (room.c:1854).\nIL Y A DONC SEIZE BORNES ET QUINZE CAISSONS dans 2020, et ce n'est pas une incoherence du code : le seizieme poste n'est pas un caisson, c'est un ecran sur un meuble. La phrase « room.c le declare comme la seizieme cible alors qu'il n'y a que quinze caissons » etait donc fausse.\nCE QUI N'EST PAS CORRIGE ICI, ET POURQUOI : dix-neuf bornes est un choix assume du proprietaire — le jeu s'appelle Nineteen. Deplacer le classement sur le comptoir demanderait de decider ce qui prend sa place au centre, et cette decision ne m'appartient pas. Elle est posee dans le rapport. Sa cote y, elle, suit l'estrade : 0,228 et non 0,12.",
@@ -4467,6 +4536,70 @@
           "pitch": -90
         },
         {
+          "_": "LE DORMANT DU MIROIR, ajoute par la recette visuelle. La glace etait un `panel` nu pose sur la faience : sans bord, elle se lisait comme une affiche collee au mur. QUATRE plats de 4 cm l'encadrent sans jamais la recouvrir — un cadre plein, essaye d'abord, la masquait entierement : il tombait a 1,5 mm devant elle et c'est le cadre qu'on voyait. Quatre plats posent la question autrement : ils ne partagent aucun pixel avec la glace, donc l'ordre en profondeur ne peut plus les departager. Ils saillent de 1,4 cm devant elle, comme un dormant devant son verre, et leur dos ne descend jamais plus profond que la glace : rien ne touche le parement est a x = 11,852.",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.0,
+            1.91,
+            -0.245
+          ],
+          "size": [
+            1.38,
+            0.04,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le plat bas du dormant.",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.0,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            1.38,
+            0.04,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le montant ouest du dormant.",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            -0.67,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            0.04,
+            0.98,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le montant est du dormant.",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.67,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            0.04,
+            0.98,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
           "type": "panel",
           "material": "miroir",
           "at": [
@@ -4519,6 +4652,70 @@
             0.44
           ],
           "pitch": -90
+        },
+        {
+          "_": "le plat haut du dormant, comme chez « lavabo_toilettes ».",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.0,
+            1.91,
+            -0.245
+          ],
+          "size": [
+            1.38,
+            0.04,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le plat bas du dormant, comme chez « lavabo_toilettes ».",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.0,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            1.38,
+            0.04,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le montant ouest du dormant, comme chez « lavabo_toilettes ».",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            -0.67,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            0.04,
+            0.98,
+            0.028
+          ],
+          "chamfer": 0.005
+        },
+        {
+          "_": "le montant est du dormant, comme chez « lavabo_toilettes ».",
+          "type": "box",
+          "material": "borne_tmolding",
+          "at": [
+            0.67,
+            0.97,
+            -0.245
+          ],
+          "size": [
+            0.04,
+            0.98,
+            0.028
+          ],
+          "chamfer": 0.005
         },
         {
           "type": "panel",
@@ -6993,10 +7190,12 @@
         1.7,
         -2.6
       ],
-      "yaw": 0.0,
+      "yaw": 90.0,
       "pitch": -2.0,
       "_": "Dans l'allée centrale, entre les deux grappes de trois, face à l'îlot.",
-      "_replan": "LES POINTS DE VUE, REPRIS APRES LE RETRECISSEMENT. Ils cadraient un hall de 19,30 x 14,40 ; il fait 14,43 x 14,27, le bar est revenu au centre, les toilettes sont passees a l'est et le sas est devenu un couloir de neuf metres. Un point de vue laisse en place se retrouve dans un meuble — le controle l'a dit pour « bar », qui etait DANS la suspension d'un banc — ou face a un mur.\\n`borne` garde son tangage a zero : le moteur pose lui-meme le regard sur la dalle, a condition d'etre en mode joueur, ce que --pose=idle impose."
+      "_replan": "LES POINTS DE VUE, REPRIS APRES LE RETRECISSEMENT. Ils cadraient un hall de 19,30 x 14,40 ; il fait 14,43 x 14,27, le bar est revenu au centre, les toilettes sont passees a l'est et le sas est devenu un couloir de neuf metres. Un point de vue laisse en place se retrouve dans un meuble — le controle l'a dit pour « bar », qui etait DANS la suspension d'un banc — ou face a un mur.\\n`borne` garde son tangage a zero : le moteur pose lui-meme le regard sur la dalle, a condition d'etre en mode joueur, ce que --pose=idle impose.",
+      "_cap": "Cap 0 -> 90. Elle vise l'ilot et elle montrait le mur est. A 0 : le dossier du banc sud-ouest sur la moitie gauche du cadre et « pilier_centre » au milieu, plus une borne coupee au bord droit — aucun des deux grappes de trois. A 90 : les six bornes de la rangee sud en enfilade, le panneau HARD/EASY au-dessus de l'allee, l'enseigne et le tableau du bar a onze metres.",
+      "_recette": "CAP CORRIGE PAR LA CAPTURE, ET NON PAR LE CALCUL. Dans ce moteur la camera avance vers (cos lacet, sin lacet) — `room_camera.c:218` — donc lacet 0 regarde +X et lacet 90 regarde +Z. Verifie avant de toucher a quoi que ce soit : quatre captures libres au meme point (0 ; -2,60), lacets 0 / 90 / 180 / 270. A 90 on a l'allee centrale, le panneau HARD/EASY dans l'axe et l'enseigne NINETEEN au fond ; a 0 un pan de dossier de banc et un pilier rouge en plein cadre. Le releve de 2020 (§ 7) signalait cinq captures a 90 degres de leur sujet ; « sud » et « billard » ont ete corrigees avant moi, voici les cinq autres."
     },
     {
       "name": "bar",
@@ -7005,8 +7204,9 @@
         1.7,
         2.8
       ],
-      "yaw": 0.0,
-      "pitch": -2.0
+      "yaw": 90.0,
+      "pitch": -2.0,
+      "_cap": "Cap 0 -> 90. Le comptoir est a z = +6,05, c'est-a-dire au NORD du point (0 ; 2,80) ; a 0 la camera regardait +X, donc le mur est, avec les bornes 4 a 6 de profil sur la gauche et le comptoir hors cadre. Le meuble que la vue nomme n'y etait pas. A 90 elle le prend de face, avec le tableau et l'enseigne."
     },
     {
       "name": "billard",
@@ -7048,9 +7248,10 @@
         1.7,
         -2.9
       ],
-      "yaw": 180.0,
+      "yaw": 270.0,
       "pitch": -6.0,
-      "_": "La borne de classement, vue depuis l'allée — c'est-à-dire d'où l'on vient. Elle était à 6 m de l'îlot, elle est à 2,2 m ; et depuis B3 elle regarde enfin dans la bonne direction."
+      "_": "La borne de classement, vue depuis l'allée — c'est-à-dire d'où l'on vient. Elle était à 6 m de l'îlot, elle est à 2,2 m ; et depuis B3 elle regarde enfin dans la bonne direction.",
+      "_cap": "Cap 180 -> 270. « borne_classement » est a (0 ; -4,541), soit 1,64 m au SUD du point de vue. A 180 la camera regardait -X et cadrait les six bornes du mur ouest et le billard — une belle image, mais pas celle que le nom promet, et la borne de classement n'y apparaissait pas du tout. A 270 elle remplit le cadre : marquee NINETEEN au neon et tableau des MEILLEURS SCORES."
     },
     {
       "name": "toilettes",
@@ -7070,10 +7271,11 @@
         1.7,
         2.2
       ],
-      "yaw": 180.0,
+      "yaw": 270.0,
       "pitch": 0.0,
       "_pitch": "ZERO, et c'est le point : le tangage etait ecrit -34 a la main ici. C'etait une QUATRIEME copie du meme calcul — --play-at le fait, l'entree en partie le fait, et cette capture le recopiait fige. Le moteur pose maintenant le regard sur la dalle des qu'on arrive devant une borne, donc cette capture n'a plus rien a declarer.\nCONSEQUENCE A CONNAITRE, et elle a ete mesuree : le moteur ne pose le regard QU'EN MODE JOUEUR. Cette capture doit donc etre prise avec --pose=idle, qui impose ce mode. Sans lui la camera reste libre a tangage nul, le marquee remplit le cadre, et 17,0 % des pixels brulent. Avec, on retombe a 7,5 %, dans la cible.\n    --view=borne              -> mediane 57,6, 17,0 %% au-dessus de 200\n    --view=borne --pose=idle  -> mediane 44,6,  7,5 %%\nC'est la lecon que main.c porte deja : une verification qui emprunte un chemin que le joueur n'emprunte pas ne verifie rien.",
-      "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`."
+      "_": "Plante devant `borne_arcade_1`, sur l'ancre EXACTE que la salle declare — ce que le commentaire precedent affirmait deja alors que le point etait 25 cm en arriere (z = -1,525 pour une ancre a -1,278). Ces 25 cm valaient les bras : le panneau se retrouvait a 0,77 m de l'epaule pour 0,59 m de portee, et `--pose=press` montrait deux mains a hauteur de monnayeur au lieu des commandes. C'est exactement le defaut que `--play-at=` documente et evite en se posant sur l'ancre sans reculer ; le point de vue nomme, lui, avait garde le recul. Verifie en image, et desormais surveille : le controle de portee tourne aussi sous `--pose=`.",
+      "_cap": "Cap 180 -> 270. C'est la pire des cinq, parce qu'elle est prise EN MODE JOUEUR : « borne_arcade_1 » est a (-3,186 ; 1,293) et le point de vue a (-3,186 ; 2,200), donc la borne est a 0,91 m en -Z. A 180 la capture montrait un mur beige a bout de bras et DEUX MAINS TENDUES DESSUS, la borne hors cadre a droite. Le commentaire ci-dessous explique que le moteur pose lui-meme le regard sur la dalle sous `--pose=idle` : il ne pose que le TANGAGE (`main.c:2774`), jamais le lacet, et il ne le pose que s'il y a une borne DEVANT — donc a 180 il ne se passait rien du tout. A 270, `--view=borne --pose=idle` donne bien la borne de face, ecran compris."
     },
     {
       "name": "centre",
@@ -7083,8 +7285,9 @@
         1.7,
         4.8
       ],
-      "yaw": 180.0,
-      "pitch": -4.0
+      "yaw": 270.0,
+      "pitch": -4.0,
+      "_cap": "Cap 180 -> 270. Son propre commentaire dit ce qu'elle doit montrer : la face nord de l'ilot, et dans l'axe l'estrade, la borne de classement et le tableau du mur sud a onze metres. Tout cela est au SUD, donc en -Z, donc a 270. A 180 elle regardait -X : le comptoir de trois quarts a gauche, les mange-debout, et les bornes du mur ouest tout au fond. La trouee centrale annoncee n'etait pas dans le cadre."
     },
     {
       "name": "sud",
@@ -7094,8 +7297,9 @@
         1.7,
         -6.7
       ],
-      "yaw": 90.0,
-      "pitch": -3.0
+      "yaw": 125.0,
+      "pitch": -3.0,
+      "_cap": "Cap 90 -> 125, VU EN CAPTURE. A 90 le point de vue regarde droit sur le DOS de « borne_classement », qui est a (0 ; -4,541) : un pan rouge uni de 0,69 m de large a 2,16 m de l'objectif, qui coupe l'image en deux et cache precisement le vide que la vue est censee montrer. Le cap corrige en meme temps que la position, un poste plus tot, avait resolu le probleme du MUR sans voir celui de la BORNE. A 125 la borne glisse au bord gauche, reduite a une masse d'angle, et le champ s'ouvre sur ce qu'annonce le nom : la profondeur du hall, le billard, les six bornes du mur ouest et la corniche. La mediane de luminance de SPEC-ATMOSPHERE poste 25 pour « sud » est a refaire."
     },
     {
       "name": "arrivee",
@@ -7116,8 +7320,9 @@
         1.7,
         -0.5
       ],
-      "yaw": 90.0,
-      "pitch": -5.0
+      "yaw": 120.0,
+      "pitch": -5.0,
+      "_cap": "Cap 90 -> 120, VU EN CAPTURE. La vue annonce « les trois bornes du mur ouest DE TROIS QUARTS, le mur, la corniche ». A 90 la camera regarde +Z, c'est-a-dire PARALLELEMENT au mur ouest : les bornes sont alors rasantes au bord droit du cadre, deux d'entre elles coupees, et la moitie gauche est occupee par le comptoir et le babyfoot, qui appartiennent a d'autres vues. On ne voit pas de trois quarts un alignement qu'on longe. A 120 l'axe croise le mur a 30 degres : les trois caissons se decalent en escalier avec leurs enseignes lisibles, le parement et la corniche tiennent le tiers gauche, et la palette du poste 15 — creme du mur, violet et jaune des caisses, moquette noire — est entiere dans le cadre. La mediane de luminance de SPEC-ATMOSPHERE pour « travee » est a refaire."
     },
     {
       "name": "orbite",
