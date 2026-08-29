@@ -6,6 +6,8 @@
   "_echelle": "Le mètre. Le modèle d'origine est en unités Blender à 2,06 par mètre — l'auteur l'a écrit lui-même, HAUTEUR_CAMERA_DEBOUT 3.5F pour un œil debout (legacy/room/room.c:90) — et le moteur V15 l'a lu comme des mètres, ce qui donnait un joueur de 82 cm au milieu de bornes de 2,40 m. Le problème cesse d'exister ici par construction.",
   "_plan": "Les cotes reprennent celles du modèle de 2020 divisées par 2,06, puis élargies : le hall d'origine faisait 19,3 x 14,4 m sous 2,92 m de plafond, celui-ci fait 22 x 16 sous 3,10. Le pan coupé du coin nord-est reprend le mur en diagonale de l'original (x = -0,4737 z + 9,401 en unités du modèle), et devient l'entrée.",
   "_convention": "Les points de mur se lisent [x, z] et suivent la LIGNE MÉDIANE. Ils sont listés de sorte qu'en marchant de l'un au suivant, l'intérieur soit à gauche : c'est la seule règle à tenir, tout le reste en découle (face intérieure, sens des onglets, côté des moulures).",
+  "_tableau": "Le TABLEAU DU BAR, derriere le comptoir. Il est DECLARE et non deduit : le moteur y dessine le classement et les joueurs en direct, comme il dessine une partie dans la dalle d'une borne. Il portait `background_classement.png`, une image peinte de 2020 avec des scores dessus — un tableau de scores qui ne bouge pas est une decoration. Le nommer ici est la seule facon que le moteur sache lequel des 190 materiaux de la salle est un ecran vivant : le deviner par son nom serait exactement l'heuristique qu'on a passe le projet a retirer.",
+  "scoreboard": "classement_fond",
   "units": "metres",
   "name": "salle",
   "room": {

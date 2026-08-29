@@ -396,6 +396,10 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
      * l'affectation des jeux suivait un tri en X puis Z qui ne correspondait pas
      * aux images peintes sur les marquees.
      */
+    /* Le tableau du bar. −1 quand la salle n'en déclare pas, ce qui est le cas
+     * de celle de 2020 : elle continue d'afficher son image peinte. */
+    s->scoreboard_material = (int32_t)ns_json_get_i64(&doc, root, "scoreboard", -1);
+
     const ns_json_value *cabs = ns_json_get(&doc, root, "cabinets");
     const int cab_count = ns_json_array_count(&doc, cabs);
     if (cab_count > 0) {

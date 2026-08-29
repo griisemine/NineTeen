@@ -24,6 +24,27 @@ mot, parce qu'une reformulation est déjà une négociation :
 
 Le point 9 est la raison d'être du fichier. Les huit autres sont les lots.
 
+### Ajoutés en cours de route, avec captures à l'appui
+
+10. « On voit les écrans comme plannée au dessus de la borne d'arcade et non
+    inclus dans la borne d'arcade — je pense que la 3D de la borne devrait être
+    creusée pour que l'écran semble incrusté dans la borne, et non se rajouter
+    en plus »
+11. « Nineteen j'aurais aimé qu'il soit écrit en néon »
+12. « l'écran plat devrait afficher les scores lives des joueurs et le
+    classement »
+13. « Les objets sont mal incrustés dans la salle, cf la capture de la lampe qui
+    n'est pas accrochée au plafond »
+
+Et une méthode, qui vaut instruction : « ne manque pas d'utiliser le connecteur
+Blender pour améliorer la partie 3D en regardant directement ce que tu produis
+via le MCP Blender, sinon tu vas commettre des erreurs. »
+
+C'est ce qui a servi pour L10 : le creux a été rendu dans Blender sous l'angle
+rasant EXACT de la capture du propriétaire avant d'être livré. Les chiffres
+disaient que la dalle reculait de 35 mm ; seul le rendu disait qu'on voyait bien
+les quatre parois autour de l'image.
+
 ## Ce qui a été MESURÉ avant d'écrire ce plan
 
 Rien ici n'est une impression. Chaque ligne est sortie du code ou d'une capture.
@@ -131,14 +152,18 @@ moi, pas par celui qui a fait le travail.
 | # | lot | critère de recette | état |
 |---|---|---|---|
 | L1 | L'écran, un seul rendu | les 19 dalles passent par le tube ; capture attract et capture en jeu indiscernables en traitement | **fermé** (88fd75c) |
-| L2 | Le panneau de commande | aucun bouton ne franchit l'axe ; les colonnes suivent un arc mesurable ; le nombre de boutons vient du jeu | ouvert |
+| L2 | Le panneau de commande | aucun bouton ne franchit l'axe ; layout de matériel réel ; le second bouton du démineur existe | **fermé** (428511f) |
 | L3 | Les flancs et le liseré | plus de trame matelassée sur de la tôle ; le T-molding cesse de prendre l'œil avant le caisson | ouvert |
 | L4 | Les bras | bras + avant-bras + main, coude et poignet réels ; la main se REFERME sur la boule | **fermé** (a97cbfa) |
-| L5 | L'ergonomie | œil à 25–30 cm au-dessus du centre d'écran ; angle de plongée sous 28° | ouvert |
+| L5 | L'ergonomie | l'écran est DANS le cadre quand on se plante devant une borne | **fermé** (2bd97c4) |
 | L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre ; contrôle au build | ouvert |
 | L7 | L'atmosphère | le centre de la salle se parcourt ; le plafond n'est plus une pergola | ouvert |
 | L8 | La recette finale | les 8 jeux, le réseau, le duel, les 35 tests, et une passe de jeu réelle | ouvert |
 | L9 | Les écrans vivants | les dix-huit bornes non jouées jouent leur propre partie | **fermé** (a26f95b) |
+| L10 | L'écran incrusté | le meuble est CREUSÉ ; on voit les parois du creux autour de l'image | **fermé** (428511f) |
+| L11 | L'enseigne au néon | « NINETEEN » est un vrai néon, pas une image peinte | ouvert |
+| L12 | L'écran plat du bar | il affiche le classement et les scores en direct, au lieu d'être noir | ouvert |
+| L13 | Les objets accrochés | rien ne flotte : la lampe pend du plafond, pas dans le vide | ouvert |
 
 ## Qui contrôle quoi
 
@@ -204,3 +229,29 @@ du jeu. Preuve de coût, palier medium, vue allée, 179 images :
 Un demi-pas de temps, parce qu'on n'en redessine que quatre par image. Les
 parties, elles, avancent toutes les dix-huit à 120 Hz — un état de jeu est une
 valeur pure, et ça ne se mesure pas.
+
+
+### L2 + L10 — `428511f`
+
+Preuve chiffrée, dans le glTF exporté, avant → après :
+
+| | avant | après |
+|---|---|---|
+| bouton le plus à droite | x = **+0,3621** (11,6 mm hors du meuble) | +0,0996, dans la tôle |
+| centre de l'emprise des commandes | +92 mm de l'axe | **0 mm** |
+| dalle par rapport à sa face | **76,2 mm devant** | 35 mm **derrière** |
+| cadre autour de l'image | 7 mm | 26,5 mm en haut/bas, 84 sur les côtés |
+| inclinaison de la dalle | 21,6° écrit / 19,87° construit | 19,87°, **calculée** |
+| triangles | 4 992 | 3 354 |
+
+Et `ns_test_ik` après le déplacement de toutes les ancres : doigt gauche à
+**0,2 cm** du manche, droit à **1,3 cm** des boutons, 3 493 vérifications,
+0 échec.
+
+### L5 — `2bd97c4`
+
+Le chiffre qui explique tout : demi-champ vertical de 31,0°, dalle à 31,8° sous
+l'horizon. **Elle était huit dixièmes de degré sous le bord bas du cadre.** Le
+défaut n'était dans aucune cote du meuble — toutes sont dans les plages du
+matériel réel — mais dans le fait que le moteur ne posait le regard qu'à
+l'entrée en partie, un instant sur cinq.

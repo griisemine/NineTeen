@@ -2212,6 +2212,23 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
             (double)pmin[0], (double)pmin[1], (double)pmin[2],
             (double)pmax[0], (double)pmax[1], (double)pmax[2]);
 
+    /*
+     * LE TABLEAU DU BAR, resolu ici en indice de materiau.
+     *
+     * La salle le nomme, roomgen le resout, le moteur le pilote — la meme
+     * chaine que pour la dalle d'une borne. Un materiau nomme mais inconnu
+     * ARRETE l'outil : un tableau qui ne s'allume pas est exactement le genre
+     * de panne muette que ce fichier existe pour rendre impossible.
+     */
+    {
+        char board[64] = { 0 };
+        tool_json_get_string(doc, root, "scoreboard", board, sizeof board);
+        if (board[0]) {
+            const int mi = material_index(b, board, "scoreboard");
+            fprintf(f, "  \"scoreboard\": %d,\n", mi);
+        }
+    }
+
     const tool_json_value *start = tool_json_get(doc, root, "playerStart");
     if (start) {
         float p[3];

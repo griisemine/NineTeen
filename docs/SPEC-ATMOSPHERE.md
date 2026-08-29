@@ -365,7 +365,10 @@ les dix familles d'objets ci-dessous en ajoutent environ 2 900, soit **+0,8 %**.
 Y = 0 ». `geo_cylinder` (`geo_shapes.c:1078-1081`) émet ses anneaux à `y = 0` et `y = height`. Le
 profil de la sphère est « posée sur Y = 0 » (`roomgen.c:1798`).
 
-> Pour les quatre primitives, **`at` est le centre en x et z, et le DESSOUS en y.**
+> **`box`, `cylinder` et `sphere` : `at` est le centre en x et z, et le DESSOUS en y.**
+> **`panel` : `at` est son CENTRE dans les trois axes** (`geo_shapes.c:412-413`, la demi-largeur et
+> la demi-hauteur partent du centre) — l'exception, et elle se vérifie sur `enseigne_nineteen`,
+> dont le panneau de 0,80 m de haut est posé à y = 2,47 et dont l'enseigne est bien centrée là.
 
 Trois clés courantes n'existent pas et feraient échouer le build : il n'y a **pas** de `repeat` sur
 un morceau de prop (`repeat` n'est lu que sur `boxes` et `lights`, `roomgen.c:735` et `:2085`), et
@@ -500,8 +503,19 @@ parce qu'il n'y a rien, pas même un mur qui dit quelque chose.
 
 `props[tableau_semaine]` — `at [0, 1.58, -7.08]`, `yaw 0`.
 
-Un `panel` de 2,20 × 0,90 encadré de deux `box` en `borne_cadre` de 0,06, et une bande
-`panneau_lumineux` de 2,30 × 0,10 au-dessus, à y = 2,08.
+```jsonc
+"parts": [
+  { "_":"le cadre, en retrait", "type":"box", "material":"borne_cadre",
+    "at":[0.00,-0.51, -0.05], "size":[2.32, 1.02, 0.06], "chamfer":0.008 },
+  { "_":"la planche. Un panel est centre sur son at.", "type":"panel",
+    "material":"tableau_semaine", "at":[0.00, 0.00, 0.00], "size":[2.20, 0.90] },
+  { "type":"panel", "material":"panneau_lumineux",
+    "at":[0.00, 0.53, 0.005], "size":[2.30, 0.10] }
+]
+```
+
+Le cadre va donc de **1,07 à 2,09 m**, la planche de 1,13 à 2,03, et le bandeau lumineux est à
+**2,11 m** — au-dessus des têtes, sous la cimaise (2,42).
 
 **La planche est à dessiner** : `tools/marqueeart` la sait déjà faire, il produit du texte en fonte
 de jeu sur fond sombre (`--titre=`, `--teinte=`, `--width=`, `--height=`). Un appel
@@ -542,12 +556,13 @@ y regarde. Le nord occupe la poche 5 ; l'ouest occupe la poche 4, sur le passage
 
 #### G. Deux poubelles
 
-`props[poubelle_ilot]` — `at [-1.05, 0, 2.20]` — et `props[poubelle_sud]` — `at [-1.90, 0, -6.75]`.
+`props[poubelle_ilot]` — `at [-1.55, 0, 1.55]` — et `props[poubelle_sud]` — `at [-1.90, 0, -6.75]`.
 Modèle `models/metal_trash_can` (déjà importé, déjà employé au sas), matériau `poubelle`.
 
 **Pourquoi.** Une poubelle en bord d'allée est ce qui distingue un plan d'architecte d'un lieu où
-l'on boit. Celle de l'îlot est au débouché de la trouée centrale, à 1,3 m du banc ouest : elle
-marque le coin sans boucher l'axe.
+l'on boit. Celle de l'îlot est au débouché nord de la trouée centrale, emprise x −1,75…−1,35 : elle
+**marque le coin sans mordre sur le couloir libre** x ∈ [−1,2 ; 1,2] (§6), et elle est à 0,45 m du
+bout est du banc ouest.
 
 #### H. Le socle des piliers
 
@@ -562,7 +577,7 @@ qu'on les lit comme de la construction. Coût : dix boîtes, 240 sommets.
 #### I. La vitrine à lots, contre la cloison du sas
 
 `props[vitrine_lots]` — `at [7.60, 0, 3.95]`, `yaw 180` (face vers −z, vers la travée est).
-Emprise 1,80 × 0,42, hauteur 1,90.
+Emprise 1,80 × 0,42, hauteur **1,80**, bandeau lumineux à **1,84**.
 
 ```jsonc
 "parts": [
@@ -582,7 +597,7 @@ Emprise 1,80 × 0,42, hauteur 1,90.
 à 4,93 m de tout meuble** : la bande étroite coincée entre la cloison du sas (z = 4,2, de x = 4,6 à
 9,65) et les bornes est. C'est aussi le premier mur qu'on longe en sortant du sas. Une vitrine à
 lots — la vitrine à peluches, à briquets et à porte-clés de toutes les salles de quartier — est un
-panneau plat sur un socle : elle habille 1,8 m de cloison, elle porte une bande lumineuse à 1,86 m
+panneau plat sur un socle : elle habille 1,8 m de cloison, elle porte une bande lumineuse à 1,84 m
 qui balise la sortie du sas, et elle donne une raison de regarder à gauche.
 
 *Elle est aussi la seule proposition de ce document qui n'a pas d'antécédent direct en 2020.* Je
@@ -597,7 +612,7 @@ au coin billard, et la salle a déjà accepté la seconde.
 | `props[fauteuil_salon]` | `at [7.55, 0, -4.05]`, `yaw 252` | `at [7.20, 0, -3.60]`, `yaw 300` | Reste en vis-à-vis oblique du canapé sans lui masquer les bornes. |
 | `props[table_basse]` | `at [6.2, 0, -3.2]`, `yaw 8` | `at [6.30, 0, -2.70]`, `yaw 12` | Entre les deux sièges, pas devant. |
 | `props[distributeur]` | `at [-9.2, 0, 5.6]`, `yaw 90` | `at [-9.25, 0, -0.30]`, `yaw 90` | Un distributeur de boissons se met **sur le trajet**, pas dans l'angle mort. À x = −9,25 il occupe x −9,64…−8,86 et z −0,93…0,53 : sur le mur ouest, entre le tapis technique et le billard, vu de toute la travée ouest. |
-| `props[tapis_technique]` | `at [-8.2, 0, 1.2]` | `at [-8.2, 0, 1.70]` | Dégage les 8 cm de recouvrement avec le distributeur déplacé. |
+| `props[tapis_technique]` | `at [-8.2, 0, 1.2]` | `at [-8.2, 0, 1.80]` | Dégage le recouvrement avec le distributeur déplacé : le tapis passe de z 0,10…2,30 à 0,70…2,90, et le distributeur s'arrête à 0,53. |
 | `props[cible_flechettes]` | `at [-9.52, 1.68, -1.6]` | `at [-9.52, 1.68, -2.45]` | Le distributeur passerait devant. À −2,45 la cible est en vis-à-vis du billard (z = −1,6), ce qui est sa place. |
 | `props[affiche_ouest_b]` | `affiche_2` | `affiche_5` | Deux affiches qui se lisent pareil à 8 m l'une de l'autre sur le même mur (§1.6). |
 | `props[suspension_comptoir]` et `lights[suspension_comptoir]` | x = −4,35 | **x = −2,60** | Sur l'axe de l'enseigne et au milieu du comptoir (§1.7). |
@@ -616,9 +631,17 @@ J'ai refait le calcul du §2.1 avec les objets A à J posés aux coordonnées ci
 Le point le plus désert devient l'angle nord-ouest de la salle — un angle de pièce, pas un milieu
 de salle. C'est la différence qu'on cherche.
 
-Et une vérification qui compte autant : les poches restantes de plus de 2 m sont en (−3,2 ; −3,7)
-et (3,1 ; −3,7), c'est-à-dire **la bande de circulation entre la rangée sud de l'îlot et
-l'estrade**. Elle doit rester vide : on y marche.
+Le calcul ne compte comme « meuble » que ce vers quoi on marche : les dix-neuf bornes, le billard,
+le comptoir, les sièges, le baby-foot, les mange-debout, le monnayeur, le distributeur, le jukebox,
+la vitrine et les poubelles. Il **exclut** les piliers, les poutres, l'estrade nue, le tapis
+technique, les objets muraux et le mobilier du sas. En les comptant tous, l'aire au-delà de 2 m
+descend à **13,8 m²** ; je retiens le chiffre prudent.
+
+Et une vérification qui compte autant : ce qui reste au-dessus de 2 m est, dans l'ordre, deux
+angles de pièce — (−9,6 ; 7,2) à 3,95 m et (9,6 ; −7,2) à 3,59 m — puis (−3,2 ; −3,7) à 2,80 m et
+(3,1 ; −3,7) à 2,74 m, c'est-à-dire **la bande de circulation entre la rangée sud de l'îlot et
+l'estrade**. Celle-là doit rester vide : on y marche, et c'est le seul passage entre l'îlot et le
+classement.
 
 #### L. Les points de vue à ajouter à `captures`
 
@@ -851,7 +874,7 @@ un aplat.
 |---|---|---|
 | Le liseré est le matériau le plus saturé du décor et il est **le même sur les dix-neuf** | `borne_tmolding` sat. **0,93**, un seul matériau, `roomgen.c:1372` le cherche par nom fixe | toutes les vues |
 | Il est **laqué** | `roughness 0.22` ; un jonc de chant est du vinyle, 0,45–0,55 | `allee`, `borne` |
-| Le flanc est **plus clair et moins coloré** que le caisson | flanc 0,177 / sat 0,41 ; caisson 0,106 / sat 0,75 | `allee`, `travee_ouest` |
+| Le flanc est **plus clair et moins coloré** que le caisson | flanc 0,177 / sat 0,42 ; caisson 0,106 / sat 0,75 | `allee`, `travee_ouest` |
 | Le losange du flanc est à l'échelle d'un **capitonnage** | **18,75 cm** (`sideart` `--step` 96 px, planche 512 px, `uvMetres 1.0`) | `allee` |
 | Deux bornes **voisines** ont la même couleur | `caisson_shooter` (0,225 ; 0,066 ; 0,024) et `caisson_demineur` (0,209 ; 0,139 ; 0,028), bornes 13 et 14, entraxe 0,80 m | `travee_ouest` |
 | Deux caissons sont à **3 %** l'un de l'autre | `caisson_demineur` et `caisson_pacman` | partout |
@@ -926,7 +949,7 @@ COMMAND sideart --step=34 --line=0.06 --low=0.12 --high=0.62 "${SIDEART}"
   c'est une tôle gaufrée.
 - `--line` 0,10 → **0,06** : les lignes deviennent un relief, pas un quadrillage.
 - `--high` 0,86 → **0,62** : le haut du flanc cesse de saturer à blanc, donc le multiplicateur de
-  couleur y garde sa teinte. C'est ce qui fait qu'un flanc à 0,79 de saturation le reste **en haut**,
+  couleur y garde sa teinte. C'est ce qui fait qu'un flanc à 0,78 de saturation le reste **en haut**,
   là où on le voit de l'allée.
 
 C'est le préalable au poste 13 de `DESIGN-SALLE.md` (`sideart --logo=`) : une planche à losanges de
@@ -957,8 +980,17 @@ Les cinq autres — flappy, tetris, shooter, piano, leaderboard — **ne changen
 | mur est (x = +9,1) | 16 · 17 · 18 | bleu roi · vert clair · **ambre** |
 | estrade | 0 | rouge cerise |
 
-Aucune paire adjacente ne partage une famille de teinte. Le noir tombe une fois par rangée d'îlot,
-au milieu, ce qui casse la répétition sans faire de trou. Le ‖ marque la trouée de 2,4 m.
+Aucune paire adjacente ne partage une famille de teinte, et la collision `shooter`/`demineur` du
+mur ouest — la seule vraie, celle qu'on voit sur `travee_ouest` — disparaît. Le ‖ marque la trouée
+de 2,4 m.
+
+**Deux adjacences de valeur restent, et c'est le flanc qui les tient.** Les paires 5–6
+(noir / bleu acier) et 8–9 (violet / noir) mettent côte à côte deux caissons sombres : 0,034 et
+0,090 pour la première, 0,072 et 0,034 pour la seconde. Le flanc les sépare, parce que c'est
+justement son rôle et que c'est la face qu'on voit de l'allée — `flanc_asteroid` sort à 0,049,
+`flanc_demineur` à 0,134 (**× 2,7**) et `flanc_piano` à 0,105 (**× 2,1**). C'est aussi la raison
+pour laquelle le §4.4 doit être appliqué **avant** le §4.5 : sans lui, deux bornes noires côte à
+côte font un trou.
 
 ### 4.6 Deux autres corrections sur la borne
 
@@ -1112,7 +1144,7 @@ couple tous ces changements, et deux corrections appliquées ensemble ne se dép
 | 3 | **Le plafond cesse d'être une pergola** — `baseColor` [0.30, 0.26, 0.13], `tile` 1.2, `railDrop` 0.016, `rail.baseColor` [0.26, 0.24, 0.22] | 5.3 | **4 lignes** | Médiane de `plafond` entre **14 et 22** (43). Tiers haut de `allee`, `bar`, `classement` sous **30**. Médiane globale de `allee` ≥ **42** |
 | 4 | **Le liseré cesse d'être magenta** — `borne_tmolding.baseColor` [0.86, 0.83, 0.78], `roughness` 0.52 | 4.3 | **1 ligne** | Saturation du matériau 0,93 → **0,22**. Sur `allee` à 100 %, le contour de borne n'est plus l'élément le plus saturé du cadre |
 | 5 | **Le sol arrête de faire la lumière** — `sol.emissiveStrength` 0.10, `sol.uvMetres` 1.6 | 5.3 | **2 lignes** | Motif au sol ≈ **0,40 m** (0,60 aujourd'hui). `% > 200` de `borne` **≤ 6** (8,5) |
-| 6 | **Les flancs portent la couleur de leur caisson** — neuf `baseColor` + les quatre arguments de `sideart` | 4.4 | 9 lignes JSON + 1 ligne CMake | Saturation moyenne des flancs 0,41 → **0,71** ; réflectance 0,177 → **0,128**. Losange 18,75 cm → **6,6 cm** |
+| 6 | **Les flancs portent la couleur de leur caisson** — neuf `baseColor` + les quatre arguments de `sideart` | 4.4 | 9 lignes JSON + 1 ligne CMake | Saturation moyenne des flancs 0,42 → **0,70** ; réflectance 0,177 → **0,132**, soit 47 % au-dessus des caissons au lieu de 67 % en dessous. Losange 18,75 cm → **6,6 cm** |
 | 7 | **Le monnayeur en bout de comptoir** | 2.3 B | ≈ 30 lignes JSON | Un objet éclairé à moins de 4 m de la sortie du sas, sur `arrivee` |
 | 8 | **L'estrade retrouve son émissif de 2020** — `sol_sombre.texture` → `moquette.jpg`, `emissive [1.0, 0.86, 0.62]`, `emissiveStrength 0.23` ; retirer `moquette.jpg` de `retiredTextures` ou en restreindre le motif au sol du hall | 1.8 | **4 lignes** | Réflectance de l'estrade 0,0031 → 0,101 ; sur `classement`, l'estrade se distingue du sol |
 | 9 | **Les rampes de l'îlot cessent de laver les bornes** — 74 → 34, portée 4,6 → 3,4 | 3.5 b | **4 lignes** | Sur `travee_ouest`, le flanc de la borne la plus proche montre un dégradé vertical net. Médiane de `allee` ≥ **42** |

@@ -5,6 +5,7 @@
 #include "ns_online.h"
 
 #include "ns_core.h"
+#include "ns_realtime.h"
 #include "ns_scores.h"
 
 #include <SDL3/SDL.h>
@@ -387,4 +388,135 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
         SDL_snprintf(tag, sizeof tag, "%d/%d", page + 1, pages);
         centred(s, w * 0.94f, 16.0f * u, 1.6f * u, dim, tag);
     }
+}
+
+/* --------------------------------------------------------------------------
+ * Le tableau du bar
+ * -------------------------------------------------------------------------- */
+
+/* Un score, rendu lisible de loin : 1 240 plutôt que 1240. */
+static void group_number(char *out, size_t n, uint32_t v)
+{
+    char raw[16];
+    SDL_snprintf(raw, sizeof raw, "%u", v);
+    const size_t len = SDL_strlen(raw);
+    size_t o = 0;
+    for (size_t i = 0; i < len && o + 2 < n; ++i) {
+        if (i > 0 && ((len - i) % 3) == 0) out[o++] = ' ';
+        out[o++] = raw[i];
+    }
+    out[o] = '\0';
+}
+
+void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_seconds,
+                              const char *my_name, const char *my_game,
+                              uint32_t my_score)
+{
+    if (!s) return;
+
+    /* Le repère : 640 x 320, soit le 2:1 du panneau de 1,80 x 0,90 m. */
+    const float u = w / 640.0f;
+
+    static const float bg[4]    = { 0.020f, 0.026f, 0.045f, 1.0f };
+    static const float rule[4]  = { 0.16f, 0.34f, 0.55f, 1.0f };
+    static const float title[4] = { 1.00f, 0.82f, 0.35f, 1.0f };
+    static const float live[4]  = { 0.45f, 1.00f, 0.62f, 1.0f };
+    static const float row[4]   = { 0.88f, 0.94f, 1.00f, 1.0f };
+    static const float dim[4]   = { 0.42f, 0.52f, 0.66f, 1.0f };
+    static const float me[4]    = { 1.00f, 0.90f, 0.45f, 1.0f };
+
+    ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
+
+    /* Le filet vertical qui sépare les deux moitiés. Sans lui, huit lignes de
+     * texte sur 1,80 m se lisent comme un seul bloc. */
+    ns_sprite_rect(s, 318.0f * u, 34.0f * u, 2.0f * u, 264.0f * u, rule);
+    ns_sprite_rect(s, 20.0f * u, 30.0f * u, 600.0f * u, 2.0f * u, rule);
+
+    centred(s, 160.0f * u, 8.0f * u, 2.4f * u, title, "MEILLEURS SCORES");
+    centred(s, 480.0f * u, 8.0f * u, 2.4f * u, live,  "EN DIRECT");
+
+    /*
+     * À GAUCHE : le meilleur de chaque jeu, en pages de six.
+     *
+     * On montre le MEILLEUR de chaque jeu plutôt que le classement complet d'un
+     * seul : c'est un tableau qu'on lit en passant devant le bar, et « qui tient
+     * le record de quoi » est la question qu'on se pose de loin. Le détail d'un
+     * jeu est sur la borne de classement, qui est faite pour ça.
+     */
+    int shown = 0;
+    const int per_page = 6;
+    const int total = ns_game_count();
+    const int pages = (total + per_page - 1) / per_page;
+    const int page = (pages > 1) ? (int)(time_seconds / 7.0) % pages : 0;
+
+    for (int i = page * per_page; i < total && shown < per_page; ++i) {
+        const ns_game_api *api = ns_game_at(i);
+        if (!api) continue;
+        const float y = (48.0f + (float)shown * 38.0f) * u;
+
+        const ns_score_board *b = ns_scores_board(api->id, "normal");
+        const bool any = (b && b->count > 0);
+
+        ns_sprite_text(s, 26.0f * u, y, 2.2f * u, row, api->label);
+        if (any) {
+            char n[24];
+            group_number(n, sizeof n, b->entry[0].score);
+            ns_sprite_text(s, 150.0f * u, y, 2.2f * u, title, n);
+            /* Le nom, s'il y en a un. Un classement local est souvent anonyme,
+             * et une colonne de « --- » vaut mieux qu'une colonne absente : elle
+             * dit que la place existe et qu'elle est à prendre. */
+            ns_sprite_text(s, 236.0f * u, y, 1.8f * u, dim,
+                           b->entry[0].name[0] ? b->entry[0].name : "---");
+        } else {
+            ns_sprite_text(s, 150.0f * u, y, 2.2f * u, dim, "---");
+        }
+        shown++;
+    }
+
+    /*
+     * À DROITE : qui est là, et à combien il en est.
+     *
+     * `ns_realtime_peers` ne rend RIEN quand le temps réel est éteint, ce qui
+     * est le cas par défaut — et c'est très bien. On affiche alors le joueur
+     * local seul, ce qui est la vérité de la salle : il y est seul.
+     */
+    ns_realtime_peer peer[8];
+    const uint32_t n = ns_realtime_peers(peer, 8);
+
+    int line = 0;
+    if (my_name && my_name[0]) {
+        const float y = (48.0f + (float)line * 38.0f) * u;
+        ns_sprite_text(s, 336.0f * u, y, 2.2f * u, me, my_name);
+        if (my_game && my_game[0]) {
+            char n[24];
+            group_number(n, sizeof n, my_score);
+            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, my_game);
+            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, me, n);
+        } else {
+            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, "dans la salle");
+        }
+        line++;
+    }
+    for (uint32_t i = 0; i < n && line < 6; ++i, ++line) {
+        const float y = (48.0f + (float)line * 38.0f) * u;
+        ns_sprite_text(s, 336.0f * u, y, 2.2f * u,
+                       peer[i].verified ? row : dim, peer[i].name);
+        if (peer[i].game[0]) {
+            char sc[24];
+            group_number(sc, sizeof sc, (uint32_t)(peer[i].score > 0 ? peer[i].score : 0));
+            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, peer[i].game);
+            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, live, sc);
+        } else {
+            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, "dans la salle");
+        }
+    }
+    if (line == 0) {
+        centred(s, 480.0f * u, 140.0f * u, 2.0f * u, dim, "SALLE VIDE");
+    }
+
+    /* Le bandeau du bas : ce qu'il faut faire pour y apparaître. Un tableau qui
+     * ne dit pas comment y entrer est une décoration. */
+    ns_sprite_rect(s, 20.0f * u, 292.0f * u, 600.0f * u, 2.0f * u, rule);
+    centred(s, 320.0f * u, 300.0f * u, 1.8f * u, dim,
+            "GLISSE UN JETON - E DEVANT UNE BORNE");
 }

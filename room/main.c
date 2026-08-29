@@ -1700,6 +1700,26 @@ int main(int argc, char **argv)
      * quatre par image. Sans cet interrupteur, la seule façon de connaître ce
      * chiffre aurait été de croire une estimation.
      */
+    /*
+     * LE TABLEAU DU BAR. 640 x 320, le 2:1 de son panneau de 1,80 x 0,90 m —
+     * et non le 16:9 des dalles : un panneau deux fois plus large que haut
+     * rendu en 16:9 étire tout ce qu'on y écrit.
+     */
+    ns_texture bar_rt;
+    SDL_zero(bar_rt);
+    if (sprites && scene.scoreboard_material >= 0) {
+        ns_texture_desc sd;
+        SDL_zero(sd);
+        sd.width = 640; sd.height = 320;
+        sd.format = ns_rhi_swapchain_format(rhi);
+        sd.render_target = true;
+        sd.sampled = true;
+        sd.name = "tableau du bar";
+        if (!ns_texture_create(rhi, &bar_rt, &sd)) {
+            NS_WARN("tableau du bar : cible indisponible, il gardera son image peinte");
+        }
+    }
+
     room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
                           ? NULL : room_attract_create(rhi, &scene);
 
@@ -2822,6 +2842,31 @@ play_at_done: ;
                 }
             }
 
+            /*
+             * LE TABLEAU DU BAR : le classement et les joueurs EN DIRECT.
+             *
+             * Il portait `background_classement.png`, une image peinte de 2020
+             * avec des scores dessinés dessus, et il sortait NOIR — mesuré :
+             * cette texture a une réflectance de 0,0158, et `gbuffer.frag`
+             * module l'émissif par l'albédo texel par texel. Aucune valeur
+             * d'émissif ne rattrape un texel presque noir. C'était la plus
+             * grande surface sombre du champ, juste sous l'enseigne.
+             *
+             * Rendu vivant, le problème disparaît par construction : ce qu'on
+             * y dessine est clair, donc il s'allume.
+             */
+            if (sprites && bar_rt.handle && scene.scoreboard_material >= 0) {
+                ns_sprite_begin(sprites, 640.0f, 320.0f);
+                room_hud_draw_scoreboard(sprites, 640.0f, 320.0f, now,
+                                         opt.player,
+                                         (in_game && game_api) ? game_api->title : NULL,
+                                         (in_game && game_api && game)
+                                             ? game_api->score(game) : 0u);
+                static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+                ns_sprite_end(rhi, sprites, bar_rt.handle, 640, 320, off);
+                ns_renderer_set_screen(renderer, scene.scoreboard_material, bar_rt.handle);
+            }
+
             if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
                 game_api->draw(sprites, game, game_art, 512.0f, 288.0f);
@@ -3043,6 +3088,7 @@ play_at_done: ;
     }
 
     room_attract_destroy(rhi, attract);
+    ns_texture_destroy(rhi, &bar_rt);
     ns_texture_destroy(rhi, &screen_rt);
     /* `board_rt` n'était pas détruite. Une seule texture, libérée par le pilote
      * à la sortie du processus — mais c'est exactement la fuite qui s'installe :

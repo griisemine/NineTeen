@@ -346,6 +346,18 @@ typedef struct ns_scene {
     ns_cabinet cabinets[NS_MAX_CABINETS];
     uint32_t   cabinet_count;
 
+    /*
+     * Le TABLEAU DU BAR : l'indice du matériau que le moteur pilote comme un
+     * écran vivant, ou −1. DÉCLARÉ par la salle, jamais deviné — c'est le seul
+     * moyen de savoir lequel des cent quatre-vingt-dix matériaux est un écran
+     * sans revenir à une heuristique sur les noms.
+     *
+     * Distinct des dalles de bornes : celles-ci reçoivent le traitement de
+     * tube, celui-là non. Une dalle plate accrochée au mur d'un bar n'a ni
+     * courbure ni lignes de balayage.
+     */
+    int32_t    scoreboard_material;
+
     ns_poi     pois[NS_MAX_POI];
     uint32_t   poi_count;
 

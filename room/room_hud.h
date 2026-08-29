@@ -80,4 +80,27 @@ void room_hud_draw(ns_sprite *s, const room_hud_state *st);
  */
 void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds);
 
+/*
+ * LE TABLEAU DU BAR : le classement à gauche, les joueurs EN DIRECT à droite.
+ *
+ * Distinct de la dalle de la borne de classement, et pour une raison de forme
+ * autant que de fond. La dalle fait 62 cm en 16:9 et se lit à deux mètres et
+ * demi ; ce tableau-ci fait 1,80 x 0,90 m en 2:1, il est derrière le comptoir,
+ * on le voit en entrant et de toute la salle. Il a la place de dire ce que la
+ * dalle n'a pas la place de dire : QUI joue, à QUOI, et à COMBIEN il en est.
+ *
+ * Il portait `background_classement.png` — une image peinte de 2020 avec des
+ * scores dessinés dessus. Le propriétaire l'a photographiée noire et a demandé
+ * qu'elle « affiche les scores lives des joueurs et le classement ». C'est un
+ * tableau de bar : sa raison d'être est qu'on lève les yeux et qu'on voie qui
+ * est en train de battre quoi.
+ *
+ * Ce n'est PAS un tube : pas de courbure, pas de lignes de balayage. Une dalle
+ * plate accrochée au mur d'un bar est un écran plat, et le traitement de tube
+ * ne s'applique qu'aux dalles déclarées par une borne.
+ */
+void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_seconds,
+                              const char *my_name, const char *my_game,
+                              uint32_t my_score);
+
 #endif /* NS_ROOM_HUD_H */
