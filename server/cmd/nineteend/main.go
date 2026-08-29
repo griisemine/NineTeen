@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"nineteen/internal/api"
+	"nineteen/internal/duel"
 	"nineteen/internal/migrations"
 	"nineteen/internal/store"
 	"nineteen/internal/web"
@@ -50,11 +51,13 @@ func isLoopbackAddr(addr string) bool {
 
 func main() {
 	var (
-		addr       = flag.String("addr", envOr("NINETEEN_ADDR", ":8080"), "adresse d'écoute")
-		dbURL      = flag.String("db", os.Getenv("NINETEEN_DB_URL"), "URL PostgreSQL")
-		migrate    = flag.Bool("migrate", true, "appliquer les migrations au démarrage")
-		secure     = flag.Bool("secure", envOr("NINETEEN_SECURE", "") != "", "servi derrière HTTPS (cookies Secure, HSTS)")
-		logFormat  = flag.String("log", envOr("NINETEEN_LOG", "text"), "format de journal : text ou json")
+		addr      = flag.String("addr", envOr("NINETEEN_ADDR", ":8080"), "adresse d'écoute")
+		dbURL     = flag.String("db", os.Getenv("NINETEEN_DB_URL"), "URL PostgreSQL")
+		migrate   = flag.Bool("migrate", true, "appliquer les migrations au démarrage")
+		secure    = flag.Bool("secure", envOr("NINETEEN_SECURE", "") != "", "servi derrière HTTPS (cookies Secure, HSTS)")
+		logFormat = flag.String("log", envOr("NINETEEN_LOG", "text"), "format de journal : text ou json")
+		duelAddr  = flag.String("duel-addr", envOr("NINETEEN_DUEL_ADDR", ""),
+			"adresse d'ecoute du relais de duel (vide = pas de duel en direct)")
 		insecureOK = flag.Bool("insecure-ok", envOr("NINETEEN_INSECURE_OK", "") != "",
 			"autoriser l'écoute publique SANS cookies Secure (à n'employer qu'en connaissance de cause)")
 	)
@@ -141,6 +144,23 @@ func main() {
 	go housekeeping(ctx, db, logger)
 
 	errCh := make(chan error, 1)
+
+	// Le relais de duel, sur SON port et seulement s'il est demande.
+	//
+	// Vide par defaut : un serveur de classement n'a aucune raison d'ouvrir un
+	// port de plus tant que personne ne joue en direct, et la promesse « rien ne
+	// s'ouvre sans qu'on le demande » vaut aussi pour le serveur.
+	var relay *duel.Relay
+	if *duelAddr != "" {
+		relay = duel.New(logger)
+		go func() {
+			if err := relay.Listen(*duelAddr); err != nil {
+				errCh <- err
+			}
+		}()
+		defer func() { _ = relay.Close() }()
+	}
+
 	go func() {
 		logger.Info("à l'écoute", "addr", *addr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

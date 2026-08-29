@@ -337,6 +337,24 @@ nineteen_apply_sanitizers(ns_test_duel)
 add_test(NAME duel COMMAND ns_test_duel)
 set_tests_properties(duel PROPERTIES TIMEOUT 60)
 
+# Le duel EN DIRECT : deux clients, un vrai relais Go, de vraies sockets.
+#
+# Sans argument, il ne vérifie que les refus — c'est ce que fait la CI, et ça ne
+# demande rien. Le duel entier se lance à la main, contre le relais autonome :
+#
+#   cd server && go run ./cmd/duelrelay -addr 127.0.0.1:8081 &
+#   ns_test_lockstep 127.0.0.1 8081
+#
+# C'est le seul endroit qui confronte les deux moitiés du protocole binaire,
+# écrites une fois en C et une fois en Go. Le classement en ligne a payé trois
+# défauts pour avoir sauté cette étape-là.
+add_executable(ns_test_lockstep test_lockstep.c)
+target_link_libraries(ns_test_lockstep PRIVATE nineteen::engine nineteen::games)
+nineteen_set_warnings(ns_test_lockstep)
+nineteen_apply_sanitizers(ns_test_lockstep)
+add_test(NAME lockstep COMMAND ns_test_lockstep)
+set_tests_properties(lockstep PROPERTIES TIMEOUT 60)
+
 # Le plafond des cartes se vérifie sur les FICHIERS PRODUITS, pas sur l'intention.
 #
 # `texgen --max-map=` est un drapeau qu'on peut oublier de passer à l'un des

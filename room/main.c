@@ -24,6 +24,7 @@
 #include "games.h"
 #include "ns_online.h"
 #include "ns_realtime.h"
+#include "ns_lockstep.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -70,6 +71,7 @@ typedef struct options {
     const char *server;      /* URL du classement en ligne, sinon la config */
     const char *input_log;   /* où déposer le journal d'entrées de la partie */
     const char *replay;      /* un journal d'entrées à rejouer, sans fenêtre */
+    const char *duel_live;   /* « hôte:port,identifiant,place » : duel EN DIRECT */
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -109,6 +111,10 @@ static void print_usage(const char *exe)
         "  --yaw=D --pitch=D    orientation en degrés\n"
         "  --exposure=F         exposition du tone mapping (défaut 1.15)\n"
         "  --particles=F        densité de poussière, 0 à 1 (défaut : le palier)\n"
+        "  --duel-direct=SPEC   duel EN DIRECT contre un adversaire, via un relais.\n"
+        "                       SPEC vaut « hôte:port,identifiant,place » — la place\n"
+        "                       est 0 ou 1, et les deux joueurs donnent le même\n"
+        "                       identifiant. À employer avec --game=. Inerte sans.\n"
         "  --rejouer=F          rejoue le journal d'entrées F et imprime le score,\n"
         "                       sans fenêtre ni GPU : c'est ce qui rend un rapport\n"
         "                       de bug reproductible\n"
@@ -311,6 +317,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->particles = ns_clampf((float)SDL_atof(a + 12), 0.0f, 1.0f);
         } else if (SDL_strncmp(a, "--journal-entrees=", 18) == 0) {
             o->input_log = a + 18;
+        } else if (SDL_strncmp(a, "--duel-direct=", 14) == 0) {
+            o->duel_live = a + 14;
         } else if (SDL_strncmp(a, "--rejouer=", 10) == 0) {
             o->replay = a + 10;
         } else if (SDL_strncmp(a, "--server=", 9) == 0) {
@@ -423,10 +431,23 @@ typedef struct duel_ghost {
     bool           loaded;       /* un journal est en mémoire */
     bool           running;      /* et il est en train d'être rejoué */
     bool           finished;
+
+    /*
+     * La liaison d'un duel EN DIRECT, ou NULL.
+     *
+     * Le fantôme différé et le duel en direct partagent tout sauf la SOURCE des
+     * entrées de l'adversaire : un journal téléchargé dans un cas, une socket
+     * dans l'autre. Le reste — un second état de jeu avancé du même pas que le
+     * sien, le tableau qui compare les deux scores — est identique, et c'est ce
+     * qui a permis de livrer le direct sans réécrire le duel.
+     */
+    ns_lockstep *live;
+    int32_t      live_stall;     /* pas passés à attendre l'adversaire */
 } duel_ghost;
 
 static void duel_release(duel_ghost *d)
 {
+    if (d->live) { ns_lockstep_say_bye(d->live); ns_lockstep_close(d->live); d->live = NULL; }
     SDL_free(d->input);
     d->input = NULL;
     d->count = d->cursor = 0;
@@ -522,13 +543,52 @@ static void duel_begin(duel_ghost *d, const ns_game_api *api, uint64_t seed, boo
 static void duel_tick(duel_ghost *d, const ns_game_api *api, int32_t tick, float dt)
 {
     if (!d->running || !d->state || !api) return;
-    if (tick > d->last_tick) { d->finished = true; d->running = false; return; }
 
     uint8_t press = 0;
-    while (d->cursor < d->count && d->input[d->cursor].tick == tick) {
-        d->held = d->input[d->cursor].held;
-        press |= d->input[d->cursor].pressed;
-        d->cursor++;
+
+    if (d->live) {
+        /*
+         * Le duel EN DIRECT : les entrées de l'adversaire arrivent par la
+         * socket, avec `NS_LOCKSTEP_DELAY` pas de retard.
+         *
+         * Le fantôme est donc en retard de huit pas sur nous — 66 ms — et c'est
+         * VOULU : c'est ce retard qui donne au réseau le temps de livrer. Le
+         * joueur, lui, n'attend pas : sa propre partie avance à pleine vitesse.
+         * C'est toute la différence avec un pas verrouillé pur, où la partie de
+         * chacun s'arrête dès que l'autre a un hoquet. Ici deux parties
+         * SÉPARÉES courent sur la même graine, et chacun rejoue celle de
+         * l'autre pour la voir — un hoquet fige l'adversaire à l'écran, pas la
+         * borne sous les doigts.
+         */
+        ns_lockstep_poll(d->live);
+        const ns_lockstep_state st = ns_lockstep_status(d->live);
+        if (st == NS_LOCKSTEP_DESYNC || st == NS_LOCKSTEP_ERROR ||
+            st == NS_LOCKSTEP_ENDED) {
+            d->finished = true;
+            d->running = false;
+            return;
+        }
+        const int32_t ghost_tick = tick - NS_LOCKSTEP_DELAY;
+        if (ghost_tick < 0) return;
+
+        uint8_t held = 0, pressed = 0;
+        if (!ns_lockstep_peer_input(d->live, ghost_tick, &held, &pressed)) {
+            /* En retard : on ne devine pas. Rejouer une entrée qu'on n'a pas
+             * reçue est exactement ce qui fait diverger deux parties, et on
+             * s'est donné une empreinte pour ne PAS en arriver là. */
+            d->live_stall++;
+            return;
+        }
+        d->held = held;
+        press = pressed;
+        d->last_tick = ghost_tick;
+    } else {
+        if (tick > d->last_tick) { d->finished = true; d->running = false; return; }
+        while (d->cursor < d->count && d->input[d->cursor].tick == tick) {
+            d->held = d->input[d->cursor].held;
+            press |= d->input[d->cursor].pressed;
+            d->cursor++;
+        }
     }
     for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
         if (press & (1u << b)) api->press(d->state, (ns_game_button)b);
@@ -596,6 +656,77 @@ static void draw_duel(ns_sprite *s, const duel_ghost *d, const ns_game_api *api,
  * Le meilleur vient donc de `ns_scores`, qui est la seule source de vérité :
  * `finish_run` l'y écrit avant qu'on le relise.
  */
+/*
+ * Ouvre un duel EN DIRECT depuis `--duel-direct=hôte:port,identifiant,place`.
+ *
+ * Rend la graine du relais, ou 0 si le duel n'a pas pu s'ouvrir — auquel cas la
+ * partie se joue seule, comme elle se joue seule sans serveur. Un duel qui ne
+ * s'ouvre pas ne doit jamais empêcher de jouer : c'est la même règle que pour
+ * le billet de partie, et elle vaut ici pour la même raison.
+ */
+static uint64_t duel_live_open(duel_ghost *d, const char *spec,
+                               const ns_game_api *api, bool hard)
+{
+    if (!spec || !api) return 0;
+
+    char host[128] = {0};
+    unsigned port = 0;
+    unsigned long long id = 0;
+    int slot = -1;
+    if (SDL_sscanf(spec, "%127[^:]:%u,%llu,%d", host, &port, &id, &slot) != 4 ||
+        port == 0 || port > 65535 || slot < 0 || slot > 1) {
+        NS_WARN("--duel-direct : « %s » ne se lit pas — attendu "
+                "« hôte:port,identifiant,place » avec une place valant 0 ou 1", spec);
+        return 0;
+    }
+
+    char err[160] = {0};
+    d->live = ns_lockstep_connect(host, (uint16_t)port, (uint64_t)id, slot,
+                                  api->id, hard ? "hard" : "normal",
+                                  3000, err, sizeof err);
+    if (!d->live) {
+        NS_WARN("--duel-direct : %s — la partie se jouera seule", err);
+        return 0;
+    }
+
+    /* On attend l'autre joueur, mais pas indéfiniment : une borne qui se fige
+     * en attendant quelqu'un qui ne vient pas est une borne cassée. */
+    const uint64_t deadline = SDL_GetTicks() + 15000;
+    while (SDL_GetTicks() < deadline) {
+        ns_lockstep_poll(d->live);
+        if (ns_lockstep_status(d->live) == NS_LOCKSTEP_RUNNING) break;
+        if (ns_lockstep_status(d->live) >= NS_LOCKSTEP_ENDED) break;
+        SDL_Delay(5);
+    }
+    if (ns_lockstep_status(d->live) != NS_LOCKSTEP_RUNNING) {
+        NS_WARN("--duel-direct : aucun adversaire au bout de quinze secondes — "
+                "la partie se jouera seule");
+        ns_lockstep_close(d->live);
+        d->live = NULL;
+        return 0;
+    }
+
+    const uint64_t seed = ns_lockstep_seed(d->live);
+    SDL_strlcpy(d->game, api->id, sizeof d->game);
+    d->seed = (int64_t)seed;
+    d->state_size = api->state_size;
+    SDL_free(d->state);
+    d->state = SDL_calloc(1, api->state_size);
+    if (!d->state) { ns_lockstep_close(d->live); d->live = NULL; return 0; }
+    api->reset(d->state, seed, hard);
+    api->set_best(d->state, 0);
+    d->cursor = 0;
+    d->held = 0;
+    d->last_tick = 0;
+    d->live_stall = 0;
+    d->loaded = d->running = true;
+    d->finished = false;
+    SDL_strlcpy(d->info.name, "EN DIRECT", sizeof d->info.name);
+    NS_INFO("duel en direct : apparie sur %s:%u, duel %llu, place %d, graine %llu",
+            host, port, id, slot, (unsigned long long)seed);
+    return seed;
+}
+
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
                       uint64_t seed, bool hard, duel_ghost *duel)
 {
@@ -630,7 +761,27 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
     if (ticketed) seed = (uint64_t)ticket.seed;
 
     api->reset(game, seed, hard);
-    api->set_best(game, ns_scores_best(api->id, difficulty));
+
+    /*
+     * Le record personnel entre dans l'état, et il ne doit pas y entrer pendant
+     * un duel EN DIRECT.
+     *
+     * `set_best` écrit une valeur dans le bloc de jeu, et ce bloc est
+     * exactement ce dont on compare l'empreinte pour détecter une divergence.
+     * Or deux joueurs n'ont pas le même record : les deux parties seraient
+     * déclarées divergentes dès le pas zéro alors qu'elles calculent la même
+     * chose. Mesuré, et c'est ce qui s'est produit au premier essai — « duel :
+     * divergence au pas 0 » sur les deux clients.
+     *
+     * On aurait pu n'empreindre qu'une partie de l'état ; il faudrait alors que
+     * chaque jeu déclare quels octets comptent, c'est-à-dire ajouter à
+     * `games.h` une notion « ce champ ne fait pas partie de la simulation » que
+     * les huit jeux devraient tenir à jour. Mettre le record à zéro le temps
+     * d'un duel coûte un chiffre à l'écran, et le record n'a de toute façon
+     * rien à faire dans une course à deux.
+     */
+    api->set_best(game, (duel && duel->live) ? 0u
+                                             : ns_scores_best(api->id, difficulty));
 
     /* Une nouvelle partie, donc un nouveau journal : poursuivre l'ancien
      * enverrait au serveur deux parties collées bout à bout. */
@@ -1569,9 +1720,48 @@ int main(int argc, char **argv)
              * d'abord ressemblé à un défaut de calcul avant d'être simplement
              * l'horloge. Une image qu'on ne peut pas refaire ne prouve rien.
              */
-            const uint64_t seed = opt.headless ? 20240418u
-                                               : (uint64_t)SDL_GetPerformanceCounter();
+            uint64_t seed = opt.headless ? 20240418u
+                                         : (uint64_t)SDL_GetPerformanceCounter();
             game_hard = false;
+
+            /*
+             * Le duel EN DIRECT s'ouvre AVANT la partie, parce que c'est le
+             * relais qui donne la graine.
+             *
+             * Même règle que pour le billet du classement, et pour la même
+             * raison : celui qui joue ne choisit pas ce sur quoi il joue. Deux
+             * adversaires qui tireraient chacun leur graine ne courraient pas
+             * la même course, et comparer leurs scores n'aurait aucun sens.
+             */
+            if (opt.duel_live && (opt.warmup > 0.0f || opt.autoplay)) {
+                /*
+                 * Deux options pilotent la simulation HORS du canal d'entrées,
+                 * et aucune ne peut donc dueller.
+                 *
+                 * `--warmup=` avance la partie sans passer par la boucle, donc
+                 * sans échanger une seule entrée. `--autoplay` est plus subtil
+                 * et c'est ce qui a coûté une heure : `autopilot()` appelle les
+                 * fonctions du jeu DIRECTEMENT — `flappy_flap` par exemple — au
+                 * lieu de passer par `press`. Ses appuis n'entrent jamais dans
+                 * le journal, donc jamais dans la socket, donc jamais chez
+                 * l'adversaire.
+                 *
+                 * Ce n'est pas un défaut du duel : c'est le duel qui l'a
+                 * révélé. Deux clients lancés ainsi divergeaient au pas 0 et
+                 * l'annonçaient — le détecteur faisait exactement son travail
+                 * dans la vraie boucle de jeu, sur un vrai relais. On refuse
+                 * donc la combinaison plutôt que de laisser un faux positif
+                 * accuser le réseau.
+                 */
+                NS_WARN("--duel-direct est incompatible avec %s : cette option "
+                        "pilote la partie hors du canal d'entrées, donc "
+                        "l'adversaire ne la verrait jamais. Duel ignoré.",
+                        opt.autoplay ? "--autoplay" : "--warmup=");
+            } else if (opt.duel_live) {
+                const uint64_t s2 = duel_live_open(&duel, opt.duel_live, game_api, game_hard);
+                if (s2) seed = s2;
+            }
+
             /* Le billet n'arrivera pas à temps pour CETTE partie — une partie ne
              * s'attend pas — mais il sera là pour la suivante, et `--autoplay`
              * en enchaîne. */
@@ -2336,11 +2526,48 @@ play_at_done: ;
                      * en jeu — et c'est ce qui rend le duel exact plutôt
                      * qu'approximatif.
                      */
+                    /* Le duel EN DIRECT publie l'entrée de CE pas tout de
+                     * suite : l'adversaire l'attend. Les EMPREINTES, elles,
+                     * sont confrontées après le pas — voir plus bas. */
+                    if (duel.live) {
+                        ns_lockstep_send_input(duel.live, run_tick, hmask, pending_press);
+                    }
+
                     duel_tick(&duel, game_api, run_tick, (float)clock.tick_seconds);
                     run_tick++;
                 }
 
                 game_api->tick(game, (float)clock.tick_seconds);
+
+                /*
+                 * Les empreintes du duel EN DIRECT, prises APRÈS le pas.
+                 *
+                 * L'instant compte autant que la valeur, et le premier essai
+                 * l'a payé : l'empreinte était publiée après avoir appliqué les
+                 * appuis du pas mais AVANT de l'avancer, tandis que le fantôme
+                 * était mesuré avant même ses appuis. Deux photographies prises
+                 * à deux moments différents du même pas ne peuvent pas
+                 * coïncider, et les deux clients annonçaient « divergence au
+                 * pas 0 » dès la première seconde d'une partie parfaitement
+                 * saine.
+                 *
+                 * « Après le pas » est le seul instant que les deux côtés
+                 * peuvent nommer sans ambiguïté. Le fantôme, lui, est en retard
+                 * de `NS_LOCKSTEP_DELAY` pas — on compare donc son pas à lui,
+                 * pas le nôtre.
+                 */
+                if (duel.live && in_game) {
+                    const int32_t done = run_tick - 1;
+                    if (done >= 0 && (done % NS_LOCKSTEP_HASH_EVERY) == 0) {
+                        ns_lockstep_publish_hash(duel.live, done,
+                                                 ns_game_state_hash(game_api, game));
+                    }
+                    const int32_t gdone = done - NS_LOCKSTEP_DELAY;
+                    if (gdone >= 0 && duel.state && (gdone % NS_LOCKSTEP_HASH_EVERY) == 0) {
+                        ns_lockstep_verify_peer(duel.live, gdone,
+                                                ns_game_state_hash(game_api, duel.state));
+                    }
+                }
                 /*
                  * L'horloge de la partie est celle de la SIMULATION, pas celle
                  * du mur : elle avance d'un pas fixe. C'est ce qui rend le

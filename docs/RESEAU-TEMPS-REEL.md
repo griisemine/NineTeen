@@ -409,30 +409,123 @@ mesuré sur une droite qui en demande plusieurs.
 
 ---
 
-## Ce qui reste : le duel EN DIRECT
+## Le duel EN DIRECT — livré, et ce qu'il a fallu pour ça
 
-La forme 2 — le pas verrouillé — **n'est pas livrée**, et c'est un choix, pas un
-oubli.
+Cette section disait « pas livrée, et c'est un choix ». Elle posait trois
+conditions ; les voici, avec ce que chacune a trouvé en chemin.
 
-Ce qu'il faudrait, dans l'ordre :
+### 1. Une empreinte d'état
 
-1. **Une somme de contrôle d'état échangée périodiquement.** Sans elle, deux
-   parties qui divergent continuent chacune de leur côté jusqu'à ce que les
-   scores se contredisent, et le bug est indébogable. C'est la première brique,
-   avant même le réseau : `test_replay.c` compare déjà des états entiers, il
-   suffirait d'en publier une empreinte.
-2. **Le déterminisme entre plateformes, pour de vrai** — trois OS, trois
-   compilateurs, états comparés au bit près et pas seulement les scores. La
-   mesure ci-dessus est un début, pas une conclusion.
-3. **Un transport qui tienne le tic.** `ns_http` ouvre une socket par requête :
-   c'est parfait pour un score toutes les trois minutes et une présence à 4 Hz,
-   c'est disqualifiant à 120 Hz. Le pas verrouillé demande une socket
-   persistante — donc un vrai protocole, un tampon d'entrées, et une politique
-   quand le paquet est en retard.
-4. **Et alors seulement** la logique de pas verrouillé.
+`ns_game_state_hash` — FNV-1a sur les `state_size` octets, dans `games.c`.
+`--rejouer=` l'imprime, ce qui fait de l'outil un instrument : deux machines
+peuvent tomber sur le même score par des chemins différents, un oiseau mort deux
+pas plus tôt après le même nombre de tuyaux donne le même chiffre.
 
-Livrer un duel en direct qui diverge en silence serait pire que de ne pas en
-livrer : le joueur perdrait des parties sans savoir pourquoi. Le duel en différé,
-lui, repose sur une propriété **mesurée** (`test_replay.c`, 8/8, état au bit
-près), il marche quand l'autre est déconnecté, et il répond à « affronter ses
-amis comme en enfance » — qui ne demande pas qu'ils soient là à la même seconde.
+FNV et non un condensé cryptographique : on cherche une divergence entre deux
+machines de bonne foi. Le score, lui, reste scellé par HMAC et **recalculé par
+le serveur** — le relais n'y touche pas.
+
+### 2. Le déterminisme entre architectures, mesuré
+
+Le binaire de ce dépôt est **universel** : il contient arm64 et x86_64. `arch
+-arm64` et `arch -x86_64` rejouent donc le même journal avec le même code, sur
+la même machine. Sur les huit jeux :
+
+> sept identiques au bit près, **Piano non** — et, en creusant, trois rejeux du
+> même journal sur la même architecture donnaient trois empreintes différentes.
+
+La cause : un `const char *fail_reason` dans l'état de Piano, dont l'adresse
+change à chaque exécution sous ASLR. `games.h` promet depuis le début que « tout
+vit dans le bloc rendu par `state_size` » ; un pointeur dans ce bloc rompt la
+promesse. Remplacé par une énumération. **8 / 8 identiques** ensuite.
+
+`tests/check_determinism.cmake` rejoue désormais chaque journal dans DEUX
+processus et compare — c'est ce que `test_replay.c` ne pouvait pas faire, lui
+qui rejoue dans le même processus où un littéral a la même adresse.
+
+### 3. Un transport qui tienne le tic
+
+`engine/net/ns_lockstep.{h,c}` : socket persistante, protocole binaire à trames
+préfixées de leur longueur, six types, dix octets pour l'entrée d'un pas — soit
+1,2 kio/s par joueur à 120 Hz. `TCP_NODELAY` n'y est pas une optimisation mais
+une condition : l'algorithme de Nagle ajouterait à chaque pas les dizaines de
+millisecondes que le retard d'entrée est censé absorber.
+
+Le relais est `server/internal/duel` et `server/cmd/duelrelay`, sur son propre
+port, vide par défaut. Il RECOPIE les trames et ne fait rien d'autre : ni
+simulation, ni validation, ni score. Un relais qui arbitrerait serait une
+deuxième autorité, et il faudrait y porter les règles des huit jeux en Go, en
+double de leur version C.
+
+### 4. La forme du duel, et pourquoi ce n'est pas un pas verrouillé pur
+
+Deux parties **séparées** sur la même graine, chacune rejouant celle de l'autre
+avec huit pas de retard. Pas une simulation unique nourrie par deux joueurs.
+
+La différence compte pour le joueur : dans un pas verrouillé pur, la partie de
+chacun s'arrête dès que l'autre a un hoquet réseau. Ici un hoquet fige
+l'adversaire à l'écran, pas la borne sous les doigts.
+
+L'empreinte publiée est donc celle de SA partie, et celle qu'on vérifie est
+celle du FANTÔME — notre copie de la partie de l'autre. Le module ne compare
+rien tout seul : il imposerait la première forme.
+
+### Ce qui a été trouvé en branchant
+
+- **Le record personnel entre dans l'état.** `set_best` écrit dans le bloc dont
+  on compare l'empreinte, et deux joueurs n'ont pas le même record : les deux
+  clients annonçaient « divergence au pas 0 » sur une partie parfaitement saine.
+  Le record est mis à zéro le temps d'un duel — il n'a de toute façon rien à
+  faire dans une course à deux.
+- **L'INSTANT de l'empreinte compte autant que sa valeur.** Elle était publiée
+  après les appuis mais avant le pas, tandis que le fantôme était mesuré avant
+  ses appuis : deux photographies du même pas prises à deux moments différents
+  ne coïncident jamais. Les deux côtés la prennent maintenant APRÈS le pas, le
+  seul instant qu'on puisse nommer sans ambiguïté.
+- **`--autoplay` ne peut pas dueller**, et le duel l'a révélé : `autopilot()`
+  appelle les fonctions du jeu directement — `flappy_flap` — au lieu de passer
+  par `press`. Ses appuis n'entrent jamais dans le journal, donc jamais dans la
+  socket. La combinaison est refusée, comme celle avec `--warmup=`.
+
+### Comment on le vérifie
+
+```sh
+cd server && go run ./cmd/duelrelay -addr 127.0.0.1:8081 &
+ns_test_lockstep 127.0.0.1 8081
+```
+
+Deux clients, un vrai relais, de vraies sockets. Ce qui est mesuré :
+
+| Contrôle | Résultat |
+|---|---|
+| appariement et graine commune | les deux reçoivent la même, tirée par le relais |
+| une troisième connexion sur une place prise | refusée |
+| 240 pas de duel sain | **état commun au bit près**, aucune divergence |
+| une empreinte FALSIFIÉE au pas 48 | détectée au pas 48, **par les deux joueurs** |
+
+Le dernier contrôle est celui qui compte. Un duel qui reste synchronisé quand
+tout va bien ne prouve rien — deux simulations identiques nourries des mêmes
+entrées le seraient de toute façon. Ce qu'il faut prouver, c'est qu'on S'EN
+APERÇOIT quand elles divergent.
+
+Il a d'ailleurs fallu deux essais pour le rendre honnête. La première version
+faisait jouer à l'un un appui de plus en espérant que le jeu diverge : un test au
+HASARD, puisque la graine vient du relais et change à chaque exécution — selon
+elle, l'oiseau était parfois déjà mort au pas visé, et le test échouait sans
+qu'aucun code ne soit fautif.
+
+En jeu : `--duel-direct=hôte:port,identifiant,place`, avec `--game=`.
+
+---
+
+## Ce qui reste
+
+- **Le déterminisme sur TROIS systèmes**, et pas seulement sur deux
+  architectures d'un même macOS avec le même compilateur. C'est la mesure qui
+  manque pour affirmer qu'un duel Windows-Linux tient.
+- **La découverte d'adversaire.** L'identifiant de duel se convient hors bande.
+  Le classement sait déjà qui joue à quoi (`ns_realtime_peers`) ; il y aurait un
+  « défier » à écrire.
+- **Le relais ne parle pas TLS**, comme le reste du réseau de ce projet, et pour
+  la même raison — voir `ns_http.h`.
+

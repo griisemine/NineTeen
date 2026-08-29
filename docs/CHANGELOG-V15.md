@@ -607,31 +607,20 @@ est probable. `ctest` : 32/32.
   vérifiées jeu par jeu. Ajouter un jeu est désormais une ligne
   dans `games/games.c` : c'est ce que Snake a vérifié, et que Démineur puis Tetris ont confirmé
   sans que `room/main.c` ait à connaître leur nom.
-- **Le temps réel : la présence et le duel fantôme tournent** ; le duel EN DIRECT non.
-  `docs/RESEAU-TEMPS-REEL.md` dit ce qui manque pour lui : une somme de contrôle d'état, le
-  déterminisme inter-plateformes mesuré pour de bon, et un transport qui tienne le tic —
-  `ns_http` ouvre une socket par requête. Une première mesure est faite : arm64 et x86_64
-  donnent des sorties identiques (49/49), mais sur les scores imprimés seulement et avec le
-  même compilateur. Ce n'est pas assez pour un lockstep, et le dire vaut mieux que de le
-  livrer à moitié.
-- **Les bras n'atteignent pas le panneau depuis le point de vue « borne ».** Constaté en
-  remodélisant la borne, et **antérieur à ce changement** : la même capture prise avant donne
-  exactement la même pose, mains pendantes à hauteur de monnayeur. Les quatre ancres sont
-  pourtant justes — `test_ik` les atteint à 3 cm près sur des cotes synthétiques, et la hauteur
-  du manche n'a pas bougé de plus de 4 mm. Le suspect est l'accrochage du joueur à la borne
-  depuis un point de vue nommé, pas la géométrie.
-- **La table de billard est le pire modèle de la salle.** Onze boîtes empilées, sans poche, avec
-  un placage de bois étiré en bandes sur les bandes. Elle mériterait le même traitement que la
-  borne : un script Blender dans `assets/blender/`.
-- **Huit bornes portent « votre publicité ici ? » en marquee.** C'est un remplissage de 2020 ;
-  chacune devrait porter l'enseigne de son jeu.
+- **Le temps réel est livré en entier** : présence, duel fantôme ET duel en direct. Les trois
+  conditions que `docs/RESEAU-TEMPS-REEL.md` posait sont remplies et mesurées — une empreinte
+  d'état, le déterminisme inter-architecture (8/8 au bit près entre arm64 et x86_64, ce qui a
+  trouvé un pointeur dans l'état de Piano), et une socket persistante avec son relais Go.
+  Vérifié contre le vrai relais : 240 pas d'un duel sain donnent un état commun, et une
+  empreinte falsifiée est détectée au pas exact, par les deux joueurs.
+  Ce qui reste : le déterminisme sur TROIS systèmes et non deux architectures d'un même
+  macOS, et une découverte d'adversaire — l'identifiant de duel se convient encore hors bande.
 - **Une lumière déclarée à l'intérieur d'un solide fermé s'éteint elle-même**, et rien ne le
   dit au build. `roomgen` fait déjà ce contrôle pour les POINTS DE VUE (« il rendrait un cadre
   noir ») ; il lui faudrait, pour les lumières, une emprise par MORCEAU et non par objet — un
   luminaire ayant toujours sa source dans la boîte englobante de son propre abat-jour. La
   suspension du billard a passé plusieurs versions ainsi (voir plus haut).
-- **Quatre constats `gosec` préexistants** font échouer l'étape correspondante de la CI : trois
-  G124 sur des cookies au `Secure` conditionnel documenté, un G115 dans `password.go`.
+
 - **La signature des paquets.** Les paquets eux-mêmes sont faits (`cpack`, une archive autonome
   par plateforme, et `.github/workflows/release.yml` qui les attache à une balise) et vérifiés en
   déballant puis en lançant le jeu **avec les assets du build masqués**. Ce qui manque est le
