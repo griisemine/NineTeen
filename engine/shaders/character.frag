@@ -22,6 +22,13 @@
  *
  * 3. La texture prend le binding 0 du set 2, donc le tampon de lumières passe
  *    au binding 1. C'est la seule différence de câblage.
+ *
+ * 4. L'OPACITÉ. Les bras ne s'effacent jamais — on les regarde depuis
+ *    l'intérieur du crâne, rien ne peut venir entre eux et l'objectif. Le
+ *    personnage, lui, s'efface quand la caméra lui rentre dedans, ce qui arrive
+ *    dès qu'un mur raccourcit le bras de caméra. Le bloc de trame porte donc un
+ *    vec4 de plus que celui du viewmodel ; voir `character_fs_ubo` dans
+ *    `ns_render.c`, dont il est la copie exacte.
  */
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
@@ -50,6 +57,7 @@ layout(set = 3, binding = 0) uniform Frame {
     vec4  u_cameraPos;    /* xyz : position, w : métallicité */
     vec4  u_ambient;      /* rgb : ambiance, a : intensité */
     ivec4 u_counts;       /* x : nombre de lumières, yzw : libres */
+    vec4  u_fade;         /* x : opacité, yzw : libres */
 };
 
 const float PI = 3.14159265359;
@@ -136,5 +144,13 @@ void main()
     }
 
     vec3 ambient = u_ambient.rgb * u_ambient.a * albedo;
-    o_color = vec4(Lo + ambient, 1.0);
+
+    /*
+     * L'alpha sort TEL QUEL et la couleur n'est PAS prémultipliée : le mélange
+     * déclaré côté pipeline est `src.rgb * src.a + dst.rgb * (1 - src.a)`,
+     * c'est lui qui fait la multiplication. La prémultiplier ici la ferait deux
+     * fois, et le personnage s'effacerait au carré — c'est-à-dire beaucoup trop
+     * vite, avec pour seul symptôme « le fondu part trop tôt ».
+     */
+    o_color = vec4(Lo + ambient, clamp(u_fade.x, 0.0, 1.0));
 }

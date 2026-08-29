@@ -127,11 +127,15 @@ void room_viewmodel_read_env(void)
  * cible, assez basse pour que le départ et l'arrivée soient ronds. */
 #define VM_DAMP  16.0f
 
-/* Doit valoir `STRIDE_METRES` de room_camera.c : c'est ce qui met le
- * contre-balancement des bras sur les pas de la caméra. La duplication est
- * assumée et vérifiée par `tests/test_ik.c`, plutôt que d'exporter une constante
- * de pose depuis un module de caméra. */
-#define VM_STRIDE  1.55f
+/*
+ * LA FOULÉE vient maintenant de la caméra, par `room_camera_stride`.
+ *
+ * Elle était recopiée ici — 1,55 m, en dur — pour mettre le contre-balancement
+ * des bras sur les pas de la caméra, et la duplication était assumée. Elle ne
+ * peut plus l'être : `personnage.foulee` règle cette valeur sans recompiler, et
+ * une copie en dur ferait balancer les bras à contretemps des jambes dès que
+ * quelqu'un touche au réglage. La valeur par défaut n'a pas changé, donc le
+ * comportement non plus. */
 
 enum {
     VM_FORCE_NONE = -1,
@@ -383,9 +387,9 @@ static ns_v3 rest_wrist(bool right)
  * construction plutôt que par réglage. À vitesse moitié, deux fois moins de
  * balancements dans la même durée, et personne n'a à s'en occuper.
  */
-static ns_v3 walk_swing(bool right, const room_view_bob *bob)
+static ns_v3 walk_swing(bool right, const room_view_bob *bob, float stride)
 {
-    const float phase = (bob->distance / VM_STRIDE) * NS_TAU;
+    const float phase = (bob->distance / ns_maxf(stride, 1e-3f)) * NS_TAU;
     const float s = sinf(phase) * (right ? 1.0f : -1.0f);
     const float a = ns_clampf(bob->amount, 0.0f, 1.0f);
 
@@ -535,8 +539,9 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
         swing_bob.distance = vm->clock * 1.4f;   /* la vitesse de marche */
     }
 
-    ns_v3 want_l = ns_v3_add(rest_wrist(false), walk_swing(false, &swing_bob));
-    ns_v3 want_r = ns_v3_add(rest_wrist(true), walk_swing(true, &swing_bob));
+    const float stride = room_camera_stride(cam);
+    ns_v3 want_l = ns_v3_add(rest_wrist(false), walk_swing(false, &swing_bob, stride));
+    ns_v3 want_r = ns_v3_add(rest_wrist(true), walk_swing(true, &swing_bob, stride));
 
     /* Respiration : quelques millimètres, seulement à l'arrêt. Ce n'est pas de
      * la décoration — c'est ce qui empêche une main immobile de se lire comme

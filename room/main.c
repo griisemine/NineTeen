@@ -54,6 +54,7 @@ typedef struct options {
     bool        debug_gpu;
     ns_quality  quality;
     room_camera_mode camera_mode;
+    bool        camera_set;  /* --camera= a été donné : voir le point de vue */
     float       camera_angle;
     float       render_scale;
     const char *debug_view;
@@ -363,6 +364,7 @@ static bool parse_options(int argc, char **argv, options *o)
             else if (SDL_strcmp(m, "free") == 0)  o->camera_mode = ROOM_CAM_FREE;
             else if (SDL_strcmp(m, "orbit") == 0) o->camera_mode = ROOM_CAM_ORBIT;
             else { fprintf(stderr, "mode de caméra inconnu : %s\n", m); return false; }
+            o->camera_set = true;
         } else if (SDL_strncmp(a, "--angle=", 8) == 0) {
             o->camera_angle = (float)SDL_atof(a + 8) * NS_DEG2RAD;
         } else {
@@ -1506,10 +1508,32 @@ int main(int argc, char **argv)
                 if (vp->orbit_radius > 0.0f) cam.orbit_radius = vp->orbit_radius;
                 if (vp->orbit_height > 0.0f) cam.orbit_height = vp->orbit_height;
             } else {
-                cam.mode = ROOM_CAM_FREE;
                 cam.position = cam.prev_position = vp->position;
                 cam.yaw   = cam.prev_yaw   = vp->yaw;
                 cam.pitch = cam.prev_pitch = vp->pitch;
+                /*
+                 * UN POINT DE VUE BASCULE EN CAMÉRA LIBRE — sauf si `--camera=`
+                 * a explicitement demandé autre chose.
+                 *
+                 * La caméra libre est ce qu'on veut pour cadrer un mur, et
+                 * toutes les captures de référence en dépendent : on n'y touche
+                 * pas. Mais elle ne dessine NI les bras NI le personnage, et
+                 * elle ignore la troisième personne, qui n'existe qu'en mode
+                 * joueur. `--view=allee --camera=player` produisait donc une
+                 * image sans personnage, sans un mot, en ayant l'air d'obéir —
+                 * et c'est ce silence qui a fait croire à un défaut du jeu là où
+                 * il n'y avait qu'un piège de l'outil de capture.
+                 *
+                 * Même remède que pour `--pose` vingt lignes plus bas : la
+                 * demande explicite gagne, et on le DIT.
+                 */
+                if (opt.camera_set && opt.camera_mode != ROOM_CAM_FREE) {
+                    cam.mode = opt.camera_mode;
+                    NS_INFO("point de vue « %s » : caméra laissée en mode demandé "
+                            "(--camera=), et non basculée en libre", vp->name);
+                } else {
+                    cam.mode = ROOM_CAM_FREE;
+                }
             }
             NS_INFO("point de vue « %s »", vp->name);
         }
@@ -1802,6 +1826,95 @@ int main(int argc, char **argv)
     if (!personnage) {
         NS_INFO("personnage indisponible : la troisième personne restera éteinte");
         cam.third_person = false;
+    }
+
+    /*
+     * LES COTES DU PERSONNAGE, PASSÉES À LA CAMÉRA.
+     *
+     * Trois mesures, toutes prises sur le modèle par `ns_skin` et toutes mises à
+     * l'échelle du jeu ici, une fois. La caméra ne charge rien et n'inclut pas
+     * `ns_skin.h` : elle reçoit des mètres.
+     *
+     * L'échelle est celle du rendu — le modèle est amené à `personnage.taille` —
+     * et c'est bien elle qu'il faut : un rayon mesuré dans les unités du fichier
+     * et comparé à un recul en mètres serait faux d'un facteur 1,25, ce qui est
+     * assez pour que les seuils aient l'air de marcher.
+     */
+    float echelle_perso = 1.0f;
+    if (personnage) {
+        const float haut = ns_skin_rest_height(personnage);
+        echelle_perso = (haut > 0.01f) ? (cam.body_height_stand / haut) : 1.0f;
+
+        /*
+         * LA FOULÉE : réglée, et CONFRONTÉE à la mesure.
+         *
+         * Zéro dans `nineteen.env` — le défaut — garde la valeur historique de
+         * 1,55 m que portent aussi le viewmodel, l'oscillation de la tête et les
+         * bruits de pas. On ne la remplace PAS par la mesure, et c'est un choix
+         * argumenté : le cycle livré n'a pas de pied cloué au sol, quatre
+         * mesures également défendables de sa foulée s'étalent de 1,02 à 2,06 m,
+         * et aucune valeur ne fait descendre le glissement à zéro. Substituer
+         * une mesure aussi dispersée à une valeur réglée à l'œil, c'est changer
+         * le comportement sans preuve — et désaccorder les jambes des bruits de
+         * pas, qui lisent la même foulée.
+         *
+         * Ce qu'on fait à la place : on COMPARE, et on avertit. Un écart d'un
+         * tiers est le signe soit d'un modèle changé, soit d'un réglage à
+         * reprendre ; dans les deux cas on veut le savoir au démarrage plutôt
+         * que sur une capture six semaines plus tard.
+         */
+        const float reglee  = ns_env_float("personnage.foulee", 0.0f);
+        const float mesuree = ns_skin_stride_length(personnage) * echelle_perso;
+        if (reglee > 1e-3f) {
+            room_camera_set_actor(&cam,
+                                  ns_skin_half_width(personnage)   * echelle_perso,
+                                  ns_skin_sweep_radius(personnage) * echelle_perso,
+                                  reglee);
+        } else {
+            /* Foulée à zéro : on ne touche pas à celle de la caméra. */
+            room_camera_set_actor(&cam,
+                                  ns_skin_half_width(personnage)   * echelle_perso,
+                                  ns_skin_sweep_radius(personnage) * echelle_perso,
+                                  0.0f);
+        }
+        const float foulee = room_camera_stride(&cam);
+
+        NS_INFO("personnage : %.2f m de haut, demi-largeur %.3f m, rayon balayé %.3f m, "
+                "foulée %.3f m (%s ; mesurée sur le cycle : %.3f m)",
+                (double)(ns_skin_rest_height(personnage) * echelle_perso),
+                (double)(ns_skin_half_width(personnage) * echelle_perso),
+                (double)(ns_skin_sweep_radius(personnage) * echelle_perso),
+                (double)foulee, (reglee > 1e-3f) ? "réglée" : "défaut",
+                (double)mesuree);
+
+        if (mesuree > 1e-3f && foulee > 1e-3f) {
+            const float ecart = SDL_fabsf(foulee - mesuree) / foulee;
+            if (ecart > 0.33f) {
+                NS_WARN("personnage : la foulée employée (%.2f m) s'écarte de %.0f %% de "
+                        "celle mesurée sur le cycle (%.2f m) — les pieds glisseront "
+                        "d'autant ; régler « personnage.foulee » après avoir REGARDÉ "
+                        "le personnage marcher",
+                        (double)foulee, (double)(ecart * 100.0f), (double)mesuree);
+            }
+        }
+
+        /*
+         * CE QUE LE MODÈLE N'A PAS, et qu'aucun réglage ne remplacera : il porte
+         * UN cycle et un seul. Pas de pose de repos, pas de course, pas
+         * d'accroupi. On le dit une fois au démarrage plutôt que de laisser
+         * quelqu'un chercher pendant une heure où sont les autres états.
+         *
+         * Ce qui EST fait avec ce cycle unique : la phase suit la distance
+         * parcourue, donc la cadence suit l'allure et les pieds ne patinent pas,
+         * à la marche comme à la course. À l'arrêt, on ramène la phase à la pose
+         * de passage mesurée. Accroupi, le personnage reste DEBOUT à l'écran —
+         * seul le point de vue descend — et c'est la limite visible du modèle.
+         */
+        if (ns_skin_duration(personnage) > 0.0f) {
+            NS_INFO("personnage : un seul cycle d'animation (%.2f s) — la cadence "
+                    "suit l'allure, mais accroupi il reste debout à l'écran",
+                    (double)ns_skin_duration(personnage));
+        }
     }
 
     room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
@@ -3117,7 +3230,24 @@ play_at_done: ;
                 static float repos = 0.0f;
                 float when;
                 if (b.amount > 0.02f) {
-                    when = (b.distance / 1.55f) * duree;
+                    /*
+                     * LA PHASE VIENT DE LA DISTANCE, et la foulée d'UN SEUL
+                     * endroit.
+                     *
+                     * Le nombre 1,55 était écrit en dur ici, quatrième copie
+                     * d'une constante que portent aussi `room_camera.c`,
+                     * `room_viewmodel.c` et `room_sound.c`. Il est remplacé par
+                     * l'accesseur : la valeur reste la même, mais elle n'a plus
+                     * qu'une source, et `personnage.foulee` la règle sans
+                     * recompiler.
+                     *
+                     * Que la phase suive la DISTANCE et non le temps est ce qui
+                     * fait que la cadence suit l'allure — marche, course,
+                     * accroupi — sans qu'il y ait un état d'animation par
+                     * allure. C'était déjà juste, et c'est ce qui rend le cycle
+                     * unique du modèle supportable.
+                     */
+                    when = (b.distance / room_camera_stride(&cam)) * duree;
                     repos = when;
                 } else {
                     /*
@@ -3132,8 +3262,17 @@ play_at_done: ;
                      * tourner le cycle donnerait quelqu'un qui marche sur place,
                      * ce qui est pire et ne s'arrête jamais.
                      */
+                    /*
+                     * Amorti avec le pas d'AFFICHAGE, pas avec celui de la
+                     * simulation : cette branche vit dans la boucle de rendu, et
+                     * elle s'exécute donc une fois par image. Employer
+                     * `tick_seconds` faisait dépendre la vitesse du retour au
+                     * repos du nombre d'images par seconde — deux fois plus
+                     * rapide sur un écran à 240 Hz que sur un 120 Hz, pour un
+                     * mouvement censé durer une demi-seconde.
+                     */
                     const float debout = ns_skin_stand_time(personnage);
-                    repos = ns_damp(repos, debout, 6.0f, (float)clock.tick_seconds);
+                    repos = ns_damp(repos, debout, 6.0f, (float)clock.frame_seconds);
                     when = repos;
                 }
 
@@ -3143,45 +3282,109 @@ play_at_done: ;
                 d.joint_count = ns_skin_joint_count(personnage);
                 ns_skin_pose(personnage, when, d.joint, NS_MAX_CHARACTER_JOINTS);
 
-                /*
-                 * L'échelle vient du RÉGLAGE, pas du fichier : un personnage
-                 * importé n'a aucune raison d'être à la taille qu'on veut, et
-                 * la deviner d'après son nom serait une heuristique. On mesure
-                 * sa hauteur au repos et on l'amène à `personnage.taille`.
-                 */
-                const float haut = ns_skin_rest_height(personnage);
-                const float echelle = (haut > 0.01f) ? (cam.body_height_stand / haut) : 1.0f;
+                /* L'échelle : mesurée et mise à l'échelle une fois, au
+                 * chargement. Voir `echelle_perso`. */
+                const float echelle = echelle_perso;
 
-                /* Les PIEDS, et le lacet de la caméra : le personnage regarde
-                 * là où le joueur regarde. */
+                /* Le lacet de la caméra : le personnage regarde là où le joueur
+                 * regarde. */
                 const float eye = ns_lerpf(cam.prev_eye_height, cam.eye_height, (float)clock.alpha);
-                const ns_v3 feet = ns_v3_make(render_cam.position.x,
-                                              cam.position.y - eye,
-                                              render_cam.position.z);
                 float dyaw = cam.yaw - cam.prev_yaw;
                 while (dyaw >  NS_PI) dyaw -= NS_TAU;
                 while (dyaw < -NS_PI) dyaw += NS_TAU;
                 const float yaw = cam.prev_yaw + dyaw * (float)clock.alpha;
 
-                /* En troisième personne les PIEDS sont sous le pivot de la
-                 * caméra, pas sous elle : `render_cam.position` a reculé. On
-                 * repart donc de la position du corps. */
-                const ns_v3 sol = ns_v3_make(cam.position.x, cam.position.y - eye, cam.position.z);
-                (void)feet;
+                /*
+                 * LES PIEDS, sous le CORPS et INTERPOLÉS.
+                 *
+                 * Deux erreurs tenaient ici l'une dans l'autre. La première est
+                 * réparée depuis : `render_cam.position` a reculé de deux mètres
+                 * en troisième personne, il ne dit donc pas où se tient le
+                 * joueur. La seconde restait : la position du corps était lue
+                 * telle quelle, c'est-à-dire à l'état du DERNIER PAS DE
+                 * SIMULATION, pendant que la caméra, elle, était interpolée. Le
+                 * personnage avançait donc par saccades de 120 Hz devant une
+                 * caméra fluide — un tremblement de deux centimètres et demi par
+                 * pas à la course, exactement le genre de défaut qu'on attribue
+                 * à « l'animation » sans le trouver.
+                 *
+                 * On interpole donc la position du corps comme tout le reste.
+                 */
+                const ns_v3 corps = ns_v3_lerp(cam.prev_position, cam.position,
+                                               (float)clock.alpha);
+                const ns_v3 sol = ns_v3_make(corps.x, corps.y - eye, corps.z);
 
-                const ns_quat q = ns_quat_from_axis(ns_v3_make(0.0f, 1.0f, 0.0f), yaw);
+                /*
+                 * L'ORIENTATION, et le signe qui la rendait fausse.
+                 *
+                 * Le code tournait le modèle de `yaw` autour de la verticale. Ce
+                 * n'est pas la bonne rotation, et le résultat n'était pas « un
+                 * peu » décalé : la rotation employée envoie un vecteur local
+                 * (x, z) sur son image tournée de MOINS l'angle, si bien que le
+                 * regard du personnage sortait sur le MIROIR de celui de la
+                 * caméra. À lacet nul, il marchait de profil, à quatre-vingt-dix
+                 * degrés de la direction suivie. La capture le montre : de
+                 * l'allée centrale on le voyait de côté, en crabe, alors qu'on
+                 * devait le voir de dos.
+                 *
+                 * La bonne rotation se pose en une ligne dès qu'on écrit les
+                 * angles. La rotation appliquée tourne l'horizontale de `-thêta`
+                 * ; l'avant du modèle est à l'angle `phi` dans son repère, et on
+                 * le veut à l'angle `yaw` dans le monde :
+                 *
+                 *      phi - thêta = yaw     donc     thêta = phi - yaw
+                 *
+                 * `phi` est MESURÉ sur le cycle — l'avant est l'opposé du recul
+                 * du pied porteur — plutôt que supposé égal à la convention glTF.
+                 * Sur ce modèle-ci la mesure donne 90,4 degrés, soit +Z à un
+                 * demi-degré près, ce qui est la convention ; l'écart est le
+                 * léger biais du cycle et non une erreur de mesure. Un modèle
+                 * exporté autrement se posera droit tout seul.
+                 */
+                const float theta = ns_skin_forward_angle(personnage) - yaw;
+                const ns_quat q = ns_quat_from_axis(ns_v3_make(0.0f, 1.0f, 0.0f), theta);
                 d.model = ns_m4_trs(sol, q, ns_v3_splat(echelle));
 
                 d.tint[0] = d.tint[1] = d.tint[2] = 1.0f;
                 d.roughness = 0.72f;
                 d.metallic = 0.0f;
+
+                /*
+                 * L'EFFACEMENT. Le bras de caméra est demandé à la caméra plutôt
+                 * que recalculé : deux calculs du même recul se décaleraient
+                 * d'une image et le personnage clignoterait. La dérivation des
+                 * seuils est dans `room_camera.c`.
+                 */
+                d.opacity = room_camera_actor_opacity(&cam,
+                                room_camera_third_arm(&cam, (float)clock.alpha));
                 ns_renderer_set_character(renderer, &d);
             } else {
                 ns_renderer_set_character(renderer, NULL);
             }
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
-            const ns_viewmodel_pose *vm = (cam.mode == ROOM_CAM_PLAYER) ? &viewmodel : NULL;
+            /*
+             * ET JAMAIS EN TROISIÈME PERSONNE.
+             *
+             * Les bras du viewmodel sont posés dans le repère de la VUE, à
+             * quarante centimètres devant l'objectif : ils sont faits pour être
+             * regardés depuis l'intérieur du crâne. Le point de vue reculé de
+             * deux mètres, ils flottent en travers de l'image, détachés du
+             * personnage qui a les siens.
+             *
+             * Le défaut existait depuis le premier jour de la troisième
+             * personne et il était CACHÉ par le défaut voisin : la caméra était
+             * si près du personnage que son épaule masquait l'avant-bras. Le
+             * corriger l'a découvert — on le voit sur la capture d'après, en
+             * tube sombre à gauche, et sur celle d'avant on le prenait pour
+             * l'épaule.
+             *
+             * `room_viewmodel_pose` est quand même appelé : c'est lui qui fait
+             * AVANCER l'interpolation des bras, et le sauter les figerait le
+             * temps d'un aller-retour en F10.
+             */
+            const bool bras_visibles = (cam.mode == ROOM_CAM_PLAYER) && !cam.third_person;
+            const ns_viewmodel_pose *vm = bras_visibles ? &viewmodel : NULL;
             if (!ns_renderer_draw(rhi, renderer, &scene, &render_cam, vm, target, w, h, now)) {
                 /*
                  * Le rendu n'a rien écrit — cibles indisponibles, typiquement au
@@ -3280,6 +3483,24 @@ play_at_done: ;
                 const ns_render_stats st = ns_renderer_stats(renderer);
                 NS_INFO("capture : %u lots dessinés, %u éliminés, %u triangles, %u lumières",
                         st.batches_drawn, st.batches_culled, st.triangles, st.lights_active);
+                /*
+                 * LE BRAS DE CAMÉRA sur la capture, en clair.
+                 *
+                 * Sans cette ligne, une capture de troisième personne sans
+                 * personnage pose une question qu'on ne peut pas trancher en la
+                 * regardant : est-il effacé parce que la caméra est contre lui,
+                 * ou pas dessiné du tout ? C'est exactement la question qui a
+                 * fait perdre du temps sur `--view=allee`, et deux nombres y
+                 * répondent.
+                 */
+                if (cam.third_person && cam.mode == ROOM_CAM_PLAYER) {
+                    const float bras = room_camera_third_arm(&cam, (float)clock.alpha);
+                    NS_INFO("capture : troisième personne, bras %.2f m sur %.2f voulus, "
+                            "épaule %.2f m, personnage à %.0f %% d'opacité",
+                            (double)bras, (double)cam.third_distance,
+                            (double)cam.third_side,
+                            (double)(room_camera_actor_opacity(&cam, bras) * 100.0f));
+                }
             }
 
             /*

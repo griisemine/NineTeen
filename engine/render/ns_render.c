@@ -101,6 +101,26 @@ typedef struct viewmodel_fs_ubo {
     int32_t counts[4];
 } viewmodel_fs_ubo;
 
+/*
+ * Le personnage a le MÊME bloc, plus un vec4.
+ *
+ * Il partageait celui du viewmodel, et c'était juste tant que les deux avaient
+ * les mêmes besoins. L'opacité en est un que les bras n'ont pas — ils ne
+ * s'effacent jamais, on les regarde de l'intérieur du crâne — et l'ajouter au
+ * bloc commun aurait obligé `viewmodel.frag` à déclarer un champ qu'il n'emploie
+ * pas. Un bloc partagé qu'un des deux ignore est exactement la façon dont deux
+ * shaders finissent par ne plus correspondre à leur structure C.
+ *
+ * Doit correspondre EXACTEMENT au bloc `Frame` de `character.frag`.
+ */
+typedef struct character_fs_ubo {
+    float   base_color[4];  /* rgb + rugosité */
+    float   camera[4];      /* xyz + métallicité */
+    float   ambient[4];
+    int32_t counts[4];
+    float   fade[4];        /* x : opacité ; yzw : libres */
+} character_fs_ubo;
+
 typedef struct exposure_ubo {
     float settings[4];      /* exposition de base, vitesse, min, max */
     float frame[4];         /* dt, première image, libres */
@@ -892,6 +912,37 @@ static SDL_GPUGraphicsPipeline *make_character_pipeline(ns_rhi *r, SDL_GPUTextur
     SDL_zero(target);
     target.format = color;
 
+    /*
+     * LE MÉLANGE ALPHA, allumé en permanence — et il ne change RIEN au cas
+     * courant.
+     *
+     * Avec `src_alpha = 1`, `src * 1 + dst * 0` rend la source telle quelle :
+     * un personnage plein sort exactement comme avant que cette ligne existe.
+     * Le mélange ne travaille donc que pendant le fondu, c'est-à-dire quand la
+     * caméra est déjà contre le personnage.
+     *
+     * On garde l'ÉCRITURE DE PROFONDEUR, et c'est le point délicat. Sans elle,
+     * un triangle lointain dessiné après un proche l'écraserait — le torse
+     * par-dessus le bras qui passe devant —, et ce serait faux même à opacité
+     * pleine, c'est-à-dire tout le temps. L'écriture de profondeur conservée,
+     * le test `GREATER` rejette le fragment le plus loin et le personnage reste
+     * juste.
+     *
+     * Ce que ça NE couvre pas, et il faut le savoir : pendant le fondu, si un
+     * triangle lointain est dessiné AVANT un proche, les deux se mélangent et la
+     * zone où le bras croise le torse sort un peu plus dense. C'est le défaut
+     * connu de tout mélange non trié, il ne dure que le temps du fondu, et il
+     * coûterait un tri par triangle et par image à supprimer. On le laisse, et
+     * on l'écrit ici plutôt que de le découvrir sur une capture.
+     */
+    target.blend_state.enable_blend = true;
+    target.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    target.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    target.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    target.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+    target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+
     SDL_GPUGraphicsPipelineCreateInfo info;
     SDL_zero(info);
     info.vertex_shader = vs;
@@ -1009,6 +1060,9 @@ static void pass_character(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
 {
     if (!rd->char_ready || !rd->pipe_character || !rd->character.visible) return;
     if (rd->character.joint_count <= 0) return;
+    /* Complètement effacé : on n'ouvre même pas la passe. Un millier de
+     * triangles mélangés à zéro coûte exactement ce qu'ils rapportent. */
+    if (rd->character.opacity <= 0.002f) return;
 
     SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
 
@@ -1062,8 +1116,9 @@ static void pass_character(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     }
     SDL_PushGPUVertexUniformData(cmd, 0, &vu, sizeof vu);
 
-    viewmodel_fs_ubo fu;
+    character_fs_ubo fu;
     SDL_zero(fu);
+    fu.fade[0] = ns_clampf(rd->character.opacity, 0.0f, 1.0f);
     fu.base_color[0] = rd->character.tint[0];
     fu.base_color[1] = rd->character.tint[1];
     fu.base_color[2] = rd->character.tint[2];

@@ -53,6 +53,10 @@ struct ns_skin {
 
     float           duration;
     float           rest_height;
+    float           sweep_radius;
+    float           half_width;
+    float           stride_length;
+    float           forward_angle;
     float           stand_time;
 
     /* L'image reste CONST : elle appartient au tampon de cgltf, qu'on garde
@@ -438,49 +442,261 @@ ns_skin *ns_skin_load(const char *logical)
     }
 
     /*
-     * LA POSE DE PASSAGE, mesurée. Voir `ns_skin_stand_time`.
+     * LES PIEDS : la pose de passage, la FOULÉE, et l'AXE DU PERSONNAGE.
      *
-     * On repère d'abord les deux os les plus BAS de la pose de liaison — ce
-     * sont les pieds, quel que soit leur nom dans le fichier — puis on balaie
-     * le cycle et on retient l'instant où ils sont le plus proches
-     * horizontalement, jambes rassemblées.
+     * On repère d'abord les deux os les plus BAS de la pose de liaison — ce sont
+     * les pieds, quel que soit leur nom dans le fichier — puis on balaie le
+     * cycle une seule fois pour les trois mesures.
+     *
+     * LA FOULÉE, et pourquoi elle ne se lit PAS sur un seul pied
+     * ----------------------------------------------------------
+     * Un cycle de marche est animé SUR PLACE : le bassin ne translate pas, ce
+     * sont les pieds qui vont et viennent sous lui. Pendant son APPUI, un pied
+     * est cloué au sol : dans le repère du personnage il recule donc exactement
+     * de ce dont le corps avance. La distance parcourue en un cycle est par
+     * conséquent la somme des reculs du pied PORTEUR, celui-ci changeant deux
+     * fois par cycle.
+     *
+     * La mesure évidente — l'aller-retour d'un seul pied — donne la moitié de
+     * ça, et c'est un piège dans lequel on est tombé avant de mesurer : un pied
+     * part d'un demi-pas devant le corps et finit un demi-pas derrière, son
+     * excursion vaut donc UN PAS et non une foulée. Sur ce modèle, 1,02 m au
+     * lieu de 2,06 — un facteur deux, et un personnage qui court sur place.
+     *
+     * On INTÈGRE donc, en prenant à chaque instant le pied le plus bas comme
+     * porteur. Aucun seuil de contact n'entre là-dedans, et c'est ce qui rend la
+     * mesure robuste : « lequel des deux est le plus bas » est une question sans
+     * réglage, alors que « ce pied touche-t-il le sol » en demande un que
+     * personne ne sait poser pour tous les modèles.
+     *
+     * On somme des VECTEURS et on prend la longueur du total, pas la somme des
+     * longueurs. La différence n'est pas cosmétique : sommer des longueurs
+     * compterait aussi le tremblement d'un pied posé, et gonflerait la foulée
+     * d'un cycle bruité. Le total vectoriel, lui, pointe vers l'ARRIÈRE du
+     * personnage — ce qui donne du même coup son axe, MESURÉ, sans nom d'os et
+     * sans convention d'exportateur. La perpendiculaire est l'axe des épaules,
+     * et c'est de celui-là qu'on tire la largeur qui compte à l'écran.
      */
+    ns_v3 axe_lateral = ns_v3_make(1.0f, 0.0f, 0.0f);
     {
         ns_m4 pose[NS_SKIN_MAX_JOINTS];
         ns_skin_pose(s, 0.0f, pose, NS_SKIN_MAX_JOINTS);
+
+        /*
+         * DEUX PIEDS, un par JAMBE — et c'est plus subtil qu'il n'y paraît.
+         *
+         * « Les deux os les plus bas » ne marche pas : sur ce squelette-ci, les
+         * quatre os les plus bas sont la cheville ET l'orteil de CHAQUE jambe.
+         * Prendre les deux plus bas peut donc prendre deux fois la même jambe,
+         * auquel cas l'un est toujours sous l'autre, le pied porteur ne change
+         * jamais, et l'intégration d'un cycle bouclé rend exactement zéro.
+         *
+         * « Le plus bas, écarté horizontalement du premier » ne marche pas non
+         * plus, et c'est le piège suivant : une cheville et son orteil sont
+         * écartés horizontalement, eux aussi. Vers l'AVANT, pas sur le côté — et
+         * on ne connaît pas encore l'axe du personnage, c'est justement ce que
+         * ce bloc cherche.
+         *
+         * Ce qui marche, et qui ne demande ni axe ni seuil : le pied opposé est
+         * celui qui MONTE quand l'autre descend. On prend donc, parmi les os
+         * bas, celui dont la hauteur est la plus ANTI-CORRÉLÉE à celle du
+         * premier sur le cycle. C'est la définition même d'une démarche — les
+         * deux jambes sont en opposition de phase — et un orteil de la même
+         * jambe est au contraire fortement corrélé, donc écarté d'office.
+         */
         int pied_a = -1, pied_b = -1;
-        float ya = FLT_MAX, yb = FLT_MAX;
+        float ya = FLT_MAX;
         for (int j = 0; j < s->joint_count; ++j) {
             /* La translation d'un os EN MONDE, une fois la liaison défaite :
              * c'est la colonne de translation de world = pose * bind. */
             const ns_m4 bind = ns_m4_inverse(s->inverse_bind[j]);
             const ns_m4 w = ns_m4_mul(pose[j], bind);
-            const float y = w.m[3][1];
-            if (y < ya) { yb = ya; pied_b = pied_a; ya = y; pied_a = j; }
-            else if (y < yb) { yb = y; pied_b = j; }
+            if (w.m[3][1] < ya) { ya = w.m[3][1]; pied_a = j; }
+        }
+        if (pied_a >= 0) {
+            /* Les hauteurs de chaque os sur le cycle, centrées. Seuls les os
+             * BAS sont candidats : une main descend aussi quand un pied monte,
+             * et elle est parfaitement anti-corrélée. Le quart inférieur de la
+             * hauteur du personnage est large pour un pied et exclut le genou,
+             * qui est à mi-cuisse. */
+            enum { ECH = 64 };
+            static float hy[NS_SKIN_MAX_JOINTS][ECH];
+            bool candidat[NS_SKIN_MAX_JOINTS];
+            const float plafond = ya + s->rest_height * 0.25f;
+            for (int j = 0; j < s->joint_count; ++j) {
+                const ns_m4 bind = ns_m4_inverse(s->inverse_bind[j]);
+                const ns_m4 w = ns_m4_mul(pose[j], bind);
+                candidat[j] = (j != pied_a) && (w.m[3][1] <= plafond);
+            }
+            for (int k = 0; k < ECH; ++k) {
+                ns_m4 p[NS_SKIN_MAX_JOINTS];
+                ns_skin_pose(s, s->duration * (float)k / (float)ECH, p, NS_SKIN_MAX_JOINTS);
+                for (int j = 0; j < s->joint_count; ++j) {
+                    const ns_m4 bind = ns_m4_inverse(s->inverse_bind[j]);
+                    hy[j][k] = ns_m4_mul(p[j], bind).m[3][1];
+                }
+            }
+            for (int j = 0; j < s->joint_count; ++j) {
+                float moy = 0.0f;
+                for (int k = 0; k < ECH; ++k) moy += hy[j][k];
+                moy /= (float)ECH;
+                for (int k = 0; k < ECH; ++k) hy[j][k] -= moy;
+            }
+            float pire = 0.0f;   /* on ne retient qu'une corrélation NÉGATIVE */
+            for (int j = 0; j < s->joint_count; ++j) {
+                if (!candidat[j]) continue;
+                float num = 0.0f, na = 0.0f, nb = 0.0f;
+                for (int k = 0; k < ECH; ++k) {
+                    num += hy[pied_a][k] * hy[j][k];
+                    na  += hy[pied_a][k] * hy[pied_a][k];
+                    nb  += hy[j][k] * hy[j][k];
+                }
+                if (na < 1e-9f || nb < 1e-9f) continue;
+                const float r = num / sqrtf(na * nb);
+                if (r < pire) { pire = r; pied_b = j; }
+            }
         }
         s->stand_time = 0.0f;
+        s->stride_length = 0.0f;
+        s->forward_angle = NS_PI * 0.5f;
         if (pied_a >= 0 && pied_b >= 0) {
+            /*
+             * 128 échantillons : le cycle fait deux secondes, donc un tous les
+             * 16 ms. L'appui dure environ une demi-seconde, soit trente
+             * échantillons — largement de quoi que l'instant du changement de
+             * pied porteur soit trouvé à mieux qu'un pour cent de la foulée.
+             */
+            enum { PAS = 128 };
+            static float px[2][PAS], py[2][PAS], pz[2][PAS];
+            const int pied[2] = { pied_a, pied_b };
+            const ns_m4 bind[2] = { ns_m4_inverse(s->inverse_bind[pied_a]),
+                                    ns_m4_inverse(s->inverse_bind[pied_b]) };
+
             float best = FLT_MAX;
-            for (int k = 0; k < 96; ++k) {
-                const float t = s->duration * (float)k / 96.0f;
+            for (int k = 0; k < PAS; ++k) {
+                const float t = s->duration * (float)k / (float)PAS;
                 ns_skin_pose(s, t, pose, NS_SKIN_MAX_JOINTS);
-                const ns_m4 wa = ns_m4_mul(pose[pied_a], ns_m4_inverse(s->inverse_bind[pied_a]));
-                const ns_m4 wb = ns_m4_mul(pose[pied_b], ns_m4_inverse(s->inverse_bind[pied_b]));
-                const float dx = wa.m[3][0] - wb.m[3][0];
-                const float dz = wa.m[3][2] - wb.m[3][2];
+                for (int f = 0; f < 2; ++f) {
+                    const ns_m4 w = ns_m4_mul(pose[pied[f]], bind[f]);
+                    px[f][k] = w.m[3][0];
+                    py[f][k] = w.m[3][1];
+                    pz[f][k] = w.m[3][2];
+                }
+                const float dx = px[0][k] - px[1][k];
+                const float dz = pz[0][k] - pz[1][k];
                 const float ecart = dx * dx + dz * dz;
                 if (ecart < best) { best = ecart; s->stand_time = t; }
             }
+
+            /* L'intégration. Le cycle est bouclé, donc le dernier échantillon
+             * revient au premier — sans ce modulo il manquerait un pas de la
+             * foulée, et l'erreur serait de moins d'un pour cent, c'est-à-dire
+             * invisible et fausse. */
+            float sx = 0.0f, sz = 0.0f;
+            for (int k = 0; k < PAS; ++k) {
+                const int n = (k + 1) % PAS;
+                const int f = (py[0][k] < py[1][k]) ? 0 : 1;
+                sx += px[f][n] - px[f][k];
+                sz += pz[f][n] - pz[f][k];
+            }
+            const float total = sqrtf(sx * sx + sz * sz);
+            s->stride_length = total;
+            /* Une foulée nulle veut dire que le porteur n'a jamais changé, donc
+             * que les deux « pieds » n'en sont pas. On le DIT : l'appelant
+             * retombera sur sa valeur par défaut, et il vaut mieux qu'il sache
+             * pourquoi. */
+            if (total <= 1e-4f) {
+                NS_WARN("personnage : foulée non mesurable (le pied porteur ne "
+                        "change jamais) — la valeur par défaut s'appliquera");
+            }
+
+            /* L'axe. Un cycle où les pieds ne bougeraient pas — une pose figée
+             * exportée comme animation — laisserait l'axe par défaut plutôt
+             * qu'une direction tirée d'un bruit d'arrondi. */
+            if (total > 1e-4f) {
+                const float inv = 1.0f / total;
+                /* La perpendiculaire horizontale : l'axe des épaules. Son SIGNE
+                 * est indifférent, on n'en prend que des valeurs absolues. */
+                axe_lateral = ns_v3_make(-sz * inv, 0.0f, sx * inv);
+                /* L'AVANT est l'opposé du recul du pied porteur, et son signe,
+                 * lui, compte : c'est ce qui décide de quel côté le personnage
+                 * regarde. */
+                s->forward_angle = atan2f(-sz, -sx);
+            }
         }
+    }
+
+    /*
+     * LES DEUX RAYONS, mesurés sur TOUT LE CYCLE et non sur la seule pose de
+     * liaison.
+     *
+     * Même précaution que pour la hauteur : on mesure ce que le shader fera,
+     * donc sous la pose. Mais ici on balaie l'animation entière, parce qu'un
+     * bras qui balance sort de la silhouette au repos et que c'est le
+     * personnage QUI MARCHE qu'on regarde.
+     *
+     * L'axe de référence est x = z = 0 du repère du personnage, parce que
+     * c'est là que `room/main.c` pose ses PIEDS : `ns_m4_trs(sol, ...)` envoie
+     * l'origine du modèle sur le sol sous le joueur. Mesurer autour d'un autre
+     * axe donnerait un rayon juste et inutilisable.
+     *
+     * DEUX rayons, et c'est le point : ils ne servent pas à la même chose.
+     *
+     *   - `sweep_radius` est le rayon du CYLINDRE qui contient tout le
+     *     personnage en mouvement, main tendue comprise. C'est le volume dans
+     *     lequel une caméra ne doit jamais entrer, quelle que soit la direction
+     *     d'où elle vient.
+     *   - `half_width` est la demi-largeur EN TRAVERS, sur l'axe des épaules.
+     *     C'est elle qui décide de la place prise à l'écran, parce qu'on
+     *     regarde le personnage de dos : un bras balancé vers l'avant est
+     *     caché derrière le corps, il ne fait pas un pixel de plus.
+     *
+     * Les confondre donne un personnage transparent en permanence, la mesure
+     * brute valant ici le double de la demi-largeur.
+     *
+     * Vingt-quatre instants : le cycle fait deux secondes, donc un échantillon
+     * toutes les 83 ms. L'épaule d'un humanoïde ne parcourt pas plus d'un
+     * centimètre en 83 ms à cadence de marche, et l'erreur de mesure est donc
+     * sous le centimètre — largement sous la marge du plan proche qui s'y
+     * ajoute plus loin.
+     */
+    {
+        ns_m4 pose[NS_SKIN_MAX_JOINTS];
+        float r2max = 0.0f, lmax = 0.0f;
+        for (int k = 0; k < 24; ++k) {
+            ns_skin_pose(s, s->duration * (float)k / 24.0f, pose, NS_SKIN_MAX_JOINTS);
+            for (uint32_t i = 0; i < s->vert_count; ++i) {
+                const ns_skin_vertex *v = &s->verts[i];
+                float x = 0.0f, z = 0.0f;
+                for (int b = 0; b < NS_SKIN_INFLUENCES; ++b) {
+                    const float w = v->weights[b];
+                    if (w <= 0.0f) continue;
+                    const ns_m4 *m = &pose[v->joints[b]];
+                    x += w * (m->m[0][0] * v->position[0] + m->m[1][0] * v->position[1] +
+                              m->m[2][0] * v->position[2] + m->m[3][0]);
+                    z += w * (m->m[0][2] * v->position[0] + m->m[1][2] * v->position[1] +
+                              m->m[2][2] * v->position[2] + m->m[3][2]);
+                }
+                const float r2 = x * x + z * z;
+                if (r2 > r2max) r2max = r2;
+                const float l = SDL_fabsf(x * axe_lateral.x + z * axe_lateral.z);
+                if (l > lmax) lmax = l;
+            }
+        }
+        s->sweep_radius = sqrtf(r2max);
+        s->half_width   = lmax;
     }
 
     NS_INFO("personnage « %s » : %u sommets, %u triangles, %d os, %.2f s d'animation, "
             "%.2f de haut au repos",
             logical, s->vert_count, s->index_count / 3u, s->joint_count,
             (double)s->duration, (double)s->rest_height);
-    NS_INFO("personnage : pose de passage mesurée à %.3f s du cycle",
-            (double)s->stand_time);
+    NS_INFO("personnage : pose de passage mesurée à %.3f s du cycle, "
+            "rayon balayé %.3f, demi-largeur %.3f, foulée %.3f (unités du fichier), "
+            "avant à %.1f degrés",
+            (double)s->stand_time, (double)s->sweep_radius,
+            (double)s->half_width, (double)s->stride_length,
+            (double)(s->forward_angle / NS_DEG2RAD));
     return s;
 }
 
@@ -510,6 +726,14 @@ const uint32_t *ns_skin_indices(const ns_skin *s, uint32_t *count)
 int   ns_skin_joint_count(const ns_skin *s) { return s ? s->joint_count : 0; }
 float ns_skin_duration(const ns_skin *s)    { return s ? s->duration : 0.0f; }
 float ns_skin_rest_height(const ns_skin *s) { return s ? s->rest_height : 1.0f; }
+float ns_skin_sweep_radius(const ns_skin *s) { return s ? s->sweep_radius : 0.0f; }
+float ns_skin_half_width(const ns_skin *s)  { return s ? s->half_width : 0.0f; }
+float ns_skin_stride_length(const ns_skin *s) { return s ? s->stride_length : 0.0f; }
+/* Un quart de tour par défaut : +Z, ce que glTF recommande pour un personnage. */
+float ns_skin_forward_angle(const ns_skin *s)
+{
+    return s ? s->forward_angle : (NS_PI * 0.5f);
+}
 float ns_skin_stand_time(const ns_skin *s)  { return s ? s->stand_time : 0.0f; }
 
 const void *ns_skin_image(const ns_skin *s, size_t *size)

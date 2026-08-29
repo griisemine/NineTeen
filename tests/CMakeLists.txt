@@ -46,6 +46,25 @@ nineteen_set_warnings(ns_test_door)
 nineteen_apply_sanitizers(ns_test_door)
 add_test(NAME porte COMMAND ns_test_door)
 
+# La caméra de TROISIÈME PERSONNE : le bras qui balaie un volume, et
+# l'effacement du personnage quand la caméra lui rentre dedans.
+#
+# Le défaut d'origine était une IMAGE — la tête du personnage au tiers gauche du
+# cadre au démarrage — et aucun test ne remplacera le fait de l'ouvrir. Mais tout
+# ce qui l'a produite est du calcul pur : une distance voulue, un obstacle, une
+# distance rendue, une opacité. Ce test cloue ce calcul-là, y compris le cas qui
+# justifie le faisceau de rayons — l'arête qu'un rayon unique manque — et le
+# patinage des pieds, qui se mesure sur le vrai cycle du modèle.
+#
+# Il reçoit le répertoire d'assets, comme `ns_test_skin` : la partie « foulée »
+# lit le personnage. Le reste tourne sans aucun fichier.
+add_executable(ns_test_camera test_camera.c "${CMAKE_SOURCE_DIR}/room/room_camera.c")
+target_include_directories(ns_test_camera PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_camera PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_camera)
+nineteen_apply_sanitizers(ns_test_camera)
+add_test(NAME camera COMMAND ns_test_camera "${CMAKE_BINARY_DIR}/assets")
+
 # Le classement local et le journal de partie scellé.
 #
 # Le contrôle qui justifie ce test à lui seul : le format canonique et le sceau

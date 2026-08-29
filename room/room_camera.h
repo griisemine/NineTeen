@@ -131,9 +131,50 @@ typedef struct room_camera {
      * caméra survole.
      */
     bool  third_person;
-    float third_distance;    /* recul, en mètres */
+    float third_distance;    /* recul VOULU, en mètres */
     float third_height;      /* hauteur de visée au-dessus des pieds */
-    float third_shoulder;    /* décalage latéral : 0 = pile derrière */
+    float third_shoulder;    /* décalage latéral VOULU : 0 = pile derrière */
+
+    /*
+     * LE BRAS DE CAMÉRA, simulé au pas fixe comme tout le reste.
+     *
+     * Il vivait dans `room_camera_resolve`, recalculé par image d'affichage.
+     * Deux raisons de l'avoir remonté ici :
+     *
+     *   - il est maintenant AMORTI, et un amortissement a besoin d'un état et
+     *     d'un pas de temps. Sans lui, le bras saute dès qu'un rayon accroche
+     *     puis lâche une arête, et une caméra qui saute est le défaut qu'on
+     *     remarque avant tous les autres ;
+     *   - il coûte neuf lancers de rayon. À 120 Hz de simulation c'est un
+     *     budget fixe ; par image d'affichage, il triplait sur un écran à
+     *     360 Hz, c'est-à-dire exactement là où on a le moins de marge.
+     *
+     * `third_arm` est le recul obtenu, `third_side` le décalage d'épaule
+     * obtenu — l'un et l'autre peuvent être plus courts que ce qui est demandé,
+     * et l'épaule aussi : elle est balayée elle aussi, parce que le point d'où
+     * part le bras peut se trouver DANS un mur quand on longe une cloison.
+     */
+    float third_arm,  prev_third_arm;
+    float third_side, prev_third_side;
+
+    /*
+     * LE PERSONNAGE, tel que la caméra a besoin de le connaître.
+     *
+     * Trois cotes, toutes MESURÉES sur le modèle par `ns_skin` et posées ici par
+     * `room/main.c` — la caméra ne charge rien et n'inclut pas `ns_skin.h`.
+     * `actor_half_width` à zéro veut dire « aucun personnage » : les seuils
+     * d'effacement sont alors inertes et l'opacité vaut toujours 1, ce qui est
+     * le comportement voulu quand le fichier de modèle manque.
+     */
+    float actor_half_width;   /* demi-largeur en travers, mètres */
+    float actor_sweep_radius; /* rayon du cylindre balayé, mètres */
+    float stride;             /* foulée, mètres — voir room_camera_stride */
+
+    /* Les réglages du recul. Voir `nineteen.env` pour ce que chacun coûte. */
+    float probe_radius;       /* rayon de la sonde de caméra, mètres */
+    float return_rate;        /* vitesse de retour du bras, par seconde */
+    float fade_full;          /* couverture d'écran en deçà de laquelle il est plein */
+    float fade_none;          /* couverture d'écran au-delà de laquelle il est effacé */
 
     /* Mode orbite */
     ns_v3 orbit_center;
@@ -179,5 +220,62 @@ ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alp
  * suite sans qu'on sache pourquoi.
  */
 room_view_bob room_camera_bob(const room_camera *c, float alpha);
+
+/* ==========================================================================
+ * La troisième personne : le bras, la foulée, l'effacement
+ * ========================================================================== */
+
+/*
+ * Déclare les cotes MESURÉES du personnage. À appeler une fois, après le
+ * chargement du modèle ; ne pas l'appeler laisse la caméra se comporter comme
+ * s'il n'y avait pas de personnage, ce qui est le cas quand le fichier manque.
+ *
+ * `stride` à zéro ou négatif garde la foulée par défaut. C'est ce qui fait
+ * qu'un test qui construit une caméra sans modèle — `tests/test_ik.c` — retrouve
+ * exactement la valeur historique.
+ */
+void room_camera_set_actor(room_camera *c, float half_width, float sweep_radius,
+                           float stride);
+
+/*
+ * LA FOULÉE, en mètres : la distance parcourue en un cycle d'animation complet.
+ *
+ * C'est la valeur qui relie la distance parcourue à la phase — des jambes, des
+ * bras, de l'oscillation de la tête et des bruits de pas. Elle est écrite en dur
+ * à 1,55 m dans QUATRE fichiers : ici, `room_viewmodel.c`, `room_sound.c` et,
+ * jusqu'ici, `room/main.c`. Une constante recopiée quatre fois est une constante
+ * qui finira par diverger, et les quatre doivent lire celle-ci.
+ *
+ * Ce qu'elle coûte quand elle est fausse : les pieds patinent. La phase avance
+ * de `distance / foulée` ; si la foulée employée diffère de celle du cycle, le
+ * pied d'appui glisse au sol d'autant.
+ *
+ * Elle reste réglable et non mesurée par défaut, et la raison est écrite dans
+ * `room_camera.c` : le cycle livré n'a pas de pied cloué au sol, donc aucune
+ * mesure ne fait autorité. `personnage.foulee` la fixe à la main ; le jeu
+ * COMPARE la valeur employée à la mesure et avertit si elles s'écartent trop.
+ */
+float room_camera_stride(const room_camera *c);
+
+/*
+ * Le recul EFFECTIF du point de vue à l'instant `alpha`, en mètres — celui que
+ * `room_camera_resolve` vient d'employer, obstacles compris.
+ *
+ * Exposé parce que c'est de LUI que dépend l'effacement du personnage, et qu'on
+ * ne veut pas que l'appelant le recalcule : deux calculs du même recul se
+ * désaccorderaient d'une image, et le personnage clignoterait.
+ */
+float room_camera_third_arm(const room_camera *c, float alpha);
+
+/*
+ * L'OPACITÉ du personnage pour un bras de caméra de `arm` mètres : 1 plein,
+ * 0 effacé.
+ *
+ * Fonction PURE — elle ne lit que les cotes du personnage et le champ de vision
+ * — et c'est délibéré : c'est ce qui la rend vérifiable sans GPU, sans salle et
+ * sans fenêtre. Voir `tests/test_camera.c`, et `room_camera.c` pour la
+ * dérivation des deux seuils, qui ne sont pas choisis mais calculés.
+ */
+float room_camera_actor_opacity(const room_camera *c, float arm);
 
 #endif /* NS_ROOM_CAMERA_H */

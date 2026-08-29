@@ -187,6 +187,25 @@ typedef struct ns_character_draw {
     int   joint_count;
     float tint[3];                                /* multiplié à la texture */
     float roughness, metallic;
+    /*
+     * L'OPACITÉ, et pourquoi elle existe.
+     *
+     * En troisième personne, le bras de caméra se raccourcit contre un mur. Dans
+     * un couloir — c'est-à-dire au départ du jeu — il se raccourcit jusqu'à
+     * mettre l'objectif contre la tempe du personnage, qui remplit alors le
+     * tiers de l'image. Le rendre à 1 comme si de rien n'était était le défaut le
+     * plus voyant du mode : `room_camera.c` calcule la valeur, ce champ la porte.
+     *
+     * 1 = plein, et c'est alors EXACTEMENT le rendu d'avant : le mélange avec un
+     * alpha de 1 rend la source telle quelle. 0 = rien n'est dessiné, et la passe
+     * sort avant d'allumer le GPU.
+     *
+     * Zéro par `SDL_zero` ne veut pas dire « invisible » par accident : c'est
+     * `visible` qui décide, et une pose montée sans toucher ce champ serait
+     * effacée. Le remplir est donc OBLIGATOIRE — `room/main.c` le fait, et il
+     * n'y a qu'un appelant.
+     */
+    float opacity;
 } ns_character_draw;
 
 /*

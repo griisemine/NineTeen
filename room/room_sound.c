@@ -7,12 +7,16 @@
 
 #include <string.h>
 
-/* Un pas tous les demi-pas de foulée. `STRIDE_METRES` vaut 1,55 m dans
- * room_camera.c : un cycle complet, donc deux pas. La constante est dupliquée
- * pour la même raison que dans le viewmodel — un module de son n'a pas à inclure
- * le .c d'une caméra — et vérifiée par le test. */
-#define RS_STRIDE_METRES 1.55f
-#define RS_STEP_METRES   (RS_STRIDE_METRES * 0.5f)
+/*
+ * Un pas tous les DEMI-PAS de foulée : une foulée est un cycle complet, donc
+ * deux pas.
+ *
+ * La foulée elle-même vient de la caméra, par `room_camera_stride`. Elle était
+ * recopiée ici, en dur, à 1,55 m ; elle ne peut plus l'être, parce que
+ * `personnage.foulee` la règle sans recompiler et qu'une copie ferait sonner les
+ * pas à contretemps des jambes. La valeur par défaut n'a pas changé.
+ */
+#define RS_STEP_FRACTION 0.5f
 
 /* Portées. Une borne ne s'entend pas d'un bout à l'autre de la salle : c'est ce
  * qui permet d'en avoir dix-neuf sans que ça devienne une bouillie. */
@@ -569,7 +573,8 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
              * entière, pas au reliquat de distance d'avant le saut. */
             s->last_step_distance = bob.distance;
         } else if (cam->grounded && bob.amount > 0.12f) {
-            if (bob.distance - s->last_step_distance >= RS_STEP_METRES) {
+            if (bob.distance - s->last_step_distance
+                    >= room_camera_stride(cam) * RS_STEP_FRACTION) {
                 s->last_step_distance = bob.distance;
                 s->left_foot = !s->left_foot;
                 const rs_gait gait = gait_of(cam, bob.amount);
