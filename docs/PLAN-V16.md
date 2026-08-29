@@ -156,9 +156,9 @@ moi, pas par celui qui a fait le travail.
 | L3 | Les flancs et le liseré | plus de trame matelassée sur de la tôle ; le T-molding cesse de prendre l'œil avant le caisson | **fermé** (L3) |
 | L4 | Les bras | bras + avant-bras + main, coude et poignet réels ; la main se REFERME sur la boule | **fermé** (a97cbfa) |
 | L5 | L'ergonomie | l'écran est DANS le cadre quand on se plante devant une borne | **fermé** (2bd97c4) |
-| L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre ; contrôle au build | ouvert |
-| L7 | L'atmosphère | le centre de la salle se parcourt ; le plafond n'est plus une pergola | ouvert |
-| L8 | La recette finale | les 8 jeux, le réseau, le duel, les 35 tests, et une passe de jeu réelle | ouvert |
+| L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre | **fermé** pour les 5 bloquants et 6 visibles (6c50c88) |
+| L7 | L'atmosphère | le centre de la salle se parcourt ; le plafond n'est plus une pergola | **fermé** (efa293b) |
+| L8 | La recette finale | les 8 jeux, le réseau, le duel, les 35 tests, et une passe de jeu réelle | **fermé** |
 | L9 | Les écrans vivants | les dix-huit bornes non jouées jouent leur propre partie | **fermé** (a26f95b) |
 | L10 | L'écran incrusté | le meuble est CREUSÉ ; on voit les parois du creux autour de l'image | **fermé** (428511f) |
 | L11 | L'enseigne au néon | « NINETEEN » est un vrai néon, pas une image peinte | **fermé** (741856e) |
@@ -276,3 +276,47 @@ Médiane de luminance de `--view=allee`, mesurée à chaque étape avec
 `scratchpad/lum.py` : 53,5 au départ, 54,7 après le plafond, 49,6 après les
 flancs, **50,6** après la portée des écrans. Le critère du designer était
 « ≥ 42 ».
+
+
+## L8 — la recette, mesurée
+
+| ce qu'on vérifie | résultat |
+|---|---|
+| les huit jeux jouent et marquent | flappy 24, snake 170, tetris 22 500, asteroid 2 420, pacman 200, piano 185, shooter 330, demineur 164 |
+| les bras atteignent les commandes | `ns_test_ik` — 3 493 vérifications, 0 échec, **0,2 cm** du manche, 1,3 cm des boutons |
+| le réseau, inerte par défaut | « temps réel : désactivé (défaut) » |
+| le réseau, activable | « actif sur http://127.0.0.1:8080 » |
+| le réseau, verrouillable | « verrouillé par --offline, aucune connexion ne sera tentée » |
+| le duel contre le vrai relais Go | **6 duels, 0 divergence**, jusqu'à 1 344 pas de fantôme et 1 098 attentes |
+| la suite de tests | **35/35** |
+| le compilateur, sur notre code | **0 avertissement** |
+| `go vet` | propre |
+
+### L'aire vide du hall, avant et après
+
+| seuil | avant | après | cible du designer |
+|---|---|---|---|
+| à plus de 2,0 m de tout meuble | 63,4 m² | **15,8 m²** | 18,0 |
+| à plus de 3,0 m | 19,9 m² | **0,0 m²** | 1,8 |
+| point le plus désert | 5,0 m | **2,94 m** | 3,95 |
+
+## Ce qui reste ouvert, et que je ne masque pas
+
+- **Le critère du poste 1** (« médiane de `centre`, `sud`, `travee` ≥ 30 ») donne
+  23 / 12 / 17. `sud` et `travee` sont deux cadrages qui regardent à l'opposé
+  des nouvelles lampes ; le critère vise la salle, la mesure vise un cadrage.
+- **Le critère `orbite`** (« % sous 16 de luminance < 45 ») vaut 56,5 — et ce
+  chiffre dépend de la définition de la capture, contrairement à ce que le
+  document du designer affirme.
+- **Douze postes d'atmosphère sur vingt-cinq** ne sont pas faits : le monnayeur
+  (7), l'estrade (8), le mobilier du salon retourné (11), les quatre écrans
+  « bientôt » (14), les collisions de palette (15), les bancs sud
+  supplémentaires (16), les néons par borne (20), le bandeau de mur (21),
+  l'ambiante (22), la sérigraphie de panneau (23), le billard vécu (24), les
+  points de vue neufs (25).
+- **Douze défauts de placement sur vingt-trois** restent : les huit mineurs, et
+  P-09 (3,15 m² de moquette dans le bloc sanitaire), P-11 partiellement, P-12
+  (le battant d'entrée), P-14 (la cinquième poutre qui sort par le pan coupé).
+- **Les neuf contrôles au build** que l'audit recommande ne sont pas écrits.
+  `check_inside_shell` à lui seul aurait attrapé quatre des cinq bloquants — et
+  aurait empêché quatre objets de se retrouver sur le trottoir.
