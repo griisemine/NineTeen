@@ -1128,49 +1128,49 @@
     },
     {
       "name": "affiche_1",
-      "texture": "poster_1.png",
+      "texture": "affiche_tournoi.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_2",
-      "texture": "poster_2.png",
+      "texture": "affiche_reglement.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_3",
-      "texture": "poster_3.jpg",
+      "texture": "affiche_jetons.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_4",
-      "texture": "poster_4.jpg",
+      "texture": "affiche_concert.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_5",
-      "texture": "poster_5.jpg",
+      "texture": "affiche_plan.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_6",
-      "texture": "poster_6.jpg",
+      "texture": "affiche_attention.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_7",
-      "texture": "poster_7.jpg",
+      "texture": "affiche_orbite.png",
       "roughness": 0.6,
       "fit": true
     },
     {
       "name": "affiche_8",
-      "texture": "poster_8.jpg",
+      "texture": "affiche_records.png",
       "roughness": 0.6,
       "fit": true
     },

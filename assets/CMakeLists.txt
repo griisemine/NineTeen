@@ -129,7 +129,7 @@ add_custom_command(
     OUTPUT  "${SIDEART_RUNTIME}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SIDEART}" "${SIDEART_RUNTIME}"
-    DEPENDS "${SIDEART}"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${SIDEART}"
     VERBATIM
 )
 # Elle passe par `texgen` comme toutes les autres : une planche sans normale ni
@@ -161,7 +161,7 @@ add_custom_command(
     OUTPUT  "${PANELART_RUNTIME}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PANELART}" "${PANELART_RUNTIME}"
-    DEPENDS "${PANELART}"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${PANELART}"
     VERBATIM
 )
 add_custom_command(
@@ -235,7 +235,7 @@ add_custom_command(
     OUTPUT  "${GEN}/scene/textures/nineteen_neon.png"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_neon}" "${GEN}/scene/textures/nineteen_neon.png"
-    DEPENDS "${_neon}"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${_neon}"
     VERBATIM
 )
 # `--strength=0.35` : le panneau est PLAT. Le relief deduit du contraste y
@@ -290,7 +290,7 @@ add_custom_command(
     OUTPUT  "${GEN}/scene/textures/bloc_sortie.png"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_sortie}" "${GEN}/scene/textures/bloc_sortie.png"
-    DEPENDS "${_sortie}"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${_sortie}"
     VERBATIM
 )
 add_custom_command(
@@ -335,7 +335,7 @@ foreach(jeu shooter demineur pacman piano flappy tetris asteroid snake)
         OUTPUT  "${GEN}/scene/textures/marquee_${jeu}.png"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_png}" "${GEN}/scene/textures/marquee_${jeu}.png"
-        DEPENDS "${_png}"
+        DEPENDS "${GEN}/scene/textures/.stamp" "${_png}"
         VERBATIM
     )
     # `--strength=0.5` : une enseigne est une plaque de PLEXIGLAS. Le relief
@@ -396,7 +396,7 @@ foreach(jeu pacman piano)
         OUTPUT  "${GEN}/scene/textures/ecran_${jeu}.png"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_png}" "${GEN}/scene/textures/ecran_${jeu}.png"
-        DEPENDS "${_png}"
+        DEPENDS "${GEN}/scene/textures/.stamp" "${_png}"
         VERBATIM
     )
     # `--strength=0.35`, comme l'enseigne au néon : la dalle est PLATE. Le relief
@@ -415,7 +415,87 @@ foreach(jeu pacman piano)
 endforeach()
 
 
+
+# ---------------------------------------------------------------------------
+# LES AFFICHES DES MURS — et la raison JURIDIQUE de les dessiner
+# ---------------------------------------------------------------------------
+#
+# Les huit `poster_*` de 2020 ne sont pas des textures : ce sont des ŒUVRES
+# TIERCES sous droit exclusif, employées sans droit et livrées dans le paquet.
+# Ouvertes une par une : `poster_7` est le flyer d'arcade PAC-MAN au logo
+# Midway, `poster_8` celui de DONKEY KONG au logo Nintendo, `poster_3` un flyer
+# ATARI, `poster_6` l'affiche « HAWKINS / PALACE ARCADE » de Stranger Things
+# avec ses personnages, `poster_5` une illustration Arcade de League of Legends,
+# `poster_2` l'arcade « SPACE PARANOIDS / ENCOM » de Tron. `poster_1` et
+# `poster_4` sont d'origine inconnue, ce qui ne vaut pas mieux.
+#
+# AUCUNE RÉDACTION DE `LICENSES.md` NE LES REND DISTRIBUABLES. Une attribution
+# répare une licence non tenue — c'était le cas de CesiumMan — mais elle ne
+# donne pas un droit qu'on n'a pas. Le jeu ne pouvait pas être vendu tant
+# qu'elles y étaient, et il ne suffisait pas de cesser de les NOMMER : la copie
+# groupée plus bas emporte tout le répertoire, employé ou non. Elles sortent
+# donc de la liste elle-même, et le paquet ne les contient plus.
+#
+# Elles restent dans `legacy/`, qui est l'archive du projet de 2020 et n'est pas
+# distribuée. Ce qui change ici, c'est ce que le build COPIE.
+#
+# Les huit remplaçantes sont DESSINÉES, comme le sont déjà les enseignes de
+# borne et le bloc de secours : l'iconographie des années 80 — grilles en
+# perspective, néons, dégradés, typographie à empattements carrés — appartient à
+# tout le monde ; ses personnages et ses logos non. Huit intentions différentes
+# plutôt que huit variations d'une seule, parce que huit fois la même grille
+# rose serait pire que ce qu'on remplace.
+#
+# `plan` LIT la description de la salle au lieu de la recopier : une affiche qui
+# montrerait un plan périmé serait pire qu'une affiche absente, et celle-ci suit
+# les murs, les dix-neuf bornes et la position de départ à chaque build.
+set(POSTER_MOTIFS tournoi reglement jetons concert plan attention orbite records)
+foreach(motif IN LISTS POSTER_MOTIFS)
+    set(_png "${GEN}/sideart/affiche_${motif}.png")
+    add_custom_command(
+        OUTPUT  "${_png}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+        COMMAND posterart "--motif=${motif}"
+                          "--salle=${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
+                          "${_png}"
+        DEPENDS posterart "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
+        COMMENT "Affiche murale : affiche_${motif}.png"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/textures/affiche_${motif}.png"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_png}"
+                                   "${GEN}/scene/textures/affiche_${motif}.png"
+        DEPENDS "${GEN}/scene/textures/.stamp" "${_png}"
+        VERBATIM
+    )
+    # `--strength=0.5`, comme les enseignes : une affiche est IMPRIMÉE sur un
+    # papier lisse. Le relief déduit du contraste y graverait les lettres.
+    add_custom_command(
+        OUTPUT  "${GEN}/materials/affiche_${motif}${_map_n}"
+                "${GEN}/materials/affiche_${motif}${_map_orm}"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.5 "${_png}" "${GEN}/materials"
+        DEPENDS texgen "${_png}"
+        COMMENT "Materiau PBR : affiche_${motif}"
+        VERBATIM
+    )
+    list(APPEND MARQUEE_ART "${_png}" "${GEN}/scene/textures/affiche_${motif}.png"
+                            "${GEN}/materials/affiche_${motif}${_map_n}"
+                            "${GEN}/materials/affiche_${motif}${_map_orm}")
+endforeach()
+
+# Les huit images qu'elles remplacent, retirées de TOUTES les listes : compte,
+# dé-cuisson et copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une
+# image n'est plus employée, il n'empêche pas de la livrer.
+set(POSTERS_TIERS poster_1.png poster_2.png poster_3.jpg poster_4.jpg
+                  poster_5.jpg poster_6.jpg poster_7.jpg poster_8.jpg)
+
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+foreach(_p IN LISTS POSTERS_TIERS)
+    list(REMOVE_ITEM _room_textures "${SRC_ROOM}/textures/${_p}")
+endforeach()
+
 file(GLOB _cc0_textures  "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.jpg"
                          "${CMAKE_CURRENT_SOURCE_DIR}/cc0/*.png")
 list(LENGTH _room_textures _n_room)
@@ -439,7 +519,10 @@ list(LENGTH _cc0_textures  _n_cc0)
 # présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
 # c'est le comportement voulu — une texture générée que la salle n'emploie pas,
 # ou une texture employée qui n'est pas générée, sont deux pannes muettes.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 14")
+# +22 : les huit affiches murales dessinees s'ajoutent aux quatorze
+# planches deja generees. Les huit images qu'elles remplacent sortent du
+# compte en meme temps, retirees de `_room_textures` : le total ne bouge pas.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 22")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -537,6 +620,12 @@ add_custom_command(
 #
 # Voir `assets/cc0/LICENSES.md` pour l'origine et la licence de chaque fichier.
 file(GLOB LEGACY_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
+# Voir le bloc « LES AFFICHES DES MURS » : ces huit-là sont des oeuvres tierces
+# sous droit exclusif et ne doivent ni etre de-cuites, ni etre copiees.
+foreach(_p IN LISTS POSTERS_TIERS)
+    list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_p}")
+endforeach()
+
 # Un seul répertoire pour TOUS les albédos rapportés, y compris ceux des modèles.
 # Poly Haven les range dans un sous-dossier par modèle ; on les remonte ici parce
 # que la chaîne (copie, puis normale et ORM dérivées par `texgen`) est la même
@@ -694,14 +783,32 @@ foreach(tex IN LISTS ROOM_TEXTURES)
     add_custom_command(
         OUTPUT  "${GEN}/scene/textures/${tex_name}${CMAKE_MATCH_0}"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${tex}" "${GEN}/scene/textures/"
-        DEPENDS "${tex}"
+        DEPENDS "${GEN}/scene/textures/.stamp" "${tex}"
         VERBATIM
     )
 endforeach()
 
 # Copie groupée des diffus (plus simple et plus rapide qu'une règle par fichier).
+# LE REPERTOIRE EST VIDE AVANT D'ETRE REMPLI, et ce n'est pas de la coquetterie.
+#
+# `copy_if_different` ajoute, il ne retire jamais. Une image qu'on cesse de
+# copier reste donc indefiniment dans l'arbre de build — et de la, dans le
+# PAQUET, puisque l'installation emporte le repertoire entier. C'est ainsi que
+# deux images orphelines se sont retrouvees livrees sans que rien ne les nomme.
+#
+# Ce serait un defaut d'hygiene si les huit `poster_*` n'en faisaient pas un
+# defaut JURIDIQUE : cesser de les copier ne suffisait pas a les faire sortir du
+# paquet, leurs exemplaires d'hier y seraient restes. Un build incremental
+# aurait donc continue de livrer des oeuvres tierces sous droit exclusif, en
+# silence, pendant qu'on croyait le probleme regle.
+#
+# Le prix est de recopier une cinquantaine d'images quand une seule change.
+# Cette regle ne se declenche que si une TEXTURE SOURCE a bouge, ce qui
+# n'arrive presque jamais ; les planches dessinees, elles, ont leurs propres
+# regles et sont recopiees apres celle-ci — d'ou la dependance ajoutee a chacune.
 add_custom_command(
     OUTPUT "${GEN}/scene/textures/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LEGACY_TEXTURES} "${GEN}/scene/textures/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CC0_TEXTURES} "${GEN}/scene/textures/"

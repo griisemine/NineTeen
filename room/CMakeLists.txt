@@ -63,8 +63,28 @@ install(TARGETS nineteen RUNTIME DESTINATION bin)
 # indisponible » dans un journal que personne ne lit, et la touche F10 ne fait
 # plus rien. C'est exactement le genre de panne muette qu'un paquet doit rendre
 # impossible.
+#
+# CE QUI NE PART PAS, et la raison est juridique avant d'etre technique.
+#
+# `salle-legacy.*` est la salle de 2020 telle que son OBJ la decrit, gardee pour
+# COMPARER la reconstruction a l'original. C'est un outil de developpement : le
+# jeu livre a une salle, pas deux. Et elle est batie sur l'integralite du jeu de
+# textures de 2020 — dont les huit affiches qui sont des oeuvres tierces sous
+# droit exclusif, retirees du build pour cette raison (voir le bloc « LES
+# AFFICHES DES MURS » dans assets/CMakeLists.txt). L'emporter, ce serait
+# reintroduire par la porte de derriere ce qu'on vient de sortir par la grande,
+# et livrer en prime une seconde copie de 5,8 Mio d'une salle que personne
+# n'ouvre.
+#
+# `--room=legacy` reste donc un outil de l'arbre de build. Dans un paquet il
+# retombe sur la salle reconstruite en le disant, plutot que de s'arreter.
+#
+# Le motif d'exclusion porte sur le NOM et non sur une liste : `salle-legacy`
+# produit quatre fichiers (gltf, bin, lights.json, scene.json) et une liste
+# nommee en aurait oublie un le jour ou un cinquieme apparait.
 foreach(_dir scene materials sounds games models)
-    install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION bin/assets)
+    install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION bin/assets
+            PATTERN "salle-legacy*" EXCLUDE)
 endforeach()
 
 # Les reglages du personnage, A COTE DU BINAIRE : c'est le premier des trois

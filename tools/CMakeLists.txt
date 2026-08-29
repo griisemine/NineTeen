@@ -33,6 +33,20 @@ nineteen_add_tool(marqueeart marqueeart.c)
 # `marqueeart` dessine avec la fonte DU JEU : une enseigne tracee dans une
 # autre fonte que les scores de la meme borne se remarque tout de suite.
 target_include_directories(marqueeart PRIVATE "${CMAKE_SOURCE_DIR}/engine/sprite")
+# Les AFFICHES des murs. Elles remplacent huit images de 2020 qui etaient des
+# oeuvres tierces sous droit exclusif — flyers PAC-MAN et DONKEY KONG, affiche
+# Stranger Things, illustration League of Legends, arcade de Tron — employees
+# sans droit et livrees dans le paquet. Aucune redaction de LICENSES.md ne rend
+# `poster_8.jpg` distribuable ; le jeu ne pouvait pas etre vendu tant qu'elles y
+# etaient. Elles sont donc DESSINEES, comme le sont deja les enseignes :
+# l'iconographie des annees 80 appartient a tout le monde, ses personnages non.
+nineteen_add_tool(posterart posterart.c)
+target_include_directories(posterart PRIVATE
+    "${CMAKE_SOURCE_DIR}/engine/sprite"
+    # Le motif « plan » LIT la description de la salle plutot que de la
+    # recopier : une affiche qui montrerait un plan perime serait pire
+    # qu'une affiche absente.
+    "${CMAKE_SOURCE_DIR}/third_party/jsmn")
 nineteen_add_tool(bvhbake  bvhbake.c)
 # Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de
 # pas et les nappes d'ambiance sont SYNTHÉTISÉES au lieu d'être enregistrées. Un

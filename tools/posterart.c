@@ -109,7 +109,6 @@ static const float C_ROUGE[3]   = { 0.62f, 0.07f, 0.07f };  /* les piliers de la
 static const float C_CREME[3]   = { 0.62f, 0.56f, 0.42f };  /* le papier, et les murs */
 static const float C_BLANC[3]   = { 0.90f, 0.92f, 0.95f };
 static const float C_ENCRE[3]   = { 0.030f, 0.022f, 0.020f };
-static const float C_NUIT[3]    = { 0.014f, 0.014f, 0.030f };
 
 static float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 static float minf(float a, float b) { return a < b ? a : b; }
@@ -841,8 +840,13 @@ static void plan_lire(plan_source *p, const char *chemin)
         p->murs_ferme[k] = tool_json_get_bool(&doc, m, "closed", false);
         for (int j = 0; j < np && j < 64; ++j) {
             const tool_json_value *pt = tool_json_at(&doc, pts, j);
-            float xy[2] = { 0.0f, 0.0f };
-            tool_json_get_floats(&doc, pt, xy, 2);
+            /* Un point de mur est un tableau NU — `[x, z]` — et non un objet a
+             * clef : `tool_json_get_floats` ne sait pas le lire, elle attend un
+             * nom de champ. On indexe donc les deux elements a la main. */
+            const float xy[2] = {
+                tool_json_value_float(&doc, tool_json_at(&doc, pt, 0), 0.0f),
+                tool_json_value_float(&doc, tool_json_at(&doc, pt, 1), 0.0f),
+            };
             p->murs[k][j][0] = xy[0];
             p->murs[k][j][1] = xy[1];
             p->murs_n[k]++;
@@ -857,7 +861,7 @@ static void plan_lire(plan_source *p, const char *chemin)
     for (int i = 0; i < nb && p->n_bornes < 32; ++i) {
         const tool_json_value *b = tool_json_at(&doc, bornes, i);
         float at[3] = { 0.0f, 0.0f, 0.0f };
-        tool_json_get_vec3(&doc, b, "at", at);
+        tool_json_get_vec3(&doc, b, "at", at, 0.0f);
         p->bornes[p->n_bornes][0] = at[0];
         p->bornes[p->n_bornes][1] = at[2];
         p->bornes[p->n_bornes][2] = tool_json_get_float(&doc, b, "yaw", 0.0f);
@@ -867,7 +871,7 @@ static void plan_lire(plan_source *p, const char *chemin)
     const tool_json_value *depart = tool_json_get(&doc, root, "playerStart");
     if (depart) {
         float at[3] = { 0.0f, 0.0f, 0.0f };
-        tool_json_get_vec3(&doc, depart, "position", at);
+        tool_json_get_vec3(&doc, depart, "position", at, 0.0f);
         p->depart[0] = at[0];
         p->depart[1] = at[2];
     }

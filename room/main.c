@@ -1437,10 +1437,22 @@ int main(int argc, char **argv)
     if (!ns_scene_load(rhi, &scene, scene_path)) {
         /* La salle reconstruite peut ne pas avoir encore été produite ; dans ce
          * cas on retombe sur celle de 2020 plutôt que de refuser de démarrer. */
+        /*
+         * LE REPLI VA DANS LES DEUX SENS, et le second cas est celui d'un
+         * PAQUET : la salle de 2020 n'y est pas installee — elle est batie sur
+         * des textures dont on n'a pas les droits, et le jeu livre a une salle,
+         * pas deux. Un joueur dont la configuration gardee dit « legacy », ou
+         * qui tape `--room=legacy` par curiosite, ne doit pas se retrouver
+         * devant « la salle n'a pas pu etre chargee ».
+         */
         bool loaded = false;
-        if (!opt.room && SDL_strcmp(scene_path, "scene/salle.gltf") == 0) {
+        if (SDL_strcmp(scene_path, "scene/salle.gltf") == 0) {
             NS_WARN("salle reconstruite absente, repli sur celle de 2020");
             loaded = ns_scene_load(rhi, &scene, "scene/salle-legacy.gltf");
+        } else {
+            NS_WARN("la salle de 2020 n'est pas installee (outil de "
+                    "developpement) : repli sur la salle reconstruite");
+            loaded = ns_scene_load(rhi, &scene, "scene/salle.gltf");
         }
         if (!loaded) {
             NS_FATAL("la salle n'a pas pu être chargée (%s)", scene_path);
