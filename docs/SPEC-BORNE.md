@@ -45,7 +45,7 @@ rouvrir. **Les hauteurs de la borne sont bonnes.** Toutes.
 | Hauteur hors tout | 1,88 m (74") | un upright classique fait 70 à 72" (1,78–1,83 m) | 2 à 4 pouces de trop — **acceptable**, c'est une contrainte de salle assumée |
 | Largeur | 0,72 m (28,3") | un upright **un joueur** fait 25 à 27" | légèrement large : c'est exactement ce qu'il faut pour UN panneau généreux |
 | Profondeur | 0,88 m (34,6") | 32 à 36" | **juste** |
-| Surface du panneau sous les commandes | 0,995 m | un panneau de commande réel est à 36–40" (0,91–1,02 m) | **juste**, au milieu de la plage |
+| Surface du panneau sous les commandes | 0,995 m | un panneau de commande réel est à 36–40" (0,91–1,02 m) | **juste**, dans le haut de la plage |
 | Centre de l'écran | 1,290 m | le tube d'un upright est centré entre 1,20 et 1,35 m | **juste** (voir §5 : c'est son CADRAGE qui est faux, pas sa hauteur) |
 | Bas du marquee → haut | 1,590 → 1,780, soit 190 mm | une glace de marquee fait 6 à 8" (150–200 mm) | **juste** |
 | Fente à jetons | 0,616 m | une porte à monnaie place sa fente vers 0,60–0,66 m | **juste** |
@@ -85,7 +85,7 @@ différé (une partie déjà jouée, rejouée à côté de la sienne) et `main.c
 le même meuble.
 
 Le moteur, enfin, ne plante **qu'un** joueur : `roomgen.c:1586` calcule un `player_anchor` unique,
-et `room/room_viewmodel.c:221-222` pose la main gauche sur `stick` et la main droite sur `panel` —
+et `room/room_viewmodel.c:229-230` pose la main gauche sur `stick` et la main droite sur `panel` —
 les deux ancres du poste de GAUCHE. Le poste de droite n'a aucune ancre. Personne ne peut le
 toucher, ni maintenant ni plus tard.
 
@@ -96,7 +96,7 @@ deux rangées de trois à x = −2,8 / −2,0 / −1,2 et +1,2 / +2,0 / +2,8, le
 x = ±9,1 au pas de 0,80 en z. Avec W = 0,72 il reste 8 cm entre deux voisines.
 
 `tools/roomgen.c:478-512` refuse deux bornes qui se recouvrent de plus de 5 mm sur **les trois**
-axes, et c'est fatal dès qu'une borne est en cause. Les bornes:
+axes, et c'est fatal dès qu'une borne est en cause. D'où deux plafonds durs :
 
 - **largeur : W < 0,81 m** est le plafond dur ; **0,79 m** est le plafond utile (10 mm de jeu
   visible). Au-delà, `roomgen` s'arrête ;
@@ -115,7 +115,7 @@ commande que le moteur ne lira jamais.
 
 ### 2.3 Ce que la référence montre, et pourquoi ça ne tranche pas
 
-Le docstring de `borne.py:513` affirme que la référence montre deux postes. Je n'ai pas pu ouvrir
+Le docstring de `borne.py:509-513` affirme que la référence montre deux postes. Je n'ai pas pu ouvrir
 le modèle (19 $, licence *Editorial only* — voir `borne.py:15-22`), donc je ne le conteste pas.
 
 Mais deux postes sur 72 cm **existent** dans le matériel réel : c'est le panneau deux joueurs des
@@ -129,9 +129,9 @@ On ne peut pas garder les deux et bien placer l'un des deux. Le second poste n'e
 supplément inutile : il est la cause directe du défaut relevé.
 
 **Retenu : un poste, la boule bleue (`manche_bleu`), à gauche de l'axe.** Le matériau
-`manche_rouge` reste dans la table — l'ordre des matériaux est lu par `roomgen.c:1409-1421` et
-`borne.py:798` casse le build s'il bouge — mais il n'est plus porté par aucune face, ou il sert au
-second bouton (§3.5).
+`manche_rouge` reste dans la table — l'ordre des matériaux est lu par `roomgen.c:1405-1421` et
+`borne.py:798` casse le build s'il bouge — mais il ne porte plus une seconde boule : il devient le
+matériau du bouton START (§3.4), qui est la pièce que le poste supprimé libère.
 
 ---
 
@@ -206,7 +206,7 @@ positif vers le joueur. Origine à l'axe du manche (le centre de la boule, à l'
 | **Manche** (boule + rondelle + tige) | 0 | 0 | boule 42 |
 | **Bouton 1 — ACTION** (`bouton_a`) | **+130 mm** | **0** | 30 |
 | **Bouton 2 — secondaire** (`bouton_b`) | **+170 mm** | **0** | 30 |
-| **START** (`bouton_b`, ou son propre matériau) | **+85 mm** | **−65 mm** *(vers l'arrière)* | 24 |
+| **START** (`manche_rouge`, le matériau que le poste supprimé libère) | **+85 mm** | **−65 mm** *(vers l'arrière)* | 24 |
 
 ## 3.5 Les mêmes, en cotes de borne, prêtes à écrire dans `borne.py`
 
@@ -256,18 +256,21 @@ boutons. **La place que ce layout libère est la place qu'il faut au dessin.**
 ## 3.6 Les deux ancres, qui changent
 
 ```jsonc
-"stick": [-0.085, 1.0960, 0.3626],   // le SOMMET de la boule : +9,4 mm par rapport à aujourd'hui
+"stick": [-0.085, 1.0719, 0.3626],   // le SOMMET de la boule — voir le calcul ci-dessous
 "panel": [ 0.045, 1.0069, 0.3626],   // le DESSUS du bouton ACTION
 ```
 
 `panel` cesse d'être le barycentre de six pastilles — un point qui n'était **aucun** bouton — et
-devient le dessus de celui que le doigt presse. C'est la sémantique que `roomgen.c:1462-1471`
+devient le dessus de celui que le doigt presse. C'est la sémantique que `roomgen.c:1462-1472`
 annonce déjà (« quatre points qu'on TOUCHE »).
 
 **Deux conséquences à traiter dans le même lot, sinon la correction est incomplète :**
 
-1. Le sommet de la boule monte de 9,4 mm (le manche recule de 49 mm, donc il remonte la pente).
-   `tests/test_ik.c:452-475` mesure la portée des deux mains sur des constantes figées : **il
+1. Le sommet de la boule **descend de 14,7 mm** (1,0866 → 1,0719), et c'est la somme de deux
+   mouvements contraires : le manche recule de 49 mm, donc il remonte la pente de +9,4 mm, mais la
+   tige raccourcie de §6.4 le rabaisse de 24 mm. La boule culmine alors à **77 mm au-dessus de la
+   tôle**, ce qui est la cote d'un manche à boule réel (elle est à 101 mm aujourd'hui).
+   `tests/test_ik.c:461-484` mesure la portée des deux mains sur des constantes figées : **il
    faudra les remesurer**. C'est exactement le réglage que le journal dit avoir coûté cher en B14b.
 2. `roomgen.c:1586` dérive la position du joueur de `panel_centre.x`. Avec l'ancre sur le bouton
    ACTION, le joueur se planterait 45 mm à droite de l'axe. **Le joueur doit se planter sur l'axe
@@ -333,9 +336,9 @@ d'être du second, et il n'y en a pas de troisième.
 | pacman | **sombre** | **sombre** | vif |
 | leaderboard | sombre | sombre | vif |
 
-Zéro géométrie, zéro export : quatre lignes de `materialButtonA` / `materialButtonB` dans les
-entrées `cabinets` de `salle.room.json`, sur le modèle de `materialPanel` qui existe déjà
-(`roomgen.c:1341`).
+Zéro géométrie, zéro export : deux clés nouvelles — `materialButtonA` et `materialButtonB` — dans
+les entrées `cabinets` de `salle.room.json`, sur le modèle de `materialPanel` qui existe déjà
+(`roomgen.c:1341`), plus les deux matériaux sombres à déclarer une fois.
 
 ### 4.4 Un défaut à corriger dans le même geste
 
@@ -375,7 +378,7 @@ déferait l'échelle de toute la salle pour corriger un angle qui est juste.
 
 ## 5.2 Le vrai chiffre du problème
 
-`room/room_camera.c:60` : `fov_y = 62°`, donc **un demi-champ vertical de 31,0°**.
+`room/room_camera.c:54` : `fov_y = 62°`, donc **un demi-champ vertical de 31,0°**.
 
 > La dalle est à **31,8°** sous l'horizon. **Elle est 0,8° SOUS le bord bas du cadre.**
 > Au repos, planté sur l'ancre que la borne déclare, le joueur ne voit pas du tout son écran.
@@ -384,8 +387,8 @@ Ce qu'il voit à la place, calculé au même endroit : le **marquee**, centré �
 de l'œil. C'est-à-dire pile au milieu de l'image. Vérifié en capture (`--pitch=0` sur l'ancre) :
 l'enseigne Flappy Bird occupe la bande centrale, et la dalle est coupée par le bord inférieur.
 
-Le moteur sait déjà baisser le regard : `room/main.c:2228-2235` pose la vue sur `screen_center` en
-un tiers de seconde **quand une partie démarre**, et le commentaire de `main.c:2204` appelle ça
+Le moteur sait déjà baisser le regard : `room/main.c:2248-2254` pose la vue sur `screen_center` en
+un tiers de seconde **quand une partie démarre**, et le commentaire de `main.c:2224` appelle ça
 « la vraie cause du "je suis obligé de m'accroupir" ». Ce correctif est bon. Il est simplement
 **incomplet** : il ne couvre qu'un instant sur cinq.
 
@@ -394,20 +397,20 @@ un tiers de seconde **quand une partie démarre**, et le commentaire de `main.c:
 | On marche vers la borne | non — normal, on regarde où on va |
 | **On est planté devant, avant d'insérer** | **non** — et l'écran d'attente, le tableau des scores et le « APPUYER SUR ESPACE POUR JOUER » sont hors cadre |
 | Le jeton part, la main s'avance | non |
-| **La partie démarre** | **oui** (`main.c:2234`) |
+| **La partie démarre** | **oui** (`main.c:2253`) |
 | **La partie est finie** | **non** — le tangage reste où le joueur l'a laissé |
 
-C'est la même leçon que `main.c:2217-2222` a déjà tirée une fois, et elle vaut encore :
+C'est la même leçon que `main.c:2236-2241` a déjà tirée une fois, et elle vaut encore :
 *« une vérification qui emprunte un chemin que le joueur n'emprunte pas ne vérifie rien »*. La
 capture nommée `borne` porte `"pitch": -34.0` écrit à la main, et `--play-at=` calcule le sien
-(`main.c:1842`). Les deux chemins d'inspection sont cadrés ; le chemin du joueur au repos ne l'est
+(`main.c:1861`). Les deux chemins d'inspection sont cadrés ; le chemin du joueur au repos ne l'est
 pas.
 
 ## 5.3 Décision
 
 **L'écran ne monte pas. Le joueur ne descend pas. C'est le REGARD qu'il faut poser, et à deux
 moments de plus** — quand `room_viewmodel_target()` désigne une borne alors qu'aucune partie ne
-tourne, et à la fin d'une partie. Le calcul existe déjà, trois lignes, à `main.c:2229-2234`.
+tourne, et à la fin d'une partie. Le calcul existe déjà, trois lignes, à `main.c:2248-2253`.
 
 ## 5.4 Ce que j'ai envisagé et que je REFUSE
 
@@ -417,7 +420,7 @@ sur la pente — assez pour la grille de 100 mm. Gain mesuré : la plongée pass
 soit **1,6°**, et la dalle gagne un vrai bandeau noir de 23 mm au lieu de 7.
 
 **Je le refuse quand même** : 1,6° ne change rien au ressenti, et cette cote est une **mesure**
-(`borne.py:132-140`, douze vues de référence relevées au pixel). On ne défait pas une mesure pour
+(`borne.py:126-140`, douze vues de référence relevées au pixel). On ne défait pas une mesure pour
 un degré et demi. Le noter ici suffit ; si l'ouverture doit un jour bouger pour une autre raison,
 le chiffre est prêt.
 
@@ -440,7 +443,7 @@ Par ordre de gravité. Chacun est vérifié dans le fichier ou dans une capture.
 
 Le défaut le plus visible du modèle, et il n'a rien à voir avec la hauteur.
 
-`borne.py:824-826` pose le centre de la dalle en **translatant de `sin(incl) × h/2` en z**. Ce
+`borne.py:819-826` pose le centre de la dalle en **translatant de `sin(incl) × h/2` en z**. Ce
 n'est pas la bonne correction : pour poser une dalle sur une face inclinée, on décale d'un
 millimètre ou deux **le long de la normale**, pas de la moitié de sa hauteur le long de z.
 
@@ -464,7 +467,7 @@ borne n'a pas d'écran : elle a un panneau publicitaire accroché devant.
 | Pente du panneau de commande | **19°** (`borne.py:119-121`) | **17,81°** (`atan2(0,080 ; 0,249)`) | 1,19° |
 | Inclinaison de l'écran | **21,6°** (`ECRAN_INCL`) | **19,87°** — la face du cadre va de (0,170 ; 1,098) à (0,050 ; 1,430) | **1,73°** |
 
-Le second est le plus grave : `ECRAN_INCL` est **exportée dans les ancres** et `roomgen.c:1455`
+Le second est le plus grave : `ECRAN_INCL` est **exportée dans les ancres** et `roomgen.c:1455-1456`
 s'en sert pour construire la normale de la dalle. La dalle est donc collée à 1,73° de la face qui
 la porte, et cette normale est ce que le moteur annonce à l'éclairage et au son.
 
@@ -480,7 +483,7 @@ Le matériau `borne_chrome` est à `metallic 1.0`. Or `engine/shaders/lighting.f
 réflexion d'environnement n'existe que si la couche de lancer de rayons tourne
 (`lighting.frag:290`, `u_counts.y >= 2`). Sans elle, il ne reste que le lobe spéculaire ponctuel.
 
-C'est précisément le défaut que `roomgen.c:1374-1380` croyait avoir corrigé (« dans la pénombre de
+C'est précisément le défaut que `roomgen.c:1375-1382` croyait avoir corrigé (« dans la pénombre de
 l'allée elle disparaissait sous sa boule ») : la tige a changé de matériau, pas de résultat.
 
 Correction : `metallic 0.85`, `roughness 0.30`, ou une `baseColor` plus claire — **dans
@@ -492,8 +495,9 @@ matière, et il est hors du périmètre de `borne.py`.
 `borne.py:540-542` : Ø 18 mm à la base, **62 mm de tige visible** entre la tôle et la boule.
 Une tige de manche réelle fait 10 à 12 mm de diamètre et laisse voir 30 à 40 mm.
 
-Retenu : **Ø 12 mm (r0 = 0,006, r1 = 0,0055), longueur 0,038.** La boule descend d'autant, ce qui
-rapproche encore le sommet de la boule de sa valeur d'aujourd'hui — à recaler avec §3.6.
+Retenu : **Ø 12 mm (r0 = 0,006, r1 = 0,0055), longueur 0,038.** La boule descend de 24 mm avec
+elle ; l'ancre `stick` qui en résulte est déjà celle de §3.6 (1,0719), tige corrigée comprise. **Il
+n'y a qu'un seul chiffre à écrire, et c'est celui-là.**
 
 ## 6.5 Aucun bouton START
 
@@ -504,8 +508,9 @@ derrière la ligne de commande.
 
 ## 6.6 Points mineurs, notés sans correction demandée
 
-- **Il n'y a pas de casquette de dalle.** L'image de 620 mm dans une ouverture de 720 laisse 50 mm
-  de noir à gauche et à droite mais **2 mm** en haut et en bas. L'ouverture (720 × 353) a un
+- **Le cadre noir autour de la dalle ne peut pas être régulier.** L'image de 620 mm dans une
+  ouverture de 720 laisse 50 mm de noir à gauche et à droite ; correctement centrée, elle n'en
+  laisserait que **2 mm** en haut et en bas (353 − 349, réparti). L'ouverture (720 × 353) a un
   rapport de 2,04:1 quand la dalle est en 16:9 : **aucune marge uniforme n'est possible**, quelle
   que soit la taille de la dalle. Le compromis retenu en §7 (600 × 337,5) donne 7 mm en haut et en
   bas contre 60 sur les côtés. C'est ce à quoi ressemble un écran 16:9 monté derrière un cadre
@@ -527,10 +532,10 @@ Classé par rendement. « Effort » suppose qu'on connaît déjà `borne.py`.
 | 2 | **La dalle rentre dans son cadre** — `ECRAN_INCL` dérivée, `ECRAN_Y = 1,2626`, `ECRAN_W/H = 0,600 / 0,3375`, ancre posée **le long de la normale** et non en z | ≈ **10 lignes** | `screen` = **(0,000 ; 1,2640 ; 0,1143)**. La dalle court de y = 1,105 à 1,423 : **7 mm de cadre en haut ET en bas**, zéro dépassement. En vue rasante depuis le flanc, plus aucun bord de dalle devant le meuble |
 | 3 | **Les deux pentes calculées, plus écrites** — `PANNEAU_PITCH` et `ECRAN_INCL` depuis les extrémités des segments | **2 lignes** | `ancres["screenTilt"]` vaut **0,3469 rad (19,87°)** et non 0,3770. Le docstring dit 17,81° pour le panneau, ou la cote change pour valoir 19° |
 | 4 | **Les ancres et la pose du joueur** — §3.6 : `panel` sur le bouton ACTION, abscisse du joueur sur l'axe de la borne | **1 ligne** dans `borne.py`, **1** dans `roomgen.c:1586` | `--pose=press` pose la main droite **sur** un bouton et la gauche **sur** la boule ; `tests/test_ik.c` repasse après remesure de ses constantes |
-| 5 | **Le regard se pose aussi hors partie** — §5.3, le calcul de `main.c:2229-2234` appliqué quand une borne est désignée et à la fin d'une partie | ≈ **10 lignes** dans `room/main.c` | Une capture prise sur l'ancre **sans `--pitch=`** montre la dalle entière. Elle est aujourd'hui **0,8° hors cadre** |
+| 5 | **Le regard se pose aussi hors partie** — §5.3, le calcul de `main.c:2248-2253` appliqué quand une borne est désignée et à la fin d'une partie | ≈ **10 lignes** dans `room/main.c` | Une capture prise sur l'ancre **sans `--pitch=`** montre la dalle entière. Elle est aujourd'hui **0,8° hors cadre** |
 | 6 | **Les inserts du monnayeur quittent `bouton_a`** — §4.4 | **1 ligne** | Dans le glTF, `bouton_a`.y min ≥ **0,97** (il vaut 0,592) |
 | 7 | **Le bouton secondaire est déclaré au démineur** — le drapeau, `demineur.c:218-222` | ≈ **20 lignes** de jeu | Un joueur humain pose un drapeau ; le commentaire qui dit la limite est supprimé parce qu'il est faux |
-| 8 | **La tige de manche** — §6.4, Ø 12 mm, 38 mm visibles | **2 lignes** | Le manche ne se lit plus comme un levier ; recaler avec le poste 4 |
+| 8 | **La tige de manche** — §6.4, Ø 12 mm, 38 mm visibles. **À faire dans le poste 1**, c'est la même fonction | **2 lignes** | L'ancre `stick` vaut **1,0719** et la boule culmine à **77 mm** au-dessus de la tôle (101 aujourd'hui) |
 | 9 | **Les boutons par jeu, en JSON** — §4.3, `materialButtonA` / `materialButtonB` par borne | ≈ **25 lignes** de JSON + **6** dans `roomgen.c` | La borne Pac-Man a deux capuchons sombres et un START vif ; la borne démineur a deux boutons vifs |
 | 10 | **Le chrome cesse d'être noir** — §6.3, `borne_chrome.metallic` 1,0 → 0,85 | **1 ligne** de JSON | La rondelle et la tige sont distinctes du panneau sur la capture `borne` |
 
@@ -595,6 +600,7 @@ Par honnêteté, et parce qu'un chiffre dont on ne dit pas la provenance finit p
 16. **Le joueur se plante sur l'axe de la borne**, pas sur l'abscisse du bouton.
 17. **Les inserts du monnayeur quittent `bouton_a`**, sans quoi repeindre les boutons repeint la
     porte à monnaie.
-18. **La tige de manche passe à Ø 12 mm sur 38 mm visibles**, contre 18 mm sur 62.
+18. **La tige de manche passe à Ø 12 mm sur 38 mm visibles**, contre 18 mm sur 62 — l'ancre `stick`
+    vaut alors **(−0,085 ; 1,0719 ; 0,3626)** et la boule culmine à 77 mm au-dessus de la tôle.
 19. **Le chrome noir est un défaut de matériau, pas de géométrie** — il se corrige dans
     `salle.room.json`, hors du périmètre de `borne.py`.

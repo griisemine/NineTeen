@@ -83,11 +83,21 @@ portée au lot L2.
 | surface du panneau | 0,97 à 1,05 m | `borne.py`, `Y_NEZ`/`Y_PANNEAU_FOND` |
 | sommet du marquee | 1,88 m | `borne.py`, `H` |
 
-L'œil est donc **41 cm au-dessus du centre de l'écran**. À la distance de jeu,
-cela fait plonger le regard de plus de 30°. Sur une borne réelle l'écart est de
-25 à 30 cm et l'angle de 25°. Le panneau, lui, est JUSTE. C'est l'écran qui est
-bas — et il l'est parce que la hauteur hors tout a été rabattue à 1,88 m sans
-remonter la dalle dans le caisson.
+L'œil est donc **41 cm au-dessus du centre de l'écran**. Mesuré depuis l'ancre
+de joueur que la borne déclare elle-même (`playerAnchor`, à 0,662 m de la dalle
+à l'horizontale), cela donne :
+
+| ce qu'on regarde | angle sous l'horizon |
+|---|---|
+| haut de la dalle | 19,6° |
+| **centre de la dalle** | **31,8°** |
+| bas de la dalle | 41,5° |
+
+Le panneau de commande, lui, est JUSTE : sa surface est à 0,97–1,05 m, ce qui
+est la cote d'une vraie borne. C'est l'écran qui est bas, et le joueur qui est
+trop près. Regarder une image dont le centre est à 32° sous l'horizon demande
+de baisser la tête, pas seulement les yeux — c'est exactement la sensation que
+le propriétaire décrit.
 
 ### Le défaut 8 — les bras
 
@@ -128,6 +138,7 @@ moi, pas par celui qui a fait le travail.
 | L6 | Le placement | tout prop a une raison d'être là ; rien ne flotte, rien ne s'encastre ; contrôle au build | ouvert |
 | L7 | L'atmosphère | le centre de la salle se parcourt ; le plafond n'est plus une pergola | ouvert |
 | L8 | La recette finale | les 8 jeux, le réseau, le duel, les 35 tests, et une passe de jeu réelle | ouvert |
+| L9 | Les écrans vivants | les dix-huit bornes non jouées jouent leur propre partie | **fermé** (a26f95b) |
 
 ## Qui contrôle quoi
 
@@ -173,3 +184,23 @@ les normales d'une main fléchie que l'étirement en Z faussait ; le roulis de l
 main, laissé au hasard par la rotation minimale de `segment_matrix` ; et
 `test_ik` qui mesurait le bout du doigt à l'ancienne place et accusait l'IK
 d'une faute qui n'était pas la sienne.
+
+
+### L9 — `a26f95b`
+
+Il ne figurait pas dans les neuf défauts du propriétaire, et c'est pourtant la
+cause la plus directe de « le jeu ne respire aucune âme » : dix-huit écrans
+FIGÉS dans une salle dont le principe d'éclairage déclaré est que « l'essentiel
+de la lumière vient des dix-neuf écrans ».
+
+Chaque borne joue maintenant sa propre partie, menée par le pilote automatique
+du jeu. Preuve de coût, palier medium, vue allée, 179 images :
+
+| | temps GPU moyen |
+|---|---|
+| sans les démos | 23,7 ms |
+| avec les dix-huit | **24,2 ms** |
+
+Un demi-pas de temps, parce qu'on n'en redessine que quatre par image. Les
+parties, elles, avancent toutes les dix-huit à 120 Hz — un état de jeu est une
+valeur pure, et ça ne se mesure pas.
