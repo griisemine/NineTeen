@@ -44,7 +44,7 @@ static int menu_item_count(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
     for (int i = 1; i <= 64; ++i) {
         room_menu_input(&m, &ctx, ROOM_MENU_DOWN);
@@ -67,7 +67,7 @@ static void test_navigation(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
 
     /* Fermé, le menu ignore tout : une touche pressée pendant la partie ne doit
      * pas déplacer un curseur invisible. */
@@ -92,7 +92,7 @@ static void test_quality_preserves_the_other_rows(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Ligne 1 : l'échelle. Deux crans vers le bas. */
@@ -142,7 +142,7 @@ static void test_bounds(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     go_to(&m, &ctx, 1);
@@ -175,7 +175,7 @@ static void test_buttons(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
     const int n = menu_item_count();
 
     room_menu_open(&m);
@@ -221,7 +221,7 @@ static void test_room_levels(void)
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
     bool realtime = false;
-    const room_menu_ctx ctx = { &rs, &sens, &realtime };
+    const room_menu_ctx ctx = { &rs, &sens, &realtime, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Visées par leur LIBELLÉ, et non par arithmétique sur le nombre de lignes.
@@ -303,7 +303,7 @@ static void test_persist(const char *dir)
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_HIGH);
     rs.render_scale = 0.75f;
     float sens = 1.85f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
 
     room_sound_set_level(ROOM_LEVEL_STEPS, 0.45f);
     room_sound_set_level(ROOM_LEVEL_TONE, 0.20f);
@@ -393,7 +393,7 @@ static void test_credits(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
 
     const int row = room_menu_row("CREDITS");
     CHECK(row >= 0, "la ligne « CREDITS » existe dans le menu");

@@ -55,6 +55,17 @@ const char   *ns_rhi_backend_name(ns_rhi *r);
 void ns_rhi_drawable_size(ns_rhi *r, uint32_t *w, uint32_t *h);
 void ns_rhi_set_vsync(ns_rhi *r, bool vsync);
 
+/*
+ * La définition de la fenêtre et le plein écran, EN COURS DE PARTIE.
+ *
+ * Existe pour le menu de réglages : `window.width`, `window.height` et
+ * `window.fullscreen` étaient lus au démarrage et jamais écrits, donc réglables
+ * seulement en éditant à la main un fichier que le joueur ne sait pas où
+ * trouver. En plein écran, la définition passée reste celle du mode FENÊTRÉ —
+ * c'est elle qu'on retrouve en ressortant.
+ */
+void ns_rhi_set_window_mode(ns_rhi *r, int width, int height, bool fullscreen);
+
 /* ========================================================================== */
 /* Cycle de frame                                                             */
 /* ========================================================================== */

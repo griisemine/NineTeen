@@ -25,6 +25,21 @@ typedef enum menu_item {
     MI_SCALE,
     MI_PARTICLES,
     MI_EXPOSURE,
+    /*
+     * La FENÊTRE, sous les réglages d'image et au-dessus du son.
+     *
+     * Ici et pas en tête : `QUALITE` et `ECHELLE DE RENDU` sont ce qu'on vient
+     * chercher quand ça rame, c'est-à-dire dans neuf ouvertures du menu sur dix,
+     * et les repousser d'un cran pour deux réglages qu'on touche une fois par
+     * installation serait le mauvais échange. Ici et pas en fin de liste non
+     * plus : ce sont des réglages d'IMAGE, et les mettre après les volumes
+     * obligerait à traverser le son pour les trouver.
+     *
+     * Conséquence utile : les quatre premières lignes ne bougent pas, et
+     * `--menu=2` continue de cadrer « POUSSIERE » comme dans la documentation.
+     */
+    MI_RESOLUTION,
+    MI_FULLSCREEN,
     MI_VOL_MASTER,
     MI_VOL_MUSIC,
     MI_VOL_SFX,
@@ -64,6 +79,8 @@ static const char *const g_label[MI_COUNT] = {
     "ECHELLE DE RENDU",
     "POUSSIERE",
     "LUMINOSITE",
+    "DEFINITION",
+    "PLEIN ECRAN",
     "VOLUME GENERAL",
     "MUSIQUE",
     "EFFETS",
@@ -139,6 +156,44 @@ static const char *quality_hint(ns_quality q)
     return "";
 }
 
+/*
+ * LES DÉFINITIONS PROPOSÉES.
+ *
+ * Une liste et non un champ libre : un menu qui se parcourt à la manette ou aux
+ * flèches ne sait pas saisir « 1728 x 1117 », et une définition tapée de travers
+ * donne une fenêtre qu'on ne peut plus redimensionner pour rejoindre le menu.
+ *
+ * Toutes en 16/9 sauf la première. `1280 x 800` est là pour les portables 16/10,
+ * qui sont redevenus la moitié du marché ; sans elle, la plus petite définition
+ * proposée laisse deux bandes noires sur ces écrans-là. Le reste couvre du 720p
+ * au 4K — au-delà, personne ne joue en fenêtré.
+ *
+ * Une définition qui ne serait dans aucune de ces cases — celle du fichier de
+ * configuration, ou `--width/--height` — s'affiche telle quelle et le premier
+ * cran la ramène dans la liste. On ne l'ÉCRASE pas au premier affichage : un
+ * menu qui change un réglage rien qu'en s'ouvrant est un menu dont on se méfie.
+ */
+static const struct { int w, h; } g_resolutions[] = {
+    { 1280,  720 },
+    { 1280,  800 },
+    { 1366,  768 },
+    { 1600,  900 },
+    { 1920, 1080 },
+    { 2560, 1440 },
+    { 3840, 2160 },
+};
+#define RES_COUNT ((int)(sizeof g_resolutions / sizeof g_resolutions[0]))
+
+/* L'indice de la définition courante, ou −1 si elle n'est dans aucune case. */
+static int resolution_index(const room_menu_ctx *ctx)
+{
+    if (!ctx->window_w || !ctx->window_h) return -1;
+    for (int i = 0; i < RES_COUNT; ++i) {
+        if (g_resolutions[i].w == *ctx->window_w && g_resolutions[i].h == *ctx->window_h) return i;
+    }
+    return -1;
+}
+
 static float bus_get(ns_audio_bus b) { return ns_audio_ready() ? ns_audio_bus_volume(b) : 0.0f; }
 
 static void bus_step(ns_audio_bus b, int dir)
@@ -178,6 +233,22 @@ static void item_value(const room_menu_ctx *ctx, int i, char *out, size_t n,
             else pct(out, n, ctx->rs->particle_density);
             break;
         case MI_EXPOSURE:   SDL_snprintf(out, n, "%.2f", (double)ctx->rs->exposure); break;
+        case MI_RESOLUTION:
+            if (!ctx->window_w || !ctx->window_h) { SDL_snprintf(out, n, "-"); break; }
+            SDL_snprintf(out, n, "%d x %d", *ctx->window_w, *ctx->window_h);
+            /*
+             * En plein écran, la ligne dit à quoi elle sert.
+             *
+             * Sans ce mot, elle affiche une définition qui n'est PAS celle de
+             * l'image qu'on regarde, et le joueur conclut que le réglage ne
+             * prend pas. C'est la définition qu'on retrouvera en ressortant.
+             */
+            if (ctx->fullscreen && *ctx->fullscreen) SDL_snprintf(hint, hn, "EN FENETRE");
+            break;
+        case MI_FULLSCREEN:
+            SDL_snprintf(out, n, "%s",
+                         (ctx->fullscreen && *ctx->fullscreen) ? "OUI" : "NON");
+            break;
         case MI_VOL_MASTER: pct(out, n, bus_get(NS_BUS_MASTER)); break;
         case MI_VOL_MUSIC:  pct(out, n, bus_get(NS_BUS_MUSIC)); break;
         case MI_VOL_SFX:    pct(out, n, bus_get(NS_BUS_SFX)); break;
@@ -280,6 +351,35 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
         case MI_EXPOSURE:
             ctx->rs->exposure = ns_clampf(ctx->rs->exposure + (float)dir * 0.05f, 0.60f, 2.00f);
             return true;
+        case MI_RESOLUTION: {
+            if (!ctx->window_w || !ctx->window_h) return false;
+            const int cur = resolution_index(ctx);
+            /*
+             * Depuis une définition hors liste, le premier cran atterrit sur la
+             * PREMIÈRE case — et non « à côté de la plus proche ». Chercher la
+             * plus proche demanderait une distance dans un espace à deux
+             * dimensions dont personne n'a la même idée, et rendrait le geste
+             * imprévisible pour gagner un cran.
+             */
+            int next = (cur < 0) ? 0 : cur + dir;
+            if (next < 0)          next = RES_COUNT - 1;
+            if (next >= RES_COUNT) next = 0;
+            *ctx->window_w = g_resolutions[next].w;
+            *ctx->window_h = g_resolutions[next].h;
+            m->window_dirty = true;
+            /* Le rendu N'EST PAS à réappliquer : les cibles hors écran suivent
+             * la taille de la fenêtre à l'image suivante, comme elles le font
+             * déjà quand on tire la poignée. */
+            return false;
+        }
+        case MI_FULLSCREEN:
+            if (!ctx->fullscreen) return false;
+            /* Une bascule ignore le SENS : gauche et droite font la même chose
+             * sur une valeur qui n'en a que deux, et exiger « droite pour oui »
+             * serait une règle de plus à deviner. */
+            *ctx->fullscreen = !*ctx->fullscreen;
+            m->window_dirty = true;
+            return false;
         case MI_VOL_MASTER:   bus_step(NS_BUS_MASTER, dir);   return false;
         case MI_VOL_MUSIC:    bus_step(NS_BUS_MUSIC, dir);    return false;
         case MI_VOL_SFX:      bus_step(NS_BUS_SFX, dir);      return false;
@@ -326,7 +426,8 @@ void room_menu_open(room_menu *m)
      * parti demanderait au joueur de se souvenir de ce qu'il a fait la fois
      * d'avant pour comprendre ce qu'il voit. */
     m->page = ROOM_MENU_PAGE_SETTINGS;
-    m->render_dirty = m->close_request = m->quit_request = false;
+    m->render_dirty = m->window_dirty = false;
+    m->close_request = m->quit_request = false;
     if (m->cursor < 0 || m->cursor >= MI_COUNT) m->cursor = 0;
 }
 
@@ -415,6 +516,12 @@ void room_menu_persist(const room_menu_ctx *ctx)
     /* Le temps réel est un RÉGLAGE PERSISTANT, pas un état de session : on ne
      * doit pas avoir à repasser `--temps-reel` à chaque lancement. */
     if (ctx->realtime) ns_config_set_bool(NS_CFG_REALTIME, *ctx->realtime);
+
+    /* La fenêtre. `main.c` relit ces trois clés au démarrage depuis toujours ;
+     * ce qui manquait, c'était quelqu'un pour les écrire. */
+    if (ctx->window_w)   ns_config_set_int(NS_CFG_WINDOW_W, *ctx->window_w);
+    if (ctx->window_h)   ns_config_set_int(NS_CFG_WINDOW_H, *ctx->window_h);
+    if (ctx->fullscreen) ns_config_set_bool(NS_CFG_FULLSCREEN, *ctx->fullscreen);
     if (ns_audio_ready()) {
         ns_config_set_float(NS_CFG_VOL_MASTER,   ns_audio_bus_volume(NS_BUS_MASTER));
         ns_config_set_float(NS_CFG_VOL_MUSIC,    ns_audio_bus_volume(NS_BUS_MUSIC));

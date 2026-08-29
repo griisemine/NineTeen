@@ -74,6 +74,15 @@ typedef struct room_menu {
     /* Ce que l'appelant doit appliquer après un `room_menu_input`. Il les remet
      * à faux lui-même — le menu ne sait pas ce qu'appliquer coûte. */
     bool  render_dirty;  /* `ns_renderer_set_settings` à rappeler */
+    /*
+     * La FENÊTRE a son propre drapeau, et pas celui du rendu.
+     *
+     * Changer de définition détruit et recrée la swapchain ; changer de palier
+     * de qualité recrée les cibles hors écran. Ce sont deux coûts différents à
+     * deux étages différents, et les confondre ferait recréer la fenêtre à
+     * chaque cran de poussière.
+     */
+    bool  window_dirty;  /* `ns_rhi_set_window_mode` à rappeler */
     bool  close_request;
     bool  quit_request;
 } room_menu;
@@ -97,6 +106,28 @@ typedef struct room_menu_ctx {
      * fenêtre, ce que `tests/test_menu.c` exploite.
      */
     bool               *realtime;
+
+    /*
+     * LA FENÊTRE — la définition et le plein écran.
+     *
+     * `window.width`, `window.height` et `window.fullscreen` étaient lus au
+     * démarrage et n'avaient AUCUN écrivain : trois clés réglables uniquement
+     * en éditant à la main un fichier qui vit dans le répertoire utilisateur et
+     * n'est même pas dans le dépôt. C'est exactement ce que `ns_config.h`
+     * reproche à ses deux clés réservées — « un réglage qu'on ne peut pas
+     * garder d'une session à l'autre n'est pas un réglage ».
+     *
+     * La définition reste celle du mode FENÊTRÉ, y compris quand le plein écran
+     * est actif : c'est elle qu'on retrouve en ressortant, et l'afficher
+     * autrement laisserait croire qu'on choisit la définition de l'écran.
+     *
+     * Les trois peuvent être NULS, comme `realtime` : `tests/test_menu.c`
+     * construit son contexte avec les seuls champs dont il a besoin, et une
+     * ligne qui ne sait rien s'affiche plutôt que de déréférencer.
+     */
+    int                *window_w;
+    int                *window_h;
+    bool               *fullscreen;
 } room_menu_ctx;
 
 void room_menu_open(room_menu *m);

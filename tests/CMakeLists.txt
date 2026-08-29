@@ -46,6 +46,25 @@ nineteen_set_warnings(ns_test_door)
 nineteen_apply_sanitizers(ns_test_door)
 add_test(NAME porte COMMAND ns_test_door)
 
+# LA MANETTE, et la seule propriété qui protège le rejeu et les duels.
+#
+# `room_pad.h` explique le piège : `hmask` est l'octet que le journal d'entrées
+# écrit, que `--rejouer` relit et qu'un duel publie sur le réseau. Une manette
+# qui rendrait un masque seulement PRESQUE égal à celui du clavier ferait
+# diverger les duels sans un message. Le test compare les 32 positions
+# possibles, à la croix puis au stick.
+#
+# Aucune machine de construction n'a de manette branchée : c'est exactement
+# pourquoi `room_pad.c` sépare ce qui interroge le périphérique de ce qui
+# décide, et pourquoi ce test-ci ne touche que la seconde moitié.
+add_executable(ns_test_pad test_pad.c "${CMAKE_SOURCE_DIR}/room/room_pad.c")
+target_include_directories(ns_test_pad PRIVATE
+    "${CMAKE_SOURCE_DIR}/room" "${CMAKE_SOURCE_DIR}/games")
+target_link_libraries(ns_test_pad PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_pad)
+nineteen_apply_sanitizers(ns_test_pad)
+add_test(NAME manette COMMAND ns_test_pad)
+
 # La caméra de TROISIÈME PERSONNE : le bras qui balaie un volume, et
 # l'effacement du personnage quand la caméra lui rentre dedans.
 #

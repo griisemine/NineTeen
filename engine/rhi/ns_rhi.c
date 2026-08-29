@@ -16,6 +16,9 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+/* L'icône de la fenêtre. Après stb_image : c'est lui qui la décode. */
+#include "ns_rhi_icon.h"
+
 #include <string.h>
 
 /* Taille de l'anneau de transfert : dimensionnée pour une image chargée
@@ -152,6 +155,47 @@ static void create_default_samplers(ns_rhi *r)
     }
 }
 
+/*
+ * L'ICÔNE DE LA FENÊTRE.
+ *
+ * `SDL_SetWindowIcon` n'était appelé nulle part : le titre était juste, et la
+ * fenêtre portait quand même l'icône générique du système — dans le dock, dans
+ * l'alt-tab et dans la barre des tâches, c'est-à-dire aux trois endroits où l'on
+ * cherche un jeu qu'on a lancé. Un exécutable sans icône se lit comme un
+ * exécutable de développement, ce qu'un jeu vendu ne doit pas être.
+ *
+ * L'échec est silencieux, et c'est délibéré : une icône qu'on n'a pas su
+ * décoder n'est pas une raison de ne pas ouvrir la fenêtre. Elle est SIGNALÉE
+ * dans le journal, parce qu'une ressource embarquée qui cesse de se décoder est
+ * une régression et pas une fatalité.
+ */
+static void set_window_icon(SDL_Window *window)
+{
+    int w = 0, h = 0, channels = 0;
+    stbi_uc *pixels = stbi_load_from_memory(ns_rhi_icon_png,
+                                            (int)sizeof ns_rhi_icon_png,
+                                            &w, &h, &channels, 4);
+    if (!pixels) {
+        NS_WARN("icône de fenêtre indécodable : %s", stbi_failure_reason());
+        return;
+    }
+
+    /* `SDL_CreateSurfaceFrom` n'a pas de propriétaire des pixels : la surface
+     * les REGARDE. On la détruit et on libère derrière, une fois l'icône posée —
+     * SDL en garde sa propre copie. */
+    SDL_Surface *icon = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32,
+                                              pixels, w * 4);
+    if (icon) {
+        if (!SDL_SetWindowIcon(window, icon)) {
+            NS_WARN("icône de fenêtre refusée : %s", SDL_GetError());
+        }
+        SDL_DestroySurface(icon);
+    } else {
+        NS_WARN("icône de fenêtre : surface non créée : %s", SDL_GetError());
+    }
+    stbi_image_free(pixels);
+}
+
 ns_rhi *ns_rhi_create(const ns_rhi_desc *desc)
 {
     NS_ASSERT(desc != NULL);
@@ -206,6 +250,12 @@ ns_rhi *ns_rhi_create(const ns_rhi_desc *desc)
         ns_free(r);
         return NULL;
     }
+
+    /* Avant de rattacher la fenêtre au GPU : poser l'icône est une opération de
+     * fenêtre, elle n'a rien à voir avec la swapchain. Même en headless — la
+     * fenêtre est cachée, pas absente, et le coût est celui d'un PNG de 1,8 Kio
+     * décodé une fois. */
+    set_window_icon(r->window);
 
     if (!SDL_ClaimWindowForGPUDevice(r->device, r->window)) {
         NS_ERROR("fenêtre non rattachée au GPU : %s", SDL_GetError());
@@ -296,6 +346,58 @@ void ns_rhi_drawable_size(ns_rhi *r, uint32_t *w, uint32_t *h)
     SDL_GetWindowSizeInPixels(r->window, &iw, &ih);
     if (w) *w = (uint32_t)(iw > 0 ? iw : 0);
     if (h) *h = (uint32_t)(ih > 0 ? ih : 0);
+}
+
+/*
+ * LA DÉFINITION ET LE PLEIN ÉCRAN, CHANGÉS SANS RELANCER.
+ *
+ * `window.width`, `window.height` et `window.fullscreen` étaient lus au
+ * démarrage et n'avaient aucun ÉCRIVAIN : trois clés que seul un éditeur de
+ * texte pouvait toucher, sur un fichier que le joueur ne sait pas où trouver.
+ * C'est la même faute que `render.quality` avant que le menu ne l'écrive.
+ *
+ * L'ordre compte, et il est mesuré : on quitte le plein écran AVANT de
+ * redimensionner, on y entre APRÈS. Redimensionner une fenêtre déjà en plein
+ * écran ne fait rien sur macOS et fait clignoter l'écran sur X11 ; la taille
+ * demandée est alors perdue au retour en fenêtré, et le joueur voit un réglage
+ * qui ne prend pas.
+ *
+ * La swapchain n'a rien à réajuster : `ns_rhi_drawable_size` interroge la
+ * fenêtre à chaque image dès qu'elle est visible, et le renderer redimensionne
+ * ses cibles quand elle change. C'est déjà le chemin d'un simple coup de souris
+ * sur la poignée de la fenêtre.
+ */
+void ns_rhi_set_window_mode(ns_rhi *r, int width, int height, bool fullscreen)
+{
+    if (!r || !r->window) return;
+
+    /* En headless la fenêtre est cachée et c'est la définition DEMANDÉE qui
+     * fait foi (voir `ns_rhi_drawable_size`) : on la met à jour, et on ne
+     * demande pas au système un plein écran qu'aucun écran ne montrera. */
+    if (width > 0 && height > 0) {
+        r->req_width  = (uint32_t)width;
+        r->req_height = (uint32_t)height;
+    }
+    if (r->headless) return;
+
+    const bool was_fullscreen = (SDL_GetWindowFlags(r->window) & SDL_WINDOW_FULLSCREEN) != 0;
+
+    if (was_fullscreen && !fullscreen) {
+        if (!SDL_SetWindowFullscreen(r->window, false)) {
+            NS_WARN("sortie du plein écran refusée : %s", SDL_GetError());
+        }
+        SDL_SyncWindow(r->window);
+    }
+
+    if (!fullscreen && width > 0 && height > 0) {
+        SDL_SetWindowSize(r->window, width, height);
+    }
+
+    if (!was_fullscreen && fullscreen) {
+        if (!SDL_SetWindowFullscreen(r->window, true)) {
+            NS_WARN("plein écran refusé : %s", SDL_GetError());
+        }
+    }
 }
 
 void ns_rhi_set_vsync(ns_rhi *r, bool vsync)

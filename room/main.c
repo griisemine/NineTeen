@@ -35,6 +35,7 @@
 #include "room_attract.h"
 #include "room_hud.h"
 #include "room_menu.h"
+#include "room_pad.h"
 #include "room_sound.h"
 #include "room_viewmodel.h"
 
@@ -1311,6 +1312,23 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /*
+     * LA MANETTE, dans son propre sous-système et non dans l'appel ci-dessus.
+     *
+     * Séparée délibérément : le pilote de manettes s'appuie sur des services
+     * que le système peut refuser — HID sur Windows, l'accès aux périphériques
+     * dans un bac à sable sur macOS — et un échec ici ferait échouer `SDL_Init`
+     * en bloc. Le jeu se lancerait alors sans image ni son parce qu'aucune
+     * manette n'a pu être énumérée, ce qui n'a aucun sens : une salle d'arcade
+     * se joue très bien au clavier.
+     *
+     * On le DIT quand ça échoue, plutôt que de laisser croire à une manette
+     * cassée : c'est le sous-système qui manque, pas le périphérique.
+     */
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+        NS_WARN("manettes indisponibles : %s", SDL_GetError());
+    }
+
     ns_paths_init(argv[0]);
     mount_asset_directories();
 
@@ -2012,7 +2030,20 @@ int main(int argc, char **argv)
      * ce qui fait que `--no-temps-reel` se voit dans le menu.
      */
     bool menu_realtime = ns_realtime_enabled();
-    room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult, &menu_realtime };
+    /*
+     * L'état de la FENÊTRE tel que le menu le montre et l'écrit.
+     *
+     * Il part de ce qui a RÉELLEMENT été retenu à l'ouverture — ligne de
+     * commande comprise — et non du fichier de configuration, pour la même
+     * raison que le temps réel juste au-dessus : le menu doit montrer le jeu qui
+     * tourne. Lancer avec `--width=1280 --fullscreen` et voir « 1600 x 900,
+     * NON » ferait douter de tout le reste de l'écran.
+     */
+    int  menu_win_w = win_w;
+    int  menu_win_h = win_h;
+    bool menu_fullscreen = rhi_desc.fullscreen;
+    room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult, &menu_realtime,
+                               &menu_win_w, &menu_win_h, &menu_fullscreen };
     if (opt.menu) {
         room_menu_open(&menu);
         /* Une ligne hors bornes ne surligne rien et ne se répare jamais :
@@ -2323,6 +2354,31 @@ play_at_done: ;
     }
 
     /*
+     * LA MANETTE.
+     *
+     * Une seule à la fois, et c'est un choix : ce jeu n'a pas de mode à deux sur
+     * la même machine — un duel oppose deux CLIENTS, pas deux manches. Ouvrir la
+     * deuxième donnerait deux joueurs qui pilotent le même personnage, ce qui se
+     * lit comme une panne. La première branchée gagne ; débranchée, la suivante
+     * prend la main (voir les deux événements dans la boucle).
+     */
+    room_pad_tuning pad_tune;
+    room_pad_read_env(&pad_tune);
+    SDL_Gamepad   *pad    = NULL;
+    SDL_JoystickID pad_id = 0;
+    room_pad_state pad_state; SDL_zero(pad_state);
+    /*
+     * Le masque de l'image PRÉCÉDENTE, d'où l'on tire les fronts montants.
+     *
+     * Le clavier reçoit ses appuis en ÉVÉNEMENTS ; le stick n'en produit aucun —
+     * il n'y a pas de « SDL_EVENT_STICK_A_DÉPASSÉ_LA_ZONE_MORTE ». Sans cette
+     * mémoire, un jeu qui tourne sur `press` (Tetris, Démineur) ne répondrait
+     * qu'à la croix directionnelle, et le stick paraîtrait mort sur la moitié
+     * des bornes.
+     */
+    uint8_t pad_prev = 0;
+
+    /*
      * Le contrôle des réglages, ICI et pas ailleurs : tous les lecteurs ont
      * lu, la boucle n'a pas commencé. Une clé mal orthographiée est silencieuse
      * par construction — la valeur par défaut s'applique et rien ne change —
@@ -2346,11 +2402,83 @@ play_at_done: ;
     }
 
     while (running) {
+        /*
+         * CE QUE CETTE IMAGE A REÇU — clavier ET manette, dans les mêmes bits.
+         *
+         * Les appuis ne sont plus traités là où ils ARRIVENT mais là où ils sont
+         * CONSOMMÉS, une fois par image, après la boucle d'événements. C'est ce
+         * qui permet à la manette d'entrer dans le jeu par le même endroit que
+         * le clavier — et c'est la seule façon de garantir que `hmask`, le
+         * journal d'entrées et le duel voient exactement le même octet quelle
+         * que soit la main qui joue.
+         */
+        uint8_t frame_press  = 0;    /* fronts montants des cinq boutons de jeu */
+        bool    want_interact = false; /* « E » : le jeton */
+        bool    want_menu     = false; /* « Échap » / Start */
+
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             switch (ev.type) {
             case SDL_EVENT_QUIT:
                 running = false;
+                break;
+
+            /*
+             * LE BRANCHEMENT À CHAUD.
+             *
+             * Une manette se branche pendant la partie, et c'est même le cas le
+             * plus fréquent : on lance le jeu, on constate qu'on préfère la
+             * manette, on la branche. SDL pousse aussi un `ADDED` par
+             * périphérique déjà présent quand le sous-système démarre — il n'y a
+             * donc pas d'énumération initiale à écrire, ce chemin-ci les voit
+             * tous.
+             */
+            case SDL_EVENT_GAMEPAD_ADDED:
+                if (!pad) {
+                    pad = SDL_OpenGamepad(ev.gdevice.which);
+                    if (pad) {
+                        pad_id   = ev.gdevice.which;
+                        pad_prev = 0;
+                        NS_INFO("manette : « %s » branchée",
+                                SDL_GetGamepadName(pad) ? SDL_GetGamepadName(pad) : "?");
+                    } else {
+                        NS_WARN("manette non ouverte : %s", SDL_GetError());
+                    }
+                }
+                break;
+
+            case SDL_EVENT_GAMEPAD_REMOVED:
+                if (pad && ev.gdevice.which == pad_id) {
+                    SDL_CloseGamepad(pad);
+                    pad = NULL;
+                    pad_id = 0;
+                    /*
+                     * Les maintiens sont OUBLIÉS, pas gelés. Débrancher au
+                     * moment où l'on tient une direction laisserait le serpent
+                     * tourner tout seul jusqu'au mur, et le joueur n'aurait plus
+                     * rien pour l'arrêter.
+                     */
+                    pad_prev = 0;
+                    SDL_zero(pad_state);
+                    NS_INFO("manette : débranchée");
+                }
+                break;
+
+            /*
+             * Seuls DEUX boutons passent par les événements : Start et le bouton
+             * de retour. Tout le reste — croix, stick, bouton d'action — est LU
+             * une fois par image avec le clavier, parce que c'est le masque qui
+             * compte et qu'un masque se lit, il ne s'accumule pas.
+             */
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                if (ev.gbutton.button == SDL_GAMEPAD_BUTTON_START) {
+                    want_menu = true;
+                } else if (ev.gbutton.button == SDL_GAMEPAD_BUTTON_EAST && menu.open) {
+                    /* Le bouton de DROITE annule : c'est la convention de tous
+                     * les menus de console, et sans elle on ne peut refermer une
+                     * page d'information qu'avec Start. */
+                    room_menu_input(&menu, &menu_ctx, ROOM_MENU_CANCEL);
+                }
                 break;
 
             case SDL_EVENT_KEY_DOWN:
@@ -2381,21 +2509,9 @@ play_at_done: ;
                 }
                 switch (ev.key.key) {
                 case SDLK_ESCAPE:
-                    if (in_game) {
-                        /* Quitter la partie rend la salle, pas le bureau. */
-                        in_game = false;
-                        playing_material = -1;
-                        playing_cab = NULL;
-                        room_viewmodel_stop_playing(&vmstate);
-                        NS_INFO("%s : score %u, meilleur %u", game_api->title,
-                                game_api->score(game), game_api->best(game));
-                        break;
-                    }
-                    room_menu_open(&menu);
-                    if (mouse_captured) {
-                        SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), false);
-                        mouse_captured = false;
-                    }
+                    /* Le geste est le même que celui de Start sur la manette :
+                     * il est donc décidé une seule fois, après la boucle. */
+                    want_menu = true;
                     break;
                 case SDLK_F2: {
                     /* Capture à la demande, dans le répertoire utilisateur. */
@@ -2409,38 +2525,23 @@ play_at_done: ;
                 case SDLK_UP: case SDLK_DOWN: case SDLK_LEFT: case SDLK_RIGHT:
                     if (in_game) {
                         /*
-                         * En partie, le clavier appartient au jeu. Après la mort
-                         * l'action relance — mais seulement une fois la chute
-                         * finie, sinon un appui maintenu au moment du choc
-                         * redémarre avant qu'on ait vu ce qui s'est passé.
+                         * En partie, le clavier appartient au jeu — mais il n'y
+                         * DÉCIDE plus rien. Il dépose son front montant dans le
+                         * même octet que la manette, et c'est un seul endroit,
+                         * après la boucle, qui tranche entre « relancer » et
+                         * « appuyer ». Deux endroits qui tranchaient la même
+                         * question auraient fini par ne plus la trancher pareil.
                          */
                         if (!ev.key.repeat) {
-                            float dead_time = 0.0f;
-                            const bool dead = game_api->dead(game, &dead_time);
-                            const bool action = (ev.key.key == SDLK_SPACE
-                                              || ev.key.key == SDLK_RETURN);
-                            if (dead && action && dead_time > 0.8f) {
-                                const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                                start_run(game_api, game, runlog, seed, game_hard, &duel);
-                                run_ms = 0;
-                                run_tick = 0; pending_press = 0;
-            run_tick = 0; pending_press = 0;
-                run_tick = 0; pending_press = 0;
-                            } else {
-                                ns_game_button b = NS_GAME_ACTION;
-                                switch (ev.key.key) {
-                                    case SDLK_UP:    b = NS_GAME_UP; break;
-                                    case SDLK_DOWN:  b = NS_GAME_DOWN; break;
-                                    case SDLK_LEFT:  b = NS_GAME_LEFT; break;
-                                    case SDLK_RIGHT: b = NS_GAME_RIGHT; break;
-                                    default: break;
-                                }
-                                game_api->press(game, b);
-                                /* Le même appui, pour le journal d'entrées : il
-                                 * arrive du gestionnaire d'événements, donc
-                                 * AVANT le pas, et sera consommé par lui. */
-                                pending_press |= (uint8_t)(1u << b);
+                            ns_game_button b = NS_GAME_ACTION;
+                            switch (ev.key.key) {
+                                case SDLK_UP:    b = NS_GAME_UP; break;
+                                case SDLK_DOWN:  b = NS_GAME_DOWN; break;
+                                case SDLK_LEFT:  b = NS_GAME_LEFT; break;
+                                case SDLK_RIGHT: b = NS_GAME_RIGHT; break;
+                                default: break;
                             }
+                            frame_press |= (uint8_t)(1u << b);
                         }
                         break;
                     }
@@ -2520,86 +2621,11 @@ play_at_done: ;
                     NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
                     break;
                 }
-                case SDLK_E: {
-                    /*
-                     * `ns_scene_nearest_cabinet` est écrite depuis M4 et n'avait
-                     * jamais eu un seul appelant — comme `screen_center`,
-                     * `player_anchor` et `ns_poi`. Elle en a un.
-                     *
-                     * L'invite affichée à l'écran (« E pour jouer ») demande la
-                     * couche 2D, qui n'existe pas encore : c'est A9. En attendant
-                     * le geste part quand on est à portée, et le journal le dit —
-                     * ce qui suffit à le vérifier sans texte à l'écran.
-                     */
-                    if (ev.key.repeat) break;
-                    const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
-                    if (near && room_viewmodel_interact(&vmstate, near)) {
-                        room_sound_coin(&sound, near->coin_slot);
-                        NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
-
-                        /*
-                         * La borne décide du jeu, et de sa difficulté. C'est ce
-                         * que `salle.room.json` déclare depuis A4 et que rien ne
-                         * lisait : dix-neuf bornes affectées à un jeu, et aucune
-                         * qui en lançait un.
-                         */
-                        if (LOAD_GAME(near->game)) {
-                            const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
-                            const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                            game_hard = hard;
-                            start_run(game_api, game, runlog, seed, hard, &duel);
-                            run_ms = 0;
-                            run_tick = 0; pending_press = 0;
-                            in_game = true;
-
-                            /*
-                             * POSER LE REGARD SUR LA DALLE — la vraie cause du
-                             * « je suis obligé de m'accroupir ».
-                             *
-                             * `--play-at=` calculait déjà ce tangage ; ce
-                             * chemin-ci, celui qu'on emprunte RÉELLEMENT en
-                             * jouant, ne le faisait pas. On appuyait sur E, la
-                             * partie démarrait, et la vue restait à
-                             * l'horizontale — avec un champ vertical de 62°
-                             * (donc ±31°) et une dalle 26° plus bas, l'image
-                             * était en bas du cadre, presque hors champ. On
-                             * s'accroupissait pour la ramener au centre.
-                             *
-                             * Deux enseignements de la capture `--play-at`, que
-                             * j'ai mis trop longtemps à rapprocher : elle était
-                             * bien cadrée, et elle était la SEULE à l'être. Une
-                             * vérification qui emprunte un chemin que le joueur
-                             * n'emprunte pas ne vérifie rien.
-                             *
-                             * C'est un objectif, pas une téléportation :
-                             * `look_settle` amène la vue en un tiers de seconde
-                             * et rend la main. Baisser les yeux vers l'écran est
-                             * le geste qu'on fait devant une vraie borne ; le
-                             * lui arracher ensuite ne l'est pas.
-                             */
-                            look_pitch  = pitch_onto(cam.position, near->screen_center);
-                            look_settle = 0.33f;
-                            /*
-                             * On reste EN 3D : le jeu tourne dans la dalle de la
-                             * borne, et la tête reste libre. C'est toute la
-                             * différence entre « lancer un mini-jeu » et « jouer
-                             * sur une borne » — on voit l'écran à travers son
-                             * verre bombé, on peut se pencher, reculer, regarder
-                             * la borne d'à côté.
-                             */
-                            playing_material = near->screen_material;
-                            fullscreen_game = false;
-                            playing_cab = near;
-                        } else {
-                            /* Le jeton part quand même : le geste est celui de la
-                             * salle, pas celui du jeu. Mais on le DIT, plutôt que
-                             * de laisser croire à une borne cassée. */
-                            NS_INFO("borne « %s » : « %s » n'est pas encore porté",
-                                    near->name, near->game);
-                        }
-                    }
+                case SDLK_E:
+                    /* Le jeton, décidé après la boucle : c'est aussi le geste du
+                     * bouton d'action de la manette hors partie. */
+                    if (!ev.key.repeat) want_interact = true;
                     break;
-                }
                 default:
                     break;
                 }
@@ -2621,6 +2647,179 @@ play_at_done: ;
 
             default:
                 break;
+            }
+        }
+
+        /* ==================================================================
+         * LES ENTRÉES DE L'IMAGE — clavier et manette, au même endroit
+         * ==================================================================
+         *
+         * Tout ce qui suit s'exécute une fois par image, après que la file
+         * d'événements est vide et AVANT que quoi que ce soit lise une entrée.
+         * C'est la seule place où les deux périphériques peuvent se confondre
+         * en un seul octet — et c'est cet octet-là que le journal d'entrées
+         * écrit, que `--rejouer` relit et que le duel publie sur le réseau.
+         */
+        room_pad_sample(pad, &pad_state);
+        const uint8_t pad_mask  = room_pad_mask(&pad_state, &pad_tune);
+        const uint8_t pad_press = (uint8_t)(pad_mask & ~pad_prev);
+        pad_prev = pad_mask;
+
+        /*
+         * LE MENU, À LA MANETTE.
+         *
+         * Il se parcourt avec les mêmes fronts montants que le jeu : un cran par
+         * poussée. Pas de répétition automatique — celle du clavier vient du
+         * système, on ne va pas en écrire une deuxième ici pour l'accorder
+         * ensuite à la première.
+         */
+        if (menu.open) {
+            if (pad_press & (1u << NS_GAME_UP))     room_menu_input(&menu, &menu_ctx, ROOM_MENU_UP);
+            if (pad_press & (1u << NS_GAME_DOWN))   room_menu_input(&menu, &menu_ctx, ROOM_MENU_DOWN);
+            if (pad_press & (1u << NS_GAME_LEFT))   room_menu_input(&menu, &menu_ctx, ROOM_MENU_LEFT);
+            if (pad_press & (1u << NS_GAME_RIGHT))  room_menu_input(&menu, &menu_ctx, ROOM_MENU_RIGHT);
+            if (pad_press & (1u << NS_GAME_ACTION)) room_menu_input(&menu, &menu_ctx, ROOM_MENU_ACCEPT);
+        } else if (in_game) {
+            /*
+             * LES DEUX PÉRIPHÉRIQUES DANS LE MÊME OCTET.
+             *
+             * `frame_press` porte déjà les fronts du clavier. La manette y verse
+             * les siens, et c'est tout : la décision qui suit ne sait plus, et
+             * n'a plus à savoir, d'où vient l'appui.
+             */
+            frame_press |= pad_press;
+            if (frame_press) {
+                /*
+                 * Après la mort, l'action relance — mais seulement une fois la
+                 * chute finie, sinon un appui maintenu au moment du choc
+                 * redémarre avant qu'on ait vu ce qui s'est passé.
+                 */
+                float dead_time = 0.0f;
+                const bool dead = game_api->dead(game, &dead_time);
+                if (dead && (frame_press & (1u << NS_GAME_ACTION)) && dead_time > 0.8f) {
+                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                    start_run(game_api, game, runlog, seed, game_hard, &duel);
+                    run_ms = 0;
+                    run_tick = 0; pending_press = 0;
+                } else {
+                    for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+                        if (frame_press & (1u << b)) game_api->press(game, (ns_game_button)b);
+                    }
+                    /* Les mêmes appuis, pour le journal d'entrées : ils arrivent
+                     * AVANT le pas, et seront consommés par lui. */
+                    pending_press |= frame_press;
+                }
+            }
+        } else if (pad_press & (1u << NS_GAME_ACTION)) {
+            /*
+             * Hors partie, le bouton d'action MET LE JETON — c'est le « E » du
+             * clavier. Une manette n'a pas de touche par verbe : le même bouton
+             * lance la partie et la joue, comme sur une vraie borne où l'on
+             * enfonce le jeton puis le bouton de tir avec le même pouce.
+             */
+            want_interact = true;
+        }
+
+        /*
+         * ÉCHAP ET START — un seul geste, une seule décision.
+         *
+         * Trois issues selon l'état, et l'ordre compte : fermer le menu s'il est
+         * ouvert, sinon quitter la partie s'il y en a une, sinon ouvrir le menu.
+         * C'était écrit dans le gestionnaire de touche ; l'en sortir est ce qui
+         * permet à la manette de faire exactement la même chose sans que ces
+         * huit lignes existent deux fois.
+         */
+        if (want_menu) {
+            if (menu.open) {
+                room_menu_input(&menu, &menu_ctx, ROOM_MENU_CANCEL);
+            } else if (in_game) {
+                /* Quitter la partie rend la salle, pas le bureau. */
+                in_game = false;
+                playing_material = -1;
+                playing_cab = NULL;
+                room_viewmodel_stop_playing(&vmstate);
+                NS_INFO("%s : score %u, meilleur %u", game_api->title,
+                        game_api->score(game), game_api->best(game));
+            } else {
+                room_menu_open(&menu);
+                if (mouse_captured) {
+                    SDL_SetWindowRelativeMouseMode(ns_rhi_window(rhi), false);
+                    mouse_captured = false;
+                }
+            }
+        }
+
+        if (want_interact && !menu.open) {
+            /*
+             * `ns_scene_nearest_cabinet` est écrite depuis M4 et n'avait
+             * jamais eu un seul appelant — comme `screen_center`,
+             * `player_anchor` et `ns_poi`. Elle en a un.
+             */
+            const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
+            if (near && room_viewmodel_interact(&vmstate, near)) {
+                room_sound_coin(&sound, near->coin_slot);
+                NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
+
+                /*
+                 * La borne décide du jeu, et de sa difficulté. C'est ce
+                 * que `salle.room.json` déclare depuis A4 et que rien ne
+                 * lisait : dix-neuf bornes affectées à un jeu, et aucune
+                 * qui en lançait un.
+                 */
+                if (LOAD_GAME(near->game)) {
+                    const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
+                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                    game_hard = hard;
+                    start_run(game_api, game, runlog, seed, hard, &duel);
+                    run_ms = 0;
+                    run_tick = 0; pending_press = 0;
+                    in_game = true;
+
+                    /*
+                     * POSER LE REGARD SUR LA DALLE — la vraie cause du
+                     * « je suis obligé de m'accroupir ».
+                     *
+                     * `--play-at=` calculait déjà ce tangage ; ce
+                     * chemin-ci, celui qu'on emprunte RÉELLEMENT en
+                     * jouant, ne le faisait pas. On appuyait sur E, la
+                     * partie démarrait, et la vue restait à
+                     * l'horizontale — avec un champ vertical de 62°
+                     * (donc ±31°) et une dalle 26° plus bas, l'image
+                     * était en bas du cadre, presque hors champ. On
+                     * s'accroupissait pour la ramener au centre.
+                     *
+                     * Deux enseignements de la capture `--play-at`, que
+                     * j'ai mis trop longtemps à rapprocher : elle était
+                     * bien cadrée, et elle était la SEULE à l'être. Une
+                     * vérification qui emprunte un chemin que le joueur
+                     * n'emprunte pas ne vérifie rien.
+                     *
+                     * C'est un objectif, pas une téléportation :
+                     * `look_settle` amène la vue en un tiers de seconde
+                     * et rend la main. Baisser les yeux vers l'écran est
+                     * le geste qu'on fait devant une vraie borne ; le
+                     * lui arracher ensuite ne l'est pas.
+                     */
+                    look_pitch  = pitch_onto(cam.position, near->screen_center);
+                    look_settle = 0.33f;
+                    /*
+                     * On reste EN 3D : le jeu tourne dans la dalle de la
+                     * borne, et la tête reste libre. C'est toute la
+                     * différence entre « lancer un mini-jeu » et « jouer
+                     * sur une borne » — on voit l'écran à travers son
+                     * verre bombé, on peut se pencher, reculer, regarder
+                     * la borne d'à côté.
+                     */
+                    playing_material = near->screen_material;
+                    fullscreen_game = false;
+                    playing_cab = near;
+                } else {
+                    /* Le jeton part quand même : le geste est celui de la
+                     * salle, pas celui du jeu. Mais on le DIT, plutôt que
+                     * de laisser croire à une borne cassée. */
+                    NS_INFO("borne « %s » : « %s » n'est pas encore porté",
+                            near->name, near->game);
+                }
             }
         }
 
@@ -2649,6 +2848,17 @@ play_at_done: ;
             NS_INFO("réglages : %s, échelle %.2f", quality_name(rs.quality),
                     (double)rs.render_scale);
         }
+        /*
+         * La FENÊTRE, appliquée ici pour la même raison que les réglages de
+         * rendu juste au-dessus : recréer une swapchain à chaque flèche
+         * maintenue ferait clignoter l'écran à chaque cran de la liste.
+         */
+        if (menu.window_dirty) {
+            menu.window_dirty = false;
+            ns_rhi_set_window_mode(rhi, menu_win_w, menu_win_h, menu_fullscreen);
+            NS_INFO("fenêtre : %d x %d%s", menu_win_w, menu_win_h,
+                    menu_fullscreen ? ", plein écran" : "");
+        }
         cam.mouse_sensitivity = mouse_sens_base * mouse_sens_mult;
         if (menu.quit_request) {
             room_menu_persist(&menu_ctx);
@@ -2672,6 +2882,33 @@ play_at_done: ;
         cam.input_strafe  = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
         cam.running = keys[SDL_SCANCODE_LSHIFT];
+
+        /*
+         * LE STICK GAUCHE MARCHE, il ne se contente pas d'aller à fond.
+         *
+         * C'est la seule entrée de ce jeu qui soit vraiment analogique, et la
+         * gâcher en la ramenant à quatre directions rendrait la manette moins
+         * bonne que le clavier alors qu'elle peut être meilleure : on longe un
+         * comptoir au pas, on s'approche d'une borne sans la dépasser.
+         *
+         * Il s'ADDITIONNE au clavier plutôt que de le remplacer — les deux sont
+         * branchés en même temps, et rien n'oblige à en choisir un. La somme est
+         * bornée parce que « clavier à fond + stick à fond » ne doit pas donner
+         * une vitesse double ; `room_camera` normalise ensuite la direction.
+         */
+        {
+            float pad_fwd = 0.0f, pad_strafe = 0.0f;
+            room_pad_move(&pad_state, &pad_tune, &pad_fwd, &pad_strafe);
+            cam.input_forward = ns_clampf(cam.input_forward + pad_fwd, -1.0f, 1.0f);
+            cam.input_strafe  = ns_clampf(cam.input_strafe  + pad_strafe, -1.0f, 1.0f);
+            /* La gâchette de course : le stick poussé à fond court, comme une
+             * gâchette le ferait, sans réclamer un bouton de plus. */
+            if (!cam.running) {
+                const float mag2 = pad_fwd * pad_fwd + pad_strafe * pad_strafe;
+                cam.running = (mag2 > 0.90f * 0.90f);
+            }
+        }
+
         if (menu.open) {
             /* Le monde continue de vivre derrière le voile — la poussière, les
              * écrans, le brouillard : c'est ce qui permet de JUGER un réglage
@@ -2822,6 +3059,35 @@ play_at_done: ;
              */
             room_doors_tick(&doors, cam.position, (float)clock.tick_seconds);
             const room_blockers blockers = room_doors_blockers(&doors);
+
+            /*
+             * LE STICK DROIT REGARDE — en radians PAR SECONDE, et donc ici.
+             *
+             * La souris rend un déplacement : dix pixels sont dix pixels quelle
+             * que soit la durée de l'image, et `room_camera` les intègre tels
+             * quels. Un stick rend une POSITION maintenue ; ce qu'il commande
+             * est une vitesse de rotation, qui doit donc être multipliée par le
+             * temps écoulé. La confondre avec un déplacement de souris ferait
+             * tourner la vue deux fois plus vite à 120 images par seconde qu'à
+             * 60 — le genre de défaut qu'on impute à sa manette.
+             *
+             * D'où sa place DANS la boucle à pas fixe et non à côté : c'est le
+             * seul endroit qui connaisse une durée.
+             *
+             * Écrit dans `yaw` et `pitch` plutôt que dans `mouse_dx` : la
+             * sensibilité de la manette est la sienne, pas celle de la souris,
+             * et passer par `mouse_dx` obligerait à diviser par une sensibilité
+             * que le joueur peut régler à autre chose. Le tangage reste borné
+             * par `room_camera_tick`, qui le rabote juste après.
+             */
+            if (!menu.open) {
+                float dyaw = 0.0f, dpitch = 0.0f;
+                room_pad_look(&pad_state, &pad_tune, (float)clock.tick_seconds,
+                              &dyaw, &dpitch);
+                cam.yaw   += dyaw;
+                cam.pitch += dpitch;
+            }
+
             room_camera_tick(&cam, &scene.bvh, &blockers, (float)clock.tick_seconds);
 
             /*
@@ -2874,16 +3140,35 @@ play_at_done: ;
             room_menu_update(&menu, (float)clock.tick_seconds);
             if (in_game && !menu.open) {
                 if (opt.autoplay && game_api->autopilot) game_api->autopilot(game);
+
+                /*
+                 * L'OCTET DES MAINTIENS — calculé UNE FOIS, ici, et pour tout le
+                 * monde.
+                 *
+                 * Il l'était deux fois : une pour `held[]`, une pour `hmask`,
+                 * vingt lignes plus bas, avec les mêmes touches recopiées. Rien
+                 * n'obligeait les deux à rester d'accord, et c'est le genre de
+                 * désaccord qu'aucun test ne voit : le jeu se joue normalement,
+                 * et c'est le JOURNAL qui ment. Une manette branchée sur `held[]`
+                 * seulement aurait produit exactement ça — des parties
+                 * irrejouables et des duels qui divergent, sans une erreur.
+                 *
+                 * Le clavier et la manette entrent donc par la même porte, et
+                 * `held[]` DESCEND du masque au lieu d'être calculé à côté. Il
+                 * n'y a plus deux vérités à tenir d'accord, il n'y en a qu'une.
+                 * `tests/test_pad.c` vérifie que les deux périphériques rendent
+                 * bien le même octet à geste égal.
+                 */
+                const uint8_t hmask = (uint8_t)(room_keys_mask(keys) | pad_mask);
+
                 /* Les maintiens : un jeu qui tourne à l'angle (le serpent) a
                  * besoin de savoir qu'on tient la direction, pas qu'on l'a
                  * pressée. Ceux qui n'en veulent pas laissent le pointeur nul. */
                 if (game_api->hold) {
                     bool held[NS_GAME_BUTTON_COUNT] = { false };
-                    held[NS_GAME_UP]     = keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_W];
-                    held[NS_GAME_DOWN]   = keys[SDL_SCANCODE_DOWN] || keys[SDL_SCANCODE_S];
-                    held[NS_GAME_LEFT]   = keys[SDL_SCANCODE_LEFT] || keys[SDL_SCANCODE_A];
-                    held[NS_GAME_RIGHT]  = keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D];
-                    held[NS_GAME_ACTION] = keys[SDL_SCANCODE_SPACE];
+                    for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
+                        held[b] = (hmask & (1u << b)) != 0;
+                    }
                     game_api->hold(game, held);
                 }
 
@@ -2899,15 +3184,14 @@ play_at_done: ;
                  * se rejouent à l'identique par ce chemin.
                  */
                 {
-                    uint8_t hmask = 0;
-                    if (game_api->hold) {
-                        if (keys[SDL_SCANCODE_UP]    || keys[SDL_SCANCODE_W]) hmask |= 1u << NS_GAME_UP;
-                        if (keys[SDL_SCANCODE_DOWN]  || keys[SDL_SCANCODE_S]) hmask |= 1u << NS_GAME_DOWN;
-                        if (keys[SDL_SCANCODE_LEFT]  || keys[SDL_SCANCODE_A]) hmask |= 1u << NS_GAME_LEFT;
-                        if (keys[SDL_SCANCODE_RIGHT] || keys[SDL_SCANCODE_D]) hmask |= 1u << NS_GAME_RIGHT;
-                        if (keys[SDL_SCANCODE_SPACE]) hmask |= 1u << NS_GAME_ACTION;
-                    }
-                    ns_runlog_input(runlog, run_tick, hmask, pending_press);
+                    /*
+                     * Un jeu sans `hold` n'a jamais reçu de maintiens : son
+                     * journal n'en porte donc pas, et il ne doit pas commencer à
+                     * en porter aujourd'hui — les journaux déjà enregistrés se
+                     * rejoueraient autrement.
+                     */
+                    const uint8_t logged = game_api->hold ? hmask : 0u;
+                    ns_runlog_input(runlog, run_tick, logged, pending_press);
                     pending_press = 0;
 
                     /*
@@ -2924,7 +3208,7 @@ play_at_done: ;
                      * suite : l'adversaire l'attend. Les EMPREINTES, elles,
                      * sont confrontées après le pas — voir plus bas. */
                     if (duel.live) {
-                        ns_lockstep_send_input(duel.live, run_tick, hmask, pending_press);
+                        ns_lockstep_send_input(duel.live, run_tick, logged, pending_press);
                     }
 
                     duel_tick(&duel, game_api, run_tick, (float)clock.tick_seconds);
@@ -3673,6 +3957,10 @@ play_at_done: ;
         ns_runlog_write_inputs(runlog, opt.input_log);
     }
     ns_runlog_destroy(runlog);
+    /* La manette avant SDL_Quit : `SDL_CloseGamepad` sur un sous-système déjà
+     * arrêté n'est pas défini, et le vérificateur de fuites juste en dessous
+     * compterait une poignée jamais rendue. */
+    if (pad) { SDL_CloseGamepad(pad); pad = NULL; }
     if (sprites) ns_sprite_destroy(rhi, sprites);
     room_sound_shutdown(&sound);
     ns_audio_shutdown();
