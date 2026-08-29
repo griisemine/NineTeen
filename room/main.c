@@ -29,6 +29,7 @@
 #include "ns_scores.h"
 
 #include "room_camera.h"
+#include "room_door.h"
 #include "ns_env.h"
 #include "ns_skin.h"
 #include "room_attract.h"
@@ -1550,6 +1551,15 @@ int main(int argc, char **argv)
     room_sound_init(&sound, &scene);
 
     /*
+     * Les portes coulissantes. Après la scène — elles y retrouvent leurs
+     * sommets par le nom du nœud — et avant la boucle, qui les fait vivre en
+     * trois temps : `room_doors_tick` au pas fixe, `room_doors_upload` dans
+     * l'image, et `room_sound_update` pour les deux extraits de 2020.
+     */
+    room_doors doors;
+    room_doors_init(&doors, &scene);
+
+    /*
      * La couche 2D et le mini-jeu.
      *
      * Le pipeline de sprites est lié au FORMAT de sa cible : celui de la
@@ -2623,7 +2633,16 @@ play_at_done: ;
 
         ns_clock_begin_frame(&clock);
         while (ns_clock_consume_tick(&clock)) {
-            room_camera_tick(&cam, &scene.bvh, (float)clock.tick_seconds);
+            /*
+             * Les portes AVANT la caméra, et ce n'est pas indifférent : la
+             * capsule doit être repoussée par le vantail tel qu'il est À CE
+             * PAS, pas tel qu'il était au précédent. Une porte qui se ferme à
+             * 0,94 m/s parcourt 1,6 cm par pas de simulation ; l'inverser
+             * laisserait le joueur d'autant à l'intérieur du panneau.
+             */
+            room_doors_tick(&doors, cam.position, (float)clock.tick_seconds);
+            const room_blockers blockers = room_doors_blockers(&doors);
+            room_camera_tick(&cam, &scene.bvh, &blockers, (float)clock.tick_seconds);
 
             /*
              * La descente du regard vers la dalle, APRÈS le pas de caméra : la
@@ -2662,7 +2681,7 @@ play_at_done: ;
                 room_viewmodel_start_playing(&vmstate, playing_cab);
             }
             settings_banner = ns_maxf(0.0f, settings_banner - (float)clock.tick_seconds);
-            room_sound_update(&sound, &scene, &cam, (float)clock.tick_seconds);
+            room_sound_update(&sound, &scene, &cam, &doors, (float)clock.tick_seconds);
             ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
             /*
@@ -2903,6 +2922,18 @@ play_at_done: ;
         ns_scene_animate_lights(&scene, now);
 
         if (ns_rhi_begin_frame(rhi)) {
+            /*
+             * Les sommets des vantaux qui ont bougé, poussés dès l'ouverture de
+             * l'image.
+             *
+             * Ici et pas dans le pas fixe : `ns_rhi_stage_buffer` exige une image
+             * commencée. Ici et pas plus tard non plus — les copies en attente
+             * sont vidées par `ns_render_frame` avant sa première passe, donc
+             * tout ce qui est mis en file après aurait une image de retard, ce
+             * qui se verrait comme une porte qui traîne derrière son bruit.
+             */
+            room_doors_upload(&doors, rhi, &scene);
+
             uint32_t w = 0, h = 0;
             ns_rhi_drawable_size(rhi, &w, &h);
 

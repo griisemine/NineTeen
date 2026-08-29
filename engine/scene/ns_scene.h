@@ -411,6 +411,40 @@ typedef struct ns_scene {
     uint32_t vertex_count;
     uint32_t index_count;
 
+    /*
+     * Les sommets et les indices, CÔTÉ PROCESSEUR.
+     *
+     * Ce ne sont pas des copies : ces deux tableaux sont ceux que le chargeur a
+     * remplis avant de les téléverser, et ils vivent dans l'arène de la scène,
+     * qui n'est libérée qu'au déchargement. Ils étaient donc DÉJÀ résidents pour
+     * toute la partie — seize mégaoctets de sommets pour la salle reconstruite —
+     * simplement inaccessibles : le chargeur les tenait dans deux variables
+     * locales. Les exposer coûte seize octets de structure et zéro octet de
+     * mémoire.
+     *
+     * À quoi ça sert, et pourquoi c'est le chemin choisi
+     * --------------------------------------------------
+     * La scène est cuite EN ESPACE MONDE : `gbuffer.vert` n'a pas de matrice de
+     * modèle, et un objet ne porte qu'un nom, une boîte et une tranche de lots.
+     * Faire bouger un vantail de porte demande donc soit une passe de rendu à
+     * part avec sa propre matrice — sur le modèle de `pass_character` —, soit de
+     * réécrire ses sommets dans le tampon.
+     *
+     * Mesuré avant de choisir : `porte_wc` occupe 192 sommets, contigus et
+     * exclusifs, soit 9 216 octets. Une translation pure de 192 sommets par
+     * image passe par `ns_rhi_stage_buffer` sans toucher au shader, au pipeline,
+     * ni à `ns_shaders.c` — donc sans rien changer à ce que le contrôle MSL
+     * vérifie. Une passe dédiée aurait demandé un pipeline, un jeu d'uniformes et
+     * une matrice par objet, pour faire glisser un panneau de 1,05 m.
+     *
+     * `room_door.c` est le seul consommateur, et il lit les indices UNE FOIS au
+     * démarrage pour retrouver la plage de sommets de chaque vantail. Rien ne les
+     * écrit à la volée : la position de repos reste la vérité, et le déplacement
+     * est toujours calculé depuis elle plutôt que cumulé — un cumul dérive.
+     */
+    const ns_vertex *cpu_vertices;
+    const uint32_t  *cpu_indices;
+
     /* Substituts utilisés quand une texture manque : évite un test par matériau
      * dans le shader, et surtout évite l'écran noir en cas d'asset absent. */
     ns_texture fallback_white;

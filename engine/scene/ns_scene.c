@@ -905,6 +905,10 @@ bool ns_scene_load(ns_rhi *r, ns_scene *out, const char *gltf_logical)
 
     out->vertex_count = vcursor;
     out->index_count  = icursor;
+    /* Voir `ns_scene.h` : les deux tableaux restent dans l'arène jusqu'au
+     * déchargement, on ne fait que cesser de les cacher. */
+    out->cpu_vertices = vertices;
+    out->cpu_indices  = indices;
     if (ns_aabb_valid(scene_bounds)) out->bounds = scene_bounds;
 
     /* ---------------------------------------------------------- matériaux */

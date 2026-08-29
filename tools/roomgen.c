@@ -1710,16 +1710,16 @@ static void check_cabinet_clearance(const rg_builder *b)
  * Les trois chiffres qui fixent celui-ci ont été relevés sur CETTE salle, pour
  * une boîte jouable de 373,1 m² :
  *
- *     salle réparée, on circule partout .............. 105,0 m²   28,1 %
- *     enfermé dans le bloc sanitaire seul ............  17,8 m²    4,8 %
+ *     salle réparée, hall + couloir + toilettes ...... 124,8 m²   33,5 %
+ *     enfermé dans le bloc sanitaire seul ............  18,0 m²    4,8 %
  *     enfermé dans le sas — le défaut livré ..........   4,7 m²    1,3 %
  *
- * Dix pour cent tombe entre les deux mondes et pas au bord de l'un d'eux :
- * presque trois fois sous la salle saine, deux fois au-dessus du plus grand
- * enfermement possible ici, huit fois au-dessus de celui qui est parti en
- * production. Le seuil ne prétend pas distinguer une salle bien meublée d'une
- * salle vide — il n'en a pas les moyens et ce n'est pas son travail. Il sépare
- * « on circule » de « on est enfermé », et ces deux-là ne sont pas voisins.
+ * Dix pour cent tombe entre les deux mondes et au bord d'aucun : trois fois sous
+ * la salle saine, deux fois au-dessus du plus grand enfermement possible ici,
+ * huit fois au-dessus de celui qui est parti en production. Le seuil ne prétend
+ * pas distinguer une salle bien meublée d'une salle vide — il n'en a pas les
+ * moyens et ce n'est pas son travail. Il sépare « on circule » de « on est
+ * enfermé », et ces deux-là ne sont pas voisins.
  */
 #define RG_REACH_MIN_SHARE 0.10f
 

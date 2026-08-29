@@ -314,7 +314,13 @@ void reach_grid_close_outside(reach_grid *g, const reach_contour *contours, size
     /* L'emprise de chaque contour, élargie de son épaisseur : quatre
      * comparaisons écartent d'emblée la quasi-totalité de la rue, et seul ce qui
      * reste vaut une distance au contour. Sans ce pré-filtre, cette passe coûte
-     * plus cher que tout le reste du remplissage réuni. */
+     * plus cher que tout le reste du remplissage réuni.
+     *
+     * L'ÉPAISSEUR ENTIÈRE ici, la DEMI-épaisseur dans la règle plus bas, et
+     * l'écart est voulu : un pré-filtre doit être plus large que le critère
+     * qu'il précède, sinon il rejette des cellules que la règle aurait
+     * acceptées. Les aligner « pour faire propre » réintroduirait le défaut que
+     * cette fonction vient de corriger, en plus discret. */
     float *box = (float *)malloc(count * 4 * sizeof(float));
     if (!box) tool_fatalf("reach_grid : mémoire épuisée (emprises des contours)");
     for (size_t c = 0; c < count; ++c) {

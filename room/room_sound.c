@@ -3,6 +3,7 @@
 
 #include "ns_config.h"
 #include "ns_core.h"
+#include "ns_env.h"
 
 #include <string.h>
 
@@ -25,6 +26,22 @@
 #define RS_FAN_MAX        6.0f
 #define RS_STREET_RADIUS  2.4f
 #define RS_STREET_MAX    16.0f
+
+/*
+ * La chasse d'eau, et la porte.
+ *
+ * Deux portées franchement différentes, et c'est délibéré. La chasse est un
+ * ÉVÉNEMENT dans une pièce voisine : on doit l'entendre depuis le hall, sinon
+ * elle ne raconte rien — d'où douze mètres. La porte est une mécanique qu'on
+ * déclenche soi-même en s'approchant : on est forcément à moins de deux mètres
+ * quand elle part, et la porter plus loin ferait grincer une porte que personne
+ * n'a ouverte. Les 8 unités de `reglageVolume` en 2020 valent 3,88 m à 2,06
+ * unités par mètre ; c'est cette cote-là qu'on garde pour la porte.
+ */
+#define RS_FLUSH_RADIUS   1.6f
+#define RS_FLUSH_MAX     12.0f
+#define RS_DOOR_RADIUS    0.8f
+#define RS_DOOR_MAX       3.88f
 
 /* --------------------------------------------------------------------------
  * Les deux niveaux réglables
@@ -151,6 +168,7 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_walk = s->clip_ambience = NS_AUDIO_INVALID;
     s->clip_tone = s->clip_fan = s->clip_street = NS_AUDIO_INVALID;
     s->clip_door_open = s->clip_door_close = NS_AUDIO_INVALID;
+    s->clip_flush = NS_AUDIO_INVALID;
     for (int i = 0; i < 3; ++i) s->clip_cabinet[i] = NS_AUDIO_INVALID;
     for (int k = 0; k < NS_STEP_COUNT; ++k) {
         for (int v = 0; v < ROOM_STEP_VARIANTS; ++v) s->clip_step[k][v] = NS_AUDIO_INVALID;
@@ -179,6 +197,7 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_cabinet[2] = ns_audio_load("sounds/borne3.wav");
     s->clip_door_open  = ns_audio_load("sounds/SF-ouvport.wav");
     s->clip_door_close = ns_audio_load("sounds/SF-fermport.wav");
+    s->clip_flush      = ns_audio_load("sounds/chasse_eau.wav");
 
     /* La banque de `tools/stepgen`. Le nom du matériau vient de
      * `ns_footstep_label` — le MÊME que celui que `salle.room.json` écrit et que
@@ -249,6 +268,54 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
                                                s->street_position,
                                                0.34f, 1.0f, RS_STREET_RADIUS, RS_STREET_MAX);
         }
+
+        /*
+         * Les cabines, retrouvées PAR LEUR NOM dans la scène.
+         *
+         * Et non écrites en dur ici, alors qu'on connaît leurs coordonnées :
+         * `cabine_toilettes_1` et `_2` sont déclarées dans `salle.room.json`,
+         * elles y portent déjà leurs cotes, et une seconde copie de ces cotes
+         * dans un fichier de son ferait deux vérités à tenir d'accord — c'est
+         * exactement l'argument qui a fait déduire l'extracteur et la rue de
+         * leurs zones sonores plutôt que de les poser à la main.
+         *
+         * La hauteur est celle du réservoir, pas celle de la cuvette : c'est de
+         * là que vient l'essentiel du bruit, et surtout tout le remplissage.
+         */
+        for (uint32_t i = 0; i < ROOM_MAX_STALLS; ++i) {
+            char name[32];
+            SDL_snprintf(name, sizeof name, "cabine_toilettes_%u", i + 1);
+            const ns_scene_object *o = ns_scene_find_object(scene, name);
+            if (!o) continue;
+            ns_v3 p = ns_aabb_center(o->bounds);
+            p.y = o->bounds.min.y + 0.95f;      /* hauteur de réservoir */
+            s->stall_position[s->stall_count++] = p;
+        }
+    }
+
+    /*
+     * La cadence des chasses.
+     *
+     * Quarante à cent vingt secondes. Le bas de la fourchette n'est pas « ce
+     * qu'on trouve joli », c'est le seuil au-delà duquel deux chasses ne se
+     * lisent plus comme un mécanisme : à dix secondes d'intervalle on entend une
+     * boucle, à quarante on entend quelqu'un. L'intervalle est TIRÉ à chaque
+     * fois plutôt que fixe, pour la même raison qui fait tirer les variantes de
+     * pas — la régularité est ce qui trahit une machine.
+     *
+     * Le premier tirage part d'un compteur déjà entamé : sans ça, toutes les
+     * parties commencent par le même silence de quarante secondes, ce qui est
+     * une régularité de plus.
+     */
+    s->flush_min = ns_env_float("chasse.intervalleMin", 40.0f);
+    s->flush_max = ns_env_float("chasse.intervalleMax", 120.0f);
+    if (s->flush_min < 5.0f) s->flush_min = 5.0f;
+    if (s->flush_max < s->flush_min) s->flush_max = s->flush_min;
+    s->flush_last_stall = UINT32_MAX;
+    s->rng = 0x9E37u;
+    {
+        ns_rng r; ns_rng_seed(&r, 0x0EA0C4A55Eull, 0u);
+        s->flush_countdown = rand_range(&r, 0.25f * s->flush_min, s->flush_max);
     }
 
     /*
@@ -278,6 +345,15 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
             s->voice_tone >= 0 ? "en place" : "absent",
             s->has_fan ? "aux toilettes" : "absent",
             s->has_street ? "au sas" : "absente");
+    /* Séparé, parce que c'est la ligne qui dit si les chasses vont se faire
+     * entendre : sans cabine trouvée ou sans extrait, elles se taisent en
+     * silence, et un silence qui s'explique vaut mieux qu'un silence. */
+    NS_INFO("son : chasse %s, %u cabine(s), toutes les %.0f à %.0f s ; "
+            "porte %s à l'ouverture, %s à la fermeture",
+            s->clip_flush >= 0 ? "chargée" : "ABSENTE",
+            s->stall_count, (double)s->flush_min, (double)s->flush_max,
+            s->clip_door_open  >= 0 ? "SF-ouvport"  : "ABSENT",
+            s->clip_door_close >= 0 ? "SF-fermport" : "ABSENT");
 }
 
 void room_sound_shutdown(room_sound *s)
@@ -367,7 +443,68 @@ static rs_gait gait_of(const room_camera *cam, float bob_amount)
     return (bob_amount > 1.25f) ? RS_GAIT_RUN : RS_GAIT_WALK;
 }
 
-void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam, float dt)
+/* --------------------------------------------------------------------------
+ * Les toilettes : la porte et les chasses
+ * -------------------------------------------------------------------------- */
+
+/*
+ * Les deux extraits de porte de 2020, joués pour la première fois.
+ *
+ * `SF-ouvport.wav` et `SF-fermport.wav` sont chargés par ce fichier depuis
+ * toujours et n'ont jamais été joués par personne : le chargement était mort. La
+ * machine à états vit dans `room_door.c`, qui lève un drapeau ; on le consomme
+ * ici parce que c'est ici qu'on sait ce qui a été chargé.
+ *
+ * La source est le CENTRE DU VANTAIL, à sa position vivante, et pas la baie : un
+ * panneau qui coulisse emmène son bruit avec lui, et sur 1,05 m de course
+ * l'écart s'entend au casque.
+ */
+static void update_doors(room_sound *s, room_doors *doors)
+{
+    if (!doors) return;
+    for (uint32_t i = 0; i < doors->count; ++i) {
+        room_door *p = &doors->door[i];
+        if (room_door_take_open_sound(p) && s->clip_door_open >= 0) {
+            ns_audio_play_3d(s->clip_door_open, NS_BUS_SFX, p->sound_position,
+                             0.70f, 1.0f, RS_DOOR_RADIUS, RS_DOOR_MAX);
+        }
+        if (room_door_take_close_sound(p) && s->clip_door_close >= 0) {
+            ns_audio_play_3d(s->clip_door_close, NS_BUS_SFX, p->sound_position,
+                             0.70f, 1.0f, RS_DOOR_RADIUS, RS_DOOR_MAX);
+        }
+    }
+}
+
+static void update_flush(room_sound *s, float dt)
+{
+    if (s->clip_flush < 0 || s->stall_count == 0) return;
+
+    s->flush_countdown -= dt;
+    if (s->flush_countdown > 0.0f) return;
+
+    ns_rng r;
+    ns_rng_seed(&r, (uint64_t)s->rng++, 0x0EA0u);
+    s->flush_countdown = rand_range(&r, s->flush_min, s->flush_max);
+
+    /* Jamais deux fois la même cabine d'affilée : avec deux cabines, la même qui
+     * tire deux fois de suite s'entend comme une seule cabine — donc comme un
+     * son placé, et non comme un bloc sanitaire qui vit. */
+    uint32_t pick = ns_rng_u32(&r) % s->stall_count;
+    if (s->stall_count > 1 && pick == s->flush_last_stall) {
+        pick = (pick + 1) % s->stall_count;
+    }
+    s->flush_last_stall = pick;
+
+    /* Un léger écart de hauteur d'une fois sur l'autre : deux réservoirs ne se
+     * remplissent jamais tout à fait sur la même note, et c'est ce qui empêche
+     * d'entendre le même fichier. */
+    ns_audio_play_3d(s->clip_flush, NS_BUS_SFX, s->stall_position[pick],
+                     0.55f, rand_range(&r, 0.94f, 1.07f),
+                     RS_FLUSH_RADIUS, RS_FLUSH_MAX);
+}
+
+void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam,
+                       room_doors *doors, float dt)
 {
     if (!s->ready || !ns_audio_ready()) return;
 
@@ -404,6 +541,10 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     if (s->voice_tone >= 0) {
         ns_audio_voice_gain(s->voice_tone, 0.42f * g_level[ROOM_LEVEL_TONE]);
     }
+
+    /* --- les toilettes -------------------------------------------------- */
+    update_doors(s, doors);
+    update_flush(s, dt);
 
     /* --- les pas ------------------------------------------------------- */
     const room_view_bob bob = room_camera_bob(cam, 1.0f);

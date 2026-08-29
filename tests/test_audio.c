@@ -863,7 +863,7 @@ static void walk_step(float dt, void *user)
     w->cam->bob.amount = w->speed / w->cam->speed_walk;
     w->cam->position = ns_v3_add(w->cam->position,
                                  ns_v3_scale(w->direction, w->speed * dt));
-    room_sound_update(w->sound, &g_scene, w->cam, dt);
+    room_sound_update(w->sound, &g_scene, w->cam, NULL, dt);
 }
 
 /* Combien de pas distincts s'entendent dans le fichier : on compte les MONTÉES

@@ -10,6 +10,77 @@
  * caméra devient dégénérée et l'image se retourne. */
 #define PITCH_LIMIT (89.0f * NS_DEG2RAD)
 
+/* --------------------------------------------------------------------------
+ * Les obstacles hors BVH
+ * --------------------------------------------------------------------------
+ * Le BVH est cuit une fois pour toutes et ne connaîtra jamais le vantail qui
+ * coulisse. Ce qui bouge et doit arrêter le joueur passe donc par une boîte
+ * relue à sa position vivante, et cette fonction l'en écarte.
+ *
+ * On raisonne sur la boîte DILATÉE du rayon de la capsule (somme de Minkowski) :
+ * le joueur redevient un point, et le problème passe de « cylindre contre
+ * boîte » à « point dans un rectangle », qui n'a pas de cas particulier aux
+ * coins.
+ *
+ * Le dégagement par l'axe de moindre pénétration, et pourquoi il SUFFIT
+ * ---------------------------------------------------------------------
+ * C'est la règle naïve, et on la soupçonne à juste titre de laisser traverser un
+ * panneau mince : à mi-course dans une cloison, le plus court chemin dehors
+ * désigne l'autre côté. Ce soupçon a été VÉRIFIÉ ici, et il ne tient pas — pour
+ * une raison qu'on ne voit qu'en posant les chiffres.
+ *
+ * Le vantail fait 4,5 cm d'épaisseur, mais ce n'est pas contre lui qu'on teste :
+ * c'est contre sa dilatation par le rayon de la capsule, 32 cm de chaque côté.
+ * La boîte effective fait donc **70 cm** d'épaisseur, pas 4,5. À la course —
+ * 3,3 m/s au pas fixe — le joueur en franchit 2,75 cm par pas : il faudrait
+ * qu'il en franchisse plus de la MOITIÉ, soit 35 cm, pour que le mauvais côté
+ * devienne le plus proche. C'est un facteur douze de marge, et il ne dépend ni de
+ * la finesse du panneau ni du nombre d'images par seconde, seulement du rayon du
+ * joueur et du pas de simulation.
+ *
+ * Une version antérieure de cette fonction repoussait « du côté d'où l'on
+ * venait », en gardant la position précédente pour trancher. Elle a été retirée :
+ * mise à l'épreuve du même test, elle ne rattrape aucun cas que celle-ci laisse
+ * passer. Un raffinement qu'on ne peut pas faire échouer n'est pas un
+ * raffinement, c'est une branche de plus à lire.
+ *
+ * Ce qui la mettrait en défaut, si un jour on y touche : un obstacle plus mince
+ * que le rayon du joueur ET un pas de simulation assez gros pour en franchir la
+ * moitié d'un coup. Aucun des deux n'est le cas ici, et `tests/test_door.c`
+ * mesure la marge plutôt que de la supposer.
+ */
+static void push_out_blockers(const room_blockers *b, float radius,
+                              float height, ns_v3 *feet)
+{
+    if (!b || !b->items || b->count == 0) return;
+
+    for (uint32_t i = 0; i < b->count; ++i) {
+        const ns_aabb box = b->items[i].box;
+        if (!ns_aabb_valid(box)) continue;
+
+        /* En hauteur, on ne dilate pas : la capsule est verticale, et une porte
+         * qui s'arrête à 2,05 m ne doit pas gêner par-dessus. */
+        if (feet->y >= box.max.y || feet->y + height <= box.min.y) continue;
+
+        const float min_x = box.min.x - radius, max_x = box.max.x + radius;
+        const float min_z = box.min.z - radius, max_z = box.max.z + radius;
+        if (feet->x <= min_x || feet->x >= max_x) continue;
+        if (feet->z <= min_z || feet->z >= max_z) continue;
+
+        /* Les quatre dégagements possibles, tous positifs. Le plus court gagne —
+         * c'est aussi celui qui déplace le joueur le moins visiblement, ce qui
+         * compte quand c'est la porte qui vient à lui et non l'inverse. */
+        const float out_neg_x = feet->x - min_x, out_pos_x = max_x - feet->x;
+        const float out_neg_z = feet->z - min_z, out_pos_z = max_z - feet->z;
+
+        float best = out_neg_x; int axis = 0; float delta = -out_neg_x;
+        if (out_pos_x < best) { best = out_pos_x; axis = 0; delta =  out_pos_x; }
+        if (out_neg_z < best) { best = out_neg_z; axis = 2; delta = -out_neg_z; }
+        if (out_pos_z < best) {              axis = 2; delta =  out_pos_z; }
+        if (axis == 0) feet->x += delta; else feet->z += delta;
+    }
+}
+
 /* Longueur d'une foulée complète (deux pas). L'oscillation verticale a deux
  * maxima par foulée — un par pied — et l'oscillation latérale un seul. */
 #define STRIDE_METRES 1.55f
@@ -182,7 +253,8 @@ static room_view_bob bob_lerp(const room_view_bob *a, const room_view_bob *b, fl
  * Pas de simulation
  * -------------------------------------------------------------------------- */
 
-void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt)
+void room_camera_tick(room_camera *c, const ns_bvh *bvh,
+                      const room_blockers *blockers, float dt)
 {
     c->prev_position = c->position;
     c->prev_yaw = c->yaw;
@@ -302,6 +374,18 @@ void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt)
     mv.step_height = c->step_height;
     mv.was_grounded = was_grounded;
     ns_bvh_move_capsule(bvh, &mv);
+
+    /*
+     * Les pièces mobiles, APRÈS le BVH et pas avant.
+     *
+     * Le BVH vient de résoudre le glissement contre les murs ; le dégagement
+     * d'un vantail se fait donc sur une position déjà valide, et ne peut pas
+     * réintroduire une pénétration dans un mur — au pire, il la laisse, et le
+     * pas suivant la reprend. L'inverse (dégager puis laisser le BVH glisser)
+     * rendrait le vantail traversable dès qu'un mur est proche, ce qui est
+     * précisément la situation d'une porte dans son huisserie.
+     */
+    push_out_blockers(blockers, mv.radius, mv.height, &mv.position);
 
     const bool just_landed = (!was_grounded && mv.grounded);
     c->grounded = mv.grounded;

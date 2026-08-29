@@ -32,6 +32,31 @@ typedef enum room_camera_mode {
     ROOM_CAM_ORBIT       /* tour lent de la salle : mode démonstration et captures */
 } room_camera_mode;
 
+/* ==========================================================================
+ * Les obstacles qui ne sont PAS dans le BVH
+ * ==========================================================================
+ * Le BVH est cuit une fois pour toutes par `tools/bvhbake` : il connaît la salle
+ * telle qu'elle sort du glTF, et il ne saura jamais qu'un vantail a coulissé
+ * d'un mètre. Tout ce qui bouge et doit arrêter le joueur passe donc par ici —
+ * une boîte, relue à sa position VIVANTE à chaque pas.
+ *
+ * C'est exactement ce que faisait la version de 2020, où la collision de la
+ * porte des toilettes était une règle lisant `toiletteFemme.x`, et non de la
+ * géométrie. Le refaire autrement demanderait de reconstruire le BVH par image.
+ *
+ * Le type reste NEUTRE — une boîte, rien d'autre. La caméra n'a pas à connaître
+ * les portes : `room_door.c` remplit ces boîtes, `room_camera.c` s'en écarte, et
+ * ni l'un ni l'autre n'inclut l'en-tête de l'autre.
+ */
+typedef struct room_blocker {
+    ns_aabb box;
+} room_blocker;
+
+typedef struct room_blockers {
+    const room_blocker *items;
+    uint32_t            count;
+} room_blockers;
+
 /*
  * État d'animation de la vue subjective, simulé au pas fixe et interpolé au
  * rendu. Groupé dans une structure parce qu'il DOIT être interpolé en entier :
@@ -123,8 +148,14 @@ void room_camera_init(room_camera *c, ns_v3 start, float yaw);
  * `bvh` peut être NULL (ou non chargé) : le mode joueur retombe alors sur un
  * déplacement libre sans gravité, ce qui garde le jeu jouable sur une salle sans
  * fichier .nsbvh plutôt que de le clouer au sol.
+ *
+ * `blockers` peut être NULL, et c'est le cas courant : une salle sans pièce
+ * mobile n'en a aucun. Ils sont résolus APRÈS le BVH, sur la position déjà
+ * corrigée — voir `room_camera.c` pour la règle de dégagement, qui n'est pas
+ * la naïve.
  */
-void room_camera_tick(room_camera *c, const ns_bvh *bvh, float dt);
+void room_camera_tick(room_camera *c, const ns_bvh *bvh,
+                      const room_blockers *blockers, float dt);
 
 /* Construit la caméra de rendu pour l'image courante, `alpha` étant la
  * fraction de pas écoulée depuis le dernier tick. */

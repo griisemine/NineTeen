@@ -8,6 +8,7 @@ add_executable(nineteen
     room_attract.c
     room_menu.c
     room_sound.c
+    room_door.c
 )
 
 target_link_libraries(nineteen PRIVATE nineteen::engine nineteen::games)

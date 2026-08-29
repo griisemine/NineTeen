@@ -111,6 +111,21 @@ static void sg_svf_set(sg_svf *s, float hz, float q)
     s->q = 1.0f / ((q > 0.5f) ? q : 0.5f);
 }
 
+/*
+ * Change la fréquence SANS toucher à l'état.
+ *
+ * `sg_svf_set` remet `lo` et `band` à zéro : c'est ce qu'on veut pour armer un
+ * résonateur avant de l'exciter, et c'est exactement ce qu'il ne faut pas faire
+ * quand la fréquence glisse d'une trame à l'autre — on réinitialiserait le
+ * filtre 48 000 fois par seconde, et il ne resterait qu'un souffle plat. Le
+ * remplissage d'un réservoir a besoin de ce glissement : c'est LUI qu'on
+ * reconnaît.
+ */
+static void sg_svf_tune(sg_svf *s, float hz)
+{
+    s->f = 2.0f * sinf(3.14159265358979f * hz / (float)SG_RATE);
+}
+
 static float sg_svf_band(sg_svf *s, float in)
 {
     const float high = in - s->lo - s->q * s->band;
@@ -586,6 +601,172 @@ static size_t sg_render_street(float *out, size_t cap)
 }
 
 /* ==========================================================================
+ * La chasse d'eau
+ * ==========================================================================
+ * Ce n'est PAS une nappe : elle ne boucle pas, elle a un début et une fin, et
+ * `room_sound.c` la déclenche de loin en loin depuis les cabines. Elle est donc
+ * rendue à part des trois ambiances, avec son propre tampon — dix secondes ne
+ * tiennent pas dans `SG_MAX_FRAMES`, qui est dimensionné pour des pas.
+ *
+ * Trois choses qui se suivent, et la troisième est celle qui compte
+ * -----------------------------------------------------------------
+ *   LA CHASSE      la vanne s'ouvre d'un coup, le réservoir se vide dans la
+ *                  cuvette. Bruit large, qui monte en deux dixièmes et décroît.
+ *                  C'est le plus fort, et c'est aussi le moins caractéristique :
+ *                  pris seul, il sonne comme n'importe quelle fuite d'eau.
+ *   L'ÉCOULEMENT   l'eau tourne dans la cuvette et s'engage dans le siphon.
+ *                  Plus grave, modulé, avec quelques glouglous — des résonances
+ *                  basses excitées brièvement, une bulle étant une cavité qui
+ *                  sonne puis se referme.
+ *   LE REMPLISSAGE le réservoir se remplit et la colonne d'air AU-DESSUS de
+ *                  l'eau raccourcit. Sa résonance monte donc pendant toute la
+ *                  durée du remplissage — de 300 à 1 400 Hz ici. C'est ce
+ *                  glissement, et lui seul, qui fait qu'on reconnaît une chasse
+ *                  d'eau les yeux fermés : un bruit filtré fixe donnerait un
+ *                  robinet ouvert, pas un réservoir qui se remplit.
+ *
+ * La fin n'est pas un fondu : le flotteur ferme la vanne, ce qui coupe le jet en
+ * une fraction de seconde et laisse un petit coup dans la tuyauterie. Un fondu
+ * de sortie sonnerait comme quelqu'un qui baisse le volume.
+ */
+/* En DIXIÈMES de seconde, et non en flottant : le tampon est un tableau
+ * statique, donc sa taille doit être une constante entière — un produit par un
+ * `float` en ferait un tableau de longueur variable replié, ce que le projet
+ * compile en avertissement. */
+#define SG_FLUSH_TENTHS  104
+#define SG_FLUSH_FRAMES  ((size_t)SG_RATE * SG_FLUSH_TENTHS / 10u)
+
+static size_t sg_render_flush(float *out, size_t cap)
+{
+    const size_t frames = SG_FLUSH_FRAMES;
+    if (frames > cap) tool_fatalf("tampon trop petit pour la chasse d'eau");
+
+    /* Les trois phases, en secondes. Elles SE CHEVAUCHENT, et c'est le point :
+     * le remplissage commence pendant que la cuvette s'écoule encore, parce que
+     * la vanne d'arrivée s'ouvre dès que le flotteur descend. Trois phases
+     * jointes bout à bout s'entendraient comme trois sons différents. */
+    const float rush_tau   = 1.25f;   /* décroissance de la vidange */
+    const float swirl_at   = 0.42f;
+    const float swirl_tau  = 2.30f;
+    const float fill_at    = 2.25f;
+    const float fill_end   = 9.85f;   /* le flotteur ferme ici */
+
+    sg_rng r; sg_seed(&r, 0x0EA0ull);
+
+    sg_pole rush_hp, rush_lp1, rush_lp2;
+    sg_pole_set(&rush_hp,   190.0f);
+    sg_pole_set(&rush_lp1, 5200.0f);
+    sg_pole_set(&rush_lp2, 5200.0f);
+
+    sg_pole jet_hp, jet_lp;
+    sg_pole_set(&jet_hp,  950.0f);
+    sg_pole_set(&jet_lp, 4600.0f);
+
+    sg_pole dc;
+    sg_pole_set(&dc, 24.0f);
+
+    /* La cuvette : une résonance large et basse, c'est un volume d'eau qui
+     * tourne, pas un tuyau. */
+    sg_svf bowl;  sg_svf_set(&bowl, 560.0f, 1.30f);
+    /* La colonne d'air du réservoir : étroite, puisqu'on doit ENTENDRE sa
+     * hauteur monter. Trop large, le glissement se perd dans le souffle. */
+    sg_svf column; sg_svf_set(&column, 300.0f, 5.60f);
+
+    /* Les glouglous du siphon. Placés à la main : un intervalle régulier
+     * s'entendrait comme un moteur. Chacun est une cavité qui sonne puis se
+     * referme, donc un résonateur excité une fois. */
+    const float glou_at[5] = { 1.55f, 2.10f, 2.72f, 3.45f, 4.60f };
+    const float glou_hz[5] = { 118.0f, 96.0f, 143.0f, 88.0f, 126.0f };
+    const float glou_amp[5]= { 0.55f, 0.42f, 0.38f, 0.30f, 0.20f };
+    sg_svf glou[5];
+    for (int k = 0; k < 5; ++k) sg_svf_set(&glou[k], glou_hz[k], 7.5f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        /* ---- 1. la chasse ------------------------------------------------ */
+        float rush = sg_lowpass(&rush_lp2, sg_lowpass(&rush_lp1, sg_highpass(&rush_hp, n)));
+        const float rush_env = sg_attack(t, 0.16f) * sg_decay(t > 0.16f ? t - 0.16f : 0.0f, rush_tau);
+
+        /* ---- 2. l'écoulement --------------------------------------------- */
+        float swirl = sg_svf_band(&bowl, n);
+        float swirl_env = 0.0f;
+        if (t > swirl_at) {
+            const float d = t - swirl_at;
+            /* La modulation lente est le tournoiement. Elle ne descend pas à
+             * zéro : l'eau ne s'arrête pas entre deux tours. */
+            const float wobble = 0.80f + 0.20f * sinf(6.28318530717959f * 2.7f * d)
+                                       + 0.08f * sinf(6.28318530717959f * 1.1f * d);
+            swirl_env = sg_attack(d, 0.30f) * sg_decay(d, swirl_tau) * wobble;
+        }
+
+        float glous = 0.0f;
+        for (int k = 0; k < 5; ++k) {
+            const float d = t - glou_at[k];
+            if (d < 0.0f || d > 0.55f) { (void)sg_svf_band(&glou[k], 0.0f); continue; }
+            /* Excitée les vingt premières millisecondes, puis laissée sonner. */
+            const float drive = (d < 0.020f) ? n : 0.0f;
+            glous += glou_amp[k] * sg_svf_band(&glou[k], drive) * sg_decay(d, 0.13f);
+        }
+
+        /* ---- 3. le remplissage ------------------------------------------- */
+        float fill = 0.0f;
+        if (t > fill_at) {
+            const float d = t - fill_at;
+            const float span = fill_end - fill_at;
+            float u = d / span;
+            if (u > 1.0f) u = 1.0f;
+
+            /*
+             * La montée n'est pas linéaire : le niveau monte à débit constant,
+             * mais la fréquence de la colonne d'air varie comme l'inverse de sa
+             * hauteur. Elle traîne donc au début et s'envole à la fin, ce qui
+             * est précisément le geste qu'on reconnaît.
+             */
+            const float hz = 300.0f + 1100.0f * (u * u * (0.35f + 0.65f * u));
+            sg_svf_tune(&column, hz);
+
+            const float jet = sg_lowpass(&jet_lp, sg_highpass(&jet_hp, n));
+            const float body = sg_svf_band(&column, n);
+
+            /* Le jet faiblit à mesure que la contre-pression monte ; la colonne,
+             * elle, se renforce parce qu'elle résonne de mieux en mieux.
+             *
+             * Le jet est VOLONTAIREMENT discret. Réglé à 0,30 il couvrait la
+             * colonne : mesuré, le remplissage perdait en brillance au lieu d'en
+             * gagner (13 600 puis 7 800 passages par zéro et par seconde), parce
+             * qu'un souffle large à 4,6 kHz écrase toujours une résonance à
+             * 1 kHz. Le contrôle en fin de programme est ce qui l'a montré — et
+             * c'est exactement ce qu'un réservoir donne à entendre : une note qui
+             * monte, pas un sifflement. */
+            float env = sg_attack(d, 0.40f);
+            if (t > fill_end) {
+                /* Le flotteur : 90 ms pour couper, pas un fondu. */
+                const float c = (t - fill_end) / 0.090f;
+                env *= (c >= 1.0f) ? 0.0f : (1.0f - c);
+            }
+            fill = env * (0.13f * jet * (1.0f - 0.45f * u) + 0.72f * body * (0.55f + 0.45f * u));
+        }
+
+        float s = 0.95f * rush * rush_env
+                + 0.85f * swirl * swirl_env
+                + glous
+                + fill;
+
+        /* Le coup de bélier : la vanne se ferme, la colonne d'eau s'arrête. */
+        const float d = t - fill_end - 0.090f;
+        if (d > 0.0f && d < 0.30f) {
+            s += 0.22f * sinf(6.28318530717959f * 78.0f * d) * sg_decay(d, 0.045f);
+        }
+
+        out[i] = sg_highpass(&dc, s);
+    }
+
+    return frames;
+}
+
+/* ==========================================================================
  * Programme
  * ========================================================================== */
 
@@ -716,6 +897,71 @@ int main(int argc, char **argv)
                    seam, neighbour, (neighbour > 0.0) ? seam / neighbour : 0.0);
         if (neighbour > 0.0 && seam > neighbour * 12.0) {
             tool_fatalf("« %s » claque au raccord", beds[i].file);
+        }
+    }
+
+    /* ---- la chasse d'eau ---------------------------------------------------
+     * Hors de la table des nappes : elle ne boucle pas, elle dure dix secondes
+     * — donc elle ne tient pas dans `SG_MAX_FRAMES` — et il n'y a pas de couture
+     * à mesurer. Ce qu'on mesure à la place, c'est la MONTÉE du remplissage :
+     * c'est la seule composante qui distingue une chasse d'eau d'un robinet, et
+     * l'affirmer sans la vérifier serait exactement le genre de promesse que ce
+     * dépôt s'interdit. */
+    {
+        static float flush[SG_FLUSH_FRAMES];
+        const size_t frames = sg_render_flush(flush, SG_FLUSH_FRAMES);
+        const float p = peak_of(flush, frames);
+        if (p < 1e-6f) tool_fatalf("la chasse d'eau est silencieuse");
+        const float scale = 0.88f / p;
+
+        snprintf(path, sizeof path, "%s/chasse_eau.wav", out_dir);
+        sg_write_wav(path, flush, frames, scale);
+
+        /*
+         * Le rapport de PUISSANCE entre une bande haute et une bande basse, sur
+         * deux fenêtres d'une seconde prises dans le remplissage : la première
+         * après son attaque, la seconde juste avant la fermeture du flotteur. Si
+         * la colonne d'air raccourcit, l'énergie passe de l'une à l'autre.
+         *
+         * Pourquoi pas les passages par zéro, qui étaient là d'abord
+         * ------------------------------------------------------------
+         * Parce qu'ils ne pèsent RIEN par l'amplitude : un filet de souffle à
+         * 4 kHz posé sur une résonance à 1 kHz ajoute autant de croisements que
+         * s'il portait toute l'énergie. Mesurés ainsi, ces dix secondes
+         * paraissaient s'assombrir (6 683 puis 5 189 par seconde) alors que le
+         * centroïde spectral, lui, montait bel et bien de 856 à 1 513 Hz. Deux
+         * bandes et leur puissance disent la même chose que le centroïde, pour
+         * deux filtres déjà écrits plus haut.
+         *
+         * Les fenêtres sont placées APRÈS l'extinction de la vidange — quatre
+         * secondes et demie, soit trois constantes de temps et demie de
+         * `rush_tau`. Plus tôt, on mesurerait le bruit large de la chasse
+         * elle-même, qui est brillant et sans rapport avec ce qu'on vérifie.
+         */
+        const size_t w = (size_t)SG_RATE;
+        const size_t starts[2] = { (size_t)(4.5f * (float)SG_RATE),
+                                   (size_t)(8.8f * (float)SG_RATE) };
+        double ratio[2] = { 0.0, 0.0 };
+        for (int k = 0; k < 2; ++k) {
+            sg_svf lo, hi;
+            sg_svf_set(&lo,  380.0f, 3.0f);
+            sg_svf_set(&hi, 1150.0f, 3.0f);
+            double elo = 0.0, ehi = 0.0;
+            for (size_t j = starts[k]; j < starts[k] + w && j < frames; ++j) {
+                const double a = sg_svf_band(&lo, flush[j]);
+                const double b = sg_svf_band(&hi, flush[j]);
+                elo += a * a; ehi += b * b;
+            }
+            ratio[k] = (elo > 1e-12) ? ehi / elo : 0.0;
+        }
+        tool_infof("chasse « %-15s » : %.1f s, remplissage 1150/380 Hz "
+                   "%.3f -> %.3f (x%.1f)",
+                   "chasse_eau.wav", (double)frames / (double)SG_RATE,
+                   ratio[0], ratio[1],
+                   (ratio[0] > 0.0) ? ratio[1] / ratio[0] : 0.0);
+        if (ratio[0] <= 0.0 || ratio[1] < ratio[0] * 2.0) {
+            tool_fatalf("le remplissage ne monte pas : la chasse ne s'entendra "
+                        "pas comme une chasse");
         }
     }
 

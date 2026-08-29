@@ -340,7 +340,7 @@ static void run_camera(const ns_bvh *b, room_camera *c, ns_v3 start, float yaw,
     c->grounded = true;
     for (int i = 0; i < ticks; ++i) {
         c->input_forward = 1.0f;
-        room_camera_tick(c, b, 1.0f / 120.0f);
+        room_camera_tick(c, b, NULL, 1.0f / 120.0f);
     }
 }
 
@@ -396,7 +396,7 @@ static void test_camera(const ns_bvh *b)
         c.crouch_held = true;
         for (int i = 0; i < 240; ++i) {
             c.input_forward = 0.0f;
-            room_camera_tick(&c, b, 1.0f / 120.0f);
+            room_camera_tick(&c, b, NULL, 1.0f / 120.0f);
         }
         CHECK(c.position.y < standing - 0.3f,
               "s'accroupir devrait baisser l'œil (%.3f -> %.3f)",
@@ -426,7 +426,7 @@ static void test_camera(const ns_bvh *b)
         c.speed_walk = c.speed_run = 3.0f;
         for (int i = 0; i < 600; ++i) {
             c.input_forward = 1.0f;
-            room_camera_tick(&c, b, 1.0f / 120.0f);
+            room_camera_tick(&c, b, NULL, 1.0f / 120.0f);
         }
         CHECK(c.position.x > 3.0f,
               "le vol libre devrait traverser le mur (x = %.3f)", (double)c.position.x);

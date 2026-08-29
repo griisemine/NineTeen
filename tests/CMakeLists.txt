@@ -29,6 +29,23 @@ nineteen_set_warnings(ns_test_bvh)
 nineteen_apply_sanitizers(ns_test_bvh)
 add_test(NAME bvh COMMAND ns_test_bvh)
 
+# La porte coulissante des toilettes : sa machine à états, et le fait qu'une
+# porte fermée ARRÊTE le joueur.
+#
+# Ni GPU, ni fenêtre, ni fichier : `room_door.c` est du calcul pur, et il l'est
+# précisément pour pouvoir être vérifié ici. `room_camera.c` vient avec, comme
+# pour `ns_test_bvh`, parce que le dégagement de la capsule contre un obstacle
+# hors BVH vit là-bas et qu'on le mesure par son vrai chemin plutôt qu'en le
+# réécrivant dans le test.
+add_executable(ns_test_door test_door.c
+    "${CMAKE_SOURCE_DIR}/room/room_door.c"
+    "${CMAKE_SOURCE_DIR}/room/room_camera.c")
+target_include_directories(ns_test_door PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_door PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_door)
+nineteen_apply_sanitizers(ns_test_door)
+add_test(NAME porte COMMAND ns_test_door)
+
 # Le classement local et le journal de partie scellé.
 #
 # Le contrôle qui justifie ce test à lui seul : le format canonique et le sceau
@@ -103,6 +120,7 @@ add_test(NAME peau COMMAND ns_test_skin "${CMAKE_BINARY_DIR}/assets")
 # réécriture, ce qui est le contraire de ce qu'on cherche.
 add_executable(ns_test_audio test_audio.c
     "${CMAKE_SOURCE_DIR}/room/room_sound.c"
+    "${CMAKE_SOURCE_DIR}/room/room_door.c"
     "${CMAKE_SOURCE_DIR}/room/room_camera.c")
 target_include_directories(ns_test_audio PRIVATE "${CMAKE_SOURCE_DIR}/room")
 target_link_libraries(ns_test_audio PRIVATE nineteen::engine)
@@ -323,6 +341,7 @@ set_tests_properties(render PROPERTIES
 add_executable(ns_test_menu test_menu.c
     "${CMAKE_SOURCE_DIR}/room/room_menu.c"
     "${CMAKE_SOURCE_DIR}/room/room_sound.c"
+    "${CMAKE_SOURCE_DIR}/room/room_door.c"
     "${CMAKE_SOURCE_DIR}/room/room_camera.c")
 target_include_directories(ns_test_menu PRIVATE "${CMAKE_SOURCE_DIR}/room")
 target_link_libraries(ns_test_menu PRIVATE nineteen::engine)

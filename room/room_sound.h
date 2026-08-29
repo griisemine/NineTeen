@@ -53,8 +53,14 @@
 #include "ns_audio.h"
 #include "ns_scene.h"
 #include "room_camera.h"
+#include "room_door.h"
 
 #include <stdbool.h>
+
+/* Les cabines dont peut partir une chasse d'eau. Deux dans la salle
+ * reconstruite (`cabine_toilettes_1` et `_2`), et la table en accepte quatre —
+ * un bloc sanitaire s'agrandit plus souvent qu'il ne rétrécit. */
+#define ROOM_MAX_STALLS 4
 
 /* Quatre par matériau. Le motif audible commence à deux répétitions, pas à
  * quatre : avec l'interdiction de rejouer la variante précédente et l'écart de
@@ -101,6 +107,27 @@ typedef struct room_sound {
     int clip_tone, clip_fan, clip_street;
     int clip_cabinet[3];
     int clip_door_open, clip_door_close;
+    int clip_flush;
+
+    /*
+     * LES CHASSES D'EAU.
+     *
+     * Ponctuelles, jamais en boucle. Une salle où la chasse tire toutes les dix
+     * secondes est une salle hantée : ce qu'on cherche, c'est le bruit qu'on
+     * entend une fois en traversant le hall et qui dit qu'il y a quelqu'un
+     * derrière la cloison. L'intervalle est donc long et TIRÉ AU SORT entre deux
+     * bornes — un intervalle fixe se remarquerait au troisième passage.
+     *
+     * Le compte à rebours court même quand personne n'écoute, et c'est voulu :
+     * une chasse ne doit pas se déclencher à l'instant précis où le joueur entre
+     * dans les toilettes, ce qui la ferait passer pour une réaction à sa
+     * présence.
+     */
+    ns_v3    stall_position[ROOM_MAX_STALLS];
+    uint32_t stall_count;
+    float    flush_countdown;      /* secondes avant la prochaine */
+    uint32_t flush_last_stall;     /* jamais deux fois d'affilée la même */
+    float    flush_min, flush_max; /* bornes de l'intervalle, en secondes */
 
     /* Voix persistantes. */
     int voice_ambience;
@@ -147,9 +174,16 @@ typedef struct room_sound {
  * une machine sans carte son doit pouvoir jouer. */
 void room_sound_init(room_sound *s, const ns_scene *scene);
 
-/* À appeler une fois par image, après la caméra. */
+/*
+ * À appeler une fois par image, après la caméra ET après les portes.
+ *
+ * `doors` peut être NULL : une salle sans porte animée — celle de 2020 — sonne
+ * comme avant. C'est `room_sound` qui joue les deux extraits de porte plutôt que
+ * `room_door`, parce que c'est lui qui sait ce qui est chargé et où est
+ * l'auditeur ; la porte, elle, ne sait que si elle vient de partir.
+ */
 void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam,
-                       float dt);
+                       room_doors *doors, float dt);
 
 /* Le geste d'insertion du jeton, déclenché par la machine à états des bras. */
 void room_sound_coin(room_sound *s, ns_v3 position);
