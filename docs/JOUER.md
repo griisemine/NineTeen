@@ -5,32 +5,37 @@ web et au classement en ligne ; ils sont facultatifs et le jeu ne les cherche pa
 
 ## Ce n'est pas une promesse, c'est vérifiable
 
-Le binaire **ne contient pas le code nécessaire pour ouvrir une connexion** :
+**Cette section disait le contraire jusqu'en 17.0.0, et elle avait tort.** Elle annonçait un
+binaire « qui ne contient pas le code nécessaire pour ouvrir une connexion », un `engine/net/`
+« répertoire vide » et un `NS_CFG_SERVER_URL` que « rien ne lit ». Les trois étaient vrais quand
+ils ont été écrits. Aucun ne l'est plus, et le document se contredisait lui-même quarante lignes
+plus loin, où il explique comment activer le classement en ligne. Voici la mesure d'aujourd'hui,
+refaite sur le binaire livré :
 
 ```sh
-$ ldd build/linux-x64/bin/nineteen
-        linux-vdso.so.1
-        libm.so.6
-        libc.so.6
-        /lib64/ld-linux-x86-64.so.2
-
-$ nm -D --undefined-only build/linux-x64/bin/nineteen \
-    | grep -iE 'socket|connect|getaddrinfo|recv|send|ssl|curl|tls'
-$ echo $?
-1        # aucun résultat
+$ nm -u build/macos-universal/bin/nineteen | grep -icE 'socket|connect|getaddrinfo|recv|send|ssl|tls'
+12
+$ wc -l engine/net/*.c | tail -1
+    3331 total
 ```
 
-260 symboles importés en tout, tous de la libc et de libm. **Zéro symbole `SDL_`** : SDL3 est lié
-statiquement. Les shaders sont compilés au build et **embarqués dans le binaire** — il n'y
+Ce que le jeu fait vraiment du réseau, en une phrase : **il n'ouvre rien tant qu'on ne lui a pas
+donné d'URL.** Sans `--server=` ni `network.serverUrl`, `ns_online` ne démarre pas son fil, et
+`ns_realtime` hérite du même verrou — le jeu le dit au démarrage, en clair :
+
+```
+réseau : aucun serveur configuré, le classement restera local
+temps réel : désactivé (défaut) — ni présence ni duel
+```
+
+C'est un défaut, pas une impossibilité, et c'est la formulation honnête. `--offline` en fait un
+verrou : voir la section du même nom. La différence avec 2020 tient : cette version-là ne pouvait
+pas atteindre sa propre fenêtre hors ligne — voir la fin de ce document.
+
+Ce qui reste exact du paragraphe d'origine : **zéro symbole `SDL_`** importé, SDL3 est lié
+statiquement, et les shaders sont compilés au build puis **embarqués dans le binaire** — il n'y
 a même pas de fichier à retrouver, encore moins à télécharger. En SPIR-V pour Vulkan ; en MSL
 pour Metal, traduit au build par `tools/spv2msl`.
-
-`engine/net/` est un répertoire vide. `NS_CFG_SERVER_URL` existe dans `engine/core/ns_config.h`
-comme clé réservée et **rien ne la lit** : même en écrivant `network.serverUrl = …` à la main dans
-`settings.cfg`, personne ne viendrait la chercher.
-
-C'est l'inverse de la version de 2020, qui hors ligne ne pouvait pas atteindre sa propre fenêtre —
-voir la fin de ce document.
 
 ## Prérequis
 
@@ -85,10 +90,21 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `Maj` gauche | courir |
 | `Espace` | sauter |
 | `Ctrl` gauche ou `C` | s'accroupir |
-| `Échap` | le menu de réglages — qualité, échelle de rendu, poussière, luminosité, les quatre volumes, la souris |
+| `E` | devant une borne : insérer un jeton et jouer |
+| `Échap` | le menu — réglages, **commandes**, **crédits**, quitter |
 | `F2` | capture d'écran dans le répertoire utilisateur |
 | `F5` | basculer caméra joueur / caméra libre |
 | `F6` | caméra orbite |
+| `F7` / `F8` | palier de qualité / échelle de rendu |
+| `F10` | première ou troisième personne |
+
+**Il n'y a pas de manette.** Ni clavier virtuel, ni pad : `SDL_Init` ne demande pas
+`SDL_INIT_GAMEPAD` et aucun événement `SDL_EVENT_GAMEPAD_*` n'est lu. Une manette branchée sera
+vue par le système et ignorée par le jeu. Ce que ça coûterait de la brancher est chiffré dans
+`docs/CHANGELOG-V17.md`.
+
+Ces touches sont aussi **dans le jeu**, depuis 17.0.0 : `Échap` puis `COMMANDES`. Un bandeau
+les rappelle pendant les quatorze premières secondes — le temps de traverser le sas.
 
 Les touches de déplacement sont lues par **position physique** et non par lettre : le bloc en haut
 à gauche du clavier avance, quelle que soit la disposition. C'est le même bloc de touches qui
@@ -98,9 +114,13 @@ En caméra libre (`F5`), `Espace` et `Ctrl` montent et descendent au lieu de sau
 s'accroupir : ce mode n'a ni gravité ni collision, c'est un outil de cadrage.
 
 **Jouer sur une borne** : approchez-vous, `E` insère un jeton et la partie démarre **dans la
-dalle** — on reste en 3D, la tête reste libre, on voit l'écran à travers son verre bombé. Deux
-jeux sont portés : **Flappy Bird** (`Espace`) et **Snake** (les flèches, maintenues : le serpent
-tourne tant qu'on tient). `Échap` sort de la partie, pas du jeu.
+dalle** — on reste en 3D, la tête reste libre, on voit l'écran à travers son verre bombé. **Les
+huit jeux sont portés** : Flappy (`Espace`), Snake, Tetris, Démineur, Asteroid, Pacman, Piano et
+le shooter, tous au manche — les flèches — et au bouton — `Espace`. Snake se joue aux flèches
+**maintenues** : le serpent tourne tant qu'on tient. `Échap` sort de la partie, pas du jeu.
+
+*(Cette ligne annonçait « deux jeux sont portés » jusqu'en 17.0.0, alors que les six autres sont
+décrits juste en dessous et que `tests/test_replay.c` les rejoue tous les huit.)*
 
 Les bornes Snake « hard » ne se jouent pas comme les autres, et c'est la règle de 2020 : **manger
 coûte** cinq fois la valeur du fruit, et le score vient de ceux qu'on laisse **pourrir** sur le
@@ -200,14 +220,22 @@ Le jeu se parcourt, se joue, et se règle. Ce qui manque :
 
 - ~~les mini-jeux~~ : **les huit sont portés**, et les dix-neuf bornes de la salle jouent
   toutes ;
-- **le transport réseau**, délibérément : voir la section précédente ;
-- **du mobilier importé au-delà de trois modèles.** La mécanique existe et marche ; ce qui la
-  limite est expliqué dans `assets/cc0/LICENSES.md`, et c'est une limite de ce que je peux
-  vérifier, pas du moteur.
+- ~~le transport réseau~~ : **écrit** — classement en ligne, présence, duels. Il reste éteint
+  par défaut et ne parle pas TLS ;
+- ~~du mobilier importé au-delà de trois modèles~~ : **douze modèles**, listés dans
+  `assets/cc0/LICENSES.md` ;
+- **la manette.** Rien n'est branché : voir le tableau des touches plus haut ;
+- **les licences des images de 2020.** Huit affiches accrochées dans la salle appartiennent à
+  des tiers — Nintendo, Bandai Namco, Atari, Netflix, Riot Games. Elles sont nommées une par une
+  dans `assets/cc0/LICENSES.md`, section « Les images de 2020 ». **Le jeu ne peut pas être vendu
+  en l'état** ;
+- **la signature du paquet.** Ni Developer ID ni Authenticode : macOS et Windows avertiront au
+  premier lancement.
 
-Cette liste a été fausse : elle annonçait encore « aucun son », « aucune interaction » et « la
-collision n'est pas branchée » longtemps après que les trois aient été livrés.
-`docs/CHANGELOG-V15.md` dit précisément ce qui tourne.
+Cette liste a été fausse deux fois plutôt qu'une : elle annonçait encore « aucun son », « aucune
+interaction » et « la collision n'est pas branchée » longtemps après que les trois aient été
+livrés, puis elle a annoncé un transport réseau absent pendant deux versions où il tournait.
+`docs/CHANGELOG-V17.md` dit ce qui tient aujourd'hui, et ce qui ne tient pas.
 
 ## Pour mémoire : la même chose en 2020
 

@@ -3,6 +3,7 @@
 
 #include "games.h"
 #include "ns_online.h"
+#include "room_credits.h"
 
 #include "ns_core.h"
 #include "ns_realtime.h"
@@ -148,12 +149,35 @@ static void draw_settings(ns_sprite *s, const room_hud_state *st)
     centred(s, ROOM_HUD_W * 0.5f, y - 24.0f, 1.6f, hint, "F7 QUALITE   F8 ECHELLE");
 }
 
+/*
+ * L'aide d'arrivée, et les deux cas où elle se tait.
+ *
+ * En PARTIE : l'écran de la borne occupe le champ, et les commandes de la salle
+ * n'y servent plus à rien. Devant une BORNE : l'invite « E — JOUER À … » occupe
+ * déjà le bas de l'écran, et deux panneaux superposés ne se lisent ni l'un ni
+ * l'autre. Dans les deux cas le joueur a trouvé quoi faire — ce bandeau a donc
+ * fini son travail avant la fin de son minuteur.
+ *
+ * Le fondu porte sur la dernière seconde et demie. Il est plus long que celui
+ * du bandeau de réglages (une demi-seconde) parce qu'on ne le regarde pas : il
+ * doit s'effacer sans qu'on remarque le moment où il part.
+ */
+static void draw_intro(ns_sprite *s, const room_hud_state *st)
+{
+    if (st->intro_timer <= 0.0f) return;
+    if (st->playing || (st->near && st->can_interact)) return;
+
+    const float a = (st->intro_timer < 1.5f) ? (st->intro_timer / 1.5f) : 1.0f;
+    room_credits_draw_intro(s, a);
+}
+
 void room_hud_draw(ns_sprite *s, const room_hud_state *st)
 {
     if (!s || !st) return;
     draw_prompt(s, st);
     draw_game_overlay(s, st);
     draw_settings(s, st);
+    draw_intro(s, st);
 }
 
 /* ========================================================================== */

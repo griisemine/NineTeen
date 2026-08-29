@@ -357,8 +357,15 @@ set_tests_properties(render PROPERTIES
 # `ns_test_bvh` compile déjà `room_camera.c` de la même façon : ce sont des
 # fichiers de jeu, et les descendre dans `engine/` pour arranger un build serait
 # déplacer du code pour la mauvaise raison.
+#
+# `room_credits.c` y entre pour une raison qui n'est pas de commodité : il porte
+# l'attribution de CesiumMan, qui est une OBLIGATION de licence (CC BY 4.0) et
+# non une politesse. Ce test-ci est ce qui rend cette obligation vérifiable :
+# effacer la ligne fait échouer `menu`, donc le build. Une mention légale que
+# rien ne défend finit par disparaître dans un nettoyage.
 add_executable(ns_test_menu test_menu.c
     "${CMAKE_SOURCE_DIR}/room/room_menu.c"
+    "${CMAKE_SOURCE_DIR}/room/room_credits.c"
     "${CMAKE_SOURCE_DIR}/room/room_sound.c"
     "${CMAKE_SOURCE_DIR}/room/room_door.c"
     "${CMAKE_SOURCE_DIR}/room/room_camera.c")

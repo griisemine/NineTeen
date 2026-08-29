@@ -15,6 +15,7 @@
 #include "ns_config.h"
 #include "ns_core.h"
 #include "ns_render.h"
+#include "room_credits.h"
 #include "room_menu.h"
 #include "room_sound.h"
 
@@ -344,6 +345,111 @@ static void test_persist(const char *dir)
     (void)dir;
 }
 
+/*
+ * L'ATTRIBUTION DE CESIUMMAN — la seule vérification de ce fichier qui ne porte
+ * pas sur le confort, mais sur le DROIT de distribuer le jeu.
+ *
+ * Le personnage est sous CC BY 4.0 : l'emploi est libre, y compris commercial,
+ * à la condition que l'auteur soit crédité. Cette condition-là ne se documente
+ * pas, elle se tient — et une mention légale que rien ne défend finit par
+ * disparaître dans un nettoyage, ou par survivre à un fichier qu'on renomme
+ * sans que personne s'en aperçoive.
+ *
+ * On vérifie donc les quatre choses que la licence demande nommément : l'ŒUVRE
+ * (CesiumMan), l'AUTEUR (Cesium), la LICENCE (CC BY 4.0) et un LIEN vers elle.
+ * Et on vérifie qu'on y arrive : une page de crédits qu'aucune ligne du menu
+ * n'ouvre n'est pas un écran de crédits.
+ */
+static bool credits_contain(const char *needle)
+{
+    int n = 0;
+    const room_credit_line *l = room_credits_lines(&n);
+    for (int i = 0; i < n; ++i) {
+        if (l[i].what && SDL_strstr(l[i].what, needle)) return true;
+        if (l[i].who  && SDL_strstr(l[i].who,  needle)) return true;
+    }
+    return false;
+}
+
+static void test_credits(void)
+{
+    int n = 0;
+    room_credits_lines(&n);
+    CHECK(n > 0, "l'écran de crédits a des lignes (%d)", n);
+
+    CHECK(credits_contain("CESIUMMAN"), "les crédits nomment l'œuvre : CesiumMan");
+    CHECK(credits_contain("CESIUM"),    "…et son auteur : Cesium");
+    CHECK(credits_contain("CC BY 4.0"), "…et sa licence : CC BY 4.0");
+    CHECK(credits_contain("CREATIVECOMMONS.ORG"), "…et le lien vers cette licence");
+
+    /* Les bibliothèques dont la licence exige, elle aussi, que la mention
+     * accompagne le binaire distribué. */
+    CHECK(credits_contain("SDL3"),  "les crédits nomment SDL3");
+    CHECK(credits_contain("CGLTF"), "…cgltf");
+    CHECK(credits_contain("JSMN"),  "…jsmn");
+    CHECK(credits_contain("STB"),   "…stb");
+
+    /* Et la page s'ATTEINT. Un écran qu'on ne peut pas ouvrir n'attribue rien. */
+    room_menu m; memset(&m, 0, sizeof m);
+    ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
+    float sens = 1.0f;
+    const room_menu_ctx ctx = { &rs, &sens, NULL };
+
+    const int row = room_menu_row("CREDITS");
+    CHECK(row >= 0, "la ligne « CREDITS » existe dans le menu");
+    room_menu_open(&m);
+    CHECK(m.page == ROOM_MENU_PAGE_SETTINGS, "le menu s'ouvre sur les réglages");
+    go_to(&m, &ctx, row);
+    room_menu_input(&m, &ctx, ROOM_MENU_ACCEPT);
+    CHECK(m.page == ROOM_MENU_PAGE_CREDITS, "…et Entrée y ouvre les crédits");
+    CHECK(!m.close_request && !m.quit_request,
+          "ouvrir les crédits ne ferme pas le menu et ne quitte pas le jeu");
+
+    /* On en revient, et on revient aux RÉGLAGES — pas au bureau. */
+    room_menu_input(&m, &ctx, ROOM_MENU_CANCEL);
+    CHECK(m.page == ROOM_MENU_PAGE_SETTINGS, "Échap remonte aux réglages");
+    CHECK(!m.close_request, "…sans fermer le menu");
+
+    /* Les flèches sur une page d'information n'y déplacent pas un curseur
+     * invisible : elles ramènent, comme tout le reste. */
+    room_menu_input(&m, &ctx, ROOM_MENU_ACCEPT);
+    CHECK(m.page == ROOM_MENU_PAGE_CREDITS, "on rouvre les crédits");
+    const int cursor = m.cursor;
+    room_menu_input(&m, &ctx, ROOM_MENU_DOWN);
+    CHECK(m.page == ROOM_MENU_PAGE_SETTINGS && m.cursor == cursor,
+          "une flèche ramène aux réglages sans bouger le curseur (%d, attendu %d)",
+          m.cursor, cursor);
+
+    /* La page des commandes, par le même chemin. */
+    const int crow = room_menu_row("COMMANDES");
+    CHECK(crow >= 0, "la ligne « COMMANDES » existe");
+    go_to(&m, &ctx, crow);
+    room_menu_input(&m, &ctx, ROOM_MENU_ACCEPT);
+    CHECK(m.page == ROOM_MENU_PAGE_CONTROLS, "…et elle ouvre la page des commandes");
+
+    int cn = 0;
+    room_controls_lines(&cn);
+    CHECK(cn > 0, "la page des commandes a des lignes (%d)", cn);
+
+    /*
+     * Et elle NE MENT PAS. Il n'y a pas une ligne de code manette dans le
+     * dépôt — `SDL_Init` ne demande pas `SDL_INIT_GAMEPAD` — donc la page ne
+     * doit pas en promettre une. Un joueur à qui l'on annonce une commande qui
+     * n'existe pas croit son matériel cassé, ce qui est pire que le silence.
+     */
+    int i;
+    bool promises_pad = false;
+    const room_credit_line *cl = room_controls_lines(&i);
+    for (i = 0; i < cn; ++i) {
+        if ((cl[i].what && SDL_strstr(cl[i].what, "MANETTE"))
+         || (cl[i].who  && SDL_strstr(cl[i].who,  "MANETTE"))) promises_pad = true;
+    }
+    CHECK(!promises_pad, "la page des commandes ne promet pas de manette : il n'y en a pas");
+
+    room_menu_close(&m);
+    CHECK(m.page == ROOM_MENU_PAGE_SETTINGS, "fermer le menu repose la page des réglages");
+}
+
 int main(int argc, char **argv)
 {
     ns_paths_init(argv[0]);
@@ -352,6 +458,7 @@ int main(int argc, char **argv)
     test_bounds();
     test_buttons();
     test_room_levels();
+    test_credits();
     test_persist(argc > 1 ? argv[1] : ".");
     ns_paths_shutdown();
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

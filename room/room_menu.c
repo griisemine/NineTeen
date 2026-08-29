@@ -5,6 +5,7 @@
 #include "ns_core.h"
 #include "ns_math.h"
 #include "ns_realtime.h"
+#include "room_credits.h"
 #include "room_hud.h"
 #include "room_sound.h"
 
@@ -36,6 +37,23 @@ typedef enum menu_item {
     MI_VOL_TONE,
     MI_MOUSE,
     MI_REALTIME,
+    /*
+     * Les deux pages d'information, JUSTE AVANT les deux boutons.
+     *
+     * Cette place n'est pas indifférente. « CREDITS » est l'endroit où se tient
+     * l'attribution de CesiumMan, qui est une obligation de licence et non une
+     * courtoisie (voir `room_credits.h`) : la mettre en fin de liste la rend
+     * introuvable, la mettre en tête ferait passer les crédits avant les
+     * réglages, ce qu'aucun joueur n'attend. Juste au-dessus de « REPRENDRE »,
+     * elle est la dernière chose qu'on lit en parcourant le menu — donc vue.
+     *
+     * Elles restent AU-DESSUS des deux boutons pour une raison plus terre à
+     * terre : `tests/test_menu.c` vise « REPRENDRE » et « QUITTER » par
+     * `n - 2` et `n - 1`. Insérer ici ne déplace pas ce que ce test croit
+     * savoir ; insérer après le déplacerait en silence.
+     */
+    MI_CONTROLS,
+    MI_CREDITS,
     MI_RESUME,
     MI_QUIT,
     MI_COUNT
@@ -54,6 +72,8 @@ static const char *const g_label[MI_COUNT] = {
     "FOND DE SALLE",
     "SOURIS",
     "TEMPS REEL",
+    "COMMANDES",
+    "CREDITS",
     "REPRENDRE",
     "QUITTER LE JEU",
 };
@@ -215,7 +235,18 @@ static void item_value(const room_menu_ctx *ctx, int i, char *out, size_t n,
     }
 }
 
-static bool item_is_button(int i) { return i == MI_RESUME || i == MI_QUIT; }
+/*
+ * Une ligne qui AGIT, par opposition à une ligne qui se règle.
+ *
+ * Les deux pages d'information en sont : elles n'ont pas de valeur, les flèches
+ * n'y font donc rien et aucun chevron ne s'affiche. Les oublier ici les aurait
+ * dessinées avec un « < » et un « > » qui ne mènent nulle part, ce qui est la
+ * façon la plus sûre de faire douter d'un menu.
+ */
+static bool item_is_button(int i)
+{
+    return i == MI_RESUME || i == MI_QUIT || i == MI_CONTROLS || i == MI_CREDITS;
+}
 
 /* Déplace l'entrée `i` d'un cran. Renvoie true si le rendu doit être réappliqué. */
 static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
@@ -291,17 +322,45 @@ void room_menu_open(room_menu *m)
 {
     m->open = true;
     m->time = 0.0f;
+    /* On rouvre TOUJOURS sur les réglages. Rouvrir sur la page où l'on était
+     * parti demanderait au joueur de se souvenir de ce qu'il a fait la fois
+     * d'avant pour comprendre ce qu'il voit. */
+    m->page = ROOM_MENU_PAGE_SETTINGS;
     m->render_dirty = m->close_request = m->quit_request = false;
     if (m->cursor < 0 || m->cursor >= MI_COUNT) m->cursor = 0;
 }
 
-void room_menu_close(room_menu *m) { m->open = false; m->close_request = false; }
+void room_menu_close(room_menu *m)
+{
+    m->open = false;
+    m->page = ROOM_MENU_PAGE_SETTINGS;
+    m->close_request = false;
+}
 
 void room_menu_update(room_menu *m, float dt) { if (m->open) m->time += dt; }
 
 void room_menu_input(room_menu *m, const room_menu_ctx *ctx, room_menu_action a)
 {
     if (!m->open) return;
+
+    /*
+     * Sur une page d'information, TOUT ramène aux réglages.
+     *
+     * Y compris les flèches, et c'est délibéré. Une page qui se lit d'un coup
+     * d'œil n'a rien à parcourir ; laisser les flèches déplacer un curseur
+     * invisible dans le menu qu'on ne voit plus donnerait un joueur qui revient
+     * sur une ligne qu'il n'a pas choisie. Le seul geste possible est donc de
+     * revenir, quelle que soit la touche — ce qui est aussi ce qu'on fait
+     * instinctivement devant un écran dont on a fini la lecture.
+     *
+     * Échap ne ferme PAS le menu depuis ici : il remonte d'un cran. Fermer
+     * ferait sortir du menu quelqu'un qui voulait seulement quitter les
+     * crédits, et lui ferait rouvrir Échap pour retrouver ses réglages.
+     */
+    if (m->page != ROOM_MENU_PAGE_SETTINGS) {
+        m->page = ROOM_MENU_PAGE_SETTINGS;
+        return;
+    }
 
     switch (a) {
         case ROOM_MENU_UP:
@@ -321,6 +380,8 @@ void room_menu_input(room_menu *m, const room_menu_ctx *ctx, room_menu_action a)
         case ROOM_MENU_ACCEPT:
             if (m->cursor == MI_QUIT)        m->quit_request = true;
             else if (m->cursor == MI_RESUME) m->close_request = true;
+            else if (m->cursor == MI_CONTROLS) m->page = ROOM_MENU_PAGE_CONTROLS;
+            else if (m->cursor == MI_CREDITS)  m->page = ROOM_MENU_PAGE_CREDITS;
             /* Sur une ligne de réglage, Entrée avance d'un cran : c'est ce que
              * fait la main quand on ne sait pas encore que ce sont les flèches. */
             else if (item_step(m, ctx, m->cursor, +1)) m->render_dirty = true;
@@ -370,6 +431,11 @@ void room_menu_draw(ns_sprite *s, const room_menu *m, const room_menu_ctx *ctx)
 {
     if (!m->open) return;
 
+    /* Les pages d'information remplacent les réglages, elles ne s'empilent pas
+     * dessus : deux cadres l'un sur l'autre se lisent comme un défaut. */
+    if (m->page == ROOM_MENU_PAGE_CONTROLS) { room_controls_draw(s); return; }
+    if (m->page == ROOM_MENU_PAGE_CREDITS)  { room_credits_draw(s);  return; }
+
     const float W = ROOM_HUD_W, H = ROOM_HUD_H;
 
     /* Un voile, pas un noir : on garde la salle derrière, c'est elle qui montre
@@ -388,12 +454,36 @@ void room_menu_draw(ns_sprite *s, const room_menu *m, const room_menu_ctx *ctx)
      * désamorce une fois pour toutes, et la borne dit ce qui arrive si l'on
      * dépasse l'écran plutôt que de le laisser déborder en silence.
      */
-    const float row_h  = 38.0f;
     const float head_h = 78.0f;    /* titre et respiration au-dessus des lignes */
     const float foot_h = 74.0f;    /* les deux lignes d'aide, et leur marge */
     const float panel_w = 720.0f;
-    float panel_h = head_h + (float)MI_COUNT * row_h + foot_h;
-    if (panel_h > H - 20.0f) panel_h = H - 20.0f;
+
+    /*
+     * C'est le PAS DES LIGNES qui cède, pas le cadre — et il a fallu le voir
+     * pour le corriger.
+     *
+     * La version précédente déduisait la hauteur du cadre du nombre de lignes,
+     * puis la rabotait à `H - 20` si elle dépassait. Le commentaire annonçait
+     * que la formule « désamorce le piège une fois pour toutes ». Elle ne le
+     * désamorçait que tant que le rabot ne servait pas : les lignes, elles,
+     * continuaient de se poser tous les 38 points depuis le haut, sans rien
+     * savoir du cadre qu'on venait de raccourcir.
+     *
+     * Mesuré à seize lignes, en ajoutant COMMANDES et CREDITS : 78 + 16 x 38 +
+     * 74 = 760 pour 700 disponibles. Le cadre a été ramené à 700, les lignes
+     * sont descendues jusqu'à 686, et « QUITTER LE JEU » s'est écrit PAR DESSUS
+     * « FLECHES CHOISIR ET REGLER ». Le piège s'était refermé sur la ligne
+     * suivante, exactement comme annoncé, et l'annonce n'avait rien empêché.
+     *
+     * Le pas se resserre donc jusqu'à ce que tout tienne. Un menu un peu plus
+     * serré reste lisible ; un menu qui écrit deux textes au même endroit ne
+     * l'est plus. Et le calcul se fait au dessin, sur `MI_COUNT` : ajouter un
+     * réglage ne demande de se souvenir de rien.
+     */
+    const float avail = H - 20.0f - head_h - foot_h;
+    float row_h = 38.0f;
+    if ((float)MI_COUNT * row_h > avail) row_h = avail / (float)MI_COUNT;
+    const float panel_h = head_h + (float)MI_COUNT * row_h + foot_h;
     const float px = (W - panel_w) * 0.5f, py = (H - panel_h) * 0.5f;
 
     const float border[4] = { 0.78f, 0.42f, 0.14f, 0.95f };

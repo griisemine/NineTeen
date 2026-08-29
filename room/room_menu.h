@@ -45,10 +45,31 @@ typedef enum room_menu_action {
     ROOM_MENU_CANCEL
 } room_menu_action;
 
+/*
+ * Ce que le menu MONTRE. Trois pages, une seule à la fois.
+ *
+ * Les crédits et les commandes sont des SOUS-PAGES du menu, et non des touches
+ * à part. C'est le seul endroit qu'un joueur cherche quand il veut savoir
+ * quelque chose, et c'est aussi ce qui évite d'inventer une touche de plus dont
+ * personne ne saurait qu'elle existe — le défaut exact que ce menu a été écrit
+ * pour corriger avec `F7` et `F8`.
+ *
+ * Conséquence de forme, et elle vaut d'être dite : `main.c` n'a rien à savoir
+ * de ces pages. Il envoie les mêmes six actions, le menu décide de ce qu'elles
+ * veulent dire selon la page ouverte. Ajouter une page ne touche donc pas la
+ * boucle de jeu.
+ */
+typedef enum room_menu_page {
+    ROOM_MENU_PAGE_SETTINGS = 0,
+    ROOM_MENU_PAGE_CONTROLS,
+    ROOM_MENU_PAGE_CREDITS
+} room_menu_page;
+
 typedef struct room_menu {
     bool  open;
     int   cursor;
     float time;          /* secondes depuis l'ouverture : anime le curseur */
+    room_menu_page page; /* la sous-page ouverte, réglages par défaut */
 
     /* Ce que l'appelant doit appliquer après un `room_menu_input`. Il les remet
      * à faux lui-même — le menu ne sait pas ce qu'appliquer coûte. */

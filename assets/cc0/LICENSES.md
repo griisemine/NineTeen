@@ -1,4 +1,19 @@
-# Textures rapportées — origine et licence
+# Nineteen — origine et licence de ce qui n'est pas de nous
+
+Ce fichier est livré **à la racine du paquet**. Il couvre quatre choses, et
+c'est dans cet ordre qu'il faut le lire si l'on cherche à savoir ce qu'on a le
+droit de faire :
+
+1. les **textures et modèles rapportés** (Poly Haven, CC0) — ci-dessous ;
+2. le **personnage** (CesiumMan, CC BY 4.0), la seule attribution qui soit une
+   obligation et non une politesse — section « Le personnage » ;
+3. le **logiciel tiers** lié dans le binaire — section « Le logiciel tiers » ;
+4. les **images de 2020**, dont la provenance n'est pas établie, et dont huit
+   sont identifiées comme appartenant à des tiers — section « Les images de
+   2020 : ce qui n'est PAS établi ». **C'est la section à lire avant de
+   vendre.**
+
+## Les textures rapportées
 
 Ces images ne viennent pas du modèle de 2020. Elles ont été rapportées **là, et
 seulement là, où le modèle d'origine n'avait pas de texture** : sept de ses
@@ -155,6 +170,11 @@ elle doit l'être aussi partout où le jeu est distribué — écran de crédits
 page de téléchargement, archive. Ce n'est pas une formalité : c'est la
 condition à laquelle on a le droit de s'en servir.
 
+Ces trois endroits ont été vérifiés un par un, et l'état de chacun est dit à la
+fin de ce document, section **« Où l'attribution est portée, aujourd'hui »**.
+Deux sur trois sont tenus depuis 17.0.0 ; le troisième attend qu'il existe une
+page de téléchargement.
+
 ### Pourquoi celui-là, et pourquoi importé
 
 Tout le reste de ce jeu est généré : la salle est décrite, les bras du joueur
@@ -186,3 +206,146 @@ CesiumMan a été retenu sur quatre critères, dans cet ordre :
 L'animation qu'il porte est une marche. Les autres allures — l'arrêt, la course
 — sont dérivées d'elle au runtime plutôt que téléchargées : c'est la part
 « que tu vas animer » de la demande.
+
+---
+
+# Le logiciel tiers
+
+Ce document ne parlait que d'images et de modèles. Le paquet emporte aussi du
+**code** qui n'est pas le nôtre, et deux de ces licences exigent que leur
+mention accompagne le binaire distribué — pas seulement les sources.
+
+| Bibliothèque | Auteur | Licence | Ce qu'elle exige d'un binaire distribué |
+|---|---|---|---|
+| **SDL3** | Sam Lantinga et contributeurs | zlib | rien ; la mention est « appréciée mais pas exigée » |
+| **cgltf** | Johannes Kuhlmann | MIT | **la mention et le texte de licence** |
+| **jsmn** | Serge Zaitsev | MIT | **la mention et le texte de licence** |
+| **stb** (`image`, `image_write`, `image_resize2`, `dxt`) | Sean Barrett | MIT **ou** domaine public, au choix | rien si l'on retient le domaine public |
+| **miniaudio** | David Reid | MIT-0 **ou** domaine public, au choix | rien |
+
+SDL3 est **lié statiquement** : il n'y a pas de `.dll` ni de `.so` à côté de
+l'exécutable, et le code de SDL est donc *dans* le binaire qu'on distribue.
+C'est ce qui fait de sa mention une question de distribution et non de dépôt.
+
+**SPIRV-Cross** (Apache-2.0) n'est pas dans cette table, et c'est délibéré : il
+ne sert qu'à `tools/spv2msl`, au build, pour traduire les shaders en MSL. Il
+n'entre dans aucun binaire livré, donc aucune obligation de distribution ne le
+concerne. Il est nommé ici pour que la prochaine personne n'ait pas à refaire
+l'enquête.
+
+La **fonte** du jeu n'est pas tierce : `engine/sprite/ns_font5x7.h` est une
+table de 95 glyphes de 5 x 7 bits écrite dans le dépôt. Les `.ttf` du dépôt —
+`legacy/room/fonts/`, `server/internal/web/assets/fonts/` — ne sont lus ni par
+le jeu ni par le paquet ; voir plus bas ce qu'il faut en penser quand même.
+
+---
+
+# Les images de 2020 : ce qui n'est PAS établi
+
+C'est la section que ce document n'avait pas, et son absence était un trou et
+non un oubli de forme : tout ce qui précède documente les **2,6 Mio rapportés**,
+et laissait croire par omission que le reste était réglé. Il ne l'est pas.
+
+## Ce qui a été mesuré
+
+Le paquet installé porte, à la mesure de cette version, **93 images** dans
+`bin/assets/scene/textures/`. Le total bouge — la direction artistique
+remplace en ce moment des enseignes de 2020 par des planches dessinées au
+build — mais **le nombre d'images de 2020 ne bouge pas**, et c'est lui qui
+compte ici :
+
+| | |
+|---|---|
+| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **58** |
+| viennent d'ici — Poly Haven, CC0, listées plus haut | **19** |
+| **générées au build** (enseignes de `marqueeart`, écrans de jeu, flanc de borne, néon) | **14** |
+| **orphelines** : aucune source dans l'arbre, aucun matériau qui les référence | **2** |
+
+Le reste — enseignes, écrans de jeu, flanc de borne, néon — est **généré au
+build** et ne pose aucune question de licence : c'est de l'arithmétique.
+
+**Les cinquante-huit images de 2020 ne portent aucune trace d'origine ni de
+licence** — ni dans ce fichier, ni dans `legacy/`, qui ne contient aucun
+document de licence.
+
+Une texture de béton ou de moquette sans provenance est un risque théorique.
+Huit de ces images n'en sont pas un : elles ont été **ouvertes et regardées**,
+et voici ce qu'elles sont.
+
+| Fichier | Ce que c'est, en le regardant | Ayant droit apparent |
+|---|---|---|
+| `poster_7.jpg` | le flyer publicitaire d'arcade **PAC-MAN**, logo Midway compris | Bandai Namco / Midway |
+| `poster_8.jpg` | le flyer publicitaire d'arcade **DONKEY KONG**, logo Nintendo compris | Nintendo |
+| `poster_3.jpg` | le flyer publicitaire **ATARI « Video Pinball »**, logo Atari compris | Atari |
+| `poster_6.jpg` | l'affiche **« Palace Arcade — Hawkins »** de *Stranger Things* | Netflix |
+| `poster_5.jpg` | une illustration de la gamme **« Arcade »** de *League of Legends* | Riot Games |
+| `poster_2.jpg` | une affiche **« Space Paranoids — ENCOM »**, l'arcade fictive de *Tron* | Disney (et l'illustrateur) |
+| `poster_1.jpg` | une affiche de festival **« Arcade Armageddon »**, graphisme d'auteur | inconnu |
+| `poster_4.jpg` | une illustration de « gaming room », retitrée **NINE 19 TEEN** | inconnu |
+
+Ces huit images sont **accrochées aux murs de la salle** et visibles en jeu.
+
+Le même examen sur les jeux donne le même genre de résultat : les lutins de
+`games/pacman/` reprennent la forme et les couleurs des personnages de Namco, et
+`games/flappy/birds.png` est la planche d'oiseaux de *Flappy Bird*. Les titres
+« PACMAN » et « TETRIS » sont par ailleurs des **marques déposées** — Bandai
+Namco pour l'une, Tetris Holding pour l'autre, qui a obtenu en justice que la
+protection porte aussi sur l'apparence du jeu et pas seulement sur le nom.
+
+## Ce que ça veut dire, et ce que ça ne veut pas dire
+
+Ça ne dit rien de la qualité du travail de 2020 : un projet d'étude qui
+décore sa salle avec les affiches du genre qu'il célèbre est une chose banale et
+sans conséquence, parce qu'il n'est pas distribué.
+
+Ça dit que **le passage à la vente change la nature de ces fichiers**. Une
+attribution ne les rattrape pas — ce ne sont pas des œuvres sous licence libre
+mal créditées, ce sont des œuvres sous droit exclusif employées sans droit. Il
+n'existe pas de rédaction de ce document qui rende `poster_8.jpg` distribuable.
+
+**Rien n'a été retiré ni modifié ici** : `salle.room.json` appartient à la
+direction artistique, et remplacer huit affiches est une décision de contenu,
+pas une correction de licence. Le travail est chiffré dans
+`docs/CHANGELOG-V17.md`, section « ce qui n'est pas tenu ».
+
+## Trois autres points ouverts, plus petits
+
+* **`server/internal/web/assets/fonts/`** porte `sega.ttf`, `neon.ttf` et
+  `police.ttf`, sans licence. Le nom du premier annonce une reproduction du
+  logotype d'un tiers. Ces fontes ne sont **pas** dans le paquet du jeu — elles
+  ne concernent que le site web du classement — mais publier ce site les
+  distribue.
+* **Deux images orphelines** voyagent dans le paquet de 17.0.0 :
+  `gamepad_diff_1k.jpg` (reliquat d'un modèle Poly Haven retiré) et
+  `coffeetable_01_diff_1k.jpg` (la texture turquoise écartée, voir plus haut).
+  Mesuré : `grep` sur `salle.gltf` **0**, sur `salle.room.json` **0**, et
+  `find assets legacy` ne trouve **aucun fichier source** pour l'une ni pour
+  l'autre. Ce sont des résidus d'un répertoire de build incrémental. Elles sont
+  CC0, donc sans risque juridique — mais un paquet qui emporte deux fichiers
+  dont plus aucune source ne rend compte est exactement ce que ce document
+  existe pour empêcher. Une reconstruction depuis un répertoire de build neuf
+  les fait disparaître.
+* **`legacy/`** n'est pas installé par CPack, mais il est dans le dépôt. Si le
+  dépôt devient public, il publie les 60 images de 2020, les huit affiches
+  comprises.
+
+---
+
+# Où l'attribution est portée, aujourd'hui
+
+CC BY 4.0 demande que l'attribution accompagne l'œuvre « d'une manière
+raisonnable au regard du support ». Pour un jeu, cela veut dire trois endroits,
+et c'est ce que la section « Le personnage » exigeait déjà.
+
+| Endroit | État | Où |
+|---|---|---|
+| **l'écran de crédits** | tenu depuis 17.0.0 | `Échap` → `CREDITS` ; le contenu est dans `room/room_credits.c` |
+| **l'archive** | tenu | ce fichier est installé à la racine du paquet (`room/CMakeLists.txt`) |
+| **la page de téléchargement** | **pas tenu** | il n'y a pas encore de page |
+
+L'écran de crédits n'est pas seulement écrit, il est **défendu** :
+`tests/test_menu.c` vérifie que la table porte l'œuvre (*CesiumMan*), l'auteur
+(*Cesium*), la licence (*CC BY 4.0*) et le lien vers son texte, et qu'une ligne
+du menu l'ouvre. Effacer l'un des quatre fait échouer le test `menu`, donc le
+build. Une mention légale que rien ne défend finit par disparaître dans un
+nettoyage.

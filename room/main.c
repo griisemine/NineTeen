@@ -1985,6 +1985,16 @@ int main(int argc, char **argv)
     /* Le bandeau de réglages : quelques secondes après F7 ou F8. Un réglage
      * qu'on change sans retour visuel est un réglage dont on doute. */
     float   settings_banner = 0.0f;
+    /*
+     * L'aide d'arrivée : les quatre commandes qui suffisent, pendant les
+     * quatorze premières secondes. Voir `room_hud.h` pour ce qu'elle solde.
+     *
+     * Quatorze et pas trois : le sas fait neuf mètres, on met une bonne dizaine
+     * de secondes à le traverser au pas, et une aide qui a disparu avant qu'on
+     * arrive dans la salle n'a aidé personne. Elle se tait d'elle-même dès
+     * qu'on est devant une borne, ce qui est le moment où l'on a trouvé.
+     */
+    float   intro_banner = 14.0f;
 
     /*
      * Le menu. `Échap` l'ouvre — c'est la convention, et c'est mieux que ce qu'il
@@ -2009,6 +2019,22 @@ int main(int argc, char **argv)
          * le menu la normalise, la ligne de commande ne doit pas l'y forcer. */
         if (opt.menu_row > 0) for (int i = 0; i < opt.menu_row; ++i)
             room_menu_input(&menu, &menu_ctx, ROOM_MENU_DOWN);
+        /*
+         * Une ligne qui ouvre une PAGE s'ouvre, plutôt que de rester surlignée.
+         *
+         * Sans ça, `--menu=13` cadrait la ligne « CREDITS » sans jamais montrer
+         * les crédits : l'écran qui porte une obligation de licence était le
+         * seul du jeu qu'on ne pouvait pas capturer en ligne de commande, donc
+         * le seul qu'on ne pouvait pas vérifier sans le jouer à la main.
+         *
+         * Les deux pages sont nommées par leur LIBELLÉ et non par un indice :
+         * un numéro de ligne se décale au premier réglage ajouté, et c'est
+         * précisément ce qui vient d'arriver à ce menu.
+         */
+        if (menu.cursor == room_menu_row("CREDITS")
+         || menu.cursor == room_menu_row("COMMANDES")) {
+            room_menu_input(&menu, &menu_ctx, ROOM_MENU_ACCEPT);
+        }
     }
     /* Le rang de la dernière partie, pour l'écran de fin. */
     uint32_t last_rank = 0;
@@ -2835,6 +2861,7 @@ play_at_done: ;
                 room_viewmodel_start_playing(&vmstate, playing_cab);
             }
             settings_banner = ns_maxf(0.0f, settings_banner - (float)clock.tick_seconds);
+            intro_banner    = ns_maxf(0.0f, intro_banner - (float)clock.tick_seconds);
             room_sound_update(&sound, &scene, &cam, &doors, (float)clock.tick_seconds);
             ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
@@ -3460,6 +3487,16 @@ play_at_done: ;
                 hud.quality_name = quality_name(rs.quality);
                 hud.render_scale = rs.render_scale;
                 hud.last_rank = last_rank;
+                /*
+                 * L'aide d'arrivée n'a de sens qu'en mode joueur : en caméra
+                 * libre ou en orbite, on cadre une capture, on ne cherche pas
+                 * où aller. Et pas non plus sous le menu — l'affichage est
+                 * dessiné AVANT lui, et le bandeau se voyait donc dépasser du
+                 * cadre des réglages : vu sur capture, corrigé ici plutôt que
+                 * dans `room_hud`, qui n'a pas à connaître le menu.
+                 */
+                hud.intro_timer = (cam.mode == ROOM_CAM_PLAYER && !menu.open)
+                                ? intro_banner : 0.0f;
 
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);

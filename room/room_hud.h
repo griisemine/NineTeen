@@ -61,6 +61,22 @@ typedef struct room_hud_state {
     /* Le rang obtenu à la dernière partie, 0 si hors classement. Affiché sur
      * l'écran de fin : c'est la seule information qui donne envie de relancer. */
     uint32_t last_rank;
+
+    /*
+     * L'AIDE D'ARRIVÉE : secondes restantes, 0 pour ne rien afficher.
+     *
+     * Elle existe parce qu'on a REGARDÉ le jeu arriver. Au premier plan, le
+     * joueur est dans un sas de neuf mètres, il voit deux mains, et l'écran ne
+     * porte pas un mot : ni titre, ni commande, ni indication. Les touches
+     * n'étaient dites que dans `--help` et dans `docs/JOUER.md` — c'est-à-dire
+     * nulle part pour qui a téléchargé un paquet et double-cliqué dessus.
+     *
+     * Un minuteur plutôt qu'une condition sur le déplacement : la condition
+     * demanderait à cet affichage de savoir où est le joueur, donc de posséder
+     * un état de la salle, ce que ce fichier ne fait pour rien d'autre. Le
+     * bandeau part de lui-même, la page complète reste dans `Échap`.
+     */
+    float intro_timer;
 } room_hud_state;
 
 /*
