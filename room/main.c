@@ -984,6 +984,21 @@ static int replay_inputs(const char *path)
     printf("  jeu ............ %s (%s), graine %lld\n", api->title, difficulty, (long long)seed);
     printf("  journal ........ %u changement(s), %d pas\n", count, last + 1);
     printf("  score .......... %u\n", api->score(state));
+    /*
+     * L'empreinte de l'ÉTAT, et pas seulement le score.
+     *
+     * C'est ce qui rend `--rejouer=` utilisable comme instrument : deux
+     * machines, deux compilateurs ou deux architectures peuvent tomber sur le
+     * même score par des chemins différents — un oiseau mort deux pas plus tôt
+     * mais après avoir passé le même nombre de tuyaux donne le même chiffre.
+     * L'empreinte, elle, couvre les `state_size` octets.
+     *
+     * C'est aussi la brique n°1 du duel en pas verrouillé, et elle sert ici
+     * avant d'y servir : mesurer le déterminisme inter-architecture demande de
+     * comparer des états, pas des scores.
+     */
+    printf("  empreinte ...... %016llx sur %zu octets d'etat\n",
+           (unsigned long long)ns_game_state_hash(api, state), api->state_size);
     printf("  gains cumulés .. %lld\n", (long long)gains);
     if (died_at >= 0) {
         printf("  mort au pas .... %d (%.1f s)\n", died_at, (double)died_at * (double)step);

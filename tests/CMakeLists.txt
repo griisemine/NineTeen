@@ -358,6 +358,15 @@ nineteen_set_warnings(ns_test_replay)
 nineteen_apply_sanitizers(ns_test_replay)
 add_test(NAME replay COMMAND ns_test_replay)
 
+# L'état d'une partie est-il une VALEUR ? Mesuré entre deux processus, sur les
+# huit jeux. `ns_test_replay` compare dans un seul processus, où une adresse est
+# stable : c'est ce qui a laissé un `const char *` dans l'état de Piano.
+add_test(NAME determinisme
+         COMMAND ${CMAKE_COMMAND}
+                 -DEXE=$<TARGET_FILE:nineteen>
+                 -DDATA=${CMAKE_CURRENT_SOURCE_DIR}/data
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/check_determinism.cmake)
+
 # `--rejouer=` de bout en bout : le format sur disque, son analyse, la reprise
 # de la graine. `ns_test_replay` ne couvre que le rejeu EN MÉMOIRE.
 add_test(NAME rejeu-cli

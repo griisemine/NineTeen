@@ -105,7 +105,7 @@ void piano_reset(piano *g, uint64_t seed, bool hard)
     /* La borne « hard » démarre déjà lancée. C'est la seule différence, et elle
      * suffit : ce jeu se durcit tout seul. */
     g->speed = hard ? 1.6f : 1.0f;
-    g->fail_reason = "";
+    g->fail_reason = PN_FAIL_NONE;
     build_chart(g, 2.0f, g->speed);
 }
 
@@ -121,12 +121,24 @@ int piano_note_at(const piano *g, int lane)
     return -1;
 }
 
-static void fail(piano *g, const char *why)
+static void fail(piano *g, pn_fail why)
 {
     g->phase = PN_DEAD;
     g->dead_time = 0.0f;
     g->died = true;
     g->fail_reason = why;
+}
+
+/* Le texte d'une fin. Il vit ICI, du côté de l'affichage : l'état ne porte que
+ * la raison, ce qui le garde comparable d'une machine à l'autre. */
+static const char *fail_text(pn_fail why)
+{
+    switch (why) {
+        case PN_FAIL_WRONG_NOTE:      return "FAUSSE NOTE";
+        case PN_FAIL_TOO_MANY_MISSES: return "TROP DE NOTES MANQUEES";
+        case PN_FAIL_NONE:            break;
+    }
+    return "";
 }
 
 static void strike(piano *g, int lane)
@@ -144,7 +156,7 @@ static void strike(piano *g, int lane)
          * VIDE termine la partie. `touche = -1`, et la boucle s'arrête. Sans
          * elle on martèlerait les quatre touches en continu.
          */
-        fail(g, "FAUSSE NOTE");
+        fail(g, PN_FAIL_WRONG_NOTE);
         return;
     }
 
@@ -224,7 +236,7 @@ void piano_tick(piano *g, float dt)
 
     /* En hardcore, laisser passer trois notes termine la partie : sans quoi
      * une borne « hard » se jouerait en ne touchant à rien. */
-    if (g->hard && g->misses >= 3) fail(g, "TROP DE NOTES MANQUEES");
+    if (g->hard && g->misses >= 3) fail(g, PN_FAIL_TOO_MANY_MISSES);
 }
 
 /* ==========================================================================
@@ -324,8 +336,9 @@ void piano_draw(ns_sprite *s, const piano *g, const piano_art *a,
         static const float veil[4] = { 0.03f, 0.03f, 0.05f, 0.80f };
         ns_sprite_rect(s, 0.0f, logical_h * 0.30f, logical_w, logical_h * 0.40f, veil);
         const float sc = base * 8.0f;
-        ns_sprite_text(s, (logical_w - ns_sprite_text_width(g->fail_reason, sc)) * 0.5f,
-                       logical_h * 0.37f, sc, amber, g->fail_reason);
+        const char *why = fail_text(g->fail_reason);
+        ns_sprite_text(s, (logical_w - ns_sprite_text_width(why, sc)) * 0.5f,
+                       logical_h * 0.37f, sc, amber, why);
         const float sc2 = base * 4.6f;
         SDL_snprintf(line, sizeof line, "%u NOTES   MEILLEUR COMBO %u", g->hits, g->best_combo);
         ns_sprite_text(s, (logical_w - ns_sprite_text_width(line, sc2)) * 0.5f,

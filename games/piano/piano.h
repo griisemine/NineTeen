@@ -50,6 +50,13 @@ typedef struct pn_note {
     bool  hit, missed;
 } pn_note;
 
+/* Les fins possibles. Le texte vit à l'affichage, pas dans l'état. */
+typedef enum pn_fail {
+    PN_FAIL_NONE = 0,
+    PN_FAIL_WRONG_NOTE,      /* frapper une voie vide : la faute de commission */
+    PN_FAIL_TOO_MANY_MISSES  /* hardcore seulement */
+} pn_fail;
+
 typedef struct piano {
     pn_phase phase;
 
@@ -69,7 +76,26 @@ typedef struct piano {
     bool     hard;
 
     float dead_time;
-    const char *fail_reason;
+    /*
+     * La raison de la fin, en VALEUR et non en pointeur.
+     *
+     * C'était un `const char *` vers une chaîne littérale. Ça marchait à
+     * l'affichage et ça rendait l'état de ce jeu incomparable : l'adresse d'un
+     * littéral change d'une exécution à l'autre (ASLR) et d'une architecture à
+     * l'autre. Une empreinte d'octets sur l'état de Piano donnait donc trois
+     * valeurs différentes pour trois rejeux du MÊME journal, là où les sept
+     * autres jeux en donnaient une seule.
+     *
+     * `games.h` promet depuis le début qu'« aucun état global » ne subsiste et
+     * que « tout vit dans le bloc rendu par `state_size` ». Un pointeur dans ce
+     * bloc rompt la promesse : ce n'est plus une valeur qu'on peut comparer,
+     * transmettre ou resemer.
+     *
+     * `tests/test_replay.c` ne pouvait pas l'attraper — il rejoue deux fois
+     * DANS LE MÊME PROCESSUS, où le littéral a la même adresse. C'est
+     * `test_determinisme` qui le fait maintenant, en comparant deux processus.
+     */
+    pn_fail  fail_reason;
 
     ns_rng rng;
 

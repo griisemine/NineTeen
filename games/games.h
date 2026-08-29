@@ -129,6 +129,26 @@ typedef struct ns_game_api {
 } ns_game_api;
 
 /* Les jeux portés, dans l'ordre où ils apparaissent au classement. */
+/*
+ * L'empreinte de l'état d'une partie.
+ *
+ * FNV-1a sur les `state_size` octets du bloc. C'est la PREMIÈRE brique d'un duel
+ * en pas verrouillé, et `docs/RESEAU-TEMPS-REEL.md` le dit dans cet ordre :
+ * sans elle, deux parties qui divergent continuent chacune de leur côté jusqu'à
+ * ce que les scores se contredisent, et le défaut devient indébogable.
+ *
+ * Elle n'est légitime que parce qu'une propriété est MESURÉE ailleurs :
+ * `tests/test_replay.c` compare les états entiers au bit près sur les huit jeux,
+ * ce qui établit qu'un état ne contient ni pointeur, ni bourrage indéterminé, ni
+ * rémanence entre deux parties. Sans cette mesure, une empreinte d'octets
+ * comparerait du bruit.
+ *
+ * FNV-1a et non un condensé cryptographique : on cherche à détecter une
+ * divergence entre deux machines de bonne foi, pas à résister à un adversaire.
+ * Le score, lui, reste scellé par HMAC et recalculé par le serveur.
+ */
+uint64_t ns_game_state_hash(const ns_game_api *api, const void *state);
+
 const ns_game_api *ns_game_find(const char *id);   /* NULL si non porté */
 const ns_game_api *ns_game_at(int index);          /* NULL au-delà */
 int                ns_game_count(void);
