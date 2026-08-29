@@ -7,6 +7,36 @@ que le chantier est terminé.
 
 ## Ce qui tourne
 
+### La passe mobilier et lumière : onze modèles CC0, et un piège qui a servi trois fois
+
+« N'aie pas peur de télécharger des modèles open source bien faits » était
+l'instruction la plus explicite du brief, et la dernière à laquelle j'ai
+répondu. Poly Haven publie 521 modèles CC0 ; onze sont entrés — fauteuil, table
+basse, plante, poste de radio, poubelle, cible de fléchettes, panneau « sol
+mouillé », une applique et deux suspensions industrielles. +14 000 triangles
+pour une salle qui en porte 163 000 et rend toujours en 6 ms au palier `low`.
+
+`assets/blender/import_cc0.py` fait le passage, et trois choses s'y règlent :
+
+- **La décimation** — la plante fait 176 226 triangles à la source. Ça règle au
+  passage le poste « un décimateur de maillage » réclamé depuis A2b, sans en
+  écrire un en C.
+- **Les VARIANTES posées côte à côte.** Poly Haven livre souvent plusieurs
+  versions d'un objet dans le même fichier, simplement décalées. Les fusionner
+  donnait une poubelle de **1,78 m** de large et une applique de **1,22 m**,
+  pour des objets qui en font 0,4 et 0,25.
+- **Un budget trop serré casse un objet fin** : la suspension en cage décimée à
+  1 100 triangles ne rendait plus qu'une plaque plate. À 3 200 elle redevient
+  une cage.
+
+**Et le piège de la lumière enfermée a servi une troisième fois.** Après la
+suspension du billard, j'ai remis l'applique du salon DANS sa cage — trois
+heures après avoir corrigé et documenté exactement ça. Symptôme identique :
+tripler l'intensité ne changeait rien. `roomgen` refuse désormais au build une
+lumière posée à l'intérieur d'un luminaire, par un test de parité à sept rayons
+doublé d'une condition de proximité, et le contrôle a trouvé un TROISIÈME cas
+dès sa première exécution — la suspension du comptoir, que je n'avais pas vue.
+
 ### La séance de refonte : sept défauts que personne ne cherchait
 
 Cette section est en tête parce que tout ce qui suit a été écrit AVANT elle, et
