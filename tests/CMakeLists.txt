@@ -142,6 +142,23 @@ nineteen_set_warnings(ns_test_ik)
 nineteen_apply_sanitizers(ns_test_ik)
 add_test(NAME ik COMMAND ns_test_ik)
 
+# LE JETON : le front qui dit à quel pas de simulation la pièce bascule.
+#
+# Séparé de `ns_test_ik`, qui mesure des POSITIONS — un poignet, un bout de
+# doigt, une matrice sans NaN. Ce qui se joue ici est un INSTANT, et le défaut
+# qu'il attrape n'a pas de forme dans l'espace : un front écrit comme un seuil
+# ferait tomber trente jetons pour un, sans qu'aucune capture ne s'en aperçoive.
+#
+# Mêmes sources que `ns_test_ik`, mêmes raisons : calcul pur, ni GPU, ni asset.
+add_executable(ns_test_jeton test_jeton.c
+    "${CMAKE_SOURCE_DIR}/room/room_camera.c"
+    "${CMAKE_SOURCE_DIR}/room/room_viewmodel.c")
+target_include_directories(ns_test_jeton PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_jeton PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_jeton)
+nineteen_apply_sanitizers(ns_test_jeton)
+add_test(NAME jeton COMMAND ns_test_jeton)
+
 # Le personnage articulé. Il lit un VRAI fichier — c'est justement la lecture
 # qu'on vérifie — donc il reçoit le dossier des assets en argument.
 #
