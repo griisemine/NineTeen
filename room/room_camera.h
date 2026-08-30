@@ -245,7 +245,7 @@ room_view_bob room_camera_bob(const room_camera *c, float alpha);
  *
  * À appeler à l'instant de l'impact, pas au début du geste. Le tangage part
  * alors d'un coup et retombe amorti ; il a disparu en 270 ms, soit AVANT que le
- * bras soit revenu (390 ms). L'ordre compte — une vue qui bouge encore quand le
+ * bras soit revenu (500 ms). L'ordre compte — une vue qui bouge encore quand le
  * poing est au repos se lit comme une caméra cassée, pas comme un choc.
  *
  * L'amplitude, elle, ne se mesure pas : elle arbitre entre « on ne le voit

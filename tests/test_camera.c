@@ -654,7 +654,7 @@ static void test_contrecoup(void)
     CHECK_NEAR(c.pitch, pitch_avant, 1e-6f, "le tangage simulé ne bouge pas");
 
     /*
-     * ELLE S'ÉTEINT, ET AVANT LE BRAS. Le geste dure 390 ms
+     * ELLE S'ÉTEINT, ET AVANT LE BRAS. Le geste dure 500 ms
      * (`room_viewmodel.h`) ; à 11 par seconde il ne reste que 5 % de la
      * secousse au bout de 270. On vérifie donc à 300 ms qu'il en reste moins
      * d'un dixième, et à une seconde qu'il n'en reste rien.

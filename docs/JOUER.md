@@ -92,7 +92,7 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `Ctrl` gauche ou `C` | s'accroupir |
 | `E` | devant une borne : insérer un jeton et jouer. Devant le **monnayeur** : prendre des jetons. Devant la **vitrine** : échanger ses tickets |
 | `R` | après une partie : **quitte ou double** (si le lot est acquis) |
-| `F` | **cogner la borne** devant soi. Marche en partie comme hors partie ; pendant les 390 ms du geste, la main quitte les boutons |
+| `F` | **cogner la borne** devant soi. Marche en partie comme hors partie ; pendant les 500 ms du geste, la main quitte les boutons |
 | `Échap` | le menu — réglages, **commandes**, **crédits**, quitter |
 | `F2` | capture d'écran dans le répertoire utilisateur |
 | `F5` | basculer caméra joueur / caméra libre |

@@ -540,7 +540,7 @@ static void bob_tick(room_camera *c, float travelled, float dt, bool just_landed
 
     /* Le contrecoup du poing. 11 par seconde : il ne reste 5 % qu'au bout de
      * 270 ms, donc la vue s'est calmée avant que le bras soit revenu, qui met
-     * 390 ms. Plus lent, la secousse survivrait au geste et se lirait comme une
+     * 500 ms. Plus lent, la secousse survivrait au geste et se lirait comme une
      * panne ; plus rapide, elle passerait sous le seuil de ce qu'on perçoit. */
     c->bob.frappe = ns_damp(c->bob.frappe, 0.0f, 11.0f, dt);
 

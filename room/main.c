@@ -3204,7 +3204,7 @@ play_at_done: ;
             /*
              * LA CONSÉQUENCE DU COUP, et elle tient en une ligne.
              *
-             * Pendant les 390 ms du geste, la main droite est SUR LA MACHINE et
+             * Pendant les 500 ms du geste, la main droite est SUR LA MACHINE et
              * pas sur les boutons : on jette donc les appuis. La partie, elle,
              * continue de tourner — c'est le seul point qui compte, et c'est ce
              * qui fait payer le coup au SCORE, donc aux tickets.

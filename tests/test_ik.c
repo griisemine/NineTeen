@@ -524,6 +524,172 @@ static void test_forced_pose(void)
     CHECK(vm.state == ROOM_VM_PRESS, "la pose forcée tient dans le temps");
 }
 
+/* ==========================================================================
+ * Le coup de poing sur une borne
+ * ==========================================================================
+ *
+ * Ce qu'on défend ici tient en deux phrases, et la seconde a coûté 65 cm.
+ *
+ *   1. LE GESTE EXISTE ET REVIENT. Le poignet part loin devant, puis retrouve
+ *      sa place ; le retour est plus lent que l'aller, c'est ce qui fait qu'un
+ *      coup se lit comme un coup.
+ *   2. L'ÉPAULE NE DÉRIVE PAS. La poussée d'épaule a d'abord été écrite dans
+ *      `vm->lean`, APRÈS son amortissement — donc elle s'intégrait d'un pas
+ *      sur l'autre. À 9 par seconde et 120 Hz, un pas ne mange que 7,2 % de
+ *      l'excès : 7,5 cm de poussée devenaient 65 cm d'épaule projetée en
+ *      avant, et le bras sortait du cadre.
+ *
+ * Le second défaut ne fait rien planter, ne produit aucun message, et ne se
+ * voit sur aucune capture fixe — seulement en frappant, et seulement si l'on
+ * regarde. C'est exactement le genre de chose qu'un test tient et qu'un œil
+ * laisse passer.
+ */
+static void test_frappe(void)
+{
+    room_camera cam = make_player();
+    room_viewmodel vm;
+    room_viewmodel_init(&vm);
+    for (int i = 0; i < 120; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+
+    ns_viewmodel_pose pose;
+    room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
+    const ns_v3 epaule_repos = ns_v3_make(pose.segment[NS_VM_SLEEVE_R].m[3][0],
+                                          pose.segment[NS_VM_SLEEVE_R].m[3][1],
+                                          pose.segment[NS_VM_SLEEVE_R].m[3][2]);
+    const ns_v3 poignet_repos = ns_v3_make(pose.segment[NS_VM_HAND_R].m[3][0],
+                                           pose.segment[NS_VM_HAND_R].m[3][1],
+                                           pose.segment[NS_VM_HAND_R].m[3][2]);
+
+    CHECK(room_viewmodel_frappe(&vm, NULL), "le coup part, même sans borne");
+    CHECK(vm.state == ROOM_VM_HIT, "l'état est bien celui du coup");
+    CHECK(!room_viewmodel_frappe(&vm, NULL), "un coup à la fois");
+    CHECK(room_viewmodel_is_hitting(&vm), "le geste est en cours");
+
+    /*
+     * On déroule les 390 ms en suivant DEUX choses à chaque pas : jusqu'où le
+     * poignet va, et jusqu'où l'épaule dérive. `make_player` regarde vers +X,
+     * donc « devant » est +X.
+     */
+    float poignet_max = poignet_repos.x;
+    float poignet_min = poignet_repos.x;
+    float epaule_max  = epaule_repos.x;
+    int   impacts = 0;
+    float t_impact = -1.0f;
+    const int pas = (int)(0.500f * 120.0f) + 2;
+    for (int i = 0; i < pas; ++i) {
+        room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+        if (room_viewmodel_take_impact(&vm, NULL, NULL)) {
+            ++impacts;
+            if (t_impact < 0.0f) t_impact = (float)(i + 1) / 120.0f;
+        }
+        room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
+        const float px = pose.segment[NS_VM_HAND_R].m[3][0];
+        const float ex = pose.segment[NS_VM_SLEEVE_R].m[3][0];
+        if (px > poignet_max) poignet_max = px;
+        if (px < poignet_min) poignet_min = px;
+        if (ex > epaule_max)  epaule_max  = ex;
+    }
+    printf("  frappe : poignet de %.3f a %.3f m (repos %.3f), epaule +%.3f m\n",
+           (double)poignet_min, (double)poignet_max, (double)poignet_repos.x,
+           (double)(epaule_max - epaule_repos.x));
+
+    /*
+     * L'IMPACT TOMBE UNE FOIS, ET À 90 ms. Onze pas de simulation remplissent
+     * la condition « on a dépassé la fin de l'aller » ; testée comme un seuil
+     * plutôt que comme un front, elle ferait partir le son onze fois.
+     */
+    CHECK(impacts == 1, "l'impact est un FRONT, pas un seuil (%d fois)", impacts);
+    CHECK(t_impact > 0.190f && t_impact < 0.212f,
+          "l'impact tombe à la fin de l'aller (%.3f s, attendu 0,200)",
+          (double)t_impact);
+
+    /*
+     * LE POING RECULE PUIS PART, et c'est la COURSE TOTALE qui compte, pas le
+     * gain sur la position de repos.
+     *
+     * C'est le contrôle qui a fait ajouter la phase d'armé. La position de
+     * repos porte déjà les mains en avant — 44 cm de l'œil pour 59 de portée —
+     * donc un coup lancé de là ne gagnait que CINQ MILLIMÈTRES au poignet : le
+     * geste existait dans le code et ne se voyait pas. Avec l'armé, le poing
+     * recule d'abord d'une vingtaine de centimètres, ce qui lui laisse de quoi
+     * partir.
+     */
+    CHECK(poignet_repos.x - poignet_min > 0.30f,
+          "le poing RECULE d'abord : %.3f m d'armé (mesuré 0,340)",
+          (double)(poignet_repos.x - poignet_min));
+    CHECK(poignet_max - poignet_min > 0.40f,
+          "et la course totale du poing est franche : %.3f m (mesuré 0,450)",
+          (double)(poignet_max - poignet_min));
+
+    /*
+     * ET IL DÉPASSE LES MAINS QU'ON PORTE DÉJÀ EN AVANT. C'est l'assertion qui
+     * attrape le défaut le plus retors des deux qu'on a trouvés ici : la fin de
+     * l'aller tombe ENTRE deux pas de simulation, donc le dernier échantillon
+     * de la phase valait 82 % de la course. Le poing culminait trois
+     * centimètres devant la position de repos — un coup qui n'arrive pas à
+     * destination, et que rien ne signale. Il en gagne maintenant onze.
+     */
+    CHECK(poignet_max > poignet_repos.x + 0.08f,
+          "le poing dépasse franchement la position de repos : %.3f m gagnés "
+          "(mesuré 0,110)", (double)(poignet_max - poignet_repos.x));
+
+    /*
+     * L'ÉPAULE SUIT, MAIS NE PART PAS. La poussée vaut 7,5 cm ; on laisse deux
+     * fois la marge pour l'interpolation et le lissage, et on refuse tout ce
+     * qui ressemble à une intégration. C'est CE contrôle qui attrape le défaut
+     * de l'accumulation, et la borne est très en dessous des 65 cm mesurés.
+     */
+    const float derive = epaule_max - epaule_repos.x;
+    CHECK(derive < 0.16f,
+          "l'épaule ne DÉRIVE pas : %.3f m devant sa place (poussée 0,075)",
+          (double)derive);
+    CHECK(derive > 0.005f,
+          "l'épaule entre quand même dans le coup : %.3f m", (double)derive);
+
+    /* LE GESTE SE TERMINE et rend la main. */
+    room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    CHECK(!room_viewmodel_is_hitting(&vm), "le coup est fini après 390 ms");
+    CHECK(vm.state == ROOM_VM_IDLE, "et les mains sont rendues au repos");
+
+    /* Tout revient : 400 pas plus tard, l'épaule et le poignet ont retrouvé
+     * leur place. Une dérive résiduelle se verrait ici même si elle passait
+     * sous la borne pendant le geste. */
+    for (int i = 0; i < 400; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
+    CHECK_NEAR(pose.segment[NS_VM_SLEEVE_R].m[3][0], epaule_repos.x, 0.002f);
+    CHECK_NEAR(pose.segment[NS_VM_HAND_R].m[3][0], poignet_repos.x, 0.010f);
+
+    /*
+     * L'ALLER EST PLUS COURT QUE LE RETOUR, et c'est ce qui distingue un coup
+     * d'un bras qu'on agite. On le lit sur l'avancement lui-même : à 90 ms il
+     * vaut 1, et à 90 + 150 ms — la moitié du retour — il doit encore valoir
+     * plus de trois dixièmes. Un geste symétrique serait déjà retombé sous un
+     * dixième au même instant.
+     */
+    room_viewmodel_init(&vm);
+    for (int i = 0; i < 120; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    room_viewmodel_frappe(&vm, NULL);
+    for (int i = 0; i < (int)(0.200f * 120.0f) + 1; ++i) {
+        room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    }
+    const float a_impact = room_viewmodel_frappe_amount(&vm, 1.0f);
+    CHECK(a_impact > 0.95f, "le geste est à fond à l'impact (%.3f)",
+          (double)a_impact);
+    for (int i = 0; i < (int)(0.150f * 120.0f); ++i) {
+        room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+    }
+    const float a_mi_retour = room_viewmodel_frappe_amount(&vm, 1.0f);
+    CHECK(a_mi_retour > 0.30f,
+          "le retour est LENT : encore %.3f à mi-chemin (un geste symétrique "
+          "serait sous 0,10)", (double)a_mi_retour);
+
+    /* Et le choc décroît au lieu de rester. */
+    CHECK(room_viewmodel_choc(&vm, 1.0f) < 0.30f,
+          "le choc de la dalle s'est calmé (%.3f)",
+          (double)room_viewmodel_choc(&vm, 1.0f));
+}
+
 int main(void)
 {
     test_reachable();
@@ -536,6 +702,7 @@ int main(void)
     test_sequence();
     test_play_hands_on_controls();
     test_forced_pose();
+    test_frappe();
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);
     return g_failures ? 1 : 0;

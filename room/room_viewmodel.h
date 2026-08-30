@@ -194,25 +194,37 @@ void room_viewmodel_tap(room_viewmodel *vm);
  * COGNER LA MACHINE
  * ==========================================================================
  *
- * Le geste, et pourquoi ses deux durées ne sont pas la même
- * ---------------------------------------------------------
+ * Le geste, et pourquoi ses trois durées ne sont pas la même
+ * ----------------------------------------------------------
  * Un coup n'est pas symétrique, et c'est ce qui le distingue d'un bras qu'on
- * agite. L'ALLER est porté par tout le corps et s'arrête net sur la tôle ; le
- * RETOUR n'est porté par rien — le bras retombe. Les deux durées sont donc
- * dans un rapport de un à trois, et elles sont MESURÉES plutôt que choisies :
+ * agite. Il a trois temps, et chacun a sa durée MESURÉE — par la distance sur
+ * le temps, pas par le goût :
  *
- *   - le poing va de l'armé (30 cm à droite, 17 sous l'œil, 10 devant) au coup
- *     porté (13 à droite, 6 sous l'œil, 55 devant), soit **49,3 cm** de
- *     trajet. En **90 ms**, cela fait **5,5 m/s** de vitesse moyenne : c'est la
- *     plage d'un vrai coup de poing, que la littérature situe entre 5 et 9 m/s
- *     à l'impact selon l'entraînement. À 150 ms on tomberait à 3,3 m/s, ce qui
- *     est la vitesse d'un geste qu'on POSE, pas d'un coup ;
- *   - le retour prend **300 ms**, soit trois fois et demie l'aller. C'est ce
- *     qui donne le poids : un retour aussi vif que l'aller se lit comme un
- *     ressort, pas comme un bras.
+ *   ARMÉ    **110 ms**. Le poing quitte la position de repos (24,6 cm à
+ *           droite, 20 sous l'œil, 44 devant) pour l'armé (30 à droite, 17
+ *           sous l'œil, 10 devant), soit **34,6 cm** — donc **3,1 m/s**. On
+ *           ramène le poing moins vite qu'on ne le lance : c'est une
+ *           préparation, pas un geste de force.
  *
- * Le geste dure donc 390 ms en tout, et c'est aussi le PRIX du coup — voir
- * `room_viewmodel_is_hitting`.
+ *           CETTE PHASE A ÉTÉ AJOUTÉE APRÈS MESURE, et ce n'est pas un
+ *           ornement. La position de repos porte DÉJÀ les mains en avant — 44
+ *           cm de l'œil pour 59 de portée — donc un coup lancé de là n'avait
+ *           que sept centimètres à gagner. Mesuré au poignet, il en gagnait
+ *           CINQ MILLIMÈTRES : le geste existait dans le code et ne se voyait
+ *           pas à l'écran.
+ *
+ *   ALLER   **90 ms**. De l'armé au coup porté (13 cm à droite, 6 sous l'œil,
+ *           55 devant), soit **49,3 cm**, donc **5,5 m/s** de moyenne : la
+ *           plage d'un vrai coup de poing, que la littérature situe entre 5 et
+ *           9 m/s à l'impact selon l'entraînement. À 150 ms on tomberait à
+ *           3,3 m/s, la vitesse d'un geste qu'on POSE.
+ *
+ *   RETOUR  **300 ms**, trois fois et demie l'aller. C'est ce qui donne le
+ *           poids : un retour aussi vif que l'aller se lit comme un ressort,
+ *           pas comme un bras.
+ *
+ * Le geste dure donc 500 ms en tout, l'impact tombe à 200, et cette demi-
+ * seconde est aussi le PRIX du coup — voir `room_viewmodel_is_hitting`.
  */
 
 /*
@@ -228,7 +240,7 @@ void room_viewmodel_tap(room_viewmodel *vm);
 bool room_viewmodel_frappe(room_viewmodel *vm, const ns_cabinet *cab);
 
 /*
- * Vrai pendant les 390 ms du geste.
+ * Vrai pendant les 500 ms du geste.
  *
  * C'EST LA CONSÉQUENCE DE JEU, et elle tient dans cette fonction : pendant que
  * la main droite est sur la machine, elle n'est pas sur les boutons. L'appelant
