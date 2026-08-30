@@ -131,6 +131,50 @@ static bool wav_measure(const char *path, int rate, double *out_peak, double *ou
     return true;
 }
 
+/*
+ * LA DURÉE UTILE d'un WAV, en millisecondes : l'instant où 95 % de son énergie
+ * est passée. −1 si le fichier manque.
+ *
+ * C'est le MÊME calcul que `sg_t95` dans `tools/stepgen.c`, et le recopier ici
+ * est délibéré alors que ce fichier refuse ailleurs de refaire le travail du
+ * générateur. La raison tient en une phrase : `stepgen` mesure son TAMPON, ce
+ * test mesure le FICHIER LIVRÉ. Entre les deux il y a une mise à l'échelle, une
+ * quantification en 16 bits, une écriture, une copie par CMake et une
+ * installation — et c'est justement cette chaîne-là qu'on veut voir tenir.
+ *
+ * Le calcul n'a ni filtre ni coefficient : c'est une somme de carrés et un
+ * seuil. C'est ce qui permet de le recopier sans risquer d'obtenir une grandeur
+ * subtilement différente sous le même nom, ce qui serait pire que de ne rien
+ * mesurer.
+ */
+static double wav_duree_utile(const char *path, int rate)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1.0;
+    unsigned char h[44];
+    if (fread(h, 1, sizeof h, f) != sizeof h) { fclose(f); return -1.0; }
+
+    static double e[48000 * 4];
+    long n = 0;
+    double total = 0.0;
+    short s;
+    while (fread(&s, sizeof s, 1, f) == 1 && n < (long)(sizeof e / sizeof e[0])) {
+        const double v = (double)s / 32768.0;
+        e[n] = v * v;
+        total += e[n];
+        n++;
+    }
+    fclose(f);
+    if (n == 0 || total <= 0.0) return -1.0;
+
+    double acc = 0.0;
+    for (long i = 0; i < n; ++i) {
+        acc += e[i];
+        if (acc >= 0.95 * total) return (double)i * 1000.0 / (double)rate;
+    }
+    return (double)n * 1000.0 / (double)rate;
+}
+
 /* Énergie moyenne par échantillon d'un WAV 16 bits, normalisée. */
 static double wav_energy(const char *path)
 {
@@ -783,6 +827,230 @@ static void test_jeton_bank(void)
     }
 }
 
+/*
+ * LES CINQ BRUITS DU COUPERET, TELS QU'ILS SONT LIVRÉS.
+ *
+ * Même service que `test_jeton_bank` rend aux jetons, et il vaut plus cher ici :
+ * le mode compétitif fait tenir sa règle dans une minuterie de quarante-cinq
+ * secondes, et le joueur a les yeux sur la dalle d'une borne pendant qu'elle
+ * court. Ces cinq fichiers sont le seul canal par lequel la règle l'atteint. Une
+ * chaîne de build qui cesserait de les produire ne rendrait pas le mode moins
+ * agréable — elle le rendrait injouable, et rien d'autre ne s'en apercevrait.
+ *
+ * CE QUE CE TEST NE REFAIT PAS. `tools/stepgen` vérifie déjà la brillance, la
+ * durée utile, le compte d'attaques et les deux glissades de ses propres
+ * sorties, et refuse d'écrire un fichier qui ment. Ce test-ci ne rejoue pas ces
+ * mesures : il vérifie que les fichiers ARRIVENT, aux bonnes durées, et il
+ * refait UNE seule des mesures de `stepgen` — celle qui sépare le tic de la
+ * lame. Voir plus bas pourquoi celle-là et pas une autre.
+ */
+static void test_couperet_bank(void)
+{
+    /* Libellés sans accent : `%-16s` compte des OCTETS, un « é » en vaut deux,
+     * et la colonne se décalerait sur la seule ligne qui en porterait un. C'est
+     * la même remarque qu'au-dessus des jetons, et elle vaut toujours. */
+    static const struct { const char *file, *quoi; double ms; } cp[5] = {
+        { "couperet_tic.wav",      "le battement",     40.0 },
+        { "couperet_lame.wav",     "la lame",        1150.0 },
+        { "couperet_coupure.wav",  "une borne morte",  500.0 },
+        { "couperet_blindage.wav", "la plaque tient",  300.0 },
+        { "couperet_renvoi.wav",   "ca repart",        420.0 },
+    };
+
+    double zcr[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+    double utile[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+    bool complete = true;
+
+    for (int i = 0; i < 5; ++i) {
+        char p[768];
+        double peak = 0.0, seconds = 0.0;
+        snprintf(p, sizeof p, "%s/assets/sounds/%s", g_dir, cp[i].file);
+        if (!wav_measure(p, 48000, &peak, &zcr[i], &seconds)) {
+            CHECK(false, "le bruit du couperet « %s » est livré (%s)",
+                  cp[i].quoi, p);
+            complete = false;
+            continue;
+        }
+        utile[i] = wav_duree_utile(p, 48000);
+
+        printf("  couperet %-16s : %6.0f ms, %6.1f ms utiles, pic %.2f, "
+               "%.0f passages/s\n",
+               cp[i].quoi, seconds * 1000.0, utile[i], peak, zcr[i]);
+
+        /* La durée attrape un renommage ou une copie qui livrerait cinq fois le
+         * même fichier — ce qu'aucune mesure acoustique ne verrait aussi
+         * sûrement, puisque les cinq passeraient alors les mêmes seuils. */
+        CHECK(fabs(seconds * 1000.0 - cp[i].ms) < 5.0,
+              "« %s » dure %.0f ms, attendu %.0f", cp[i].file,
+              seconds * 1000.0, cp[i].ms);
+        /* Un fichier normalisé, donc audible. Un pic effondré voudrait dire
+         * qu'on a livré du silence sous un nom correct. */
+        CHECK(peak > 0.60, "« %s » n'est pas muet (pic %.2f)", cp[i].file, peak);
+        CHECK(utile[i] > 0.0, "« %s » a une durée utile mesurable", cp[i].file);
+    }
+    if (!complete) return;
+
+    /*
+     * LE TIC ET LA LAME NE SE CONFONDENT PAS, SUR LES FICHIERS RÉELLEMENT
+     * PRODUITS.
+     *
+     * C'est la seule mesure de `stepgen` que ce test refait, et voici pourquoi
+     * elle mérite de l'être deux fois. Ce sont les deux sons du MÊME événement à
+     * deux instants — le compte à rebours, puis sa fin — et le joueur les
+     * apprend au moment précis où il regarde ailleurs. S'ils se ressemblent, il
+     * ne saura jamais lequel veut dire quoi, et ce n'est pas du confort qui est
+     * perdu, c'est la règle du mode.
+     *
+     * Le seuil est LE MÊME que celui de `stepgen` — x40, pour une valeur
+     * mesurée de x98 — et c'est le point : `stepgen` l'impose à son tampon, ce
+     * test l'impose au fichier qui sort du paquet. Entre les deux il y a une
+     * normalisation, une quantification en 16 bits et deux copies. Mesuré ici,
+     * l'écart vaut 451,3 contre 4,6 ms.
+     *
+     * LES PASSAGES PAR ZÉRO confirment, plus grossièrement, et on écrit ce qu'ils
+     * établissent et rien de plus : 4 025 contre 228 par seconde, soit un
+     * facteur 17,7. C'est un instrument que ce fichier possède déjà et qui ne
+     * coûte rien ; il ne remplace pas le premier, parce qu'un croisement de zéro
+     * ne pèse rien par l'amplitude — la limite est écrite au-dessus des jetons.
+     */
+    const double ecart_duree = (utile[0] > 0.0) ? utile[1] / utile[0] : 0.0;
+    const double ecart_zcr   = (zcr[1] > 0.0)   ? zcr[0] / zcr[1]     : 0.0;
+
+    printf("  couperet : la lame dure x%.0f le tic (%.1f contre %.1f ms), "
+           "le tic croise x%.1f (%.0f contre %.0f /s)\n",
+           ecart_duree, utile[1], utile[0], ecart_zcr, zcr[0], zcr[1]);
+
+    CHECK(ecart_duree > 40.0,
+          "le tic et la lame ne se confondent pas en durée utile "
+          "(x%.0f, plancher x40)", ecart_duree);
+    CHECK(ecart_zcr > 8.0,
+          "…ni en brillance grossière (x%.1f, plancher x8)", ecart_zcr);
+}
+
+/*
+ * LA CADENCE DU TIC, SANS UN SEUL ÉCHANTILLON D'AUDIO.
+ *
+ * `room_sound_couperet_tic` prend `couperet.prochain` à chaque image et décide
+ * elle-même quand battre : c'est un compte à rebours DANS `room_sound`, au même
+ * titre que la rafale du monnayeur et que la cadence des pas. Ce qui se teste
+ * ici n'est donc pas un son, c'est une machine à états — et elle se teste sans
+ * mixeur, sans fichier et sans carte son.
+ *
+ * L'INSTANCE EST MONTÉE À LA MAIN, avec `ready` vrai et le clip à
+ * `NS_AUDIO_INVALID`. Ce n'est pas un contournement, c'est exactement le cas
+ * qu'on veut couvrir : la fonction doit faire avancer son état MÊME quand le
+ * fichier manque. Si elle ne le faisait pas, une banque incomplète ne rendrait
+ * pas seulement le tic muet — elle laisserait le compteur sur une valeur morte,
+ * et le premier tic d'après une réinstallation partirait au mauvais moment.
+ *
+ * On observe `cp_tic_seconde` : la fonction joue exactement quand ce champ
+ * change pour une valeur de 1 à 10. Compter ses changements, c'est compter les
+ * tics.
+ */
+static int compter_tics(room_sound *s, float de, float a, float pas,
+                        int *premier, int *dernier)
+{
+    int tics = 0, avant = s->cp_tic_seconde;
+    if (premier) *premier = 0;
+    if (dernier) *dernier = 0;
+
+    for (float p = de; p > a; p -= pas) {
+        room_sound_couperet_tic(s, p);
+        if (s->cp_tic_seconde != avant && s->cp_tic_seconde != 0) {
+            if (premier && tics == 0) *premier = s->cp_tic_seconde;
+            if (dernier) *dernier = s->cp_tic_seconde;
+            tics++;
+        }
+        avant = s->cp_tic_seconde;
+    }
+    return tics;
+}
+
+static void test_couperet_tic_cadence(void)
+{
+    room_sound s;
+    memset(&s, 0, sizeof s);
+    s.ready = true;
+    s.clip_cp_tic = NS_AUDIO_INVALID;
+
+    /* Une image sur 120, la cadence de simulation du dépôt. */
+    const float pas = 1.0f / 120.0f;
+
+    /*
+     * UNE MANCHE ENTIÈRE, de la période complète à zéro. `prochain` descend
+     * ainsi dans `room_cp_avancer`, qui le recalcule par
+     * `periode - fmodf(horloge, periode)` — il ne descend jamais au-dessous de
+     * zéro, il remonte d'un coup.
+     */
+    int premier = 0, dernier = 0;
+    const int tics = compter_tics(&s, 45.0f, 0.0f, pas, &premier, &dernier);
+
+    printf("  couperet : %d tic(s) sur une manche de 45 s, du %d au %d\n",
+           tics, premier, dernier);
+
+    CHECK(tics == 10, "le tic sonne exactement dix fois sur une manche (%d)", tics);
+    CHECK(premier == 10, "le premier tic annonce dix secondes (%d)", premier);
+    CHECK(dernier == 1, "le dernier tic annonce une seconde (%d)", dernier);
+
+    /* ZÉRO AU-DELÀ DE DIX SECONDES. C'est la moitié de la règle, et c'est celle
+     * qui coûterait le plus cher si elle lâchait : un tic toutes les secondes
+     * pendant quarante-cinq secondes rendrait le mode invivable. */
+    memset(&s, 0, sizeof s);
+    s.ready = true;
+    s.clip_cp_tic = NS_AUDIO_INVALID;
+    const int hors = compter_tics(&s, 45.0f, 10.0f, pas, NULL, NULL);
+    CHECK(hors == 0, "aucun tic au-delà de dix secondes (%d)", hors);
+
+    /*
+     * LE RÉARMEMENT. Trois manches d'affilée doivent donner trois fois dix, sans
+     * quoi seule la première s'entendrait — et c'est précisément le défaut qu'un
+     * compteur sans remise à zéro produirait, en silence.
+     */
+    memset(&s, 0, sizeof s);
+    s.ready = true;
+    s.clip_cp_tic = NS_AUDIO_INVALID;
+    for (int manche = 0; manche < 3; ++manche) {
+        const int n = compter_tics(&s, 45.0f, 0.0f, pas, NULL, NULL);
+        CHECK(n == 10, "la manche %d sonne dix fois (%d)", manche + 1, n);
+    }
+
+    /*
+     * UNE IMAGE LONGUE NE FAIT JAMAIS DEUX TICS. Si le compte saute de 3,4 à 1,2
+     * — un chargement, une machine à genoux —, un seul tic part et il annonce
+     * « 2 ». Deux clips lancés à la même image ne s'entendraient pas comme deux
+     * secondes mais comme un seul bruit plus épais.
+     */
+    memset(&s, 0, sizeof s);
+    s.ready = true;
+    s.clip_cp_tic = NS_AUDIO_INVALID;
+    room_sound_couperet_tic(&s, 3.4f);
+    const int apres_saut = s.cp_tic_seconde;
+    room_sound_couperet_tic(&s, 1.2f);
+    CHECK(apres_saut == 4, "à 3,4 s le tic annonce quatre (%d)", apres_saut);
+    CHECK(s.cp_tic_seconde == 2,
+          "une image de 2,2 s ne fait qu'un tic, et il annonce deux (%d)",
+          s.cp_tic_seconde);
+
+    /*
+     * LA BORNE EXACTE. À 10,0 s le tic part — c'est « dix secondes », et le
+     * compte en commence dix. Juste au-dessus, rien.
+     */
+    memset(&s, 0, sizeof s);
+    s.ready = true;
+    s.clip_cp_tic = NS_AUDIO_INVALID;
+    room_sound_couperet_tic(&s, 10.001f);
+    CHECK(s.cp_tic_seconde == 0, "à 10,001 s, rien n'a encore sonné (%d)",
+          s.cp_tic_seconde);
+    room_sound_couperet_tic(&s, 10.0f);
+    CHECK(s.cp_tic_seconde == 10, "à 10,0 s exactement, le tic part (%d)",
+          s.cp_tic_seconde);
+
+    /* Un compte à rebours à zéro ou négatif ne sonne pas et réarme. */
+    room_sound_couperet_tic(&s, 0.0f);
+    CHECK(s.cp_tic_seconde == 0, "à zéro, l'état est réarmé (%d)",
+          s.cp_tic_seconde);
+}
+
 static void test_ambience_beds(void)
 {
     static const struct { const char *file, *what; double max_ratio; } bed[3] = {
@@ -1324,6 +1592,8 @@ int main(int argc, char **argv)
     test_zone_reverb();
     test_footstep_bank();
     test_jeton_bank();
+    test_couperet_bank();
+    test_couperet_tic_cadence();
     test_ambience_beds();
     test_room_walk();
     test_ambience_positions();
