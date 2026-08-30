@@ -48,11 +48,67 @@ add_dependencies(nineteen nineteen_assets)
 # n'installait — on lançait toujours depuis l'arbre de build, où le chemin est
 # passé en dur par `NINETEEN_BUILD_ASSET_DIR`.
 #
-# Les assets vont donc À CÔTÉ du binaire, dans `bin/assets`, exactement là où le
-# moteur les cherche. Pas dans `share/` : ce serait plus conforme aux usages
-# Unix, et ça demanderait au moteur un point de montage de plus dont un paquet
-# .dmg ou .msi n'aurait que faire.
-install(TARGETS nineteen RUNTIME DESTINATION bin)
+# Les assets vont donc À CÔTÉ du binaire, exactement là où le moteur les cherche
+# — et « à côté du binaire » ne veut pas dire le même répertoire sur les trois
+# plateformes. Trois dispositions, une seule règle.
+#
+# ------------------------------------------------------------------------
+# macOS : Contents/Resources, et surtout PAS Contents/MacOS
+# ------------------------------------------------------------------------
+# Un `.dmg` qu'on glisse dans Applications demande un vrai bundle. La question
+# est alors : où poser les assets pour que `ns_paths` les trouve sans qu'on
+# touche au moteur ? La réponse est dans SDL, pas dans une convention :
+#
+#   SDL3/src/filesystem/cocoa/SDL_sysfilesystem.m:51
+#   « this returns the exedir for non-bundled and the resourceDir for bundled »
+#
+# `SDL_GetBasePath()` rend donc `Nineteen.app/Contents/Resources/` dès qu'il y a
+# un Info.plist, et NON `Contents/MacOS/`. Poser les assets à côté de
+# l'exécutable — le réflexe — les mettrait dans `Contents/MacOS/assets`, que
+# `ns_paths` ne regarderait jamais : le jeu s'arrêterait sur « scène
+# introuvable » depuis le .dmg, et seulement depuis le .dmg, parce que sur la
+# machine de construction `NINETEEN_BUILD_ASSET_DIR` l'aurait sauvé.
+#
+# `Contents/Resources` demande donc ZÉRO ligne de moteur : ni point de montage
+# de plus, ni cas particulier dans `ns_paths.c`. Le comportement est en outre
+# ÉCRIT dans notre Info.plist (`SDL_FILESYSTEM_BASE_DIR_TYPE = resource`) plutôt
+# que subi par défaut, pour qu'un futur changement d'avis se lise.
+#
+# ------------------------------------------------------------------------
+# Linux : lib/nineteen, et bin/nineteen n'est qu'un lien
+# ------------------------------------------------------------------------
+# Un `.deb` s'installe sous `/usr`. Y poser `bin/assets` donnerait
+# `/usr/bin/assets/` : un répertoire de données dans le répertoire du PATH, que
+# lintian refuse et qui pollue la complétion de tous les shells de la machine.
+# Le binaire ET ses assets vont donc dans `lib/nineteen/`, et `bin/nineteen` est
+# un lien symbolique RELATIF vers lui.
+#
+# Ça marche parce que SDL résout `/proc/self/exe`, qui suit le lien : le
+# processus lancé par `/usr/bin/nineteen` voit `/usr/lib/nineteen/` comme base,
+# donc ses assets. Vérifié dans un conteneur, `.deb` installé par `apt`.
+#
+# ------------------------------------------------------------------------
+# Windows : bin/, inchangé
+# ------------------------------------------------------------------------
+# L'installateur pose son propre répertoire dans %LOCALAPPDATA%\Programs ; il
+# n'y a ni PATH partagé ni police de distribution à respecter, et `bin\assets`
+# à côté de `bin\nineteen.exe` est exactement ce que `ns_paths` attend.
+if(APPLE)
+    set(_app "Nineteen.app")
+    set(_bindir   "${_app}/Contents/MacOS")
+    set(_datadir  "${_app}/Contents/Resources")
+    set(_docdir   ".")                       # la racine du .dmg, à côté de l'app
+elseif(UNIX)
+    set(_bindir   "lib/nineteen")
+    set(_datadir  "lib/nineteen")
+    set(_docdir   "share/doc/nineteen")
+else()
+    set(_bindir   "bin")
+    set(_datadir  "bin")
+    set(_docdir   ".")
+endif()
+
+install(TARGETS nineteen RUNTIME DESTINATION "${_bindir}")
 
 # On installe les quatre répertoires QUE LE JEU LIT, et pas le contenu du
 # dossier de build. La première version copiait `${NINETEEN_GEN_DIR}/` en bloc :
@@ -85,23 +141,73 @@ install(TARGETS nineteen RUNTIME DESTINATION bin)
 # produit quatre fichiers (gltf, bin, lights.json, scene.json) et une liste
 # nommee en aurait oublie un le jour ou un cinquieme apparait.
 foreach(_dir scene materials sounds games models)
-    install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION bin/assets
+    install(DIRECTORY "${NINETEEN_GEN_DIR}/${_dir}" DESTINATION "${_datadir}/assets"
             PATTERN "salle-legacy*" EXCLUDE)
 endforeach()
 
-# Les reglages du personnage, A COTE DU BINAIRE : c'est le premier des trois
-# endroits ou `ns_env_load` les cherche. Sans ce fichier le jeu tourne sur ses
-# valeurs par defaut — ce qui est correct — mais le joueur n'a rien a editer, et
-# la promesse « configurable sans recompiler » ne tient pas dans le paquet.
-install(FILES "${CMAKE_SOURCE_DIR}/nineteen.env" DESTINATION bin)
+# Les reglages du personnage, LA OU `ns_env_load` les cherche en deuxieme :
+# `SDL_GetBasePath()`, c'est-a-dire le meme repertoire que `assets/`. Sans ce
+# fichier le jeu tourne sur ses valeurs par defaut — ce qui est correct — mais le
+# joueur n'a rien a editer, et la promesse « configurable sans recompiler » ne
+# tient pas dans le paquet.
+install(FILES "${CMAKE_SOURCE_DIR}/nineteen.env" DESTINATION "${_datadir}")
 
 # Ce qu'il faut lire pour jouer, et ce qu'il faut savoir sur les licences.
 install(FILES "${CMAKE_SOURCE_DIR}/docs/JOUER.md"
               "${CMAKE_SOURCE_DIR}/assets/cc0/LICENSES.md"
-        DESTINATION .)
+        DESTINATION "${_docdir}")
 
-# De quoi lancer le jeu depuis un menu, sur les bureaux qui en ont un.
-if(UNIX AND NOT APPLE)
+if(APPLE)
+    # --------------------------------------------------------------------
+    # Ce qui fait qu'un répertoire EST une application, pour le Finder
+    # --------------------------------------------------------------------
+    # Sans `Info.plist`, `Nineteen.app` reste un dossier : double-cliquer
+    # l'ouvre au lieu de lancer le jeu. Et sans lui `SDL_GetBasePath()` ne
+    # bascule pas sur `Contents/Resources` — le bundle et l'emplacement des
+    # assets sont la MÊME décision, pas deux.
+    # Un build macOS lancé sans le préréglage n'a pas de cible de déploiement :
+    # la clé `LSMinimumSystemVersion` sortirait vide, et le Finder d'un vieux
+    # système lancerait quand même une application qui ne peut pas tourner.
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0")
+    endif()
+    configure_file("${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+                   "${CMAKE_CURRENT_BINARY_DIR}/Info.plist" @ONLY)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/Info.plist"
+            DESTINATION "${_app}/Contents")
+
+    # Huit octets que macOS n'exige plus depuis Snow Leopard, et que tout
+    # bundle produit par Xcode porte encore. On les met : ils coûtent moins
+    # que la question « pourquoi le nôtre ne l'a pas ».
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/PkgInfo" "APPL????")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/PkgInfo"
+            DESTINATION "${_app}/Contents")
+
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/macos/nineteen.icns"
+            DESTINATION "${_app}/Contents/Resources")
+
+elseif(UNIX)
+    # --------------------------------------------------------------------
+    # `bin/nineteen` : un lien, pas une copie
+    # --------------------------------------------------------------------
+    # Une copie doublerait 9,4 Mio et divergerait au premier correctif. Un
+    # lien RELATIF, parce qu'un lien absolu vers `/usr/lib/...` casserait le
+    # `.tar.gz` déballé ailleurs que sur `/` — et le `.tar.gz` est justement
+    # celui qui n'est pas installé.
+    #
+    # `file(CREATE_LINK)` et non `install(FILES)` : CMake ne sait pas installer
+    # un lien qui n'existe pas encore. `$ENV{DESTDIR}` est ajouté à la main —
+    # c'est `install(FILES)` qui le fait d'ordinaire, pas `file()`, et l'oublier
+    # écrirait dans le `/usr` de la machine de construction au lieu du paquet.
+    install(CODE [[
+        set(_racine "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
+        file(MAKE_DIRECTORY "${_racine}/bin")
+        file(CREATE_LINK "../lib/nineteen/nineteen" "${_racine}/bin/nineteen" SYMBOLIC)
+        message(STATUS "Lien : ${_racine}/bin/nineteen -> ../lib/nineteen/nineteen")
+    ]])
+
+    # De quoi lancer le jeu depuis un menu, sur les bureaux qui en ont un.
+    # C'est aussi ce que `appimagetool` lit pour nommer et illustrer l'AppImage.
     install(FILES "${CMAKE_SOURCE_DIR}/packaging/nineteen.desktop"
             DESTINATION share/applications)
     install(FILES "${CMAKE_SOURCE_DIR}/packaging/nineteen.png"
