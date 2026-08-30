@@ -208,13 +208,79 @@ void main()
         /* La cible du lancer de rayons est plus petite que l'image : sans cette
          * division, on lirait le quart supérieur gauche étiré sur tout l'écran. */
         const int rtDiv = max(u_counts.w, 1);
-        uvec4 packed = texelFetch(u_lightShadow, ivec2(gl_FragCoord.xy) / rtDiv, 0);
+
+        /*
+         * UN FILTRAGE BILINEAIRE FAIT A LA MAIN, ET POURQUOI IL A FALLU L'ECRIRE.
+         *
+         * Cette cible est ENTIERE — chaque canal porte `(indice << 8) |
+         * visibilite` — donc le materiel ne peut pas l'interpoler : melanger
+         * deux indices de lumiere ne veut rien dire, et Vulkan l'interdit. Le
+         * code lisait donc UN texel au plus proche. A rtDiv = 2 et une echelle
+         * de rendu de 0,75, un texel de cette cible couvre 2,7 pixels de
+         * fenetre : chaque bord d'ombre sortait en marches d'escalier de trois
+         * pixels, et le debruiteur a-trous les elargissait encore. Mesure a
+         * l'oeil sur la vue « plafond » : a --quality=medium, ou les ombres ne
+         * passent pas par cette cible, les memes bords sont nets ; a
+         * --quality=high ils sont en escalier. Le palier que `--help` annonce
+         * « superbe en capture » etait donc le plus laid des deux, et toutes
+         * les captures du depot sont prises a ce palier.
+         *
+         * Ce qu'on ne peut pas interpoler, c'est l'INDICE. La VISIBILITE, elle,
+         * s'interpole tres bien — a condition de ne melanger que des valeurs
+         * qui parlent de la MEME lumiere. D'ou : les quatre voisins sont lus,
+         * et chacun ne contribue au creneau k que si son propre creneau k porte
+         * le meme indice que le texel le plus proche. Quand aucun ne le porte —
+         * a une vraie discontinuite, la ou l'ensemble des lumieres dominantes
+         * change — on retombe exactement sur l'ancien comportement, c'est-a-dire
+         * le plus proche. Le filtre ne peut donc pas inventer d'ombre la ou il
+         * n'y en a pas.
+         *
+         * L'HYPOTHESE, ecrite parce qu'elle est fausse quelque part. On compare
+         * le creneau k au creneau k, et non chaque creneau a tous les autres :
+         * seize comparaisons au lieu de soixante-quatre. Elle tient parce que
+         * `raytrace.comp` classe les lumieres par la meme fonction sur des
+         * positions voisines, donc l'ordre est stable d'un texel a l'autre. La
+         * ou il ne l'est pas, la condition echoue et on retombe sur le plus
+         * proche : le pire cas de l'hypothese est l'ancien rendu.
+         */
+        const ivec2 rtMax = textureSize(u_lightShadow, 0) - ivec2(1);
+        const vec2  rtc   = gl_FragCoord.xy / float(rtDiv) - 0.5;
+        const ivec2 base  = ivec2(floor(rtc));
+        const vec2  frac  = rtc - vec2(base);
+
+        const ivec2 pres = clamp(base + ivec2(frac.x >= 0.5 ? 1 : 0,
+                                              frac.y >= 0.5 ? 1 : 0),
+                                 ivec2(0), rtMax);
+        uvec4 packed = texelFetch(u_lightShadow, pres, 0);
         shadowIdx = int[4](int(packed.x >> 8), int(packed.y >> 8),
                            int(packed.z >> 8), int(packed.w >> 8));
         shadowVis = float[4](float(packed.x & 0xFFu) / 255.0,
                              float(packed.y & 0xFFu) / 255.0,
                              float(packed.z & 0xFFu) / 255.0,
                              float(packed.w & 0xFFu) / 255.0);
+
+        float visAcc[4] = float[4](0.0, 0.0, 0.0, 0.0);
+        float visSum[4] = float[4](0.0, 0.0, 0.0, 0.0);
+        for (int n = 0; n < 4; ++n) {
+            const ivec2 off = ivec2(n & 1, n >> 1);
+            const float w = ((off.x == 1) ? frac.x : 1.0 - frac.x)
+                          * ((off.y == 1) ? frac.y : 1.0 - frac.y);
+            if (w <= 0.0) continue;
+            const uvec4 q = texelFetch(u_lightShadow,
+                                       clamp(base + off, ivec2(0), rtMax), 0);
+            const uint qi[4] = uint[4](q.x >> 8, q.y >> 8, q.z >> 8, q.w >> 8);
+            const uint qv[4] = uint[4](q.x & 0xFFu, q.y & 0xFFu,
+                                       q.z & 0xFFu, q.w & 0xFFu);
+            for (int k = 0; k < 4; ++k) {
+                if (int(qi[k]) == shadowIdx[k]) {
+                    visAcc[k] += w * float(qv[k]) / 255.0;
+                    visSum[k] += w;
+                }
+            }
+        }
+        for (int k = 0; k < 4; ++k) {
+            if (visSum[k] > 1e-4) shadowVis[k] = visAcc[k] / visSum[k];
+        }
     }
 
     vec3 Lo = vec3(0.0);
