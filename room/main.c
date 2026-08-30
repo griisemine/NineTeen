@@ -949,10 +949,19 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
  * en regardant la vitrine. On cherche donc parmi les DEUX natures qui nous
  * intéressent, ce qui rend le résultat indépendant des six autres.
  *
- * 1,6 m. Le monnayeur fait 0,60 m de profondeur et la vitrine 0,42 ; leur ancre
- * étant l'origine du meuble, un joueur planté devant se tient entre 0,6 et
- * 0,9 m d'elle une fois sa propre demi-largeur de 0,425 m comptée. 1,6 m laisse
- * donc la marge d'un pas de côté sans allumer l'invite depuis l'allée.
+ * LA DISTANCE EST HORIZONTALE, ET C'EST LA SECONDE CHOSE QU'IL A FALLU
+ * CORRIGER EN IMAGE. Une distance en trois dimensions est ce qu'on écrit
+ * d'abord, et elle ne peut pas marcher ici : l'ancre d'un lieu est l'origine du
+ * meuble, donc AU SOL, et l'œil du joueur est à 1,60 m. La composante verticale
+ * mange à elle seule tout le budget, et l'invite ne s'allume jamais — quelle
+ * que soit la valeur qu'on écrit, tant qu'elle est inférieure à la taille du
+ * joueur. Aucun message, aucune erreur : le monnayeur reste muet et on cherche
+ * du côté de la salle. Vu sur capture à 1,97 m mesurés pour une portée de 1,60.
+ *
+ * 1,6 m au sol. Le monnayeur fait 0,60 m de profondeur et la vitrine 0,42 ;
+ * un joueur planté devant se tient entre 0,6 et 0,9 m de l'origine du meuble
+ * une fois sa propre demi-largeur de 0,425 m comptée. 1,6 m laisse donc la
+ * marge d'un pas de côté sans allumer l'invite depuis l'allée.
  *
  * Les six autres natures n'ont rien à proposer : billard, canapé, bar, radio,
  * toilettes et porte. Une invite qui s'allumerait devant un canapé apprendrait
@@ -965,12 +974,14 @@ static ns_poi_kind eco_poi_kind(const ns_scene *scene, const room_camera *cam)
     if (cam->mode != ROOM_CAM_PLAYER) return NS_POI_NONE;
 
     ns_poi_kind best_kind = NS_POI_NONE;
-    float       best_dist = ECO_PORTEE_COMPTOIR;
+    float       best2 = ECO_PORTEE_COMPTOIR * ECO_PORTEE_COMPTOIR;
     for (uint32_t i = 0; i < scene->poi_count; ++i) {
         const ns_poi *p = &scene->pois[i];
         if (p->kind != NS_POI_TOKENS && p->kind != NS_POI_PRIZES) continue;
-        const float d = ns_v3_dist(cam->position, p->anchor);
-        if (d < best_dist) { best_dist = d; best_kind = p->kind; }
+        const float dx = cam->position.x - p->anchor.x;
+        const float dz = cam->position.z - p->anchor.z;
+        const float d2 = dx * dx + dz * dz;
+        if (d2 < best2) { best2 = d2; best_kind = p->kind; }
     }
     return best_kind;
 }

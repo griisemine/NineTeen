@@ -1493,6 +1493,86 @@ static void motif_records(toile *t)
 }
 
 /* ==========================================================================
+ * MOTIF 9 — LOTS. La face de la vitrine, lue dans l'économie.
+ * ==========================================================================
+ * Elle n'est pas accrochée à un mur : c'est la face du meuble `vitrine_lots`,
+ * dans l'alcôve nord-est du hall, et elle est la SEULE des neuf planches qui
+ * soit à la fois un décor et une interface.
+ *
+ * CE QU'IL Y AVAIT À LA PLACE. Le meuble portait `affiche_6`, c'est-à-dire
+ * `affiche_attention.png` — l'avertissement « LUMIÈRES CLIGNOTANTES / EN CAS DE
+ * MALAISE, ARRÊTEZ LA PARTIE ». Une vitrine à lots qui affiche un avertissement
+ * d'épilepsie n'est pas seulement hors sujet : elle enseigne au joueur que ce
+ * meuble ne le concerne pas, et il ne s'en approche plus. L'avertissement, lui,
+ * est déjà accroché au mur où il doit être.
+ *
+ * ELLE EST EN PAYSAGE, et les cotes viennent du meuble : la face fait 1,62 x
+ * 0,76 m, soit 2,13:1. Les huit autres planches sont en portrait parce qu'elles
+ * remplissent des cadres de 0,777 x 0,971 m ; celle-ci prendrait des bandes
+ * noires ou serait étirée de 113 %.
+ *
+ * Le titre au-dessus, les lots en dessous, un par ligne : le nom à gauche, le
+ * prix à droite. C'est la même mise en page que la grille de l'affiche
+ * `jetons`, et c'est voulu — le joueur qui a lu l'une sait lire l'autre.
+ */
+static void motif_lots(toile *t)
+{
+    const float W = (float)t->w, H = (float)t->h;
+    const float haut[3] = { 0.055f, 0.020f, 0.075f };
+    const float bas[3]  = { 0.020f, 0.010f, 0.035f };
+    fond_degrade(t, haut, bas);
+
+    /* Un halo derrière le titre : sans lui, la planche est un tableau posé sur
+     * du noir, et une vitrine doit avoir l'air éclairée de l'intérieur. */
+    for (int i = 30; i > 0; --i) {
+        p_anneau(t, W * 0.5f, H * 0.16f, 0.0f, W * 0.42f * (float)i / 30.0f,
+                 C_MAGENTA, 0.006f);
+    }
+
+    p_cadre(t, 0.0f, 0.0f, W, H, H * 0.030f, C_AMBRE, 1.0f);
+
+    const float mx = W * 0.5f;
+    p_titre_c(t, "VITRINE A LOTS", mx, H * 0.055f,
+              cellule("VITRINE A LOTS", W * 0.66f, H * 0.150f), C_AMBRE, C_ENCRE);
+    p_texte_c(t, "VOS TICKETS S'ECHANGENT ICI", mx, H * 0.245f,
+              cellule("VOS TICKETS S'ECHANGENT ICI", W * 0.56f, H * 0.062f),
+              C_CYAN, 1.0f);
+
+    /*
+     * Les lots, dépliés depuis `ROOM_ECO_LOTS`. Le nombre n'est écrit nulle
+     * part : ajouter un lot ajoute sa ligne, et le pas se recalcule. C'est ce
+     * qui interdit à cette planche de promettre un lot qui n'existe pas, ou de
+     * taire celui qu'on vient d'ajouter.
+     */
+    typedef struct { const char *titre; int prix; const char *quoi; } lot_ligne;
+#define POSTER_LOT(cle, prix, titre, quoi) { (titre), (prix), (quoi) },
+    static const lot_ligne lots[] = { ROOM_ECO_LOTS(POSTER_LOT) };
+#undef POSTER_LOT
+
+    const int   n    = (int)(sizeof lots / sizeof lots[0]);
+    const float ytop = H * 0.365f;
+    const float ybas = H * 0.945f;
+    const float pas  = (ybas - ytop) / (float)(n > 0 ? n : 1);
+    /* La cellule est calée sur le pire cas de la table — le titre le plus long
+     * et le prix le plus grand — et non sur la première ligne : une ligne plus
+     * large que les autres déborderait toute seule. */
+    const float cel  = minf(cellule("REGIME DIFFICILE 0000", W * 0.86f, H * 0.10f),
+                            floorf(pas / 10.0f));
+
+    for (int i = 0; i < n; ++i) {
+        const float y = ytop + pas * (float)i;
+        if ((i & 1) == 0) {
+            p_rect(t, W * 0.045f, y - cel * 1.4f, W - W * 0.045f, y + cel * 8.6f,
+                   C_AMBRE, 0.09f);
+        }
+        char prix[16];
+        snprintf(prix, sizeof prix, "%d", lots[i].prix);
+        p_texte(t, lots[i].titre, W * 0.065f, y, cel, C_BLANC, 1.0f);
+        p_texte_d(t, prix, W - W * 0.065f, y, cel, C_AMBRE, 1.0f);
+    }
+}
+
+/* ==========================================================================
  * Le programme
  * ========================================================================== */
 
@@ -1510,6 +1590,7 @@ static const motif_def g_motifs[] = {
     { "attention", "l'avertissement lumieres clignotantes"    },
     { "orbite",    "la reclame d'un jeu invente"              },
     { "records",   "le tableau des meilleurs scores"          },
+    { "lots",      "la face de la vitrine, lue dans l'economie" },
 };
 
 static void ecrire(const toile *t, const char *chemin)
@@ -1574,6 +1655,7 @@ int main(int argc, char **argv)
     else if (strcmp(motif, "attention") == 0) motif_attention(&t);
     else if (strcmp(motif, "orbite") == 0)    motif_orbite(&t);
     else if (strcmp(motif, "records") == 0)   motif_records(&t);
+    else if (strcmp(motif, "lots") == 0)      motif_lots(&t);
     else tool_fatalf("motif inconnu : « %s »", motif);
 
     finition(&t);
