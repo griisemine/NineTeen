@@ -202,6 +202,7 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_door_open  = ns_audio_load("sounds/SF-ouvport.wav");
     s->clip_door_close = ns_audio_load("sounds/SF-fermport.wav");
     s->clip_flush      = ns_audio_load("sounds/chasse_eau.wav");
+    s->clip_coup       = ns_audio_load("sounds/coup_borne.wav");
 
     /* La banque de `tools/stepgen`. Le nom du matériau vient de
      * `ns_footstep_label` — le MÊME que celui que `salle.room.json` écrit et que
@@ -635,6 +636,31 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     }
 
     ns_audio_update(dt);
+}
+
+void room_sound_frappe(room_sound *s, ns_v3 position)
+{
+    if (!s->ready || s->clip_coup < 0) return;
+
+    ns_rng r;
+    ns_rng_seed(&r, (uint64_t)s->rng++, 0xC0DEu);
+
+    /*
+     * La plage de hauteur est ÉTROITE — sept pour cent de part et d'autre.
+     * Au-delà, on n'entend plus la même borne d'un coup à l'autre : une
+     * transposition de plus d'un demi-ton change la taille apparente du meuble,
+     * et c'est précisément ce que la banque de pas reproche à la méthode de
+     * 2020. Ici elle ne sert qu'à casser la répétition exacte.
+     */
+    const float pitch = rand_range(&r, 0.93f, 1.07f);
+    const float gain  = rand_range(&r, 0.82f, 1.00f);
+
+    /*
+     * Portée courte : 1 à 14 m. Un coup sur une borne n'est pas un événement de
+     * salle — il est fort là où on est et il ne porte pas jusqu'au bar. C'est
+     * l'inverse de la chasse d'eau, qui doit s'entendre à travers une cloison.
+     */
+    ns_audio_play_3d(s->clip_coup, NS_BUS_SFX, position, gain, pitch, 1.0f, 14.0f);
 }
 
 void room_sound_coin(room_sound *s, ns_v3 position)

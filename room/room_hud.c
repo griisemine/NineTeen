@@ -844,3 +844,73 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
     centred(s, 320.0f * u, 296.0f * u, 2.6f * u, dim,
             "UN JETON, PUIS E DEVANT UNE BORNE");
 }
+
+/* ==========================================================================
+ * LE DÉRAILLEMENT D'UNE DALLE FRAPPÉE
+ * ==========================================================================
+ * Le raisonnement est dans `room_hud.h` ; ici, les trois traits et leurs cotes.
+ *
+ * Tout est proportionnel à `h`, jamais en pixels : la même fonction dessine
+ * dans la dalle de 512 x 288 d'une borne et dans n'importe quelle autre cible,
+ * exactement comme le reste de ce fichier rapporte ses cotes à 640.
+ */
+void room_hud_draw_choc(ns_sprite *s, float w, float h, float choc, float phase)
+{
+    if (!s || choc <= 0.01f) return;
+    const float k = (choc > 1.0f) ? 1.0f : choc;
+
+    /*
+     * 1. LA BARRE DE DÉSYNCHRONISATION.
+     *
+     * Elle monte, et ce n'est pas indifférent : sur un tube dont la fréquence
+     * verticale décroche vers le bas, la trame se répète avant la fin de
+     * l'image et le raccord DÉFILE VERS LE HAUT. C'est le sens qu'on a tous vu
+     * sur un téléviseur mal réglé, et le prendre à l'envers donne quelque chose
+     * qui ne rappelle rien.
+     *
+     * Trois passages par seconde et cinq pour cent de la hauteur : assez lent
+     * pour qu'on la suive des yeux, assez fine pour qu'on continue de voir le
+     * jeu derrière. Une barre large cacherait la partie, ce qui punirait deux
+     * fois — la conséquence de jeu est ailleurs, elle est dans la main qui
+     * quitte les boutons.
+     */
+    float y = h - SDL_fmodf(phase * 3.0f, 1.0f) * (h * 1.10f);
+    const float bh = h * 0.05f;
+    const float sombre[4] = { 0.0f, 0.0f, 0.0f, 0.55f * k };
+    ns_sprite_rect(s, 0.0f, y, w, bh, sombre);
+    /* Le liseré clair juste au-dessus : le bord d'une trame qui se recouvre est
+     * plus lumineux, pas plus sombre. Sans lui la barre se lit comme une ombre
+     * portée, ce qui n'est pas du tout le même défaut. */
+    const float lisere[4] = { 0.85f, 0.90f, 1.0f, 0.30f * k };
+    ns_sprite_rect(s, 0.0f, y - h * 0.006f, w, h * 0.006f, lisere);
+
+    /*
+     * 2. LES DÉCHIRURES.
+     *
+     * Quatre bandes fines, à des hauteurs qui ne bougent pas pendant le choc :
+     * une déchirure de synchronisation reste sur sa ligne tant que le défaut
+     * dure. Les faire sauter d'une image à l'autre donnerait de la NEIGE, qui
+     * est un autre défaut — celui d'un signal absent, pas d'un signal secoué.
+     *
+     * Leurs positions sont écrites à la main et irrégulières, pour la même
+     * raison que les glouglous de la chasse d'eau sont irréguliers : quatre
+     * bandes régulièrement espacées se lisent comme une mire.
+     */
+    static const float bandes[4] = { 0.17f, 0.38f, 0.61f, 0.83f };
+    for (int i = 0; i < 4; ++i) {
+        const float a = 0.22f * k * ((i & 1) ? 0.7f : 1.0f);
+        const float clair[4] = { 1.0f, 1.0f, 1.0f, a };
+        ns_sprite_rect(s, 0.0f, h * bandes[i], w, h * 0.008f, clair);
+    }
+
+    /*
+     * 3. LE BLANCHIMENT.
+     *
+     * Très bref — il suit `k * k`, donc il a disparu bien avant la barre. C'est
+     * l'à-coup d'alimentation à l'instant du choc, et il ne dure que ça. Un
+     * voile constant sur toute la durée délaverait l'image et se lirait comme
+     * un défaut de rendu.
+     */
+    const float voile[4] = { 0.72f, 0.78f, 0.95f, 0.16f * k * k };
+    ns_sprite_rect(s, 0.0f, 0.0f, w, h, voile);
+}

@@ -167,4 +167,42 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
                               const char *my_name, const char *my_game,
                               uint32_t my_score);
 
+/*
+ * LA DALLE QUI DÉRAILLE, quand on cogne la borne.
+ *
+ * Pourquoi c'est ce qui fait la différence entre une animation et un jeu
+ * ---------------------------------------------------------------------
+ * Un coup de poing dont on ne voit que le bras est une animation. Un coup de
+ * poing après lequel la MACHINE répond est un jeu — c'est ce que le
+ * propriétaire a demandé quand il a dit « si on rage », et c'est la seule
+ * moitié du geste qui parle de la borne plutôt que du joueur.
+ *
+ * Ce que ça dessine, et pourquoi ce n'est pas une secousse
+ * --------------------------------------------------------
+ * On ne peut pas DÉPLACER l'image : `ns_sprite_begin` ne prend qu'une taille
+ * logique, sans origine, donc le seul décalage possible serait ancré sur le
+ * coin haut-gauche — une image qui grandit depuis son coin, ce qui ne ressemble
+ * à rien.
+ *
+ * On dessine donc ce qu'un tube fait VRAIMENT quand on le frappe : il perd sa
+ * synchronisation verticale. Une barre sombre traverse l'image de bas en haut,
+ * quelques lignes se déchirent, et l'ensemble blanchit brièvement — c'est le
+ * « déraillement » qu'on reconnaît sans savoir le nommer. Trois aplats
+ * translucides par image, aucune ressource, aucun shader.
+ *
+ * Ce que ça NE fait PAS, et ce qu'il faudrait pour le faire
+ * ---------------------------------------------------------
+ * Le vrai sursaut — l'image entière qui saute de quelques lignes dans son cadre
+ * — demanderait un décalage d'UV côté matériau, c'est-à-dire un champ de plus
+ * dans `ns_render_settings` ou dans l'uniforme `u_screen`. Les deux fichiers
+ * qui le porteraient sont tenus par un autre chantier ; c'est écrit dans le
+ * rapport, et ce qui est ici tient sans eux.
+ *
+ * `choc` va de 1 (à l'impact) à 0. `phase` est un temps en secondes, qui fait
+ * descendre la barre : il est passé plutôt que dérivé de `choc` parce que deux
+ * coups rapprochés remettent `choc` à 1 sans que la barre doive resauter au
+ * même endroit.
+ */
+void room_hud_draw_choc(ns_sprite *s, float w, float h, float choc, float phase);
+
 #endif /* NS_ROOM_HUD_H */

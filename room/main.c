@@ -208,7 +208,8 @@ static void print_usage(const char *exe)
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
         "  En jeu : Échap réglages, F5 caméra libre, F6 orbite,\n"
-        "           F7 palier de qualité, F8 échelle de rendu, F2 capture.\n"
+        "           F7 palier de qualité, F8 échelle de rendu, F2 capture,\n"
+        "           F cogner la borne devant soi.\n"
         "  --nom=NOM            nom porté au classement local\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
@@ -218,7 +219,8 @@ static void print_usage(const char *exe)
         "  --warmup=S           avance le mini-jeu de S secondes avant de rendre\n"
         "  --play-at=BORNE      se place devant la borne nommée et lance sa partie,\n"
         "                       en restant EN 3D : le jeu tourne dans sa dalle\n"
-        "  --pose=NOM           fige les bras : idle, walk, reach, insert, press\n"
+        "  --pose=NOM           fige les bras : idle, walk, reach, insert,\n"
+        "                       press, frappe\n"
         "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
         "  --help               affiche ce message\n",
@@ -2093,6 +2095,10 @@ int main(int argc, char **argv)
      */
     int32_t    run_tick = 0;
     uint8_t    pending_press = 0;
+    /* La dalle qu'on vient de frapper, ou -1. Retenue entre l'impact et la fin
+     * du déraillement : `room_viewmodel_take_impact` ne la donne qu'une fois,
+     * et le tremblement, lui, dure un tiers de seconde. */
+    int32_t    choc_material = -1;
     /*
      * LE DUEL EN DIFFÉRÉ — le « fantôme ».
      *
@@ -2450,10 +2456,11 @@ int main(int argc, char **argv)
         }
         if (ns_skin_duration(personnage) > 0.0f) {
             NS_INFO("personnage : un seul cycle d'animation (%.2f s) — la cadence "
-                    "suit l'allure ; l'accroupi et le balancement d'arrêt en sont "
-                    "DÉRIVÉS (accroupi %s)",
+                    "suit l'allure ; l'accroupi, le balancement d'arrêt et la "
+                    "frappe en sont DÉRIVÉS (accroupi %s, frappe %s)",
                     (double)ns_skin_duration(personnage),
-                    ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout");
+                    ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout",
+                    ns_skin_can_hit(personnage) ? "prête" : "IMPOSSIBLE, le bras reste inerte");
         }
     }
 
@@ -2896,7 +2903,13 @@ play_at_done: ;
         } else if (SDL_strcasecmp(opt.pose, "idle") != 0
                 && SDL_strcasecmp(opt.pose, "repos") != 0
                 && SDL_strcasecmp(opt.pose, "walk") != 0
-                && SDL_strcasecmp(opt.pose, "marche") != 0) {
+                && SDL_strcasecmp(opt.pose, "marche") != 0
+                /* La frappe non plus n'a besoin d'aucune cible : on cogne
+                 * dans le vide aussi bien que sur une borne, et le geste est
+                 * le même. Avertir ici enverrait chercher un défaut qui
+                 * n'existe pas. */
+                && SDL_strcasecmp(opt.pose, "frappe") != 0
+                && SDL_strcasecmp(opt.pose, "hit") != 0) {
             NS_WARN("--pose=%s : aucune borne à portée, les bras resteront au repos "
                     "(essayer --view=borne)", opt.pose);
         }
@@ -2980,6 +2993,7 @@ play_at_done: ;
         uint8_t frame_press  = 0;    /* fronts montants des cinq boutons de jeu */
         bool    want_interact = false; /* « E » : le jeton */
         bool    want_gamble   = false; /* « R » : quitte ou double */
+        bool    want_frappe   = false; /* « F » : cogner la borne */
         bool    want_menu     = false; /* « Échap » / Start */
 
         SDL_Event ev;
@@ -3194,6 +3208,25 @@ play_at_done: ;
                      * bouton d'action de la manette hors partie. */
                     if (!ev.key.repeat) want_interact = true;
                     break;
+                case SDLK_F:
+                    /*
+                     * COGNER LA BORNE. « F » comme frapper, et la touche est
+                     * libre : E met le jeton, R double la mise, C et Ctrl
+                     * s'accroupissent, F2 et F5 à F10 sont les outils.
+                     *
+                     * Elle vaut EN PARTIE comme hors partie, et c'est tout
+                     * l'intérêt : on rage sur la machine qui vient de nous
+                     * tuer, pas sur celle d'à côté. Elle n'est donc pas dans
+                     * le bloc qui rend le clavier au jeu — celui-ci ne réclame
+                     * que l'espace, l'entrée et les flèches.
+                     *
+                     * Pas de répétition : maintenir la touche ne doit pas
+                     * marteler. `room_viewmodel_frappe` refuse déjà pendant le
+                     * geste, mais s'en remettre à ça ferait dépendre le rythme
+                     * des coups de la durée d'une animation.
+                     */
+                    if (!ev.key.repeat) want_frappe = true;
+                    break;
                 case SDLK_R:
                     /* QUITTE OU DOUBLE. Décidé ici plutôt qu'après la boucle
                      * parce qu'il ne dépend d'aucune autre entrée : il n'y a
@@ -3269,6 +3302,22 @@ play_at_done: ;
              * n'a plus à savoir, d'où vient l'appui.
              */
             frame_press |= pad_press;
+            /*
+             * LA CONSÉQUENCE DU COUP, et elle tient en une ligne.
+             *
+             * Pendant les 500 ms du geste, la main droite est SUR LA MACHINE et
+             * pas sur les boutons : on jette donc les appuis. La partie, elle,
+             * continue de tourner — c'est le seul point qui compte, et c'est ce
+             * qui fait payer le coup au SCORE, donc aux tickets.
+             *
+             * Pourquoi pas un jeton retiré : `room_bareme.h` garantit un
+             * plancher de cinq jetons au monnayeur, sans condition et sans
+             * attente, et `room_economie.h` écrit qu'il n'y a « pas de minuterie
+             * qui punit ». Un jeton retiré ne serait donc pas une perte mais un
+             * aller-retour de 3,4 m. Le seul bien qu'on puisse vraiment perdre
+             * ici est la partie en cours.
+             */
+            if (room_viewmodel_is_hitting(&vmstate)) frame_press = 0;
             if (frame_press) {
                 /*
                  * Après la mort, l'action relance — mais seulement une fois la
@@ -3368,6 +3417,17 @@ play_at_done: ;
                     run_tick = 0; pending_press = 0;
                 }
             }
+        }
+
+        /*
+         * LE COUP, résolu avant le jeton parce qu'il ne coûte rien à décider :
+         * il ne consulte ni l'économie, ni les comptoirs, ni le chargement d'un
+         * jeu. `room_viewmodel_frappe` accepte une borne NULLE — on cogne alors
+         * dans le vide, ce qui est le bon comportement quand on tape à côté.
+         */
+        if (want_frappe && !menu.open && cam.mode == ROOM_CAM_PLAYER) {
+            const ns_cabinet *cible = room_viewmodel_target(&scene, &cam);
+            room_viewmodel_frappe(&vmstate, cible);
         }
 
         if (want_interact && !menu.open) {
@@ -3882,6 +3942,29 @@ play_at_done: ;
                 look_settle -= dt;
             }
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
+
+            /*
+             * L'IMPACT, consommé ICI et une seule fois.
+             *
+             * Les trois réactions partent du MÊME front : la vue encaisse, le
+             * son part, la dalle retient qu'elle a été frappée. Calculées
+             * séparément depuis l'état du bras, elles se décaleraient d'un pas
+             * de simulation les unes des autres — et un choc dont le bruit
+             * arrive huit millisecondes après l'image ne se lit plus comme un
+             * choc.
+             */
+            {
+                ns_v3 ou; int32_t quoi = -1;
+                if (room_viewmodel_take_impact(&vmstate, &ou, &quoi)) {
+                    room_camera_frappe(&cam);
+                    /* Le son part du CENTRE DE LA DALLE quand il y a une borne,
+                     * et de l'œil quand on cogne dans le vide : un choc sans
+                     * cible n'a pas de position dans la salle, et le placer à
+                     * l'origine le ferait venir d'un coin de la pièce. */
+                    room_sound_frappe(&sound, (quoi >= 0) ? ou : cam.position);
+                    choc_material = quoi;
+                }
+            }
             /* Les dix-neuf démos avancent du même pas que la partie du joueur :
              * c'est la seule façon qu'elles aient la bonne vitesse quel que
              * soit le nombre d'images par seconde. */
@@ -4294,6 +4377,21 @@ play_at_done: ;
             if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
                 game_api->draw(sprites, game, game_art, 512.0f, 288.0f);
+                /*
+                 * LA DALLE ENCAISSE. Dessiné PAR-DESSUS le jeu et dans la même
+                 * passe : c'est un défaut de l'écran, pas un élément du jeu, et
+                 * il doit donc recouvrir ce que le jeu a dessiné.
+                 *
+                 * Seulement si c'est CETTE borne qu'on a frappée. Cogner la
+                 * voisine ne doit pas faire dérailler la partie en cours — ce
+                 * serait la seule façon de punir quelqu'un pour un coup qu'il
+                 * n'a pas donné à cet écran-là.
+                 */
+                if (choc_material >= 0 && choc_material == playing_material) {
+                    room_hud_draw_choc(sprites, 512.0f, 288.0f,
+                                       room_viewmodel_choc(&vmstate, (float)clock.alpha),
+                                       (float)now);
+                }
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                 ns_sprite_end(rhi, sprites, screen_rt.handle, 512, 288, off);
                 ns_renderer_set_screen(renderer, playing_material, screen_rt.handle);
@@ -4415,6 +4513,31 @@ play_at_done: ;
                 const room_view_bob b = room_camera_bob(&cam, (float)clock.alpha);
                 const float duree = ns_skin_duration(personnage);
                 static float repos = 0.0f;
+                /*
+                 * LE DÉCALAGE ENTRE LA PHASE DE DISTANCE ET LA PHASE POSÉE.
+                 *
+                 * Il corrige un CLAQUEMENT qu'aucun réglage ne rattrapait, et
+                 * qui ne se voit qu'en regardant les jambes au moment précis où
+                 * l'on repart.
+                 *
+                 * L'entrée au repos était déjà continue : `repos` reprend la
+                 * dernière phase de marche. La SORTIE ne l'était pas. Pendant
+                 * l'arrêt, `repos` glisse vers la position de passage, tandis
+                 * que la distance parcourue, elle, ne bouge plus. Au premier pas
+                 * qui repart, la phase sautait donc de l'une à l'autre — et
+                 * l'écart peut valoir une DEMI-DURÉE de cycle, soit une seconde
+                 * sur les deux du modèle, c'est-à-dire un pas entier. Les deux
+                 * jambes s'échangeaient en une image.
+                 *
+                 * Le décalage rend les deux sorties continues sans toucher à la
+                 * CADENCE : il est constant pendant la marche, donc la phase
+                 * avance toujours exactement comme la distance, et le patinage
+                 * n'est ni amélioré ni aggravé. Il n'est mis à jour que pendant
+                 * l'arrêt, c'est-à-dire quand la cadence ne veut rien dire.
+                 */
+                static float decalage = 0.0f;
+                const float phase_distance =
+                    (b.distance / room_camera_stride(&cam)) * duree;
                 float when;
                 if (b.amount > 0.02f) {
                     /*
@@ -4434,7 +4557,7 @@ play_at_done: ;
                      * allure. C'était déjà juste, et c'est ce qui rend le cycle
                      * unique du modèle supportable.
                      */
-                    when = (b.distance / room_camera_stride(&cam)) * duree;
+                    when = phase_distance + decalage;
                     repos = when;
                 } else {
                     /*
@@ -4461,6 +4584,12 @@ play_at_done: ;
                     const float debout = ns_skin_stand_time(personnage);
                     repos = ns_damp(repos, debout, 6.0f, (float)clock.frame_seconds);
                     when = repos;
+                    /* La marche reprendra EXACTEMENT ici. Ramené dans le cycle à
+                     * chaque image : laissé libre, ce décalage dériverait avec
+                     * la distance parcourue et finirait par perdre en précision
+                     * de flottant ce qu'une phase d'animation ne peut pas se
+                     * permettre de perdre. */
+                    decalage = SDL_fmodf(repos - phase_distance, duree);
                 }
 
                 ns_character_draw d;
@@ -4496,6 +4625,15 @@ play_at_done: ;
                 }
                 allure.souffle = b.breath;
                 allure.souffle_force = 1.0f - ns_clampf(b.amount, 0.0f, 1.0f);
+                /*
+                 * LE COUP, sur la MÊME horloge que le bras de la première
+                 * personne. F10 bascule d'une vue à l'autre en pleine partie :
+                 * deux gestes qui ne dureraient pas pareil se verraient au
+                 * basculement, et c'est le genre d'écart qu'on ne diagnostique
+                 * qu'en le cherchant.
+                 */
+                allure.frappe = room_viewmodel_frappe_amount(&vmstate,
+                                                             (float)clock.alpha);
                 ns_skin_pose_allure(personnage, when, &allure, d.joint,
                                     NS_MAX_CHARACTER_JOINTS);
 

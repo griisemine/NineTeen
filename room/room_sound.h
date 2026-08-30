@@ -108,6 +108,10 @@ typedef struct room_sound {
     int clip_cabinet[3];
     int clip_door_open, clip_door_close;
     int clip_flush;
+    /* Le coup de poing sur une borne, synthétisé par `tools/stepgen` comme les
+     * pas et la chasse. -1 si la banque manque : le geste reste muet plutôt que
+     * d'emprunter un son qui ne veut pas dire ça. */
+    int clip_coup;
 
     /*
      * LES CHASSES D'EAU.
@@ -187,6 +191,23 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
 
 /* Le geste d'insertion du jeton, déclenché par la machine à états des bras. */
 void room_sound_coin(room_sound *s, ns_v3 position);
+
+/*
+ * LE COUP SUR UNE BORNE, à l'instant de l'impact et pas au début du geste.
+ *
+ * `tools/stepgen` le synthétise plutôt qu'on ne le télécharge, comme tout le
+ * reste de la banque, et pour la même raison de licence autant que de style :
+ * un choc se DÉCRIT — un poing mat, deux modes de tôle laquée, la caisse creuse
+ * du meuble et le cliquetis de ses tripes — donc il se synthétise. Le modèle
+ * complet est dans `sg_render_coup`.
+ *
+ * La hauteur est tirée au sort dans une plage étroite à chaque coup. Ce n'est
+ * pas de la décoration : quand on rage on frappe plusieurs fois de suite, et
+ * c'est exactement la situation où l'oreille repère une forme d'onde répétée —
+ * le défaut que la banque de pas existe pour corriger, à la seule différence
+ * que l'intervalle est ici d'une demi-seconde au lieu de trois quarts.
+ */
+void room_sound_frappe(room_sound *s, ns_v3 position);
 
 void room_sound_shutdown(room_sound *s);
 

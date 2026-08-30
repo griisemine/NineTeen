@@ -115,6 +115,7 @@ static const room_credit_line g_controls[] = {
     { "E",       "DEVANT UNE BORNE : INSERER UN JETON ET JOUER", false },
     { "FLECHES", "EN PARTIE : LE MANCHE DE LA BORNE", false },
     { "ESPACE",  "EN PARTIE : LE BOUTON - ET REJOUER APRES LA MORT", false },
+    { "F",       "COGNER LA BORNE - LA MAIN QUITTE LES BOUTONS", false },
     { "ECHAP",   "EN PARTIE : SORTIR DE LA PARTIE, PAS DU JEU", false },
 
     { "LE RESTE", NULL, true },

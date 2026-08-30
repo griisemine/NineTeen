@@ -586,6 +586,96 @@ static void test_foulee(const char *assets)
     ns_skin_free(sk);
 }
 
+/* ==========================================================================
+ * 8. Le contrecoup du coup de poing
+ * ==========================================================================
+ *
+ * Trois choses à défendre, et deux d'entre elles sont des PIÈGES documentés
+ * dans `room_camera.h` que rien d'autre ne rattraperait :
+ *
+ *   1. le champ ajouté à `room_view_bob` est INTERPOLÉ. L'en-tête de la
+ *      structure prévient en toutes lettres qu'un champ oublié dans
+ *      `bob_lerp` fait saccader l'animation à la fréquence de simulation. Un
+ *      oubli ne casse rien, ne prévient rien, et se diagnostique mal : on le
+ *      teste donc en demandant deux instants entre deux pas et en exigeant que
+ *      la vue passe par des valeurs INTERMÉDIAIRES ;
+ *   2. la secousse ne touche PAS l'état simulé. Si elle entrait dans
+ *      `c->pitch`, cinquante coups mettraient la visée au plafond ;
+ *   3. elle s'éteint, et avant que le bras soit revenu.
+ */
+static void test_contrecoup(void)
+{
+    printf("-- le contrecoup du coup de poing\n");
+
+    scratch_bvh s;
+    memset(&s, 0, sizeof s);
+    add_floor(&s);
+    finish(&s);
+
+    room_camera c;
+    room_camera_init(&c, ns_v3_make(0.0f, 1.70f, 0.0f), 0.0f);
+    c.mode = ROOM_CAM_PLAYER;
+    c.third_person = false;
+    for (int i = 0; i < 60; ++i) room_camera_tick(&c, &s.bvh, NULL, 1.0f / 120.0f);
+
+    const float pitch_avant = c.pitch;
+    const ns_camera calme = room_camera_resolve(&c, NULL, 1.0f);
+
+    room_camera_frappe(&c);
+    CHECK(c.bob.frappe > 0.99f, "la secousse est armée à 1 (%.3f)",
+          (double)c.bob.frappe);
+
+    /* L'IMAGE BOUGE. On regarde la composante verticale du regard : le tangage
+     * la fait monter, et c'est exactement ce qu'on veut voir. */
+    const ns_camera secoue = room_camera_resolve(&c, NULL, 1.0f);
+    CHECK(fabsf(secoue.forward.y - calme.forward.y) > 0.005f,
+          "le coup fait bouger le regard (%.5f contre %.5f)",
+          (double)secoue.forward.y, (double)calme.forward.y);
+
+    /*
+     * L'INTERPOLATION. Un pas de simulation plus tard, `prev_bob.frappe` vaut 1
+     * et `bob.frappe` a décru : `alpha = 0,5` doit donc donner un regard STRICTEMENT
+     * ENTRE les deux. Sans l'interpolation du champ, les trois valeurs seraient
+     * identiques deux à deux et la vue avancerait par paliers.
+     */
+    room_camera_tick(&c, &s.bvh, NULL, 1.0f / 120.0f);
+    const float y0 = room_camera_resolve(&c, NULL, 0.0f).forward.y;
+    const float y5 = room_camera_resolve(&c, NULL, 0.5f).forward.y;
+    const float y1 = room_camera_resolve(&c, NULL, 1.0f).forward.y;
+    const float lo = (y0 < y1) ? y0 : y1;
+    const float hi = (y0 < y1) ? y1 : y0;
+    CHECK(hi - lo > 1e-6f,
+          "le montage est faux : les deux bouts du pas doivent différer");
+    CHECK(y5 > lo + 1e-7f && y5 < hi - 1e-7f,
+          "la secousse est INTERPOLÉE entre deux pas (%.7f hors de ]%.7f ; %.7f[) — "
+          "champ oublié dans bob_lerp ?", (double)y5, (double)lo, (double)hi);
+
+    /* L'ÉTAT SIMULÉ EST INTACT : la secousse est un effet de rendu. */
+    CHECK_NEAR(c.pitch, pitch_avant, 1e-6f, "le tangage simulé ne bouge pas");
+
+    /*
+     * ELLE S'ÉTEINT, ET AVANT LE BRAS. Le geste dure 500 ms
+     * (`room_viewmodel.h`) ; à 11 par seconde il ne reste que 5 % de la
+     * secousse au bout de 270. On vérifie donc à 300 ms qu'il en reste moins
+     * d'un dixième, et à une seconde qu'il n'en reste rien.
+     */
+    for (int i = 0; i < 35; ++i) room_camera_tick(&c, &s.bvh, NULL, 1.0f / 120.0f);
+    CHECK(c.bob.frappe < 0.10f,
+          "au bout de 300 ms il reste moins d'un dixième de secousse (%.4f)",
+          (double)c.bob.frappe);
+    for (int i = 0; i < 85; ++i) room_camera_tick(&c, &s.bvh, NULL, 1.0f / 120.0f);
+    CHECK(c.bob.frappe < 0.01f, "au bout d'une seconde elle a disparu (%.5f)",
+          (double)c.bob.frappe);
+
+    /* Deux coups coup sur coup n'empilent pas deux secousses : on POSE à 1, on
+     * n'ajoute pas. Sans cette règle, marteler une borne sortirait du réglage
+     * et donnerait une vue qui part au plafond. */
+    room_camera_frappe(&c);
+    room_camera_frappe(&c);
+    CHECK(c.bob.frappe <= 1.0f + 1e-6f,
+          "deux coups n'empilent pas deux secousses (%.3f)", (double)c.bob.frappe);
+}
+
 /* ========================================================================== */
 
 int main(int argc, char **argv)
@@ -600,6 +690,7 @@ int main(int argc, char **argv)
     test_epaule();
     test_amortissement();
     test_premiere_personne_intacte();
+    test_contrecoup();
     test_foulee(argc > 1 ? argv[1] : NULL);
 
     printf("\n%d contrôle(s), %d échec(s)\n", g_checks, g_failures);

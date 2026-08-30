@@ -72,6 +72,22 @@ typedef struct room_view_bob {
     float land;       /* impulsion d'atterrissage, décroissante */
     float roll;       /* roulis en virage, radians */
     float breath;     /* phase de respiration à l'arrêt */
+    /*
+     * LE CONTRECOUP D'UN COUP DE POING : 1 à l'impact, décroissant.
+     *
+     * Frère de `land`, et pour de bonnes raisons — c'est le même genre
+     * d'événement, une impulsion brève et amortie que le corps encaisse — mais
+     * PAS le même champ, et il ne faut pas les confondre. `land` déplace l'œil
+     * VERS LE BAS : les jambes plient. Un coup de poing ne plie pas les jambes,
+     * il fait basculer la tête ; celui-ci agit donc sur le TANGAGE, et le
+     * mélanger à `land` ferait s'accroupir le joueur à chaque coup.
+     *
+     * Comme tous les champs de cette structure, il DOIT être interpolé dans
+     * `bob_lerp` — c'est l'avertissement en tête de la structure, et il n'est
+     * pas décoratif : oublié, la secousse saccade à la fréquence de simulation,
+     * ce qui se voit tout de suite et se diagnostique mal.
+     */
+    float frappe;
 } room_view_bob;
 
 typedef struct room_camera {
@@ -98,6 +114,9 @@ typedef struct room_camera {
     float speed_walk, speed_run, speed_crouch;
     float mouse_sensitivity;
     float fov_y;
+    /* L'amplitude du contrecoup de frappe, en RADIANS. Lue une fois dans
+     * `nineteen.env` : voir `room_camera_frappe`. */
+    float hit_pitch;
 
     /* --- animation --- */
     room_view_bob bob, prev_bob;
@@ -220,6 +239,21 @@ ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alp
  * suite sans qu'on sache pourquoi.
  */
 room_view_bob room_camera_bob(const room_camera *c, float alpha);
+
+/*
+ * ENCAISSER UN COUP : arme le contrecoup de la vue.
+ *
+ * À appeler à l'instant de l'impact, pas au début du geste. Le tangage part
+ * alors d'un coup et retombe amorti ; il a disparu en 270 ms, soit AVANT que le
+ * bras soit revenu (500 ms). L'ordre compte — une vue qui bouge encore quand le
+ * poing est au repos se lit comme une caméra cassée, pas comme un choc.
+ *
+ * L'amplitude, elle, ne se mesure pas : elle arbitre entre « on ne le voit
+ * pas » et « on a mal au cœur », et le seul juge est l'œil. Elle se règle donc
+ * dans `nineteen.env` (`vue.secousseFrappe`), pour la même raison que
+ * `penche_buste` dans `ns_skin.h`.
+ */
+void room_camera_frappe(room_camera *c);
 
 /* ==========================================================================
  * La troisième personne : le bras, la foulée, l'effacement

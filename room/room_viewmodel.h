@@ -63,12 +63,36 @@ typedef enum room_vm_state {
      */
     ROOM_VM_PLAY,
     ROOM_VM_RETURN,       /* retour au repos */
+    /*
+     * LE COUP SUR LA MACHINE.
+     *
+     * Ajouté EN DERNIER dans l'énumération, et ce n'est pas de la paresse : les
+     * cinq valeurs qui précèdent sont lues par `--pose=` et par la table de
+     * `room_viewmodel_set_forced_pose`, et les décaler d'un rang changerait en
+     * silence ce qu'une capture de référence produit.
+     *
+     * C'est le seul état qui puisse INTERROMPRE `ROOM_VM_PLAY` et y revenir. Il
+     * ne s'insère donc pas dans la séquence du jeton : on ne frappe pas au
+     * milieu d'une insertion, on frappe soit les mains vides, soit en pleine
+     * partie — c'est-à-dire quand on rage.
+     */
+    ROOM_VM_HIT,
     ROOM_VM_STATE_COUNT
 } room_vm_state;
 
 typedef struct room_viewmodel {
     room_vm_state state;
     float         elapsed;        /* secondes dans l'état courant */
+    /*
+     * L'instant précédent DANS L'ÉTAT, pour interpoler au rendu.
+     *
+     * Le coup est la première animation de ce fichier dont la valeur n'est pas
+     * une position lissée mais une COURBE du temps. On interpole donc le temps
+     * et on rééchantillonne la courbe, plutôt que d'interpoler entre deux
+     * valeurs de la courbe : la corde d'une parabole rabote son sommet, et le
+     * sommet est ici l'instant de l'impact.
+     */
+    float         prev_elapsed;
 
     /* La borne visée pendant la séquence. Copiée et non pointée : la scène peut
      * être rechargée pendant qu'un geste est en cours (F5), et un pointeur
@@ -105,6 +129,31 @@ typedef struct room_viewmodel {
     float press_depth, prev_press_depth;   /* 0 à 1, enfoncement de l'index */
     float insert_push, prev_insert_push;   /* 0 à 1, avancée du jeton dans la fente */
 
+    /*
+     * LE COUP, et les trois choses qu'il laisse derrière lui.
+     *
+     * `hit_from_play` : on revient aux commandes après le geste plutôt qu'au
+     * repos. Sans lui, cogner une borne pendant une partie rendait les bras au
+     * corps et la partie continuait sans personne devant — le défaut exact que
+     * `ROOM_VM_PLAY` avait été ajouté pour corriger.
+     *
+     * `hit_impact` : un front, posé à l'instant précis où le poing arrive et
+     * consommé par `room_viewmodel_take_impact`. C'est ce qui fait partir le
+     * son, la secousse de la vue et le déraillement de la dalle EN MÊME TEMPS.
+     * Les trois calculés séparément depuis `elapsed` se décaleraient d'un pas
+     * de simulation les uns des autres, et un choc dont le bruit arrive huit
+     * millisecondes après l'image ne se lit plus comme un choc.
+     *
+     * `choc` : ce qui reste du coup, décroissant. Doublé de son état précédent
+     * comme tout le reste de ce fichier — il est lu au rendu, donc il doit être
+     * interpolé, sinon la dalle déraille par paliers de 8 ms.
+     */
+    bool  hit_from_play;
+    bool  hit_impact;
+    ns_v3 hit_point;              /* le centre de la dalle frappée, en monde */
+    int32_t hit_material;         /* le matériau de cette dalle, -1 si inconnu */
+    float choc, prev_choc;
+
     /* Pose forcée par `--pose=`, pour les captures. -1 = pas de forçage. */
     int   forced_pose;
     float clock;                  /* horloge propre, seulement pour `--pose=walk` */
@@ -140,6 +189,103 @@ void room_viewmodel_stop_playing(room_viewmodel *vm);
 /* Un appui : l'index droit descend puis remonte. Le jeu ne connaît pas les bras,
  * c'est l'appelant qui relaie son événement de battement. */
 void room_viewmodel_tap(room_viewmodel *vm);
+
+/* ==========================================================================
+ * COGNER LA MACHINE
+ * ==========================================================================
+ *
+ * Le geste, et pourquoi ses trois durées ne sont pas la même
+ * ----------------------------------------------------------
+ * Un coup n'est pas symétrique, et c'est ce qui le distingue d'un bras qu'on
+ * agite. Il a trois temps, et chacun a sa durée MESURÉE — par la distance sur
+ * le temps, pas par le goût :
+ *
+ *   ARMÉ    **110 ms**. Le poing quitte la position de repos (24,6 cm à
+ *           droite, 20 sous l'œil, 44 devant) pour l'armé (30 à droite, 17
+ *           sous l'œil, 10 devant), soit **34,6 cm** — donc **3,1 m/s**. On
+ *           ramène le poing moins vite qu'on ne le lance : c'est une
+ *           préparation, pas un geste de force.
+ *
+ *           CETTE PHASE A ÉTÉ AJOUTÉE APRÈS MESURE, et ce n'est pas un
+ *           ornement. La position de repos porte DÉJÀ les mains en avant — 44
+ *           cm de l'œil pour 59 de portée — donc un coup lancé de là n'avait
+ *           que sept centimètres à gagner. Mesuré au poignet, il en gagnait
+ *           CINQ MILLIMÈTRES : le geste existait dans le code et ne se voyait
+ *           pas à l'écran.
+ *
+ *   ALLER   **90 ms**. De l'armé au coup porté (13 cm à droite, 6 sous l'œil,
+ *           55 devant), soit **49,3 cm**, donc **5,5 m/s** de moyenne : la
+ *           plage d'un vrai coup de poing, que la littérature situe entre 5 et
+ *           9 m/s à l'impact selon l'entraînement. À 150 ms on tomberait à
+ *           3,3 m/s, la vitesse d'un geste qu'on POSE.
+ *
+ *   RETOUR  **300 ms**, trois fois et demie l'aller. C'est ce qui donne le
+ *           poids : un retour aussi vif que l'aller se lit comme un ressort,
+ *           pas comme un bras.
+ *
+ * Le geste dure donc 500 ms en tout, l'impact tombe à 200, et cette demi-
+ * seconde est aussi le PRIX du coup — voir `room_viewmodel_is_hitting`.
+ */
+
+/*
+ * Déclenche le coup vers `cab`. Refuse — et rend false — si un geste est déjà
+ * en cours ou si l'on est au milieu de la séquence du jeton : cogner pendant
+ * qu'on insère une pièce n'a pas de sens, et laisser les deux se superposer
+ * ferait viser deux points à la fois au même poignet.
+ *
+ * `cab` peut être NULL : on cogne alors dans le vide, ce qui est le
+ * comportement voulu quand on tape à côté d'une borne. Le geste a lieu, le son
+ * et la secousse aussi, mais aucune dalle ne déraille.
+ */
+bool room_viewmodel_frappe(room_viewmodel *vm, const ns_cabinet *cab);
+
+/*
+ * Vrai pendant les 500 ms du geste.
+ *
+ * C'EST LA CONSÉQUENCE DE JEU, et elle tient dans cette fonction : pendant que
+ * la main droite est sur la machine, elle n'est pas sur les boutons. L'appelant
+ * s'en sert pour ne pas transmettre les appuis au jeu — la partie continue,
+ * elle, et c'est le seul point qui compte.
+ *
+ * Pourquoi ce prix-là et pas un jeton retiré : le barème de la salle garantit
+ * un PLANCHER de cinq jetons au monnayeur, sans condition et sans attente
+ * (`room_bareme.h`). Un jeton retiré n'est donc pas une perte, c'est un
+ * aller-retour ; et `room_economie.h` écrit noir sur blanc qu'il n'y a « pas de
+ * minuterie qui punit ». Le seul bien qu'on puisse vraiment perdre dans cette
+ * salle est le SCORE de la partie en cours, parce que c'est lui qui fait les
+ * tickets. C'est donc lui qu'on paie.
+ */
+bool room_viewmodel_is_hitting(const room_viewmodel *vm);
+
+/*
+ * Le FRONT d'impact : vrai UNE fois, au pas de simulation où le poing arrive.
+ * Consommé par l'appel, comme `jump_requested` l'est par la caméra.
+ *
+ * `point` reçoit le centre de la dalle frappée et `material` son matériau, ou
+ * -1 : c'est ce qui permet à l'appelant de placer le son dans la salle et de
+ * faire dérailler la bonne dalle sans avoir à retrouver la borne lui-même.
+ */
+bool room_viewmodel_take_impact(room_viewmodel *vm, ns_v3 *point, int32_t *material);
+
+/*
+ * Ce qui reste du choc à l'instant `alpha`, de 1 à 0.
+ *
+ * Sert à deux choses qui doivent rester d'accord : le déraillement de l'image
+ * de la dalle, et la pose du bras du personnage en troisième personne. Les
+ * faire décroître séparément les désynchroniserait, et on verrait l'écran se
+ * calmer avant le bras.
+ */
+float room_viewmodel_choc(const room_viewmodel *vm, float alpha);
+
+/*
+ * L'avancement du geste, de 0 à 1, tel que `ns_skin_allure.frappe` l'attend :
+ * 0 bras au repos, 1 coup porté. Monte en 90 ms et redescend en 300.
+ *
+ * C'est la MÊME horloge que le geste de la première personne, et c'est
+ * délibéré : F10 bascule d'une vue à l'autre en pleine partie, et deux gestes
+ * qui ne dureraient pas pareil se verraient au basculement.
+ */
+float room_viewmodel_frappe_amount(const room_viewmodel *vm, float alpha);
 
 /* Vrai tant que les mains sont sur les commandes. */
 bool room_viewmodel_is_playing(const room_viewmodel *vm);
