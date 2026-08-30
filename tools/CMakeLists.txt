@@ -46,7 +46,13 @@ target_include_directories(posterart PRIVATE
     # Le motif « plan » LIT la description de la salle plutot que de la
     # recopier : une affiche qui montrerait un plan perime serait pire
     # qu'une affiche absente.
-    "${CMAKE_SOURCE_DIR}/third_party/jsmn")
+    "${CMAKE_SOURCE_DIR}/third_party/jsmn"
+    # Et les quatre motifs qui parlent d'argent — `reglement`, `jetons`,
+    # `records`, `tournoi` — lisent l'ECONOMIE pour la meme raison. Ils
+    # incluent `room/room_bareme.h`, qui n'a pas une seule dependance et
+    # n'en aura pas : c'est ce qui permet a un outil d'hote de partager ses
+    # chiffres avec le jeu sans partager son moteur.
+    "${CMAKE_SOURCE_DIR}/room")
 # Les PLANCHES DE SPRITES des mini-jeux. Même raison que `posterart`, un cran
 # plus haut dans la gravité : ce n'étaient pas des affiches accrochées au mur,
 # c'étaient les PERSONNAGES eux-mêmes. `1_pacman/pacman.png` et
