@@ -441,7 +441,10 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
 {
     if (!s) return;
 
-    /* Le repère : 640 x 320, soit le 2:1 du panneau de 1,80 x 0,90 m. */
+    /* Le repère reste 640 x 320 quelle que soit la cible : toutes les cotes
+     * ci-dessous sont dans ce système, et `u` les y ramène. La cible réelle
+     * vaut ROOM_BAR_RT_W x ROOM_BAR_RT_H, un multiple entier — c'est ce qui
+     * permet d'en changer sans redessiner la mise en page. */
     const float u = w / 640.0f;
 
     static const float bg[4]    = { 0.020f, 0.026f, 0.045f, 1.0f };
@@ -455,7 +458,7 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
     ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
 
     /* Le filet vertical qui sépare les deux moitiés. Sans lui, huit lignes de
-     * texte sur 1,80 m se lisent comme un seul bloc. */
+     * texte sur 1,70 m se lisent comme un seul bloc. */
     ns_sprite_rect(s, 318.0f * u, 34.0f * u, 2.0f * u, 264.0f * u, rule);
     ns_sprite_rect(s, 20.0f * u, 30.0f * u, 600.0f * u, 2.0f * u, rule);
 

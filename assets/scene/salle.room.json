@@ -4313,18 +4313,80 @@
             0.4
           ],
           "chamfer": 0.01
+        }
+      ]
+    },
+    {
+      "name": "ecran_bar",
+      "_": "L'ECRAN DU BAR, ET POURQUOI IL EST DEVENU UN MEUBLE.\nIl etait le QUATRIEME MORCEAU de « bar_accueil » : un « panel » nu de 1,80 x 0,90, sans cadre, sans corps, sans fixation, a la cote monde z 6,708. Le parement interieur du mur nord est a z 7,035 (mesure sur la geometrie produite : les sommets de la coquille valent 7,035 en face interieure et 7,235 en face exterieure, pour 0,20 m d'epaisseur). La dalle FLOTTAIT donc a 32,7 cm du mur, sans rien derriere elle, et son bord haut (y 2,051) passait devant la tablette de l'enseigne (y 2,013 a 2,073) : de face on lisait une image posee en l'air devant une etagere. C'est l'artefact que le proprietaire a nomme.\nUn ecran plat n'est pas une image, c'est un OBJET : une patte au mur, un caisson, un cadre, et la dalle 2 mm devant le cadre. Les quatre morceaux ci-dessous font saillie de 0,133 m sur le parement, ce qui est la cote d'un televiseur sur support mural.\nLES COTES SONT CONTRAINTES PAR LE HAUT ET PAR LE BAS, et c'est ce qui fixe la taille. En bas, le plan de travail du comptoir est a y 1,048 (morceau « bois_noir » de bar_accueil, base 0,998 + 0,05) : le cadre commence exactement la, l'alignement se lit. En haut, la tablette de l'enseigne descend a 2,013 : le cadre s'arrete a 1,958, soit 5,5 cm dessous, et ne croise plus rien. Il reste 0,910 m de hauteur de cadre, donc 0,85 de dalle, donc 1,70 de large — le 2:1 EXACT de la cible ou le moteur dessine le classement, comme pour « tableau_semaine ». Vouloir garder les 1,80 x 0,90 d'avant obligeait a passer devant la tablette : c'est le defaut qu'on corrige, pas une cote a preserver.\nLa patte rentre de 1 cm DANS le parement (z 6,980 a 7,045). Un objet mural qui affleure au millimetre laisse un liseré de lumiere sous un eclairage rasant ; « tableau_semaine » rentre de 5,5 cm pour la meme raison.",
+      "at": [
+        0.0,
+        0.0,
+        7.035
+      ],
+      "yaw": 180.0,
+      "pose": "mur",
+      "parts": [
+        {
+          "_": "La patte de fixation. Elle est entierement cachee par le caisson vue de face, et c'est elle qu'on apercoit par la tranche quand on longe le comptoir : sans elle l'ecran redevient une image collee.",
+          "type": "box",
+          "material": "borne_noir",
+          "at": [
+            0.0,
+            1.283,
+            0.0225
+          ],
+          "size": [
+            0.44,
+            0.44,
+            0.065
+          ],
+          "chamfer": 0.004
         },
         {
+          "_": "Le caisson. Plus petit que le cadre de tous les cotes : c'est ce retrait qui fait l'ombre portee sous laquelle un ecran plat se detache du mur. « laque_sombre » et non « borne_noir » — le dos d'un televiseur est un gris plus clair que sa face, et deux noirs identiques auraient rendu un seul bloc.",
+          "type": "box",
+          "material": "laque_sombre",
+          "at": [
+            0.0,
+            1.143,
+            0.079
+          ],
+          "size": [
+            1.5,
+            0.72,
+            0.048
+          ],
+          "chamfer": 0.006
+        },
+        {
+          "_": "Le cadre, 3 cm de bordure autour de la dalle. C'est la cote d'un televiseur d'aujourd'hui ; les 12 cm d'un cadre de borne auraient fait un moniteur des annees quatre-vingt, ce que le comptoir d'accueil n'est pas.",
+          "type": "box",
+          "material": "borne_noir",
+          "at": [
+            0.0,
+            1.048,
+            0.117
+          ],
+          "size": [
+            1.76,
+            0.91,
+            0.028
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "La dalle. « classement_fond » est le materiau que le moteur PILOTE — c'est la cle « scoreboard » en tete de ce fichier — et c'est pour ca qu'elle n'est pas une texture peinte. Un panel est centre sur son at et sa normale est en +Z local : a yaw 180 elle regarde la salle. 2 mm devant la face du cadre, assez pour qu'aucune profondeur ne se dispute le pixel.",
           "type": "panel",
           "material": "classement_fond",
           "at": [
             0.0,
-            1.601,
-            -0.658
+            1.503,
+            0.133
           ],
           "size": [
-            1.8,
-            0.9
+            1.7,
+            0.85
           ]
         }
       ]

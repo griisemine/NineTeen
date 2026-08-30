@@ -101,7 +101,7 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
  *
  * Distinct de la dalle de la borne de classement, et pour une raison de forme
  * autant que de fond. La dalle fait 62 cm en 16:9 et se lit à deux mètres et
- * demi ; ce tableau-ci fait 1,80 x 0,90 m en 2:1, il est derrière le comptoir,
+ * demi ; ce tableau-ci fait 1,70 x 0,85 m en 2:1, il est derrière le comptoir,
  * on le voit en entrant et de toute la salle. Il a la place de dire ce que la
  * dalle n'a pas la place de dire : QUI joue, à QUOI, et à COMBIEN il en est.
  *
@@ -113,8 +113,22 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
  *
  * Ce n'est PAS un tube : pas de courbure, pas de lignes de balayage. Une dalle
  * plate accrochée au mur d'un bar est un écran plat, et le traitement de tube
- * ne s'applique qu'aux dalles déclarées par une borne.
+ * ne s'applique qu'aux dalles déclarées par une borne. Depuis que « ecran_bar »
+ * est un meuble — patte, caisson, cadre, dalle — la phrase décrit enfin ce que
+ * la salle contient : elle portait un panneau nu à 32,7 cm du mur.
  */
+
+/*
+ * LA CIBLE OU CE TABLEAU EST DESSINE, et pourquoi elle est ici plutôt que chez
+ * son seul appelant : `room_hud_draw_scoreboard` rapporte toutes ses cotes à
+ * 640 (`u = w / 640`). Les deux nombres doivent donc rester un MULTIPLE ENTIER
+ * de ce repère, et les écrire à deux endroits est la façon la plus sûre de les
+ * voir diverger. Le choix de 1280 x 640 est mesuré dans `room/main.c`, à
+ * l'endroit où la cible est créée.
+ */
+#define ROOM_BAR_RT_W 1280u
+#define ROOM_BAR_RT_H  640u
+
 void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_seconds,
                               const char *my_name, const char *my_game,
                               uint32_t my_score);

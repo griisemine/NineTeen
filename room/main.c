@@ -1879,16 +1879,40 @@ int main(int argc, char **argv)
      * chiffre aurait été de croire une estimation.
      */
     /*
-     * LE TABLEAU DU BAR. 640 x 320, le 2:1 de son panneau de 1,80 x 0,90 m —
-     * et non le 16:9 des dalles : un panneau deux fois plus large que haut
-     * rendu en 16:9 étire tout ce qu'on y écrit.
+     * LE TABLEAU DU BAR. Un 2:1 — et non le 16:9 des dalles : un panneau deux
+     * fois plus large que haut rendu en 16:9 étire tout ce qu'on y écrit.
+     *
+     * LA DEFINITION EST UNE DENSITE DE TEXELS, PAS UN NOMBRE ROND, et c'est la
+     * mesure qui l'a fixée. Une dalle de borne fait 0,5333 m pour 512 px, soit
+     * 960 texels par mètre (`salle.scene.json`, clé `screenWidth`). Le même
+     * matériau habille ici deux surfaces bien plus grandes : l'écran du bar
+     * (1,70 m) et « tableau_semaine » (2,40 m). A 640 px c'était 376 et 267
+     * texels par mètre — deux fois et demie à trois fois et demie plus grossier
+     * qu'une borne, ce qui se voit dès qu'on s'approche du comptoir : le
+     * lettrage y est en marches d'escalier alors que la même fonte est nette
+     * sur une borne à la même distance.
+     *
+     * 1280 x 640 porte l'écran du bar à 753 texels par mètre, soit 78 % d'une
+     * dalle de borne. C'est un DOUBLEMENT EXACT : `room_hud_draw_scoreboard`
+     * multiplie toutes ses cotes par `w / 640`, donc chaque coordonnée reste
+     * sur la même grille et aucune position ne se met à tomber entre deux
+     * texels. Coût mesuré : la cible passe de 819 Ko à 3,3 Mo, et le temps GPU
+     * de l'allée en palier medium ne bouge pas — le tableau est un remplissage
+     * de sprites, pas une passe d'éclairage.
+     *
+     * Ce que ça ne corrige PAS, et il faut le dire : de LOIN, le lettrage reste
+     * sous le seuil de lisibilité du projet. Mesuré sur la vue « bar » (caméra
+     * à 4,10 m) en 1400 x 875, un caractère du titre fait 8,4 px de haut quand
+     * le seuil relevé sur ce dépôt est 11. La définition n'y change rien : à
+     * cette distance le panneau n'occupe que 348 px, et c'est la TAILLE DU
+     * LETTRAGE SUR LE PANNEAU qu'il faudrait revoir, pas le nombre de texels.
      */
     ns_texture bar_rt;
     SDL_zero(bar_rt);
     if (sprites && scene.scoreboard_material >= 0) {
         ns_texture_desc sd;
         SDL_zero(sd);
-        sd.width = 640; sd.height = 320;
+        sd.width = ROOM_BAR_RT_W; sd.height = ROOM_BAR_RT_H;
         sd.format = ns_rhi_swapchain_format(rhi);
         sd.render_target = true;
         sd.sampled = true;
@@ -3523,14 +3547,16 @@ play_at_done: ;
              * y dessine est clair, donc il s'allume.
              */
             if (sprites && bar_rt.handle && scene.scoreboard_material >= 0) {
-                ns_sprite_begin(sprites, 640.0f, 320.0f);
-                room_hud_draw_scoreboard(sprites, 640.0f, 320.0f, now,
+                ns_sprite_begin(sprites, (float)ROOM_BAR_RT_W, (float)ROOM_BAR_RT_H);
+                room_hud_draw_scoreboard(sprites, (float)ROOM_BAR_RT_W,
+                                         (float)ROOM_BAR_RT_H, now,
                                          opt.player,
                                          (in_game && game_api) ? game_api->title : NULL,
                                          (in_game && game_api && game)
                                              ? game_api->score(game) : 0u);
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-                ns_sprite_end(rhi, sprites, bar_rt.handle, 640, 320, off);
+                ns_sprite_end(rhi, sprites, bar_rt.handle,
+                              ROOM_BAR_RT_W, ROOM_BAR_RT_H, off);
                 ns_renderer_set_screen(renderer, scene.scoreboard_material, bar_rt.handle);
             }
 
