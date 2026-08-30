@@ -114,6 +114,24 @@ typedef struct room_sound {
     int clip_coup;
 
     /*
+     * LES TROIS BRUITS DU JETON, et pourquoi ils sont trois.
+     *
+     * Une pièce fait trois choses distinctes dans cette salle : elle entre dans
+     * une fente, elle se fait recracher par un monnayeur qui n'en veut pas, et
+     * elle tombe dans le godet du distributeur. Les jouer avec un seul fichier
+     * dirait trois fois la même chose, et la dirait fausse deux fois — un refus
+     * qui sonne comme une insertion fait croire qu'on vient de payer.
+     *
+     * −1 chacun si la banque manque, et alors le geste reste MUET. C'est la
+     * même règle que pour le coup de poing, et elle a une histoire ici :
+     * jusqu'à cette version, le jeton empruntait `SF-fermport.wav` transposé de
+     * 60 % — le seul « clac » métallique de la banque de 2020. Un son qui ne
+     * veut pas dire ça est pire qu'un silence : le silence, on l'attribue à un
+     * fichier manquant ; le son emprunté, on l'attribue au jeu.
+     */
+    int clip_jeton_insere, clip_jeton_refuse, clip_jeton_bac;
+
+    /*
      * LES CHASSES D'EAU.
      *
      * Ponctuelles, jamais en boucle. Une salle où la chasse tire toutes les dix
@@ -127,6 +145,24 @@ typedef struct room_sound {
      * dans les toilettes, ce qui la ferait passer pour une réaction à sa
      * présence.
      */
+    /*
+     * LA RAFALE DU MONNAYEUR : les pièces qui restent à tomber dans le godet.
+     *
+     * Elle vit ICI et non chez l'appelant parce que c'est une file d'attente
+     * dans le TEMPS, et que le seul point de ce fichier qui ait un `dt` est
+     * `room_sound_update`. La faire tenir à `room/main.c` lui demanderait de
+     * porter un compte à rebours pour un son, ce qui est exactement le partage
+     * des rôles que cet en-tête refuse.
+     *
+     * Pourquoi les espacer plutôt que de tout jouer d'un coup : cinq clips qui
+     * partent à la même image se superposent en UN bruit, plus fort et pas plus
+     * long. C'est l'intervalle qui fait entendre « cinq jetons » ; sans lui, le
+     * monnayeur rend une pièce épaisse.
+     */
+    ns_v3    coin_at;              /* le godet, en monde */
+    int      coin_left;            /* pièces encore à faire tomber */
+    float    coin_delay;           /* secondes avant la prochaine */
+
     ns_v3    stall_position[ROOM_MAX_STALLS];
     uint32_t stall_count;
     float    flush_countdown;      /* secondes avant la prochaine */
@@ -189,8 +225,55 @@ void room_sound_init(room_sound *s, const ns_scene *scene);
 void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam,
                        room_doors *doors, float dt);
 
-/* Le geste d'insertion du jeton, déclenché par la machine à états des bras. */
-void room_sound_coin(room_sound *s, ns_v3 position);
+/* ==========================================================================
+ * LE JETON
+ * ==========================================================================
+ *
+ * Trois gestes, trois sons, et la même règle que pour le coup de poing : la
+ * position est celle de l'objet dans la salle, la hauteur est tirée au sort
+ * dans une plage ÉTROITE, et rien ne se joue si le fichier manque.
+ *
+ * La hauteur, et pourquoi la plage n'est pas la même pour les trois
+ * -----------------------------------------------------------------
+ * La hauteur d'une pièce EST son diamètre : la transposer, c'est changer la
+ * taille du disque. Les dix-neuf bornes prennent le même jeton, donc l'insertion
+ * et le refus restent dans ±5 % — juste de quoi casser la répétition exacte
+ * d'une forme d'onde, qui est ce que l'oreille repère en premier.
+ *
+ * Le godet a le droit d'être plus large (±8 %), et c'est le seul des trois qui
+ * en ait besoin : le monnayeur rend CINQ jetons d'un coup, à quelques dizaines
+ * de millisecondes d'intervalle. Cinq pièces qui tombent ne sont pas cinq
+ * copies d'une pièce — elles ne touchent pas le godet du même angle — et c'est
+ * l'intervalle le plus court de toute la bande-son, donc celui où une
+ * répétition exacte s'entend le plus.
+ *
+ * `tools/stepgen` les synthétise, comme le reste de la banque : un disque de
+ * métal est un résonateur à trois modes INHARMONIQUES qu'un rebond ré-excite
+ * avec moins d'énergie et un intervalle qui raccourcit. Le modèle complet est
+ * dans `sg_render_coin`.
+ */
+
+/* La pièce entre dans la fente et tombe dans la caisse. Appelée sur le FRONT de
+ * `room_viewmodel_take_token`, jamais depuis `elapsed` : voir `room_viewmodel.h`. */
+void room_sound_jeton_insere(room_sound *s, ns_v3 position);
+
+/* Le monnayeur n'en veut pas et la rend. */
+void room_sound_jeton_refuse(room_sound *s, ns_v3 position);
+
+/*
+ * `nombre` pièces qui tombent dans le godet du distributeur, ESPACÉES.
+ *
+ * La première part tout de suite, les suivantes sont mises en file et tombent
+ * au fil de `room_sound_update` — c'est ce qui fait entendre « cinq jetons »
+ * plutôt qu'un seul, plus épais. Un `nombre` nul ou négatif ne joue rien : le
+ * monnayeur qui n'a rien à rendre parce qu'on est déjà au plancher doit rester
+ * muet, sans quoi il dirait qu'il a donné quelque chose.
+ *
+ * Une nouvelle rafale REMPLACE celle qui coulait encore. Deux appuis rapprochés
+ * sur le monnayeur ne doivent pas empiler deux files : ce qu'on entendrait
+ * alors n'aurait plus de rapport avec ce que le portefeuille a reçu.
+ */
+void room_sound_jeton_bac(room_sound *s, ns_v3 position, int nombre);
 
 /*
  * LE COUP SUR UNE BORNE, à l'instant de l'impact et pas au début du geste.

@@ -1109,7 +1109,12 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
  */
 #define ECO_PORTEE_COMPTOIR 1.6f
 
-static ns_poi_kind eco_poi_kind(const ns_scene *scene, const room_camera *cam)
+/* `anchor` peut être NULL, et l'invite du bandeau le passe ainsi : elle a
+ * besoin de savoir CE QU'IL Y A à portée, pas où. Le monnayeur, lui, a besoin
+ * du point d'où tombent les pièces — sans quoi leur bruit viendrait de la tête
+ * du joueur au lieu de la machine devant laquelle il se tient. */
+static ns_poi_kind eco_poi_kind(const ns_scene *scene, const room_camera *cam,
+                                ns_v3 *anchor)
 {
     if (cam->mode != ROOM_CAM_PLAYER) return NS_POI_NONE;
 
@@ -1121,7 +1126,7 @@ static ns_poi_kind eco_poi_kind(const ns_scene *scene, const room_camera *cam)
         const float dx = cam->position.x - p->anchor.x;
         const float dz = cam->position.z - p->anchor.z;
         const float d2 = dx * dx + dz * dz;
-        if (d2 < best2) { best2 = d2; best_kind = p->kind; }
+        if (d2 < best2) { best2 = d2; best_kind = p->kind; if (anchor) *anchor = p->anchor; }
     }
     return best_kind;
 }
@@ -3343,10 +3348,37 @@ play_at_done: ;
                      */
                     if (room_eco_salle_offre()) room_eco_salle_refuser();
                     if (opt.autoplay || room_eco_salle_jeton()) {
+                        /*
+                         * LE JETON DE LA RELANCE S'ENTEND, ET SE VOIT.
+                         *
+                         * Il était débité en silence : les deux mains restaient
+                         * sur les commandes et une partie neuve apparaissait.
+                         * Le geste court fait l'aller-retour vers la fente en
+                         * 400 ms, main droite seule, et son FRONT fait partir le
+                         * son — voir `ROOM_VM_RELANCE`.
+                         *
+                         * `opt.autoplay` ne paie pas, donc il ne joue rien : une
+                         * démonstration qui ferait tinter une pièce toutes les
+                         * dix secondes mentirait sur ce qu'elle dépense.
+                         */
+                        if (!opt.autoplay && !room_viewmodel_relance(&vmstate)
+                            && playing_cab) {
+                            /* Le geste a été refusé — on cognait la borne à cet
+                             * instant précis. Le jeton, lui, est bien parti : il
+                             * doit s'entendre quand même, sinon on aurait payé
+                             * sans rien voir NI rien entendre. */
+                            room_sound_jeton_insere(&sound, playing_cab->coin_slot);
+                        }
                         const uint64_t seed = room_eco_salle_graine(game_api->id);
                         start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                         run_ms = 0;
                         run_tick = 0; pending_press = 0;
+                    } else if (playing_cab) {
+                        /* Plus de jetons : le monnayeur RECRACHE. C'est le seul
+                         * retour que le joueur ait sur un appui qui n'a rien
+                         * fait — le bandeau le dit, mais on regarde l'écran de
+                         * la borne, pas le bandeau. */
+                        room_sound_jeton_refuse(&sound, playing_cab->coin_slot);
                     }
                 } else {
                     for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
@@ -3410,12 +3442,23 @@ play_at_done: ;
             && room_eco_salle_offre()) {
             if (room_eco_salle_jeton()) {
                 if (room_eco_salle_accepter()) {
+                    /* Même geste et même son que la relance ordinaire : c'est
+                     * la même pièce dans la même fente. Ce qui distingue le
+                     * quitte ou double est ce qu'on RISQUE, pas ce qu'on paie. */
+                    if (!room_viewmodel_relance(&vmstate) && playing_cab) {
+                        room_sound_jeton_insere(&sound, playing_cab->coin_slot);
+                    }
                     game_hard = true;
                     const uint64_t seed = room_eco_salle_graine(game_api->id);
                     start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                     run_ms = 0;
                     run_tick = 0; pending_press = 0;
                 }
+            } else if (playing_cab) {
+                /* L'offre reste sur la table et on va chercher un jeton. Le
+                 * refus s'entend : sans lui, appuyer sur « R » sans le sou ne
+                 * produit rien du tout. */
+                room_sound_jeton_refuse(&sound, playing_cab->coin_slot);
             }
         }
 
@@ -3445,8 +3488,28 @@ play_at_done: ;
              * promettrait une action et la touche en ferait une autre.
              */
             if (!near) {
-                const ns_poi_kind k = eco_poi_kind(&scene, &cam);
-                if (k == NS_POI_TOKENS)      { room_eco_salle_monnayeur(); }
+                ns_v3 comptoir = cam.position;
+                const ns_poi_kind k = eco_poi_kind(&scene, &cam, &comptoir);
+                if (k == NS_POI_TOKENS) {
+                    /*
+                     * LE MONNAYEUR REND DES PIÈCES, ET ON LES ENTEND TOMBER.
+                     *
+                     * Autant de fois qu'il en rend, espacées : c'est
+                     * l'intervalle qui fait entendre « cinq jetons » plutôt
+                     * qu'un seul, plus épais. Zéro quand il n'a rien à donner,
+                     * et il reste alors muet — un godet qui sonne à vide dirait
+                     * qu'on vient de recevoir quelque chose.
+                     *
+                     * Le son part de l'ANCRE du meuble et non de l'œil : le
+                     * godet est devant le joueur, à un mètre et demi au plus, et
+                     * cinq pièces qui tomberaient dans sa tête ne viendraient de
+                     * nulle part. La cote de l'ancre est celle du sol ; on la
+                     * relève à hauteur de godet, qui est celle d'une main.
+                     */
+                    comptoir.y += 0.85f;
+                    room_sound_jeton_bac(&sound, comptoir,
+                                         (int)room_eco_salle_monnayeur());
+                }
                 else if (k == NS_POI_PRIZES) { room_eco_salle_vitrine(); }
             }
 
@@ -3464,11 +3527,23 @@ play_at_done: ;
              * refus, lue au même endroit que lui.
              */
             if (near && vmstate.state == ROOM_VM_IDLE && !room_eco_salle_jeton()) {
+                /* La borne ne prendra rien : on n'a pas de quoi. Le monnayeur
+                 * RECRACHE, et c'est le seul retour audible d'un appui qui ne
+                 * fait rien. */
+                room_sound_jeton_refuse(&sound, near->coin_slot);
                 near = NULL;
             }
 
             if (near && room_viewmodel_interact(&vmstate, near)) {
-                room_sound_coin(&sound, near->coin_slot);
+                /*
+                 * LE SON NE PART PLUS D'ICI, et c'est tout l'objet du front.
+                 *
+                 * Il partait à l'appui sur « E », c'est-à-dire 722 ms avant que
+                 * la pièce n'entre : le bras commençait à peine à se lever
+                 * qu'on l'entendait déjà tomber. Il part maintenant du front
+                 * `room_viewmodel_take_token`, consommé avec l'impact du coup
+                 * de poing quelques centaines de lignes plus bas.
+                 */
                 NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
 
                 /*
@@ -3963,6 +4038,22 @@ play_at_done: ;
                      * l'origine le ferait venir d'un coin de la pièce. */
                     room_sound_frappe(&sound, (quoi >= 0) ? ou : cam.position);
                     choc_material = quoi;
+                }
+            }
+
+            /*
+             * LE JETON, consommé au même endroit et pour la même raison.
+             *
+             * Les deux gestes qui insèrent une pièce — la séquence complète et
+             * le geste court de la relance — lèvent ce front à l'image exacte
+             * où elle bascule dans le mécanisme, et il rend la fente visée.
+             * Le son n'a donc rien à retrouver : il se place tout seul sur la
+             * borne, y compris quand on a tourné la tête entre-temps.
+             */
+            {
+                ns_v3 fente;
+                if (room_viewmodel_take_token(&vmstate, &fente)) {
+                    room_sound_jeton_insere(&sound, fente);
                 }
             }
             /* Les dix-neuf démos avancent du même pas que la partie du joueur :
@@ -4860,7 +4951,7 @@ play_at_done: ;
                  * pour que l'invite ne puisse pas promettre autre chose que ce
                  * que l'appui fera. */
                 hud.eco = room_eco_salle();
-                hud.poi = eco_poi_kind(&scene, &cam);
+                hud.poi = eco_poi_kind(&scene, &cam, NULL);
                 hud.eco_message = room_eco_salle_message();
                 hud.eco_message_timer = room_eco_salle_message_reste();
 

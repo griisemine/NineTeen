@@ -42,6 +42,18 @@
  * n'a ouverte. Les 8 unités de `reglageVolume` en 2020 valent 3,88 m à 2,06
  * unités par mètre ; c'est cette cote-là qu'on garde pour la porte.
  */
+/*
+ * LE JETON. La portée la plus courte de tout ce fichier, et c'est voulu : une
+ * pièce qui tombe est un petit objet à cinquante centimètres des yeux. Un jeton
+ * qu'on entendrait du bar dirait à tout le monde que quelqu'un vient de payer,
+ * ce qui n'a aucun sens dans une salle où l'on paie en permanence.
+ *
+ * Six mètres et non les quatorze du coup de poing : cogner une borne est un
+ * ÉVÉNEMENT — on se retourne —, mettre une pièce n'en est pas un.
+ */
+#define RS_COIN_RADIUS    0.6f
+#define RS_COIN_MAX       6.0f
+
 #define RS_FLUSH_RADIUS   1.6f
 #define RS_FLUSH_MAX     12.0f
 #define RS_DOOR_RADIUS    0.8f
@@ -173,6 +185,8 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_tone = s->clip_fan = s->clip_street = NS_AUDIO_INVALID;
     s->clip_door_open = s->clip_door_close = NS_AUDIO_INVALID;
     s->clip_flush = NS_AUDIO_INVALID;
+    s->clip_jeton_insere = s->clip_jeton_refuse = NS_AUDIO_INVALID;
+    s->clip_jeton_bac = NS_AUDIO_INVALID;
     for (int i = 0; i < 3; ++i) s->clip_cabinet[i] = NS_AUDIO_INVALID;
     for (int k = 0; k < NS_STEP_COUNT; ++k) {
         for (int v = 0; v < ROOM_STEP_VARIANTS; ++v) s->clip_step[k][v] = NS_AUDIO_INVALID;
@@ -203,6 +217,9 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_door_close = ns_audio_load("sounds/SF-fermport.wav");
     s->clip_flush      = ns_audio_load("sounds/chasse_eau.wav");
     s->clip_coup       = ns_audio_load("sounds/coup_borne.wav");
+    s->clip_jeton_insere = ns_audio_load("sounds/jeton_insere.wav");
+    s->clip_jeton_refuse = ns_audio_load("sounds/jeton_refuse.wav");
+    s->clip_jeton_bac    = ns_audio_load("sounds/jeton_bac.wav");
 
     /* La banque de `tools/stepgen`. Le nom du matériau vient de
      * `ns_footstep_label` — le MÊME que celui que `salle.room.json` écrit et que
@@ -359,6 +376,13 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
             s->stall_count, (double)s->flush_min, (double)s->flush_max,
             s->clip_door_open  >= 0 ? "SF-ouvport"  : "ABSENT",
             s->clip_door_close >= 0 ? "SF-fermport" : "ABSENT");
+    /* Les trois jetons ont leur ligne, pour la raison qui a fait donner la
+     * sienne à la chasse : sans elle, une banque incomplète rend les gestes
+     * muets EN SILENCE, et un silence qui s'explique vaut mieux qu'un silence. */
+    NS_INFO("son : jeton %s à l'insertion, %s au refus, %s au godet",
+            s->clip_jeton_insere >= 0 ? "chargé" : "ABSENT",
+            s->clip_jeton_refuse >= 0 ? "chargé" : "ABSENT",
+            s->clip_jeton_bac    >= 0 ? "chargé" : "ABSENT");
 }
 
 void room_sound_shutdown(room_sound *s)
@@ -508,6 +532,107 @@ static void update_flush(room_sound *s, float dt)
                      RS_FLUSH_RADIUS, RS_FLUSH_MAX);
 }
 
+/* --------------------------------------------------------------------------
+ * Le jeton
+ * -------------------------------------------------------------------------- */
+
+/*
+ * Les trois gestes du jeton, joués par UNE fonction et trois jeux de bornes.
+ *
+ * Trois copies de `room_sound_frappe` diraient la même chose trois fois et
+ * laisseraient trois endroits où corriger une portée. Ce qui diffère
+ * réellement d'un geste à l'autre tient dans quatre nombres — la plage de
+ * hauteur et celle de gain —, et c'est ce que les trois appelants passent.
+ *
+ * La graine avance à chaque appel (`s->rng++`) comme pour le coup et les
+ * chasses : c'est ce qui rend la suite reproductible d'une partie à l'autre
+ * sans être identique d'un jeton au suivant.
+ */
+static void play_jeton(room_sound *s, int clip, ns_v3 at,
+                       float pitch_lo, float pitch_hi,
+                       float gain_lo, float gain_hi)
+{
+    /* MUET plutôt qu'emprunté : voir `room_sound.h`. */
+    if (!s->ready || clip < 0) return;
+
+    ns_rng r;
+    ns_rng_seed(&r, (uint64_t)s->rng++, 0x0EC0u);
+
+    ns_audio_play_3d(clip, NS_BUS_SFX, at,
+                     rand_range(&r, gain_lo, gain_hi),
+                     rand_range(&r, pitch_lo, pitch_hi),
+                     RS_COIN_RADIUS, RS_COIN_MAX);
+}
+
+void room_sound_jeton_insere(room_sound *s, ns_v3 position)
+{
+    /* ±5 % : la hauteur d'une pièce est son diamètre, et les dix-neuf bornes
+     * prennent le même jeton. La plage ne sert donc qu'à casser la répétition
+     * exacte d'une forme d'onde, pas à faire croire à plusieurs pièces. */
+    play_jeton(s, s->clip_jeton_insere, position, 0.95f, 1.05f, 0.80f, 0.95f);
+}
+
+void room_sound_jeton_refuse(room_sound *s, ns_v3 position)
+{
+    /* Plus discret que les deux autres, et c'est une décision et non un
+     * réglage : un refus n'est pas un événement dont la salle doit s'apercevoir.
+     * On l'entend parce qu'on est devant le monnayeur. */
+    play_jeton(s, s->clip_jeton_refuse, position, 0.96f, 1.04f, 0.66f, 0.80f);
+}
+
+/* Une pièce dans le godet. La plage de hauteur est la plus large des trois —
+ * ±8 % — parce que c'est le seul des trois qu'on joue plusieurs fois de suite à
+ * quelques dizaines de millisecondes d'intervalle. C'est l'endroit de toute la
+ * bande-son où une répétition exacte s'entendrait le plus, et cinq pièces qui
+ * tombent ne touchent pas le godet du même angle. */
+static void play_jeton_bac(room_sound *s, ns_v3 at)
+{
+    play_jeton(s, s->clip_jeton_bac, at, 0.92f, 1.09f, 0.72f, 0.92f);
+}
+
+void room_sound_jeton_bac(room_sound *s, ns_v3 position, int nombre)
+{
+    if (!s->ready || nombre <= 0) return;
+
+    /* La file est REMPLACÉE, pas allongée : voir `room_sound.h`. */
+    s->coin_at    = position;
+    s->coin_left  = nombre - 1;
+    s->coin_delay = 0.0f;
+    play_jeton_bac(s, position);
+}
+
+/*
+ * La rafale, une pièce par échéance.
+ *
+ * L'intervalle est TIRÉ entre 52 et 84 ms, et l'argument est celui des
+ * glouglous de la chasse et des tripes du coup de poing : un intervalle
+ * parfaitement régulier s'entend comme un moteur. Le mécanisme, lui, l'est —
+ * mais ce n'est pas le mécanisme qu'on entend, c'est la CHUTE, et cinq pièces
+ * ne rebondissent pas de la même façon.
+ *
+ * La fourchette est étroite en valeur absolue et large en proportion : à 52 ms
+ * on entend une rafale, à 84 on entend encore une suite. Au-delà de la
+ * centaine, cinq jetons deviennent cinq événements et le joueur compte au lieu
+ * d'entendre.
+ *
+ * Une seule pièce par image au plus : à 120 Hz, un pas fait 8,3 ms et la
+ * fourchette la plus serrée en vaut six. Boucler ici pour rattraper un pas long
+ * ne servirait qu'à faire tomber d'un coup ce qu'on vient d'espacer.
+ */
+static void update_coin_burst(room_sound *s, float dt)
+{
+    if (s->coin_left <= 0) return;
+
+    s->coin_delay -= dt;
+    if (s->coin_delay > 0.0f) return;
+
+    ns_rng r;
+    ns_rng_seed(&r, (uint64_t)s->rng++, 0x0EC1u);
+    s->coin_delay = rand_range(&r, 0.052f, 0.084f);
+    s->coin_left--;
+    play_jeton_bac(s, s->coin_at);
+}
+
 void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam,
                        room_doors *doors, float dt)
 {
@@ -550,6 +675,7 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     /* --- les toilettes -------------------------------------------------- */
     update_doors(s, doors);
     update_flush(s, dt);
+    update_coin_burst(s, dt);
 
     /* --- les pas ------------------------------------------------------- */
     const room_view_bob bob = room_camera_bob(cam, 1.0f);
@@ -663,13 +789,3 @@ void room_sound_frappe(room_sound *s, ns_v3 position)
     ns_audio_play_3d(s->clip_coup, NS_BUS_SFX, position, gain, pitch, 1.0f, 14.0f);
 }
 
-void room_sound_coin(room_sound *s, ns_v3 position)
-{
-    if (!s->ready) return;
-    /* Le jeton emprunte le son de porte, aigu et sec : c'est le seul « clac »
-     * métallique de la banque de 2020. Un vrai son de jeton viendra avec les
-     * enregistrements ; en attendant, un geste muet serait pire. */
-    if (s->clip_door_close >= 0) {
-        ns_audio_play_3d(s->clip_door_close, NS_BUS_SFX, position, 0.5f, 1.6f, 0.5f, 6.0f);
-    }
-}

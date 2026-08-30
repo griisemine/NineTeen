@@ -628,9 +628,9 @@ void room_eco_salle_fin(const char *jeu, bool hard, uint32_t score)
     (void)room_eco_sauver(&g_eco);
 }
 
-void room_eco_salle_monnayeur(void)
+int32_t room_eco_salle_monnayeur(void)
 {
-    const int32_t rendu = room_eco_monnayeur(&g_eco);
+    int32_t rendu = room_eco_monnayeur(&g_eco);
     if (rendu > 0) {
         dire("+%d JETONS", rendu);
     } else {
@@ -639,10 +639,14 @@ void room_eco_salle_monnayeur(void)
          * plancher — un joueur qui actionne le monnayeur veut de quoi jouer,
          * pas une pièce. */
         const int32_t n = room_eco_changer(&g_eco, ROOM_ECO_PLANCHER_ACCUEIL);
-        if (n > 0) dire("CHANGE : +%d JETONS", n);
+        if (n > 0) { dire("CHANGE : +%d JETONS", n); rendu = n; }
         else       dire("%d JETONS EN POCHE", g_eco.jetons);
     }
     (void)room_eco_sauver(&g_eco);
+    /* Les DEUX origines comptent pareil pour l'oreille : cinq pièces tombent
+     * dans le godet, qu'elles viennent du plancher ou du change. La distinction
+     * est comptable, et le bandeau la dit déjà. */
+    return rendu;
 }
 
 void room_eco_salle_vitrine(void)

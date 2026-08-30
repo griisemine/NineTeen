@@ -359,9 +359,17 @@ uint64_t room_eco_salle_graine(const char *jeu);
  */
 void room_eco_salle_fin(const char *jeu, bool hard, uint32_t score);
 
-/* Le monnayeur et la vitrine, actionnés par le joueur qui s'en approche. */
-void room_eco_salle_monnayeur(void);
-void room_eco_salle_vitrine(void);
+/* Le monnayeur et la vitrine, actionnés par le joueur qui s'en approche.
+ *
+ * Le monnayeur rend le NOMBRE DE JETONS effectivement tombés dans le godet —
+ * qu'ils viennent du plancher d'accueil ou du change —, et zéro quand il n'a
+ * rien à donner. Il ne le rendait pas, et rien ne pouvait donc les faire
+ * entendre : un monnayeur qui délivre cinq pièces en silence est un
+ * distributeur de chiffres, pas une machine. C'est le seul usage de cette
+ * valeur, et c'est pour ça qu'elle est un COMPTE et non un booléen : cinq
+ * pièces et une pièce ne font pas le même bruit. */
+int32_t room_eco_salle_monnayeur(void);
+void    room_eco_salle_vitrine(void);
 
 /*
  * LE QUITTE OU DOUBLE.
