@@ -767,6 +767,125 @@ static size_t sg_render_flush(float *out, size_t cap)
 }
 
 /* ==========================================================================
+ * LE COUP DE POING SUR UNE BORNE
+ * ==========================================================================
+ * Comme la chasse d'eau, ce n'est pas une nappe : un debut, une fin, et
+ * `room_sound.c` le declenche a la demande. Il est donc rendu a part.
+ *
+ * Ce qu'on frappe, et pourquoi ca ne sonne pas comme un mur
+ * ---------------------------------------------------------
+ * Une borne d'arcade n'est pas un bloc : c'est un COFFRE de contreplaque de
+ * dix-huit millimetres, ferme par des flancs peints et un panneau de commande
+ * en tole laquee, et il est VIDE a l'interieur — un tube, une carte, un
+ * monnayeur, et beaucoup d'air. Un coup dessus fait donc quatre choses a la
+ * fois, et c'est leur superposition qui la rend reconnaissable :
+ *
+ *   LE POING     mat, et c'est ce qui le distingue d'un coup de marteau. La
+ *                chair amortit : l'excitation est un bruit BASSE bande de trois
+ *                millisecondes et demie, pas la salve de deux millisecondes
+ *                large d'un pas. Un choc dur ici donnerait un impact de
+ *                percussion, ce qu'un poing n'est pas.
+ *   LA TOLE      le panneau repond sur DEUX modes, 420 et 780 Hz. Deux et non
+ *                un : une plaque a un spectre, un seul resonateur donne une
+ *                NOTE, et une borne qu'on frappe ne chante pas. Les Q sont
+ *                moderes parce que la laque amortit — de la tole nue sonnerait
+ *                deux fois plus longtemps, et ce serait une poubelle.
+ *   LA CAISSE    82 Hz, et c'est elle qui porte le volume du meuble. C'est le
+ *                meme raisonnement que les 62 Hz de l'estrade : une boite
+ *                creuse est un tambour, et sans ce grave on entend frapper une
+ *                planche pleine.
+ *   LES TRIPES   quatre petits chocs aigus, irreguliers, dans les cent
+ *                premieres millisecondes : la vitre dans sa feuillure, le
+ *                monnayeur, les vis. C'est le detail qui fait entendre une
+ *                MACHINE et non du mobilier, et il ne coute que quatre
+ *                resonateurs excites une fois. Leurs instants sont poses a la
+ *                main : un intervalle regulier s'entendrait comme un moteur,
+ *                exactement comme pour les glouglous de la chasse.
+ */
+#define SG_COUP_LEN 0.55f
+
+static size_t sg_render_coup(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_COUP_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour le coup sur la borne");
+
+    sg_rng r; sg_seed(&r, 0xC0DEull);
+
+    /* Les deux modes de la tole. */
+    sg_svf tole1, tole2;
+    sg_svf_set(&tole1, 420.0f, 3.2f);
+    sg_svf_set(&tole2, 780.0f, 4.0f);
+
+    /* La caisse du meuble. */
+    sg_svf caisse; sg_svf_set(&caisse, 82.0f, 6.5f);
+
+    /* Le mat du poing : du bruit dont on a retire tout l'aigu. Deux poles en
+     * cascade et non un : un seul laisse passer une brillance qui rend le coup
+     * claquant, et un poing ne claque pas. */
+    sg_pole poing1, poing2;
+    sg_pole_set(&poing1, 340.0f);
+    sg_pole_set(&poing2, 340.0f);
+
+    /* Les tripes. */
+    const float cliq_at[4]  = { 0.013f, 0.032f, 0.059f, 0.096f };
+    const float cliq_hz[4]  = { 2600.0f, 3400.0f, 1900.0f, 2950.0f };
+    const float cliq_amp[4] = { 0.26f, 0.17f, 0.20f, 0.11f };
+    sg_svf cliq[4];
+    for (int k = 0; k < 4; ++k) sg_svf_set(&cliq[k], cliq_hz[k], 9.0f);
+
+    /* Le retrait du continu : la caisse descend bas, et un resonateur a 82 Hz
+     * excite par du bruit laisse une composante lente qui deplace le zero du
+     * fichier sans s'entendre. Elle mangerait de la dynamique a la
+     * normalisation. */
+    sg_pole dc; sg_pole_set(&dc, 22.0f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        /* L'excitation : 3,5 ms. C'est la duree du contact d'un poing, et elle
+         * est ce qui rend le choc MAT — a 2 ms comme un pas, le meme filtrage
+         * donnerait un coup sec. */
+        const float choc = n * sg_decay(t, 0.0035f);
+
+        float v = 0.0f;
+
+        /* La tole. Le second mode s'eteint plus vite que le premier : les modes
+         * hauts d'une plaque sont toujours les plus amortis. */
+        v += sg_svf_band(&tole1, choc) * 0.62f * sg_decay(t, 0.085f) * sg_attack(t, 0.0006f);
+        v += sg_svf_band(&tole2, choc) * 0.34f * sg_decay(t, 0.052f) * sg_attack(t, 0.0004f);
+
+        /* La caisse : elle met plus longtemps a s'etablir — un grand volume ne
+         * repond pas dans la milliseconde — et beaucoup plus a se taire. */
+        v += sg_svf_band(&caisse, choc) * 0.78f * sg_decay(t, 0.240f) * sg_attack(t, 0.0045f);
+
+        /* Le mat du poing lui-meme. */
+        {
+            const float m = sg_lowpass(&poing2, sg_lowpass(&poing1, choc));
+            v += m * 1.35f * sg_decay(t, 0.020f);
+        }
+
+        /* Les tripes. */
+        for (int k = 0; k < 4; ++k) {
+            const float d = t - cliq_at[k];
+            if (d < 0.0f || d > 0.10f) { (void)sg_svf_band(&cliq[k], 0.0f); continue; }
+            const float drive = (d < 0.0015f) ? n : 0.0f;
+            v += cliq_amp[k] * sg_svf_band(&cliq[k], drive) * sg_decay(d, 0.008f);
+        }
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    /* Fondu de sortie, meme raison que pour les pas : un fichier qui s'arrete
+     * sur une valeur non nulle clique a chaque coup. */
+    const size_t fade = (size_t)(0.015f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ==========================================================================
  * Programme
  * ========================================================================== */
 
@@ -811,8 +930,9 @@ int main(int argc, char **argv)
             "usage : %s [--peak=F] <repertoire-de-sortie>\n"
             "  --peak=F   pic visé après normalisation GLOBALE (défaut 0.90)\n"
             "\n"
-            "Produit %d x %d pas (`pas_<materiau>_<n>.wav`) et trois boucles\n"
-            "d'ambiance (`amb_neon.wav`, `amb_ventilo.wav`, `amb_rue.wav`).\n",
+            "Produit %d x %d pas (`pas_<materiau>_<n>.wav`), trois boucles\n"
+            "d'ambiance (`amb_neon.wav`, `amb_ventilo.wav`, `amb_rue.wav`),\n"
+            "la chasse d'eau et le coup sur une borne (`coup_borne.wav`).\n",
             argv[0], SG_MATERIAL_COUNT, SG_VARIANTS);
         return 2;
     }
@@ -962,6 +1082,76 @@ int main(int argc, char **argv)
         if (ratio[0] <= 0.0 || ratio[1] < ratio[0] * 2.0) {
             tool_fatalf("le remplissage ne monte pas : la chasse ne s'entendra "
                         "pas comme une chasse");
+        }
+    }
+
+    /* ---- le coup sur une borne ---------------------------------------------
+     * Ce qu'on mesure ici, c'est qu'il est COURT et MAT — les deux mots qui le
+     * décrivent, et les deux qu'on peut vérifier plutôt que promettre.
+     *
+     *   COURT : l'énergie des trente premières millisecondes contre celle de la
+     *   queue. Un choc a un rapport franc ; un son qui traîne n'est plus un
+     *   choc mais une cloche, et c'est exactement ce qu'on obtient si un Q part
+     *   à la hausse.
+     *
+     *   MAT : la puissance dans une bande haute contre une bande basse, RAPPORTÉE
+     *   À CELLE D'UN BRUIT BLANC. La normalisation n'est pas un détail : les
+     *   deux filtres sont à Q constant, donc leurs largeurs sont
+     *   proportionnelles à leur fréquence, et la bande de 2 200 Hz en couvre
+     *   4,9 fois plus que celle de 450. Comparés bruts, ils annoncent 2,2 pour
+     *   un son qui est en réalité DEUX FOIS PLUS SOMBRE que du bruit blanc —
+     *   c'est le premier seuil écrit ici, et il refusait un fichier correct.
+     *   Divisée par 4,9, la mesure vaut 0,45 et veut enfin dire quelque chose :
+     *   « moitié moins d'aigu qu'un bruit blanc ».
+     */
+    {
+        static float coup[SG_MAX_FRAMES];
+        const size_t frames = sg_render_coup(coup, SG_MAX_FRAMES);
+        const float p = peak_of(coup, frames);
+        if (p < 1e-6f) tool_fatalf("le coup sur la borne est silencieux");
+        const float scale = 0.92f / p;
+
+        snprintf(path, sizeof path, "%s/coup_borne.wav", out_dir);
+        sg_write_wav(path, coup, frames, scale);
+
+        const size_t tete = (size_t)(0.030f * (float)SG_RATE);
+        double e_tete = 0.0, e_queue = 0.0;
+        for (size_t i = 0; i < frames; ++i) {
+            const double v = (double)coup[i];
+            if (i < tete) e_tete += v * v; else e_queue += v * v;
+        }
+        /* Ramenées à la trame : les deux fenêtres n'ont pas la même longueur,
+         * et comparer des sommes brutes ferait passer la queue pour l'essentiel
+         * du son au seul motif qu'elle est dix-sept fois plus longue. */
+        const double d_tete  = (tete > 0) ? e_tete / (double)tete : 0.0;
+        const double d_queue = (frames > tete) ? e_queue / (double)(frames - tete) : 0.0;
+
+        sg_svf bas, haut;
+        sg_svf_set(&bas,   450.0f, 2.0f);
+        sg_svf_set(&haut, 2200.0f, 2.0f);
+        double ebas = 0.0, ehaut = 0.0;
+        for (size_t i = 0; i < frames; ++i) {
+            const double a = sg_svf_band(&bas, coup[i]);
+            const double b = sg_svf_band(&haut, coup[i]);
+            ebas += a * a; ehaut += b * b;
+        }
+        /* La référence : le rapport que donnerait du bruit blanc, c'est-à-dire
+         * le rapport des largeurs de bande, c'est-à-dire celui des fréquences
+         * centrales puisque le Q est le même. */
+        const double blanc = 2200.0 / 450.0;
+        const double mat = (ebas > 1e-12) ? (ehaut / ebas) / blanc : 1e9;
+
+        tool_infof("coup  « %-15s » : %.0f ms, tête/queue %.0fx, "
+                   "aigu %.2f fois celui d'un bruit blanc (mat)",
+                   "coup_borne.wav", (double)SG_COUP_LEN * 1000.0,
+                   (d_queue > 1e-12) ? d_tete / d_queue : 0.0, mat);
+
+        if (!(d_queue > 1e-12) || d_tete < d_queue * 20.0) {
+            tool_fatalf("le coup traîne : c'est une cloche, pas un choc");
+        }
+        if (mat > 0.60) {
+            tool_fatalf("le coup est trop brillant (%.2f fois un bruit blanc) : "
+                        "c'est un marteau, pas un poing", mat);
         }
     }
 
