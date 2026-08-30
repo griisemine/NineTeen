@@ -592,7 +592,9 @@ static void play_jeton_bac(room_sound *s, ns_v3 at)
 
 void room_sound_jeton_bac(room_sound *s, ns_v3 position, int nombre)
 {
-    if (!s->ready || nombre <= 0) return;
+    /* Le clip manquant sort AVANT la mise en file : sans ça, on ferait tourner
+     * un compte à rebours pendant une demi-seconde pour ne rien jouer. */
+    if (!s->ready || s->clip_jeton_bac < 0 || nombre <= 0) return;
 
     /* La file est REMPLACÉE, pas allongée : voir `room_sound.h`. */
     s->coin_at    = position;
