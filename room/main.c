@@ -178,7 +178,8 @@ static void print_usage(const char *exe)
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
         "  En jeu : Échap réglages, F5 caméra libre, F6 orbite,\n"
-        "           F7 palier de qualité, F8 échelle de rendu, F2 capture.\n"
+        "           F7 palier de qualité, F8 échelle de rendu, F2 capture,\n"
+        "           F cogner la borne devant soi.\n"
         "  --nom=NOM            nom porté au classement local\n"
         "  --debug=VUE          affiche une cible intermédiaire : albedo, normal,\n"
         "                       emissive, depth, visibility, hdr, bloom\n"
@@ -2035,6 +2036,10 @@ int main(int argc, char **argv)
      */
     int32_t    run_tick = 0;
     uint8_t    pending_press = 0;
+    /* La dalle qu'on vient de frapper, ou -1. Retenue entre l'impact et la fin
+     * du déraillement : `room_viewmodel_take_impact` ne la donne qu'une fois,
+     * et le tremblement, lui, dure un tiers de seconde. */
+    int32_t    choc_material = -1;
     /*
      * LE DUEL EN DIFFÉRÉ — le « fantôme ».
      *
@@ -2368,10 +2373,11 @@ int main(int argc, char **argv)
         }
         if (ns_skin_duration(personnage) > 0.0f) {
             NS_INFO("personnage : un seul cycle d'animation (%.2f s) — la cadence "
-                    "suit l'allure ; l'accroupi et le balancement d'arrêt en sont "
-                    "DÉRIVÉS (accroupi %s)",
+                    "suit l'allure ; l'accroupi, le balancement d'arrêt et la "
+                    "frappe en sont DÉRIVÉS (accroupi %s, frappe %s)",
                     (double)ns_skin_duration(personnage),
-                    ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout");
+                    ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout",
+                    ns_skin_can_hit(personnage) ? "prête" : "IMPOSSIBLE, le bras reste inerte");
         }
     }
 
@@ -2886,6 +2892,7 @@ play_at_done: ;
         uint8_t frame_press  = 0;    /* fronts montants des cinq boutons de jeu */
         bool    want_interact = false; /* « E » : le jeton */
         bool    want_gamble   = false; /* « R » : quitte ou double */
+        bool    want_frappe   = false; /* « F » : cogner la borne */
         bool    want_menu     = false; /* « Échap » / Start */
 
         SDL_Event ev;
@@ -3100,6 +3107,25 @@ play_at_done: ;
                      * bouton d'action de la manette hors partie. */
                     if (!ev.key.repeat) want_interact = true;
                     break;
+                case SDLK_F:
+                    /*
+                     * COGNER LA BORNE. « F » comme frapper, et la touche est
+                     * libre : E met le jeton, R double la mise, C et Ctrl
+                     * s'accroupissent, F2 et F5 à F10 sont les outils.
+                     *
+                     * Elle vaut EN PARTIE comme hors partie, et c'est tout
+                     * l'intérêt : on rage sur la machine qui vient de nous
+                     * tuer, pas sur celle d'à côté. Elle n'est donc pas dans
+                     * le bloc qui rend le clavier au jeu — celui-ci ne réclame
+                     * que l'espace, l'entrée et les flèches.
+                     *
+                     * Pas de répétition : maintenir la touche ne doit pas
+                     * marteler. `room_viewmodel_frappe` refuse déjà pendant le
+                     * geste, mais s'en remettre à ça ferait dépendre le rythme
+                     * des coups de la durée d'une animation.
+                     */
+                    if (!ev.key.repeat) want_frappe = true;
+                    break;
                 case SDLK_R:
                     /* QUITTE OU DOUBLE. Décidé ici plutôt qu'après la boucle
                      * parce qu'il ne dépend d'aucune autre entrée : il n'y a
@@ -3175,6 +3201,22 @@ play_at_done: ;
              * n'a plus à savoir, d'où vient l'appui.
              */
             frame_press |= pad_press;
+            /*
+             * LA CONSÉQUENCE DU COUP, et elle tient en une ligne.
+             *
+             * Pendant les 390 ms du geste, la main droite est SUR LA MACHINE et
+             * pas sur les boutons : on jette donc les appuis. La partie, elle,
+             * continue de tourner — c'est le seul point qui compte, et c'est ce
+             * qui fait payer le coup au SCORE, donc aux tickets.
+             *
+             * Pourquoi pas un jeton retiré : `room_bareme.h` garantit un
+             * plancher de cinq jetons au monnayeur, sans condition et sans
+             * attente, et `room_economie.h` écrit qu'il n'y a « pas de minuterie
+             * qui punit ». Un jeton retiré ne serait donc pas une perte mais un
+             * aller-retour de 3,4 m. Le seul bien qu'on puisse vraiment perdre
+             * ici est la partie en cours.
+             */
+            if (room_viewmodel_is_hitting(&vmstate)) frame_press = 0;
             if (frame_press) {
                 /*
                  * Après la mort, l'action relance — mais seulement une fois la
@@ -3274,6 +3316,17 @@ play_at_done: ;
                     run_tick = 0; pending_press = 0;
                 }
             }
+        }
+
+        /*
+         * LE COUP, résolu avant le jeton parce qu'il ne coûte rien à décider :
+         * il ne consulte ni l'économie, ni les comptoirs, ni le chargement d'un
+         * jeu. `room_viewmodel_frappe` accepte une borne NULLE — on cogne alors
+         * dans le vide, ce qui est le bon comportement quand on tape à côté.
+         */
+        if (want_frappe && !menu.open && cam.mode == ROOM_CAM_PLAYER) {
+            const ns_cabinet *cible = room_viewmodel_target(&scene, &cam);
+            room_viewmodel_frappe(&vmstate, cible);
         }
 
         if (want_interact && !menu.open) {
@@ -3750,6 +3803,29 @@ play_at_done: ;
                 look_settle -= dt;
             }
             room_viewmodel_tick(&vmstate, &cam, (float)clock.tick_seconds);
+
+            /*
+             * L'IMPACT, consommé ICI et une seule fois.
+             *
+             * Les trois réactions partent du MÊME front : la vue encaisse, le
+             * son part, la dalle retient qu'elle a été frappée. Calculées
+             * séparément depuis l'état du bras, elles se décaleraient d'un pas
+             * de simulation les unes des autres — et un choc dont le bruit
+             * arrive huit millisecondes après l'image ne se lit plus comme un
+             * choc.
+             */
+            {
+                ns_v3 ou; int32_t quoi = -1;
+                if (room_viewmodel_take_impact(&vmstate, &ou, &quoi)) {
+                    room_camera_frappe(&cam);
+                    /* Le son part du CENTRE DE LA DALLE quand il y a une borne,
+                     * et de l'œil quand on cogne dans le vide : un choc sans
+                     * cible n'a pas de position dans la salle, et le placer à
+                     * l'origine le ferait venir d'un coin de la pièce. */
+                    room_sound_frappe(&sound, (quoi >= 0) ? ou : cam.position);
+                    choc_material = quoi;
+                }
+            }
             /* Les dix-neuf démos avancent du même pas que la partie du joueur :
              * c'est la seule façon qu'elles aient la bonne vitesse quel que
              * soit le nombre d'images par seconde. */
@@ -4160,6 +4236,21 @@ play_at_done: ;
             if (in_game && !fullscreen_game && sprites && screen_rt.handle) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
                 game_api->draw(sprites, game, game_art, 512.0f, 288.0f);
+                /*
+                 * LA DALLE ENCAISSE. Dessiné PAR-DESSUS le jeu et dans la même
+                 * passe : c'est un défaut de l'écran, pas un élément du jeu, et
+                 * il doit donc recouvrir ce que le jeu a dessiné.
+                 *
+                 * Seulement si c'est CETTE borne qu'on a frappée. Cogner la
+                 * voisine ne doit pas faire dérailler la partie en cours — ce
+                 * serait la seule façon de punir quelqu'un pour un coup qu'il
+                 * n'a pas donné à cet écran-là.
+                 */
+                if (choc_material >= 0 && choc_material == playing_material) {
+                    room_hud_draw_choc(sprites, 512.0f, 288.0f,
+                                       room_viewmodel_choc(&vmstate, (float)clock.alpha),
+                                       (float)now);
+                }
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                 ns_sprite_end(rhi, sprites, screen_rt.handle, 512, 288, off);
                 ns_renderer_set_screen(renderer, playing_material, screen_rt.handle);
@@ -4349,6 +4440,15 @@ play_at_done: ;
                 }
                 allure.souffle = b.breath;
                 allure.souffle_force = 1.0f - ns_clampf(b.amount, 0.0f, 1.0f);
+                /*
+                 * LE COUP, sur la MÊME horloge que le bras de la première
+                 * personne. F10 bascule d'une vue à l'autre en pleine partie :
+                 * deux gestes qui ne dureraient pas pareil se verraient au
+                 * basculement, et c'est le genre d'écart qu'on ne diagnostique
+                 * qu'en le cherchant.
+                 */
+                allure.frappe = room_viewmodel_frappe_amount(&vmstate,
+                                                             (float)clock.alpha);
                 ns_skin_pose_allure(personnage, when, &allure, d.joint,
                                     NS_MAX_CHARACTER_JOINTS);
 
