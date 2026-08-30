@@ -737,3 +737,189 @@ ce qui est décrit ci-dessus. Ce document décrit le transport, et rien de ce qu
 - **Le relais ne parle pas TLS**, comme le reste du réseau de ce projet, et pour
   la même raison — voir `ns_http.h`.
 
+
+---
+
+## LE CLIENT C DE L'ARÈNE — `ns_arene`
+
+Le paragraphe qui ferme la section précédente disait : « le client C de l'arène ne fait pas partie
+de ce qui est décrit ci-dessus ». Il en fait partie maintenant. `engine/net/ns_arene.{c,h}` est
+l'autre bout du relais à huit places, et voici ce qu'il pose, ce qu'il coûte et ce qui est
+réellement vérifié.
+
+### Le vocabulaire au-dessus de `0x20`
+
+Le relais ne connaît rien de ce qu'il diffuse : tout ce qui est au-dessus de `0x20` traverse sans
+être regardé, précédé du seul octet qu'il écrive lui-même — **la place de l'émetteur**. Le
+vocabulaire du mode est donc entièrement défini côté C, et il tient en quatre trames.
+
+| type | ce que ça dit | écrit | reçu |
+|---|---|---|---|
+| `0x20` **ÉTAT** | l'état d'une place, à 4 Hz | 46 o | 47 o |
+| `0x21` **ACTION** | « je vise la place C avec l'action A » | 2 o | 3 o |
+| `0x22` **VERDICT** | ce que le couperet a décidé | 7 o | 8 o |
+| `0x23` **EFFET** | ce que la règle a fait d'une action | 4 o | 5 o |
+
+L'**ÉTAT**, octet par octet : `uint8` drapeaux (bit 0 vivante, bit 1 régime difficile), `uint8`
+camp, `int32` points encaissés, `int32` fusibles, `int32` valeur devant le couperet
+(`room_cp_valeur`), `int64` score courant, `char jeu[24]`. Deux choix méritent d'être dits.
+`jeu[0] == 0` veut dire « ne joue pas », exactement comme dans `room_cp_place` — un drapeau de plus
+aurait pu contredire le nom. Et la *valeur devant le couperet* voyage à côté des *points* parce que
+ce sont deux grandeurs et non une : « qui gagne » se juge sur ce qui est en banque, « qui tombe »
+sur ce qu'on est en train de faire.
+
+L'**ACTION** ne porte **pas** son auteur. C'est le point entier : le relais l'insère, donc un
+joueur ne peut pas saboter « de la part » d'un autre. L'**EFFET**, lui, porte deux auteurs, et ce
+n'est pas une redondance — le premier octet, posé par le relais, dit « c'est l'arbitre qui parle » ;
+le second dit « de qui venait l'action dont voici le sort ». Sans lui, l'auteur d'une action refusée
+ne saurait jamais que ses fusibles lui restent.
+
+Aucune de ces trames ne transporte un type de `room_couperet.h`. `engine/` ne dépend pas de
+`room/`, et l'inverse seulement : ce sont des entiers nus dont la salle donne le sens, et le module
+ne se recompile pas parce qu'une action a changé de numéro.
+
+### Le rythme : 4 Hz, pour une autre raison que la présence
+
+C'est le rythme de `ns_realtime` (`NS_RT_PERIOD_MS`), mais **la justification de là-bas ne
+s'applique pas ici**, et le recopier sans le dire aurait été une double description de plus. La
+présence est à 4 Hz parce que `ns_http` rouvre une socket à chaque battement ; ici la socket est
+ouverte une fois pour toute la manche, et ce prix-là n'existe pas.
+
+Ce qui décide est la nature de ce qu'on publie. L'ÉTAT n'est pas une position, c'est un **tableau
+de scores** : points, fusibles, camp et borne jouée ne bougent qu'à des événements, et les
+événements voyagent par leurs propres trames, immédiatement. Le seul champ qui varie sans arrêt est
+le score de la partie en cours, et son seul lecteur pressé est le bandeau de menace
+(`room_cp_menace`) — un chiffre que regarde un humain, pour qui 250 ms de retard ne se voient pas.
+
+Le prix se calcule exactement :
+
+```
+charge d'ÉTAT                          46 octets
+sur le fil, en-tête + place ajoutés    50 octets
+salon plein, 8 places à 4 Hz           8 × 7 × 4 × 50 = 11 200 o/s au relais
+ce qui arrive chez un joueur           7 × 4 × 50     =  1 400 o/s
+```
+
+À 20 Hz ce serait cinq fois plus, pour rafraîchir cinq fois plus vite un chiffre que personne ne lit
+cinq fois plus vite. À 1 Hz on économiserait 9 kio/s et le bandeau prendrait jusqu'à une seconde de
+retard, ce qui se voit. Pour situer : `ns_lockstep.c` chiffre le duel à 1,2 kio/s **par joueur** à
+120 Hz.
+
+### Qui arbitre, et ce que ça concède
+
+**La place 0 arbitre** : elle seule fait tourner `room_cp_avancer`, résout les actions par
+`room_cp_agir`, et diffuse le verdict. Les autres appliquent. La règle du couperet n'est pas une
+fonction du seul état local — `room_cp_agir` consomme le blindage de la *victime* et débite les
+fusibles de l'*auteur* — donc huit clients qui résoudraient chacun leur copie divergeraient au
+premier ordre d'arrivée différent, et deux d'entre eux se contrediraient sur qui est tombé.
+
+**Hors ligne, le chemin de code est le même.** Sans arène ouverte le handle est nul :
+`ns_arene_ma_place(NULL)` vaut 0, `ns_arene_arbitre(NULL)` vaut vrai, et chaque fonction d'envoi ne
+fait rien. Il n'y a pas de « mode hors ligne » à maintenir à côté du vrai.
+
+**La place 0 peut donc mentir**, et il faut l'écrire comme le relais écrit la sienne. C'est la même
+franchise que « deux clients complices peuvent se mentir pendant un duel ». Ce que ça ne touche
+pas : l'autorité sur les scores **enregistrés** n'a pas bougé depuis M6 — journal scellé par HMAC,
+envoyé par HTTP, recalculé par le serveur. Une manche de Couperet ne fabrique aucun score mondial ;
+elle distribue des points qui naissent au coup d'envoi et meurent au verdict. L'usurpation qui *est*
+fermée, elle, l'est par l'octet d'identité du relais : un verdict qui ne vient pas de l'arbitre est
+jeté par le client qui le reçoit.
+
+**Pourquoi le relais n'arbitre pas**, alors que ce serait tentant : il faudrait porter la règle en
+Go, en double de sa version C — la table des seize durées mesurées, l'exposant 1,35, la période de
+45 s, les six actions et leur ordre de résolution. Deux descriptions d'une même chose finissent
+toujours par se contredire (c'est le raisonnement de `room_bareme.h`), et le fait que la seconde
+soit dans un autre langage n'arrange rien : ça l'aggrave. Un relais qui arbitrerait serait aussi une
+seconde autorité, donc une seconde surface à défendre.
+
+### La lame ne doit jamais rester en l'air
+
+L'arbitre est en réalité **la plus petite place présente**, et pas la place 0 en dur. La différence
+n'apparaît qu'une fois, mais elle est fatale : le relais laisse sa socket au dernier joueur d'un
+salon, donc quand la place 0 raccroche, la liaison des six autres est parfaitement vivante et plus
+personne n'avance le couperet. Tout le monde décide sur le **même** tableau — le relais le diffuse
+identique à toutes les places — donc personne n'a rien à négocier. Il en va de même quand la liaison
+meurt : `ns_arene_arbitre` redevient vrai quelle que soit la place occupée, et la manche se termine
+avec les rivaux locaux.
+
+Ce que ça laisse ouvert, et il vaut mieux l'écrire : le temps qu'un tableau vole, deux places
+peuvent se croire arbitres et deux verdicts du **même numéro** peuvent arriver. C'est borné par le
+temps de vol d'une trame, et la salle s'en protège en une ligne — un verdict dont le numéro est déjà
+appliqué se jette. C'est aussi pour ça que le numéro est dans la trame.
+
+### Rien ne bloque, y compris l'ouverture
+
+Un fil de travail par arène, comme `ns_online` et `ns_realtime` : la boucle de jeu dépose et relit.
+Trois différences avec `ns_lockstep.c`, et chacune a une raison.
+
+- **Un fil, pas un `poll` appelé par la boucle.** Le duel est en pas verrouillé : sa boucle *doit*
+  attendre le pair. L'arène ne doit jamais faire attendre personne.
+- **Une connexion non bloquante, avec `select`.** `ns_arene_fermer` doit pouvoir arrêter le fil à
+  tout instant, et un `connect` bloquant ne se laisse pas interrompre — `SO_SNDTIMEO` ne le borne
+  pas sous Linux, où un hôte injoignable coûte plus d'une minute. Fermer l'arène aurait attendu
+  cette minute-là.
+- **Une file d'événements bornée**, au lieu d'un anneau indexé par le pas. Quand elle déborde on
+  jette **le plus ancien** et on le compte : jeter le plus récent perdrait le verdict qui vient de
+  tomber pour garder un état périmé de trois secondes.
+
+### Le verrou est hérité, et il est mesuré
+
+`ns_arene_ouvrir` interroge `ns_online_server_url()` et rend `NULL` sans rien tenter si la réponse
+est `NULL`. La garantie « sans URL configurée, aucune socket n'est ouverte » reste écrite à **un
+seul endroit**, `ns_online_init`, exactement comme `ns_realtime_init` en hérite. Le relais n'est
+pourtant pas le serveur HTTP — autre port, autre protocole, adresse fournie par l'appelant — et
+hériter quand même est délibéré : il n'y a aucune raison d'ouvrir l'une des deux sockets quand
+l'autre est interdite, et `--offline` doit vouloir dire hors ligne.
+
+Ce module n'ajoute **pas** de second verrou propre, contrairement au temps réel : la présence
+publie une position sans qu'on ait rien demandé, alors qu'entrer dans une arène est un geste
+explicite.
+
+Et la promesse se **mesure** au lieu de se relire. `ns_arene_sockets()` est incrémenté juste avant
+le seul `socket()` du fichier ; le test le lit avant et après une tentative vers une adresse
+*valable*, sans URL puis sous `--offline`. Viser un hôte inexistant aurait donné le même refus sans
+rien prouver.
+
+### Comment c'est prouvé
+
+`tests/test_arene.c`, deux régimes comme `ns_test_lockstep` et pour la même raison : le protocole
+est écrit deux fois, une fois en C et une fois en Go, et un faux relais écrit en C ne prouverait
+que la cohérence du C avec lui-même.
+
+**Sans relais — 142 vérifications, et c'est ce que fait la CI.** Le verrou ci-dessus ; le chemin
+hors ligne (les onze fonctions publiques appelées sur un pointeur nul) ; « qui arbitre » sur les
+**256** tableaux de places possibles ; chaque trame aller-retour, y compris le pseudo de 23 octets,
+le tableau de huit (201 octets), un score négatif sur 64 bits ; les charges malveillantes — trame
+tronquée d'un octet, 513 octets annoncés, 65 535 annoncés, tableau qui annonce huit places et n'en
+porte que trois, entrée de place 8, issue hors énumération — dont aucune n'alloue ni ne déborde ; et
+le découpage, la même trame livrée **octet par octet** devant rendre zéro à chacun de ses préfixes
+puis exactement sa taille, deux trames dans un seul paquet, une charge de 511.
+
+**Avec une adresse — 194 vérifications contre le vrai relais Go.**
+
+```sh
+cd server && go run ./cmd/duelrelay -addr 127.0.0.1:8099 &
+ns_test_arene 127.0.0.1 8099
+```
+
+```
+salon de deux contre un vrai relais :
+  salon de 2 : 8 trames reçues, 2 émises, graine 1268649438bd5e3f
+entrée refusée :
+  place prise : « entree refusee : place 0 du salon 326023 »
+194 vérifications, 0 échec(s)
+```
+
+Ce que ces 52 vérifications de plus ajoutent : deux clients dans un salon de deux reçoivent la
+**même** graine, bit de poids fort effacé ; une action de la place 1 arrive à la place 0 **attribuée
+à la place 1**, sans que la place 1 ait écrit son numéro nulle part ; le verdict et l'effet
+descendent de l'arbitre ; une place qui n'arbitre pas n'émet **rien**, mesuré au compteur de trames
+émises faute de quoi on ne prouverait qu'une absence ; la place 0 raccroche et la place 1 **reprend
+la lame** ; et une place déjà prise se voit comme une fin de liaison avec un motif.
+
+**Ce qui n'est pas prouvé, et il faut le dire.** Le découpage est vérifié sur `ns_arene_trame`, la
+seule fonction du module qui sache découper — le fil s'en sert, il ne le refait pas — mais le
+tampon de réception du fil lui-même n'est exercé que par le régime avec relais, c'est-à-dire pas en
+CI. Et rien ici ne mesure un salon de **huit** contre un vrai relais : le test en ouvre deux. Le
+relais, lui, a ses salons de huit dans `relay_test.go`, mais des deux côtés à la fois, personne ne
+l'a encore fait.
