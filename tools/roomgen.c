@@ -540,6 +540,39 @@ static float overlap_1d(float amin, float amax, float bmin, float bmax)
 }
 
 /*
+ * L'EPAISSEUR NOMINALE D'UN PANNEAU, et le defaut qu'elle rattrape.
+ *
+ * Un `type: "panel"` est une seule face : sa boite est PLATE sur un axe. Le
+ * recouvrement y vaut donc 0,000 m quoi qu'il arrive, l'axe oppose son veto, et
+ * la paire n'est jamais examinee. Consequence mesuree : `affiche_sud` se tenait
+ * a 81 % DANS le caisson du distributeur — le cadre en z -7,030 et x
+ * -3,7775..-3,0005, le caisson couvrant x -3,630..-2,770 — et C-02 ne pouvait
+ * pas le voir. Il a fallu une capture ouverte a l'oeil pour le trouver.
+ *
+ * On donne donc a l'axe degenere une epaisseur nominale. La valeur n'est pas
+ * choisie : elle est encadree par deux mesures. Il faut qu'elle depasse la
+ * tolerance de 5 mm, sinon le recouvrement reste sous le seuil et rien ne
+ * change ; et il faut qu'elle reste sous le double du jeu qui separe un panneau
+ * de son propre parement — les dix-huit panneaux muraux de la salle sont entre
+ * 0,5 et 1,5 cm de leur mur. A 2 cm, un panneau plaque a 0,5 cm mord de 0,5 sur
+ * ce qui est derriere lui, ce qui reste sous la tolerance ; a 5 cm il
+ * accuserait chaque affiche de rentrer dans son propre mur.
+ *
+ * Ce n'est PAS une epaisseur de rendu : la geometrie produite reste plate.
+ * C'est la marge dans laquelle on considere qu'un panneau et un solide se
+ * disputent la meme place.
+ */
+#define RG_PANEL_NOMINAL 0.020f
+
+static void solid_span(float mn, float mx, float *lo, float *hi)
+{
+    if (mx - mn >= RG_PANEL_NOMINAL) { *lo = mn; *hi = mx; return; }
+    const float c = (mn + mx) * 0.5f;
+    *lo = c - RG_PANEL_NOMINAL * 0.5f;
+    *hi = c + RG_PANEL_NOMINAL * 0.5f;
+}
+
+/*
  * Un luminaire doit se trouver dans le lieu dont il porte le nom.
  *
  * Ce contrôle vient d'une bévue réelle, et de deux occurrences plutôt qu'une :
@@ -1318,12 +1351,20 @@ static void check_solid_overlaps(const rg_builder *b)
         for (size_t j = i + 1; j < b->solid_count; ++j) {
             const rg_solid *A = &b->solids[i], *B = &b->solids[j];
 
-            const float ox = overlap_1d(A->bounds.min.x, A->bounds.max.x,
-                                        B->bounds.min.x, B->bounds.max.x);
-            const float oy = overlap_1d(A->bounds.min.y, A->bounds.max.y,
-                                        B->bounds.min.y, B->bounds.max.y);
-            const float oz = overlap_1d(A->bounds.min.z, A->bounds.max.z,
-                                        B->bounds.min.z, B->bounds.max.z);
+            /* Les bornes de chaque axe passent par `solid_span`, qui rend a un
+             * panneau plat une epaisseur nominale : sans elle son axe degenere
+             * opposait un veto et la paire n'etait jamais examinee. */
+            float axlo, axhi, aylo, ayhi, azlo, azhi;
+            float bxlo, bxhi, bylo, byhi, bzlo, bzhi;
+            solid_span(A->bounds.min.x, A->bounds.max.x, &axlo, &axhi);
+            solid_span(A->bounds.min.y, A->bounds.max.y, &aylo, &ayhi);
+            solid_span(A->bounds.min.z, A->bounds.max.z, &azlo, &azhi);
+            solid_span(B->bounds.min.x, B->bounds.max.x, &bxlo, &bxhi);
+            solid_span(B->bounds.min.y, B->bounds.max.y, &bylo, &byhi);
+            solid_span(B->bounds.min.z, B->bounds.max.z, &bzlo, &bzhi);
+            const float ox = overlap_1d(axlo, axhi, bxlo, bxhi);
+            const float oy = overlap_1d(aylo, ayhi, bylo, byhi);
+            const float oz = overlap_1d(azlo, azhi, bzlo, bzhi);
             if (ox <= RG_OVERLAP_TOLERANCE || oy <= RG_OVERLAP_TOLERANCE
              || oz <= RG_OVERLAP_TOLERANCE) {
                 continue;                       /* disjoints sur au moins un axe */

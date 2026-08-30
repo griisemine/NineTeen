@@ -5003,7 +5003,7 @@
       "at": [
         7.09,
         1.72,
-        -0.3
+        -4.6
       ],
       "yaw": 270.0,
       "pose": "mur",
@@ -5022,7 +5022,8 @@
             0.3
           ]
         }
-      ]
+      ],
+      "_c02": "TROIS PLACES ESSAYEES, ET C'EST LE CONTROLE QUI LES A DEPARTAGEES. Le mur est est plus encombre qu'il n'en a l'air : la baie des sanitaires prend z -0,651 a -4,069, `pilier_est_2` z -0,909..-0,423, `pilier_est_1` z -4,206..-3,720, la vitrine a lots z 0,25..2,05 et l'extincteur z -0,10. A z -0,30 le panneau etait dans le pilastre, a z +0,30 dans la vitrine. La seule bande libre assez longue est au SUD de la baie, de -7,035 a -4,206 : le panneau y occupe -4,81..-4,39.\nAucune de ces trois collisions n'etait visible avant que C-02 sache lire un panneau plat : son axe degenere opposait un recouvrement de 0,000 m et la paire n'etait jamais examinee. C'est le meme aveuglement qui laissait `affiche_sud` a 81 % dans le distributeur."
     },
     {
       "name": "cabine_toilettes",
