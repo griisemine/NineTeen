@@ -95,7 +95,7 @@
  * ajoute une minuterie, et la promesse tient quand même — parce qu'elle ne
  * punit pas L'ABSENCE, elle arbitre une MANCHE qu'on a choisi de commencer.
  * Sortir du Couperet ne coûte rien, n'entame aucun compteur, et le portefeuille
- * de la salle n'est pas touché : les jetons de la manche sont à elle, ils
+ * de la salle n'est pas touché : les fusibles de la manche sont à elle, ils
  * naissent au coup d'envoi et meurent au verdict. Un joueur qui ne joue jamais
  * ce mode n'a rien perdu.
  *
@@ -287,30 +287,30 @@ float room_cp_periode(void);
 #define ROOM_CP_PSEUDO     24
 #define ROOM_CP_JEU        24
 
-/* Le nombre de jetons au coup d'envoi. TROIS : de quoi lancer un brouillage et
+/* Le nombre de fusibles au coup d'envoi. TROIS : de quoi lancer un brouillage et
  * un blindage, ou un seul leurre, avant d'avoir fini la moindre partie. À zéro
  * la première minute serait muette et le mode ne commencerait qu'à la deuxième ;
  * à cinq, on ouvrirait sur une coupure, c'est-à-dire sur une partie annulée
  * avant que qui que ce soit ait joué. */
-#define ROOM_CP_JETONS_DEPART 3
+#define ROOM_CP_FUSIBLES_DEPART 3
 
 /*
- * LE REVENU DU TEMPS : une tranche de trente secondes de jeu vaut un jeton.
+ * LE REVENU DU TEMPS : une tranche de trente secondes de jeu vaut un fusible.
  *
  * Trente parce que c'est la durée sous laquelle le mode n'a plus de bornes :
  * cinq des seize lignes du tableau durent moins (7,1 / 9,1 / 20,3 / 25,4 /
  * 28,3 s), et payer plus vite qu'elles ferait du va-et-vient entre deux parties
- * une source de jetons plutôt qu'un choix de jeu.
+ * une source de fusibles plutôt qu'un choix de jeu.
  *
  * Ce que ça donne sur une manche pleine de huit places, qui dure 315 s : une
- * dizaine de jetons de temps plus sept de couperet, soit dix-sept — quatre
+ * dizaine de fusibles de temps plus sept de couperet, soit dix-sept — quatre
  * coupures, ou huit blindages, ou dix-sept brouillages. Assez pour que la
  * dépense soit une décision à chaque fois, pas assez pour saboter en continu.
  *
  * Le temps est compté PAR TRANCHE ENTIÈRE et le reste est gardé : sans ça,
  * quatre parties de vingt-neuf secondes ne rapporteraient rien du tout.
  */
-#define ROOM_CP_SECONDES_PAR_JETON 30
+#define ROOM_CP_SECONDES_PAR_FUSIBLE 30
 
 /*
  * LE PLAFOND DE MANCHE, en secondes — quinze minutes.
@@ -323,12 +323,26 @@ float room_cp_periode(void);
 #define ROOM_CP_MANCHE_MAX_S 900
 
 /* ==========================================================================
- * LES SIX ACTIONS — ce qu'on achète avec ses jetons
+ * LES SIX ACTIONS — ce qu'on achète avec ses fusibles
  * ==========================================================================
  *
- * D'OÙ VIENNENT LES JETONS :
+ * POURQUOI « FUSIBLE » ET PAS « JETON ». Parce que le JETON existe déjà et
+ * veut dire autre chose : c'est la pièce qu'on enfonce dans la fente pour
+ * jouer, elle a son geste, son bruit et son monnayeur, et l'affichage du haut
+ * à gauche en compte le solde en permanence. Deux monnaies portant le même nom
+ * sur le même écran, c'est un joueur qui lit « 3 JETONS » à un endroit et
+ * « 0 JETONS » à un autre et qui conclut que le jeu est cassé — ce qui a été vu
+ * sur la première capture du mode.
  *
- *     + 1 par TRANCHE DE `ROOM_CP_SECONDES_PAR_JETON` SECONDES DE JEU.
+ * Le fusible, lui, dit ce que les six actions FONT. Elles sont toutes
+ * électriques : on brouille une image, on inverse un câblage, on coupe le
+ * courant, on blinde un tableau, on renvoie une surtension. Cette salle a des
+ * néons, des tubes et un compteur ; ce qu'on s'échange sous le comptoir pour
+ * s'en prendre à la borne du voisin, ce sont des fusibles.
+ *
+ * D'OÙ ILS VIENNENT :
+ *
+ *     + 1 par TRANCHE DE `ROOM_CP_SECONDES_PAR_FUSIBLE` SECONDES DE JEU.
  *     + 1 par COUPERET, aux vivants comme aux spectres.
  *
  * LE PREMIER TERME A ÉTÉ « UN PAR PARTIE TERMINÉE », et il a fallu le retirer.
@@ -340,46 +354,46 @@ float room_cp_periode(void);
  *   - ELLE PAIE LE SUICIDE. La borne la plus courte du vivier descend à 0,1 s :
  *     l'autopilote meurt à la première image. Insérer, mourir exprès,
  *     recommencer — environ deux secondes par cycle, plus de cent cinquante
- *     jetons dans une manche de cinq minutes, de quoi couper toutes les bornes
- *     de la salle en boucle. Une première rustine refusait le jeton aux parties
+ *     fusibles dans une manche de cinq minutes, de quoi couper toutes les bornes
+ *     de la salle en boucle. Une première rustine refusait le fusible aux parties
  *     à zéro point ; elle fermait le cas extrême et laissait tout le reste.
  *   - LE DÉSÉQUILIBRE N'EST PAS UNE TENSION, C'EST UN VAINQUEUR. Mesuré : à
- *     revenu par partie, le pressé finit la manche avec quatre fois les jetons
+ *     revenu par partie, le pressé finit la manche avec quatre fois les fusibles
  *     de l'engagé, et gagne 98 % des manches en le coupant avant chaque
  *     encaissement. L'engagé ne terminait plus 0,1 partie par manche.
  *
- * Le jeton se gagne donc AU TEMPS PASSÉ À JOUER, ce qui ferme les deux d'un
+ * Le fusible se gagne donc AU TEMPS PASSÉ À JOUER, ce qui ferme les deux d'un
  * coup : mourir en une image ne rapporte rien parce qu'aucun temps n'a passé,
  * et les deux stratégies ont le même budget parce qu'elles jouent le même
  * temps.
  *
  * L'ALLIANCE QUE LE PROPRIÉTAIRE A DEMANDÉE EXISTE TOUJOURS, et elle est
  * meilleure ainsi : elle ne vient plus d'une asymétrie de revenu subie, mais
- * d'un CHOIX de dépense. Tout le monde a les mêmes jetons ; celui qui les
+ * d'un CHOIX de dépense. Tout le monde a les mêmes fusibles ; celui qui les
  * dépense en blindages sur son porteur ne s'achète rien pour lui-même, et c'est
  * ça, jouer le soutien. Le couperet classant les CAMPS, ce rôle est survivable
  * — ce qui est exactement ce qui manquait pour qu'il soit jouable.
  *
- * LES SPECTRES REÇOIVENT LE JETON DU COUPERET mais plus celui du temps : ils ne
+ * LES SPECTRES REÇOIVENT LE FUSIBLE DU COUPERET mais plus celui du temps : ils ne
  * jouent plus. Leur budget décroît donc en pouvoir d'achat relatif au fil de la
  * manche, sans jamais tomber à zéro.
  *
  * LES SPECTRES. Un joueur sorti par le couperet NE PART PAS. Il ne peut plus
- * jouer — sa borne est éteinte — mais il garde ses jetons, il en reçoit un à
+ * jouer — sa borne est éteinte — mais il garde ses fusibles, il en reçoit un à
  * chaque couperet, et il peut toujours agir. Sortir vous change donc de métier
  * plutôt que de vous mettre à la porte, et une équipe décimée devient une
  * escouade de saboteurs. C'est aussi la réponse au défaut classique du genre :
  * être éliminé à la première minute d'une manche de cinq, c'est quatre minutes
  * à regarder. Ici, ce sont quatre minutes à peser.
  *
- * X(cle, cout_en_jetons, duree_en_dixiemes, offensive, titre, effet)
+ * X(cle, cout_en_fusibles, duree_en_dixiemes, offensive, titre, effet)
  */
 #define ROOM_CP_ACTIONS(X)                                                     \
     X(BROUILLAGE, 1,  40, 1, "BROUILLAGE", "la dalle de la cible se brouille")  \
     X(INVERSION,  2,  50, 1, "INVERSION",  "son manche part a l'envers")        \
     X(COUPURE,    4,   0, 1, "COUPURE",    "sa borne s'eteint : partie annulee")\
     X(BLINDAGE,   2,   0, 0, "BLINDAGE",   "encaisse la prochaine attaque")     \
-    X(RELAIS,     1,   0, 0, "RELAIS",     "donne un jeton")                    \
+    X(RELAIS,     1,   0, 0, "RELAIS",     "donne un fusible")                    \
     X(LEURRE,     3,   0, 0, "LEURRE",     "renvoie la prochaine attaque")
 
 /*
@@ -387,23 +401,23 @@ float room_cp_periode(void);
  * réglage qui a le plus changé de nature au cours de la mise au point.
  *
  * Les deux ont d'abord duré trente secondes. Le tournoi a mesuré ce que ça
- * produit, et c'est une paralysie complète : à deux jetons pour trente
+ * produit, et c'est une paralysie complète : à deux fusibles pour trente
  * secondes, entretenir un blindage coûte EXACTEMENT le revenu du temps, un
- * jeton par trente secondes. Les huit joueurs se couvraient donc en permanence,
- * aucun n'atteignait jamais les quatre jetons d'une coupure, et la manche avec
+ * fusible par trente secondes. Les huit joueurs se couvraient donc en permanence,
+ * aucun n'atteignait jamais les quatre fusibles d'une coupure, et la manche avec
  * sabotage rendait EXACTEMENT le même résultat que la manche sans — 187 contre
  * 13, au joueur près. Six actions dont pas une seule n'était jouée.
  *
  * Sans durée, la plaque est achetée une fois et ATTEND. Renouveler ne coûte
  * qu'après avoir encaissé, donc la défense est une dépense ponctuelle et non un
  * abonnement, et le budget se libère pour attaquer. Le rapport de prix devient
- * lisible : il faut quatre jetons pour détruire ce que deux protègent, donc
+ * lisible : il faut quatre fusibles pour détruire ce que deux protègent, donc
  * frapper coûte le double de se garder — ce qui est la seule façon d'obtenir
  * que les deux existent.
  *
  * On n'en tient qu'un de chaque : acheter un second blindage quand on en a
  * déjà un est REFUSÉ plutôt qu'empilé, sans quoi le geste évident (marteler la
- * touche) jetterait des jetons sans rien dire.
+ * touche) jetterait des fusibles sans rien dire.
  */
 
 #define ROOM_CP_ACTION_ENUM(cle, cout, duree, off, titre, effet) ROOM_CP_##cle,
@@ -436,10 +450,10 @@ typedef struct room_cp_place {
     uint8_t  camp;                 /* 0..7 ; en individuel, camp = place */
 
     int32_t  points;
-    int32_t  jetons;
+    int32_t  fusibles;
     int32_t  parties;              /* parties TERMINÉES, pas commencées */
     float    joue;                 /* secondes de jeu cumulées, reste de tranche
-                                    * comprise : c'est le revenu en jetons */
+                                    * comprise : c'est le revenu en fusibles */
     int32_t  annulees;             /* parties perdues sur coupure */
 
     /* La partie en cours. `jeu[0] == 0` veut dire qu'on ne joue pas. */
@@ -636,7 +650,7 @@ void room_cp_avance(room_couperet *c, uint8_t place, int64_t score_courant);
  *
  * Elle ne crédite AUCUN jeton : ceux-là se gagnent au temps passé, dans
  * `room_cp_avancer`, et le raisonnement est écrit au-dessus de
- * `ROOM_CP_SECONDES_PAR_JETON`.
+ * `ROOM_CP_SECONDES_PAR_FUSIBLE`.
  *
  * Rend 0 sans rien créditer si la place ne jouait pas — ce qui arrive quand une
  * coupure a annulé la partie entre-temps, et c'est le comportement voulu : la
@@ -660,7 +674,7 @@ int32_t room_cp_partie_fin(room_couperet *c, uint8_t place, int64_t score);
  * coupure par manche malgré un budget de huit blindages.
  *
  * Avec elle, une borne déjà éteinte n'est plus une cible : le second attaquant
- * garde ses jetons, et la défense redevient une affaire d'économie plutôt
+ * garde ses fusibles, et la défense redevient une affaire d'économie plutôt
  * qu'une affaire de simultanéité.
  *
  * L'ORDRE DE RÉSOLUTION d'une attaque, et il compte :

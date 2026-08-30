@@ -914,3 +914,361 @@ void room_hud_draw_choc(ns_sprite *s, float w, float h, float choc, float phase)
     const float voile[4] = { 0.72f, 0.78f, 0.95f, 0.16f * k * k };
     ns_sprite_rect(s, 0.0f, 0.0f, w, h, voile);
 }
+
+/* ==========================================================================
+ * LE COUPERET
+ * ==========================================================================
+ *
+ * Ce que ces deux fonctions ont à résoudre, et qui n'existait pas ailleurs
+ * dans ce fichier : le mode se joue LES YEUX SUR LA DALLE D'UNE BORNE. Tout
+ * ce qui est écrit ici est lu en vision périphérique, par quelqu'un qui est en
+ * train de faire autre chose.
+ *
+ * D'où trois règles de mise en page, et elles sont contraignantes :
+ *
+ *   1. LE MILIEU RESTE LIBRE. La dalle qu'on joue est au centre du cadre — le
+ *      poste de jeu l'y met délibérément, à 31 % de l'aire (`room_poste.h`).
+ *      Un panneau au centre couvrirait la partie.
+ *   2. CE QUI PRESSE EST EN HAUT ET GRAND. Le compte à rebours et le nom du
+ *      menacé sont les deux seules choses qui puissent faire changer d'avis en
+ *      cours de partie ; tout le reste peut attendre la fin de la partie.
+ *   3. LES SIX ACTIONS SONT TOUJOURS AFFICHÉES, jamais dans un menu qu'on
+ *      ouvre. Un menu demande de quitter la borne des yeux, donc de perdre la
+ *      partie qu'on est en train de protéger — ce qui serait exactement le
+ *      contraire de ce que ces actions servent à faire.
+ */
+
+/* Une couleur par camp. Huit, franches et distinctes à faible luminance : le
+ * mode se joue dans une salle en tungstène, et deux bleus voisins y deviennent
+ * le même bleu. */
+static const float C_CAMP[ROOM_CP_MAX_PLACES][4] = {
+    { 1.00f, 0.78f, 0.28f, 1.0f },   /* ambre */
+    { 0.36f, 0.78f, 1.00f, 1.0f },   /* cyan */
+    { 0.52f, 0.92f, 0.42f, 1.0f },   /* vert */
+    { 1.00f, 0.44f, 0.42f, 1.0f },   /* rouge */
+    { 0.82f, 0.56f, 1.00f, 1.0f },   /* violet */
+    { 1.00f, 0.62f, 0.20f, 1.0f },   /* orange */
+    { 0.40f, 0.98f, 0.86f, 1.0f },   /* turquoise */
+    { 0.95f, 0.95f, 0.95f, 1.0f },   /* blanc */
+};
+
+static const float *couleur_camp(uint8_t camp)
+{
+    return C_CAMP[camp % ROOM_CP_MAX_PLACES];
+}
+
+/* Le nom d'une place, jamais vide : une ligne de classement sans nom se lit
+ * comme une ligne cassée. */
+static const char *nom_place(const room_couperet *c, uint8_t i)
+{
+    if (!c || i >= ROOM_CP_MAX_PLACES) return "?";
+    return c->place[i].pseudo[0] ? c->place[i].pseudo : "SANS NOM";
+}
+
+/*
+ * Le nom TRONQUÉ à ce qui tient dans la colonne. Mesuré sur capture : la
+ * colonne du tableau du bar fait 252 unités et la police avance de 6 par
+ * caractère à l'échelle 3, soit quatorze caractères. « PIED-DE-BICHE » en fait
+ * treize et passait de justesse ; un pseudo saisi par un joueur n'a aucune
+ * raison de s'arrêter là, et il écrivait par-dessus la colonne d'à côté.
+ *
+ * On coupe plutôt qu'on ne rétrécit : rétrécir la police rendrait TOUTES les
+ * lignes moins lisibles à cinq mètres pour un seul nom trop long.
+ */
+static void nom_court(char *out, size_t n, const room_couperet *c, uint8_t i)
+{
+    SDL_strlcpy(out, nom_place(c, i), n);
+}
+
+void room_hud_draw_couperet(ns_sprite *s, const room_couperet *c, uint8_t moi,
+                            uint8_t cible, double time_seconds)
+{
+    if (!s || !c || c->phase != ROOM_CP_COURSE) return;
+
+    static const float rouge[4] = { 1.00f, 0.32f, 0.26f, 1.0f };
+    static const float vert[4]  = { 0.46f, 1.00f, 0.56f, 1.0f };
+    static const float noir[4]  = { 0.02f, 0.02f, 0.03f, 0.80f };
+
+    const uint8_t menace = room_cp_menace(c);
+    const bool je_suis_menace = (menace < ROOM_CP_MAX_PLACES && menace == moi);
+
+    /* ---- LA BANDE DU HAUT : le compte à rebours et le menacé -------------
+     *
+     * Le nombre de secondes ET le nom, jamais l'un sans l'autre. Un compte à
+     * rebours qui ne dit pas qui est visé n'oblige personne à changer d'avis :
+     * il presse tout le monde également, donc personne.
+     */
+    {
+        const float bw = 600.0f, bx = (ROOM_HUD_W - bw) * 0.5f;
+        panel(s, bx, 8.0f, bw, 70.0f);
+
+        char t[16];
+        SDL_snprintf(t, sizeof t, "%d", (int)ceilf(c->prochain));
+        /* Sous dix secondes, le nombre bat. Le battement est en secondes
+         * ENTIÈRES d'horloge de manche et non du temps d'image : il doit tomber
+         * avec le chiffre qui change, sinon on lit deux rythmes. */
+        const bool urgent = (c->prochain <= 10.0f);
+        const float pulse = urgent
+            ? 0.72f + 0.28f * (float)fabs(cos(time_seconds * 6.283185307))
+            : 1.0f;
+        float couleur[4];
+        for (int k = 0; k < 4; ++k) {
+            couleur[k] = (urgent ? rouge[k] : C_GOLD[k]) * ((k == 3) ? 1.0f : pulse);
+        }
+        couleur[3] = 1.0f;
+        ns_sprite_text(s, bx + 20.0f, 22.0f, 5.2f, couleur, t);
+        ns_sprite_text(s, bx + 20.0f + ns_sprite_text_width(t, 5.2f) + 8.0f, 40.0f,
+                       2.0f, C_DIM, "S");
+
+        if (menace < ROOM_CP_MAX_PLACES) {
+            char l[80];
+            if (je_suis_menace) {
+                SDL_snprintf(l, sizeof l, "LE COUPERET EST SUR TOI");
+            } else {
+                SDL_snprintf(l, sizeof l, "LE COUPERET VISE %s", nom_place(c, menace));
+            }
+            ns_sprite_text(s, bx + 140.0f, 22.0f, 2.6f,
+                           je_suis_menace ? rouge : C_TEXT, l);
+        }
+        if (moi < ROOM_CP_MAX_PLACES) {
+            char l[96];
+            const room_cp_place *p = &c->place[moi];
+            SDL_snprintf(l, sizeof l, "%d PTS   %d FUSIBLES%s",
+                         p->points, p->fusibles, p->blindage ? "   [BLINDE]" : "");
+            ns_sprite_text(s, bx + 140.0f, 50.0f, 2.2f, p->vivante ? C_TEXT : C_DIM, l);
+        }
+    }
+
+    /* ---- CE QUE JE SUBIS, à gauche ---------------------------------------
+     *
+     * Un effet qu'on subit sans savoir qu'on le subit se lit comme une panne de
+     * jeu. « Ton manche est inversé » transforme le même événement en coup
+     * reçu, donc en quelque chose qui appelle une réponse.
+     */
+    if (moi < ROOM_CP_MAX_PLACES) {
+        const room_cp_place *p = &c->place[moi];
+        float y = 96.0f;
+        struct { float reste; const char *quoi; } effets[] = {
+            { p->brouillage, "BROUILLAGE" },
+            { p->inversion,  "MANCHE INVERSE" },
+        };
+        for (unsigned i = 0; i < sizeof effets / sizeof effets[0]; ++i) {
+            if (effets[i].reste <= 0.0f) continue;
+            char l[48];
+            SDL_snprintf(l, sizeof l, "%s  %.1f s", effets[i].quoi, (double)effets[i].reste);
+            panel(s, 16.0f, y, 260.0f, 28.0f);
+            ns_sprite_text(s, 26.0f, y + 7.0f, 2.2f, rouge, l);
+            y += 34.0f;
+        }
+        if (p->leurre) {
+            panel(s, 16.0f, y, 260.0f, 28.0f);
+            ns_sprite_text(s, 26.0f, y + 7.0f, 2.2f, vert, "LEURRE ARME");
+        }
+    }
+
+    /* ---- LA BANDE DU BAS : la cible, et les six actions -------------------
+     *
+     * Le PRIX est écrit sur chaque touche, et ce qu'on ne peut pas payer est
+     * éteint. C'est ce qui remplace un didacticiel : au bout de deux manches on
+     * sait ce que coûte une coupure sans que personne l'ait expliqué.
+     */
+    if (moi < ROOM_CP_MAX_PLACES && c->place[moi].occupee) {
+        const room_cp_place *p = &c->place[moi];
+        /*
+         * AU-DESSUS DU BANDEAU D'AIDE, et pas au ras du bas. `room_hud_draw`
+         * écrit les commandes de la salle sur la dernière ligne pendant les
+         * premières secondes ; posée en bas, cette bande-ci se superposait
+         * exactement à elle — deux textes ambrés l'un sur l'autre, illisibles
+         * tous les deux. Mesuré sur capture, puis remonté de 46 points.
+         */
+        const float by = ROOM_HUD_H - 124.0f;
+        panel(s, 16.0f, by, ROOM_HUD_W - 32.0f, 58.0f);
+
+        char t[96];
+        if (cible < ROOM_CP_MAX_PLACES && c->place[cible].occupee) {
+            SDL_snprintf(t, sizeof t, "TAB  CIBLE : %s", nom_place(c, cible));
+            ns_sprite_text(s, 28.0f, by + 10.0f, 2.4f, couleur_camp(c->place[cible].camp), t);
+        } else {
+            ns_sprite_text(s, 28.0f, by + 10.0f, 2.4f, C_DIM, "TAB  AUCUNE CIBLE");
+        }
+
+        /*
+         * UNE SEULE LIGNE PAR ACTION : « 3 COUPURE -4 ». La touche, le nom, le
+         * prix. Le prix sur une seconde ligne se lisait comme un second
+         * numéro de touche — la première capture donnait « 1 BROUILLAGE » avec
+         * un « 1 » dessous, et rien ne disait lequel des deux était la touche.
+         * Le signe moins dit que ça se retire.
+         */
+        const float x0 = 28.0f, pas = (ROOM_HUD_W - 88.0f) / (float)ROOM_CP_ACTION_COUNT;
+        for (int a = 0; a < ROOM_CP_ACTION_COUNT; ++a) {
+            const room_cp_action act = (room_cp_action)a;
+            const int32_t cout = room_cp_action_cout(act);
+            const bool payable = (p->fusibles >= cout) && p->vivante;
+            SDL_snprintf(t, sizeof t, "%d %s -%d", a + 1, room_cp_action_titre(act), cout);
+            ns_sprite_text(s, x0 + (float)a * pas, by + 34.0f, 1.8f,
+                           payable ? (room_cp_action_offensive(act) ? C_KEY : vert)
+                                   : C_DIM, t);
+        }
+        (void)noir;
+    }
+}
+
+/*
+ * LE TÉLÉVISEUR DU BAR PENDANT UNE MANCHE.
+ *
+ * Il remplace les quatre volets du tableau ordinaire pour la durée de la
+ * manche, et c'est le bon compromis : pendant qu'une manche court, « qui tient
+ * le record de snake » n'intéresse plus personne, et le classement de la
+ * manche intéresse tout le monde — y compris les spectres, pour qui c'est la
+ * seule chose qui reste à regarder.
+ *
+ * Huit lignes sur un panneau 2:1 de 1,78 x 0,89 m : chaque ligne fait 4,4 cm de
+ * haut à l'échelle réelle, soit un angle de 30 minutes d'arc à cinq mètres —
+ * au-dessus du seuil de lisibilité de la police 5x7 établi sur ce dépôt (11 px
+ * de hauteur de glyphe).
+ */
+void room_hud_draw_arene(ns_sprite *s, float w, float h, const room_couperet *c,
+                         uint8_t moi, double time_seconds)
+{
+    if (!s || !c) return;
+
+    const float u = w / 640.0f;
+    static const float bg[4]    = { 0.003f, 0.004f, 0.008f, 1.0f };
+    static const float bande[4] = { 0.290f, 0.070f, 0.070f, 1.0f };
+    static const float rule[4]  = { 0.85f, 0.24f, 0.20f, 1.0f };
+    static const float clair[4] = { 1.00f, 0.96f, 0.94f, 1.0f };
+    static const float dim[4]   = { 0.45f, 0.42f, 0.46f, 1.0f };
+    static const float rouge[4] = { 1.00f, 0.32f, 0.26f, 1.0f };
+
+    ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
+    ns_sprite_rect(s, 0.0f, 0.0f, w, 58.0f * u, bande);
+    ns_sprite_rect(s, 0.0f, 58.0f * u, w, 3.0f * u, rule);
+
+    char t[96];
+    if (c->phase == ROOM_CP_SALON) {
+        int assis = 0;
+        for (int i = 0; i < c->places; ++i) if (c->place[i].occupee) assis++;
+        SDL_snprintf(t, sizeof t, "LE COUPERET   %d / %d PLACES", assis, (int)c->places);
+    } else if (c->phase == ROOM_CP_FINI) {
+        SDL_snprintf(t, sizeof t, "LE COUPERET   TERMINE");
+    } else {
+        SDL_snprintf(t, sizeof t, "LE COUPERET   LAME %d", c->couperets + 1);
+    }
+    ns_sprite_text(s, 22.0f * u, 15.0f * u, 3.6f * u, clair, t);
+
+    if (c->phase == ROOM_CP_COURSE) {
+        SDL_snprintf(t, sizeof t, "%d", (int)ceilf(c->prochain));
+        a_droite(s, 618.0f * u, 12.0f * u, 4.2f * u,
+                 (c->prochain <= 10.0f) ? rouge : clair, t);
+    }
+
+    const uint8_t menace = room_cp_menace(c);
+    uint8_t ordre[ROOM_CP_MAX_PLACES];
+    const int n = room_cp_classement(c, ordre);
+
+    const float y0 = 76.0f, pas = 30.0f;
+    for (int r = 0; r < n; ++r) {
+        const uint8_t i = ordre[r];
+        const room_cp_place *p = &c->place[i];
+        const float y = (y0 + (float)r * pas) * u;
+        const bool vise = (i == menace) && (c->phase == ROOM_CP_COURSE);
+
+        /* La ligne du menacé est SOULIGNÉE D'UN APLAT, pas seulement écrite en
+         * rouge : à cinq mètres une couleur de texte se perd dans le tungstène
+         * de la salle, un aplat non. */
+        if (vise) {
+            ns_sprite_rect(s, 12.0f * u, y - 4.0f * u, 616.0f * u, 26.0f * u,
+                           (const float[4]){ 0.32f, 0.06f, 0.05f, 1.0f });
+        }
+        /* Le fanion du camp. En individuel il y a huit camps d'une place, donc
+         * huit couleurs : c'est ce qui permet de suivre quelqu'un du regard
+         * dans la salle sans lire son nom. */
+        ns_sprite_rect(s, 16.0f * u, y, 8.0f * u, 18.0f * u, couleur_camp(p->camp));
+
+        SDL_snprintf(t, sizeof t, "%d", r + 1);
+        ns_sprite_text(s, 32.0f * u, y, 3.0f * u, dim, t);
+        char nom[15];
+        nom_court(nom, sizeof nom, c, i);
+        ns_sprite_text(s, 56.0f * u, y, 3.0f * u,
+                       (i == moi) ? C_GOLD : (p->vivante ? clair : dim), nom);
+
+        if (!p->vivante) {
+            ns_sprite_text(s, 314.0f * u, y, 2.6f * u, dim, "SPECTRE");
+        } else if (p->jeu[0]) {
+            char maj[16];
+            SDL_strlcpy(maj, p->jeu, sizeof maj);
+            for (char *q = maj; *q; ++q) *q = (char)SDL_toupper((unsigned char)*q);
+            /* Le « + » du régime difficile : un signe et pas le mot, parce que
+             * la colonne fait treize caractères et que « DEMINEUR HARD » en
+             * fait quatorze. */
+            SDL_snprintf(t, sizeof t, "%s%s", maj, p->hard ? "+" : "");
+            ns_sprite_text(s, 314.0f * u, y, 2.6f * u, dim, t);
+        } else {
+            ns_sprite_text(s, 314.0f * u, y, 2.6f * u, dim, "AU MONNAYEUR");
+        }
+
+        SDL_snprintf(t, sizeof t, "%d", p->fusibles);
+        a_droite(s, 530.0f * u, y, 2.8f * u, C_KEY, t);
+        SDL_snprintf(t, sizeof t, "%d", p->points);
+        a_droite(s, 618.0f * u, y, 3.4f * u, p->vivante ? clair : dim, t);
+    }
+
+    /*
+     * Les en-têtes de colonne EN BAS et non en haut : le bandeau du haut porte
+     * déjà le titre et le compte à rebours, et empiler une ligne de service
+     * avant la première place ferait descendre le classement hors de la moitié
+     * haute — celle qu'on voit par-dessus les têtes au comptoir.
+     *
+     * À 304 et non à 296 : mesuré sur capture, la huitième ligne descend
+     * jusqu'à 293 et les deux textes se chevauchaient sur les deux dernières
+     * places, c'est-à-dire exactement là où l'on regarde quand on perd.
+     */
+    a_droite(s, 524.0f * u, 304.0f * u, 1.8f * u, dim, "FUSIBLES");
+    a_droite(s, 616.0f * u, 304.0f * u, 1.8f * u, dim, "POINTS");
+    (void)time_seconds;
+}
+
+void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float phase)
+{
+    if (!s || force <= 0.0f) return;
+    if (force > 1.0f) force = 1.0f;
+
+    /*
+     * Ce qu'on dessine, et pourquoi ça ressemble à un brouillage plutôt qu'à
+     * du bruit : un tube brouillé ne perd pas ses pixels au hasard, il perd des
+     * LIGNES — des bandes horizontales qui se déplacent lentement, parce que
+     * l'interférence bat contre la fréquence de trame. C'est ce battement lent
+     * qu'on reconnaît, pas le grain.
+     *
+     * Onze bandes, tirées d'un générateur à état explicite plutôt que de
+     * `rand()` : deux images voisines doivent porter le MÊME motif décalé, et
+     * non deux motifs indépendants, sans quoi l'écran scintille au lieu de
+     * défiler.
+     */
+    static const float voile[4] = { 0.42f, 0.46f, 0.52f, 1.0f };
+    ns_sprite_rect(s, 0.0f, 0.0f, w, h, (const float[4]){
+        voile[0], voile[1], voile[2], 0.30f * force });
+
+    uint32_t etat = 0x9E3779B9u;
+    for (int i = 0; i < 11; ++i) {
+        etat = etat * 1664525u + 1013904223u;
+        const float base = (float)(etat >> 8 & 0xFFFFu) / 65535.0f;
+        etat = etat * 1664525u + 1013904223u;
+        const float ep = 2.0f + (float)(etat >> 8 & 0xFFu) / 255.0f * 9.0f;
+        /* Vitesses différentes par bande : à vitesse commune les onze bandes
+         * forment un peigne rigide, qui se lit comme un défaut de rendu. */
+        const float v = 0.05f + (float)i * 0.021f;
+        float y = fmodf(base + (float)phase * v, 1.0f) * h;
+        const float a = (0.10f + 0.22f * (float)((i * 37) % 5) / 4.0f) * force;
+        ns_sprite_rect(s, 0.0f, y, w, ep, (const float[4]){ 0.02f, 0.03f, 0.05f, a });
+        ns_sprite_rect(s, 0.0f, y + ep, w, 1.0f, (const float[4]){ 0.85f, 0.92f, 1.0f, a * 0.5f });
+    }
+
+    /* La bande large qui balaie : c'est elle qui rend le brouillage ILLISIBLE
+     * par moments plutôt que seulement laid. Sans elle on s'habitue en dix
+     * secondes, et l'action achetée ne coûte plus rien à sa cible. */
+    const float large = h * 0.16f;
+    const float yb = fmodf((float)phase * 0.31f, 1.0f) * (h + large) - large;
+    ns_sprite_rect(s, 0.0f, yb, w, large,
+                   (const float[4]){ 0.62f, 0.68f, 0.78f, 0.34f * force });
+}

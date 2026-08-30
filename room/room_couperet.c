@@ -216,7 +216,7 @@ bool room_cp_asseoir(room_couperet *c, uint8_t place, const char *pseudo, uint8_
 
     p->occupee  = true;
     p->vivante  = true;
-    p->jetons   = ROOM_CP_JETONS_DEPART;
+    p->fusibles   = ROOM_CP_FUSIBLES_DEPART;
     p->sortie_a = -1;
     copier(p->pseudo, sizeof p->pseudo, pseudo);
     /*
@@ -434,11 +434,11 @@ static void tomber(room_couperet *c)
     pousser(c, ROOM_CP_EVT_COUPERET, victime, 0, c->couperets);
 
     /*
-     * LE JETON DU COUPERET. Un pour chaque place qui n'est pas celle qu'on
+     * LE FUSIBLE DU COUPERET. Un pour chaque place qui n'est pas celle qu'on
      * vient de sortir — vivants ET spectres.
      *
      * Aux vivants, c'est le revenu qui empêche un joueur enfermé dans une
-     * partie de trois minutes d'arriver au bout sans un seul jeton.
+     * partie de trois minutes d'arriver au bout sans un seul fusible.
      * Aux spectres, c'est ce qui les garde dangereux : un spectre sans revenu
      * dépense son magot en une minute et redevient un écran qui regarde, ce
      * qui est exactement le défaut que les spectres corrigent.
@@ -448,7 +448,7 @@ static void tomber(room_couperet *c)
      */
     for (int i = 0; i < c->places; ++i) {
         if (!c->place[i].occupee || i == (int)victime) continue;
-        c->place[i].jetons++;
+        c->place[i].fusibles++;
     }
 
     if (camp_le_plus_faible(c) >= ROOM_CP_MAX_PLACES) conclure(c);
@@ -470,8 +470,8 @@ void room_cp_avancer(room_couperet *c, float dt)
              * gardé : sans ça, quatre parties de vingt-neuf secondes ne
              * rapporteraient rien du tout. */
             p->joue += dt;
-            const float tranche = (float)ROOM_CP_SECONDES_PAR_JETON;
-            while (p->joue >= tranche) { p->joue -= tranche; p->jetons++; }
+            const float tranche = (float)ROOM_CP_SECONDES_PAR_FUSIBLE;
+            while (p->joue >= tranche) { p->joue -= tranche; p->fusibles++; }
         }
         /* Le blindage et le leurre ne s'écoulent PAS : ce sont des charges
          * tenues jusqu'à usage. Le raisonnement est dans l'en-tête. */
@@ -569,16 +569,16 @@ static void appliquer(room_couperet *c, uint8_t cible, room_cp_action quoi)
          * LA BORNE S'ÉTEINT ET LA PARTIE EST PERDUE — zéro point, la durée est
          * jetée avec.
          *
-         * C'est l'action la plus chère (4 jetons) et la seule qui détruise du
+         * C'est l'action la plus chère (4 fusibles) et la seule qui détruise du
          * travail plutôt que de le gêner. Elle existe parce que sans elle
          * l'engagé n'a aucun adversaire : les quatre autres attaques ne font
          * que réduire son score, or son score n'est pas ce qui le porte — c'est
          * la DURÉE, et rien d'autre ne peut la lui reprendre.
          *
-         * Le prix se lit dans le revenu : un pressé gagne un jeton par partie,
-         * soit quatre parties de démineur — environ 100 s de jeu — pour annuler
-         * les 180 s d'un aplomb. C'est un bon échange pour lui, et c'est voulu :
-         * c'est ce qui empêche l'engagement d'être gratuit.
+         * Le prix se lit dans le revenu du temps : un fusible par trente
+         * secondes de jeu, donc DEUX MINUTES passées à jouer pour annuler les
+         * trois minutes d'un aplomb. C'est un bon échange pour l'attaquant, et
+         * c'est voulu : c'est ce qui empêche l'engagement d'être gratuit.
          */
         v->jeu[0] = '\0';
         v->depuis = 0.0f;
@@ -604,7 +604,7 @@ bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quo
     const bool offensive = room_cp_action_offensive(quoi);
     if (offensive) {
         /* On ne frappe ni son propre camp, ni un spectre : dans les deux cas ce
-         * serait jeter ses jetons, et un module qui laisse faire ça oblige
+         * serait jeter ses fusibles, et un module qui laisse faire ça oblige
          * l'interface à réimplémenter la règle pour griser le bouton. */
         if (a->camp == b->camp) return false;
         if (!b->vivante) return false;
@@ -615,20 +615,20 @@ bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quo
     }
 
     /* On ne tient qu'une plaque et qu'un miroir : acheter le second est refusé
-     * plutôt qu'empilé, sans quoi marteler la touche jetterait des jetons. */
+     * plutôt qu'empilé, sans quoi marteler la touche jetterait des fusibles. */
     if (quoi == ROOM_CP_BLINDAGE && b->blindage) return false;
     if (quoi == ROOM_CP_LEURRE   && b->leurre)   return false;
 
     const int32_t cout = room_cp_action_cout(quoi);
-    if (a->jetons < cout) return false;
-    a->jetons -= cout;
+    if (a->fusibles < cout) return false;
+    a->fusibles -= cout;
     pousser(c, ROOM_CP_EVT_ACTION, de, vers, (int32_t)quoi);
 
     if (!offensive) {
         switch (quoi) {
         case ROOM_CP_BLINDAGE: b->blindage = true; break;
         case ROOM_CP_LEURRE:   b->leurre   = true; break;
-        case ROOM_CP_RELAIS:   b->jetons  += 1; break;
+        case ROOM_CP_RELAIS:   b->fusibles  += 1; break;
         default: break;
         }
         return true;
@@ -705,8 +705,8 @@ bool room_cp_valide(const room_couperet *c)
         const room_cp_place *p = &c->place[i];
         if (i >= c->places && p->occupee) return false;
         if (!p->occupee) continue;
-        if (p->points < 0 || p->jetons < 0 || p->parties < 0 || p->annulees < 0) return false;
-        if (p->joue < 0.0f || p->joue >= (float)ROOM_CP_SECONDES_PAR_JETON) return false;
+        if (p->points < 0 || p->fusibles < 0 || p->parties < 0 || p->annulees < 0) return false;
+        if (p->joue < 0.0f || p->joue >= (float)ROOM_CP_SECONDES_PAR_FUSIBLE) return false;
         if (p->camp >= ROOM_CP_MAX_PLACES) return false;
         if (!c->equipes && p->camp != (uint8_t)i) return false;
         if (p->vivante && p->sortie_a >= 0) return false;

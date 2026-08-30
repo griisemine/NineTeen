@@ -158,8 +158,8 @@ static void test_salon(void)
     CHECK(room_cp_asseoir(&c, 0, "un", 0), "la place 0 refuse un joueur");
     CHECK(!room_cp_asseoir(&c, 0, "bis", 0), "la place 0 accepte deux joueurs");
     CHECK(!room_cp_asseoir(&c, 4, "hors", 0), "une place hors bornes est acceptée");
-    CHECK(c.place[0].jetons == ROOM_CP_JETONS_DEPART,
-          "on ne démarre pas avec %d jetons", ROOM_CP_JETONS_DEPART);
+    CHECK(c.place[0].fusibles == ROOM_CP_FUSIBLES_DEPART,
+          "on ne démarre pas avec %d jetons", ROOM_CP_FUSIBLES_DEPART);
 
     /* Hors mode équipes, le camp EST la place : c'est l'invariant qui permet
      * aux deux modes de partager toute la suite du code. */
@@ -232,9 +232,9 @@ static void test_couperet(void)
 
     /* Le jeton du couperet : tous sauf la victime. */
     for (int i = 0; i < 4; ++i) {
-        const int32_t attendu = ROOM_CP_JETONS_DEPART + ((i == (int)menace) ? 0 : 1);
-        CHECK(c.place[i].jetons == attendu,
-              "place %d : %d jetons au lieu de %d", i, c.place[i].jetons, attendu);
+        const int32_t attendu = ROOM_CP_FUSIBLES_DEPART + ((i == (int)menace) ? 0 : 1);
+        CHECK(c.place[i].fusibles == attendu,
+              "place %d : %d jetons au lieu de %d", i, c.place[i].fusibles, attendu);
     }
 
     /*
@@ -340,18 +340,18 @@ static void test_actions(void)
     /* Les refus, et chacun ferme une façon de gaspiller des jetons. */
     CHECK(!room_cp_agir(&c, 0, 0, ROOM_CP_BROUILLAGE), "on se brouille soi-même");
     CHECK(!room_cp_agir(&c, 0, 9, ROOM_CP_BROUILLAGE), "on vise une place inexistante");
-    CHECK(c.place[0].jetons == ROOM_CP_JETONS_DEPART, "un refus a débité des jetons");
+    CHECK(c.place[0].fusibles == ROOM_CP_FUSIBLES_DEPART, "un refus a débité des jetons");
 
     room_cp_partie_debut(&c, 1, "aplomb", false);
     CHECK(!room_cp_agir(&c, 0, 1, ROOM_CP_COUPURE),
           "la coupure passe à %d jetons alors qu'elle en coûte %d",
-          ROOM_CP_JETONS_DEPART, room_cp_action_cout(ROOM_CP_COUPURE));
-    CHECK(c.place[0].jetons == ROOM_CP_JETONS_DEPART, "une action trop chère a débité");
+          ROOM_CP_FUSIBLES_DEPART, room_cp_action_cout(ROOM_CP_COUPURE));
+    CHECK(c.place[0].fusibles == ROOM_CP_FUSIBLES_DEPART, "une action trop chère a débité");
 
     /* Le brouillage passe et se PROLONGE. */
     room_cp_partie_debut(&c, 1, "snake", false);
     CHECK(room_cp_agir(&c, 0, 1, ROOM_CP_BROUILLAGE), "le brouillage ne passe pas");
-    CHECK(c.place[0].jetons == ROOM_CP_JETONS_DEPART - 1, "le brouillage n'a pas été payé");
+    CHECK(c.place[0].fusibles == ROOM_CP_FUSIBLES_DEPART - 1, "le brouillage n'a pas été payé");
     const float un = c.place[1].brouillage;
     CHECK(un > 0.0f, "le brouillage n'a aucun effet");
     CHECK(room_cp_agir(&c, 2, 1, ROOM_CP_BROUILLAGE), "le second brouillage ne passe pas");
@@ -366,7 +366,7 @@ static void test_actions(void)
     room_couperet b;
     asseoir_tous(&b, 4, false);
     room_cp_partie_debut(&b, 1, "snake", false);
-    b.place[1].jetons = 10;
+    b.place[1].fusibles = 10;
     CHECK(room_cp_agir(&b, 1, 1, ROOM_CP_BLINDAGE), "on ne peut pas se blinder");
     CHECK(room_cp_agir(&b, 0, 1, ROOM_CP_BROUILLAGE), "le brouillage ne part pas");
     CHECK(b.place[1].brouillage == 0.0f, "le blindage n'a pas absorbé");
@@ -375,9 +375,9 @@ static void test_actions(void)
     CHECK(b.place[1].brouillage > 0.0f, "le blindage a absorbé deux fois");
     /* On ne tient qu'une plaque : la seconde est refusée sans rien débiter. */
     CHECK(room_cp_agir(&b, 1, 1, ROOM_CP_BLINDAGE), "on ne peut plus se blinder");
-    const int32_t avant_bis = b.place[1].jetons;
+    const int32_t avant_bis = b.place[1].fusibles;
     CHECK(!room_cp_agir(&b, 1, 1, ROOM_CP_BLINDAGE), "on empile deux blindages");
-    CHECK(b.place[1].jetons == avant_bis, "un blindage refusé a débité");
+    CHECK(b.place[1].fusibles == avant_bis, "un blindage refusé a débité");
 
     /* LE LEURRE RENVOIE. */
     room_couperet l;
@@ -395,7 +395,7 @@ static void test_actions(void)
     asseoir_tous(&lb, 4, false);
     room_cp_partie_debut(&lb, 0, "snake", false);
     room_cp_partie_debut(&lb, 1, "snake", false);
-    lb.place[1].jetons = 20;
+    lb.place[1].fusibles = 20;
     CHECK(room_cp_agir(&lb, 1, 1, ROOM_CP_LEURRE), "leurre");
     CHECK(room_cp_agir(&lb, 1, 1, ROOM_CP_BLINDAGE), "blindage");
     CHECK(room_cp_agir(&lb, 0, 1, ROOM_CP_BROUILLAGE), "brouillage");
@@ -407,7 +407,7 @@ static void test_actions(void)
     asseoir_tous(&ll, 4, false);
     room_cp_partie_debut(&ll, 0, "snake", false);
     room_cp_partie_debut(&ll, 1, "snake", false);
-    ll.place[0].jetons = 10;
+    ll.place[0].fusibles = 10;
     CHECK(room_cp_agir(&ll, 0, 0, ROOM_CP_LEURRE), "leurre de l'auteur");
     CHECK(room_cp_agir(&ll, 1, 1, ROOM_CP_LEURRE), "leurre de la cible");
     CHECK(room_cp_agir(&ll, 0, 1, ROOM_CP_BROUILLAGE), "brouillage");
@@ -417,7 +417,7 @@ static void test_actions(void)
     /* LA COUPURE JETTE LA DURÉE, et c'est tout son intérêt. */
     room_couperet k;
     asseoir_tous(&k, 4, false);
-    k.place[0].jetons = 10;
+    k.place[0].fusibles = 10;
     room_cp_partie_debut(&k, 1, "aplomb", false);
     /* Sous la période : un couperet qui tomberait ici sortirait la place 1 —
      * seule à ne rien avoir encaissé — et on mesurerait le couperet au lieu de
@@ -437,10 +437,10 @@ static void test_actions(void)
      * une tactique, pas un bogue. */
     room_couperet r;
     asseoir_tous(&r, 4, false);
-    const int32_t avant = r.place[1].jetons;
+    const int32_t avant = r.place[1].fusibles;
     CHECK(room_cp_agir(&r, 0, 1, ROOM_CP_RELAIS), "le relais ne passe pas");
-    CHECK(r.place[1].jetons == avant + 1, "le relais n'a rien donné");
-    CHECK(r.place[0].jetons == ROOM_CP_JETONS_DEPART - room_cp_action_cout(ROOM_CP_RELAIS),
+    CHECK(r.place[1].fusibles == avant + 1, "le relais n'a rien donné");
+    CHECK(r.place[0].fusibles == ROOM_CP_FUSIBLES_DEPART - room_cp_action_cout(ROOM_CP_RELAIS),
           "le relais n'a pas été payé");
 
     /* On ne frappe ni un spectre, ni une borne éteinte : ce serait jeter ses
@@ -503,7 +503,7 @@ static void test_journal(void)
     /* Un journal plein jette le plus ancien et ne déborde pas. */
     for (int i = 0; i < ROOM_CP_JOURNAL * 3; ++i) {
         (void)room_cp_agir(&c, 0, 1, ROOM_CP_RELAIS);
-        c.place[0].jetons = 10;
+        c.place[0].fusibles = 10;
     }
     int n = 0;
     while (room_cp_prendre(&c, &e)) n++;
@@ -731,11 +731,11 @@ static strategie une_manche(bool avec_sabotage, int *duree_s, bilan *b)
                 if (!p->occupee || !p->vivante) continue;
 
                 if (p->jeu[0] != '\0' && !p->blindage &&
-                    p->jetons >= room_cp_action_cout(ROOM_CP_BLINDAGE)) {
+                    p->fusibles >= room_cp_action_cout(ROOM_CP_BLINDAGE)) {
                     (void)room_cp_agir(&c, i, i, ROOM_CP_BLINDAGE);
                     continue;
                 }
-                if (p->jetons < room_cp_action_cout(ROOM_CP_COUPURE)) continue;
+                if (p->fusibles < room_cp_action_cout(ROOM_CP_COUPURE)) continue;
                 uint8_t cible = ROOM_CP_MAX_PLACES;
                 int32_t meilleur = -1;
                 for (uint8_t k = 0; k < 8; ++k) {

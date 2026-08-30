@@ -133,6 +133,17 @@ typedef struct options {
     const char *input_log;   /* où déposer le journal d'entrées de la partie */
     const char *replay;      /* un journal d'entrées à rejouer, sans fenêtre */
     const char *duel_live;   /* « hôte:port,identifiant,place » : duel EN DIRECT */
+    /*
+     * LE COUPERET, ouvert au démarrage sur N places. 0 = pas de manche.
+     *
+     * Une option et pas seulement une touche, parce que les captures en ont
+     * besoin : le mode a deux surfaces à photographier — la bande par-dessus la
+     * vue et le téléviseur du bar — et ni l'une ni l'autre n'existe tant qu'une
+     * manche ne court pas. Sans elle, la seule façon de les voir serait de
+     * lancer le jeu et d'appuyer sur F9 à la main, ce qu'aucune recette
+     * automatique ne peut faire.
+     */
+    int         couperet;
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -184,6 +195,8 @@ static void print_usage(const char *exe)
         "                       SPEC vaut « hôte:port,identifiant,place » — la place\n"
         "                       est 0 ou 1, et les deux joueurs donnent le même\n"
         "                       identifiant. À employer avec --game=. Inerte sans.\n"
+        "  --couperet[=N]       ouvre une manche du mode compétitif sur N places\n"
+        "                       (2 a 8, defaut 8). F9 fait la meme chose en jeu.\n"
         "  --rejouer=F          rejoue le journal d'entrées F et imprime le score,\n"
         "                       sans fenêtre ni GPU : c'est ce qui rend un rapport\n"
         "                       de bug reproductible\n"
@@ -422,6 +435,10 @@ static bool parse_options(int argc, char **argv, options *o)
             o->input_log = a + 18;
         } else if (SDL_strncmp(a, "--duel-direct=", 14) == 0) {
             o->duel_live = a + 14;
+        } else if (SDL_strncmp(a, "--couperet=", 11) == 0) {
+            o->couperet = SDL_atoi(a + 11);
+        } else if (SDL_strcmp(a, "--couperet") == 0) {
+            o->couperet = ROOM_CP_MAX_PLACES;
         } else if (SDL_strncmp(a, "--rejouer=", 10) == 0) {
             o->replay = a + 10;
         } else if (SDL_strncmp(a, "--server=", 9) == 0) {
@@ -949,6 +966,50 @@ static uint64_t duel_live_open(duel_ghost *d, const char *spec,
     NS_INFO("duel en direct : apparie sur %s:%u, duel %llu, place %d, graine %llu",
             host, port, id, slot, (unsigned long long)seed);
     return seed;
+}
+
+/*
+ * OUVRIR UNE MANCHE et s'y asseoir. Rend la place du joueur local.
+ *
+ * LE JOUEUR EST TOUJOURS LA PLACE 0, et ce n'est pas une commodité : la place 0
+ * est l'ARBITRE du couperet. La règle vit en C une seule fois, dans
+ * `room_couperet.c` ; en ligne, c'est la place 0 qui la fait tourner et qui
+ * diffuse son verdict, les autres appliquent. Hors ligne, on est place 0 et il
+ * n'y a personne à qui diffuser — c'est le MÊME chemin de code, ce qui est la
+ * seule façon d'éviter que le mode solo et le mode en ligne divergent en
+ * silence.
+ *
+ * Les autres places sont tenues par des rivaux locaux. Ils ne sont pas encore
+ * branchés à cet instant du chantier : les places sont assises et nommées, mais
+ * personne ne joue derrière. Le couperet les sortira donc l'une après l'autre,
+ * ce qui est exactement ce qu'il doit faire de sept joueurs qui ne marquent
+ * rien — et c'est déjà de quoi photographier les deux surfaces du mode.
+ */
+static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, const char *moi)
+{
+    /*
+     * Des noms de salle, et TOUS SOUS QUATORZE CARACTÈRES : c'est la largeur de
+     * la colonne du tableau du bar, mesurée sur capture. « PIED-DE-BICHE » et
+     * « GRAND-MERE » y étaient au premier essai et écrivaient par-dessus la
+     * colonne d'à côté. Le tableau tronque désormais de lui-même, mais un nom
+     * qu'on choisit n'a aucune raison d'être tronqué.
+     */
+    static const char *g_noms[ROOM_CP_MAX_PLACES - 1] = {
+        "MARQUISE", "TOURNEVIS", "LE BELGE", "OCTOBRE",
+        "LA BICHE", "MAMIE", "ZERO"
+    };
+    if (places < 2) places = 2;
+    if (places > ROOM_CP_MAX_PLACES) places = ROOM_CP_MAX_PLACES;
+
+    room_cp_ouvrir(c, places, false);
+    (void)room_cp_asseoir(c, 0, (moi && moi[0]) ? moi : "VOUS", 0);
+    for (uint8_t i = 1; i < places; ++i) {
+        (void)room_cp_asseoir(c, i, g_noms[(i - 1u) % (ROOM_CP_MAX_PLACES - 1u)], i);
+    }
+    room_cp_lancer(c, (uint64_t)SDL_GetPerformanceCounter());
+    NS_INFO("couperet : manche ouverte, %u places, lame toutes les %.0f s",
+            (unsigned)places, (double)room_cp_periode());
+    return 0;
 }
 
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
@@ -2045,6 +2106,28 @@ int main(int argc, char **argv)
     bool  game_hard = false;
     int   sfx_blip = -1, sfx_score = -1, sfx_die = -1;
     bool in_game = false;
+
+    /*
+     * LE COUPERET — la manche du mode compétitif.
+     *
+     * Quatre variables et pas une de plus, parce que toute la règle vit dans
+     * `room/room_couperet.c` : ce fichier POUSSE des événements et LIT un
+     * classement. C'est le même partage que pour l'économie, et pour la même
+     * raison — `main.c` fait déjà cinq mille lignes, et la prochaine règle du
+     * mode s'écrirait ici si on lui en laissait la place.
+     *
+     * `cp_moi` vaut `ROOM_CP_MAX_PLACES` hors manche, ce qui rend tous les
+     * appels inertes sans qu'aucun d'eux ait besoin d'un `if` autour.
+     */
+    room_couperet couperet;
+    uint8_t cp_moi   = ROOM_CP_MAX_PLACES;
+    uint8_t cp_cible = ROOM_CP_MAX_PLACES;
+    bool    cp_actif = false;
+    room_cp_ouvrir(&couperet, 2, false);
+    if (opt.couperet > 0) {
+        cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet, opt.player);
+        cp_actif = (couperet.phase == ROOM_CP_COURSE);
+    }
     /*
      * L'objectif de regard, quand une partie démarre : la vue se pose sur la
      * dalle en `look_settle` secondes, puis la tête redevient entièrement au
@@ -3213,6 +3296,90 @@ play_at_done: ;
                      * bouton d'action de la manette hors partie. */
                     if (!ev.key.repeat) want_interact = true;
                     break;
+                /*
+                 * LE COUPERET : TAB choisit la cible, 1 à 6 achètent une action.
+                 *
+                 * POURQUOI DES CHIFFRES ET PAS UN MENU. Les six actions servent
+                 * à répondre à quelque chose qui se passe PENDANT une partie —
+                 * un compte à rebours qui tombe, une borne qu'on vient de vous
+                 * éteindre. Un menu qu'il faut ouvrir, parcourir et valider
+                 * demande de quitter la dalle des yeux, c'est-à-dire de perdre
+                 * la partie qu'on est en train de protéger. Six touches
+                 * toujours actives, avec leur prix écrit en bas de l'écran :
+                 * c'est la seule forme qui laisse le geste tenir dans le temps
+                 * dont on dispose.
+                 *
+                 * Ces touches ne sont PAS rendues au jeu : les bornes ne lisent
+                 * qu'un manche à quatre directions et un bouton (`games.h`), et
+                 * aucun des huit jeux ne voit jamais un chiffre.
+                 */
+                case SDLK_F9:
+                    /*
+                     * OUVRIR OU FERMER UNE MANCHE. F9 parce que les touches de
+                     * fonction sont déjà les outils de la salle (F2 la capture,
+                     * F5 le rechargement, F6 le mode libre, F7 et F8 la qualité,
+                     * F10 la troisième personne) et qu'une manche est du même
+                     * ordre : quelque chose qu'on met en route, pas un geste de
+                     * jeu.
+                     *
+                     * Elle est disponible EN PARTIE comme hors partie. Un joueur
+                     * qui découvre le mode le fera depuis la salle ; celui qui
+                     * veut arrêter une manche insupportable est, lui, forcément
+                     * en train d'en subir une.
+                     */
+                    if (!ev.key.repeat) {
+                        if (cp_actif) {
+                            cp_actif = false;
+                            cp_moi = ROOM_CP_MAX_PLACES;
+                            cp_cible = ROOM_CP_MAX_PLACES;
+                            NS_INFO("couperet : manche abandonnée");
+                        } else {
+                            cp_moi = couperet_ouvrir(&couperet, opt.couperet
+                                                     ? (uint8_t)opt.couperet
+                                                     : ROOM_CP_MAX_PLACES,
+                                                     opt.player);
+                            cp_actif = (couperet.phase == ROOM_CP_COURSE);
+                            cp_cible = ROOM_CP_MAX_PLACES;
+                            if (cp_actif && in_game && game_api) {
+                                room_cp_partie_debut(&couperet, cp_moi,
+                                                     game_api->id, game_hard);
+                            }
+                        }
+                    }
+                    break;
+                case SDLK_TAB:
+                    if (!ev.key.repeat && cp_actif && cp_moi < ROOM_CP_MAX_PLACES) {
+                        /* On tourne sur les places OCCUPÉES autres que la
+                         * sienne, `ROOM_CP_MAX_PLACES` compris — « aucune
+                         * cible » est un état qu'on doit pouvoir reprendre,
+                         * sinon on tire par accident sur le dernier visé. */
+                        for (int k = 1; k <= ROOM_CP_MAX_PLACES; ++k) {
+                            const int n = ((int)cp_cible + k) % (ROOM_CP_MAX_PLACES + 1);
+                            if (n == ROOM_CP_MAX_PLACES) { cp_cible = ROOM_CP_MAX_PLACES; break; }
+                            if (n != (int)cp_moi && couperet.place[n].occupee) {
+                                cp_cible = (uint8_t)n; break;
+                            }
+                        }
+                    }
+                    break;
+                case SDLK_1: case SDLK_2: case SDLK_3:
+                case SDLK_4: case SDLK_5: case SDLK_6:
+                    if (!ev.key.repeat && cp_actif && cp_moi < ROOM_CP_MAX_PLACES) {
+                        const room_cp_action a =
+                            (room_cp_action)(ev.key.key - SDLK_1);
+                        /* Une action défensive sans cible se pose sur SOI. Le
+                         * cas le plus fréquent du mode est « je me blinde »,
+                         * et l'obliger à passer par une sélection de cible
+                         * ajouterait un geste à celui qui presse le plus. */
+                        const bool sur_soi = !room_cp_action_offensive(a) &&
+                                             cp_cible >= ROOM_CP_MAX_PLACES;
+                        const uint8_t vers = sur_soi ? cp_moi : cp_cible;
+                        if (vers < ROOM_CP_MAX_PLACES &&
+                            room_cp_agir(&couperet, cp_moi, vers, a)) {
+                            room_sound_jeton_bac(&sound, cam.position, 1);
+                        }
+                    }
+                    break;
                 case SDLK_F:
                     /*
                      * COGNER LA BORNE. « F » comme frapper, et la touche est
@@ -3371,6 +3538,8 @@ play_at_done: ;
                         }
                         const uint64_t seed = room_eco_salle_graine(game_api->id);
                         start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
+                    room_cp_partie_debut(&couperet, cp_moi, game_api->id, game_hard);
+                        room_cp_partie_debut(&couperet, cp_moi, game_api->id, game_hard);
                         run_ms = 0;
                         run_tick = 0; pending_press = 0;
                     } else if (playing_cab) {
@@ -3570,6 +3739,7 @@ play_at_done: ;
                     const uint64_t seed = room_eco_salle_graine(near->game);
                     game_hard = hard;
                     start_run(game_api, game, runlog, seed, hard, opt.autoplay, &duel);
+                    room_cp_partie_debut(&couperet, cp_moi, near->game, hard);
                     run_ms = 0;
                     run_tick = 0; pending_press = 0;
                     in_game = true;
@@ -4094,6 +4264,85 @@ play_at_done: ;
              * faire : elle intégrait en nombre d'images, à 60 Hz supposés.
              */
             room_menu_update(&menu, (float)clock.tick_seconds);
+
+            /*
+             * LA MANCHE AVANCE ICI, au pas fixe, et jamais au temps d'image.
+             *
+             * C'est ce qui décide si l'arbitre et les autres voient tomber le
+             * même couperet sur le même joueur : `room_cp_avancer` déduit le
+             * nombre de lames de son horloge accumulée, donc deux machines qui
+             * avancent du même total doivent le faire du même total. Le temps
+             * d'image ne l'est pas — il dépend de la carte graphique de chacun.
+             *
+             * Le menu ne l'arrête PAS, et c'est délibéré : mettre le mode en
+             * pause en ouvrant Échap serait un moyen d'échapper au couperet, et
+             * les sept autres joueurs, eux, continueraient.
+             */
+            if (cp_actif) {
+                room_cp_avancer(&couperet, (float)clock.tick_seconds);
+                if (in_game && game_api && game && cp_moi < ROOM_CP_MAX_PLACES) {
+                    room_cp_avance(&couperet, cp_moi, (int64_t)game_api->score(game));
+                }
+                /*
+                 * LE JOURNAL DE LA MANCHE, drainé ici.
+                 *
+                 * C'est par là que le mode fait du BRUIT et coupe des bornes,
+                 * et il n'y a pas d'autre chemin : un état ne dit pas ce qui
+                 * vient de changer, et comparer l'état d'avant à celui d'après
+                 * pour retrouver « on vient de me couper » serait redécouvrir
+                 * ce que `room_couperet` savait déjà.
+                 */
+                room_cp_evenement e;
+                while (room_cp_prendre(&couperet, &e)) {
+                    switch (e.type) {
+                    case ROOM_CP_EVT_ACTION:
+                        if (e.b == cp_moi && e.valeur == (int32_t)ROOM_CP_COUPURE
+                            && in_game) {
+                            /*
+                             * ON VIENT DE M'ÉTEINDRE LA BORNE. La partie
+                             * s'arrête sans passer par `finish_run` : elle n'a
+                             * ni score à classer, ni tickets à verser, et le
+                             * journal d'entrées qu'elle laisse ne décrit aucune
+                             * partie complète.
+                             *
+                             * C'est le même chemin que « quitter la partie »
+                             * vingt lignes plus haut, à un mot près — et ce mot
+                             * est le point : le joueur n'a pas quitté, on l'a
+                             * sorti. Le bruit du jeton refusé le dit mieux que
+                             * n'importe quelle ligne de texte.
+                             */
+                            in_game = false;
+                            playing_material = -1;
+                            if (playing_cab) {
+                                room_sound_jeton_refuse(&sound, playing_cab->coin_slot);
+                            }
+                            playing_cab = NULL;
+                            room_viewmodel_stop_playing(&vmstate);
+                            NS_INFO("couperet : la place %u vous a coupé le courant",
+                                    (unsigned)e.a);
+                        }
+                        break;
+                    case ROOM_CP_EVT_COUPERET:
+                        if (e.a == cp_moi && in_game) {
+                            in_game = false;
+                            playing_material = -1;
+                            playing_cab = NULL;
+                            room_viewmodel_stop_playing(&vmstate);
+                        }
+                        NS_INFO("couperet : lame %d, la place %u est sortie",
+                                e.valeur, (unsigned)e.a);
+                        break;
+                    case ROOM_CP_EVT_FIN:
+                        NS_INFO("couperet : manche terminée, camp %u vainqueur",
+                                (unsigned)e.a);
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                if (couperet.phase == ROOM_CP_FINI) cp_actif = false;
+            }
+
             if (in_game && !menu.open) {
                 if (opt.autoplay && game_api->autopilot) game_api->autopilot(game);
 
@@ -4115,7 +4364,33 @@ play_at_done: ;
                  * `tests/test_pad.c` vérifie que les deux périphériques rendent
                  * bien le même octet à geste égal.
                  */
-                const uint8_t hmask = (uint8_t)(room_keys_mask(keys) | pad_mask);
+                uint8_t hmask = (uint8_t)(room_keys_mask(keys) | pad_mask);
+
+                /*
+                 * LE MANCHE À L'ENVERS, quand on l'a acheté sur vous.
+                 *
+                 * Gauche et droite seulement, pas haut et bas. Deux raisons, et
+                 * la seconde est la bonne : un manche d'arcade inversé sur les
+                 * quatre axes devient injouable plutôt que difficile, et une
+                 * action qui rend injouable n'est plus une gêne mais une
+                 * coupure — or la coupure existe déjà, elle coûte quatre jetons,
+                 * et celle-ci en coûte deux.
+                 *
+                 * L'échange se fait sur le MASQUE et non dans le jeu : les huit
+                 * jeux ne doivent rien savoir du mode, c'est la règle de
+                 * `games.h`. Le journal d'entrées enregistre donc le masque
+                 * INVERSÉ, celui que le jeu a réellement reçu — c'est ce qui
+                 * permet à la partie de se rejouer telle qu'elle a été jouée,
+                 * sabotage compris.
+                 */
+                if (cp_actif && cp_moi < ROOM_CP_MAX_PLACES &&
+                    couperet.place[cp_moi].inversion > 0.0f) {
+                    const uint8_t g = (uint8_t)(hmask & (1u << NS_GAME_LEFT));
+                    const uint8_t d = (uint8_t)(hmask & (1u << NS_GAME_RIGHT));
+                    hmask = (uint8_t)(hmask & ~((1u << NS_GAME_LEFT) | (1u << NS_GAME_RIGHT)));
+                    if (g) hmask |= (uint8_t)(1u << NS_GAME_RIGHT);
+                    if (d) hmask |= (uint8_t)(1u << NS_GAME_LEFT);
+                }
 
                 /* Les maintiens : un jeu qui tourne à l'angle (le serpent) a
                  * besoin de savoir qu'on tient la direction, pas qu'on l'a
@@ -4291,6 +4566,21 @@ play_at_done: ;
                         room_eco_salle_fin(game_api->id, game_hard,
                                            game_api->score(game));
                     }
+                    /*
+                     * LES POINTS DE LA MANCHE, au même instant et pour la même
+                     * raison d'ordre : le score doit être arrêté avant qu'on le
+                     * tarife. Deux comptabilités distinctes sur le même
+                     * événement, et c'est voulu — les tickets de la salle
+                     * survivent à la manche, les points de la manche meurent
+                     * avec elle. Les mélanger ferait du Couperet une voie
+                     * d'enrichissement, donc une raison de le jouer autrement
+                     * que pour lui-même.
+                     *
+                     * Sans effet hors manche : `cp_moi` vaut alors
+                     * `ROOM_CP_MAX_PLACES` et l'appel rend zéro.
+                     */
+                    (void)room_cp_partie_fin(&couperet, cp_moi,
+                                             (int64_t)game_api->score(game));
                     /* La partie est finie : c'est le moment où son journal
                      * d'entrées est complet. L'écrire plus tôt donnerait une
                      * partie tronquée, plus tard une partie déjà relancée. */
@@ -4453,6 +4743,24 @@ play_at_done: ;
              */
             if (sprites && bar_rt.handle && scene.scoreboard_material >= 0) {
                 ns_sprite_begin(sprites, (float)ROOM_BAR_RT_W, (float)ROOM_BAR_RT_H);
+                /*
+                 * PENDANT UNE MANCHE, LE TABLEAU DU BAR EST CELUI DE LA MANCHE.
+                 *
+                 * Il remplace les quatre volets ordinaires, et c'est le bon
+                 * arbitrage : tant qu'une manche court, « qui tient le record
+                 * de snake » n'intéresse plus personne, et le classement de la
+                 * manche intéresse tout le monde — les spectres compris, pour
+                 * qui c'est la seule chose qui reste à regarder.
+                 *
+                 * Le mode n'a donc eu besoin d'AUCUN écran nouveau. Ce panneau
+                 * fait 1,78 x 0,89 m, il est derrière le comptoir, on le voit
+                 * de toute la salle, et sa raison d'être écrite est qu'on lève
+                 * les yeux pour voir qui est en train de battre quoi.
+                 */
+                if (cp_actif || couperet.phase == ROOM_CP_FINI) {
+                    room_hud_draw_arene(sprites, (float)ROOM_BAR_RT_W,
+                                        (float)ROOM_BAR_RT_H, &couperet, cp_moi, now);
+                } else
                 room_hud_draw_scoreboard(sprites, (float)ROOM_BAR_RT_W,
                                          (float)ROOM_BAR_RT_H, now,
                                          opt.player,
@@ -4482,6 +4790,26 @@ play_at_done: ;
                     room_hud_draw_choc(sprites, 512.0f, 288.0f,
                                        room_viewmodel_choc(&vmstate, (float)clock.alpha),
                                        (float)now);
+                }
+                /*
+                 * LE BROUILLAGE, dans la dalle et non par-dessus la vue.
+                 *
+                 * Ce n'est pas le joueur qu'on gêne, c'est SA BORNE. Un voile
+                 * sur tout l'écran couvrirait aussi le compte à rebours et les
+                 * prix des actions, c'est-à-dire tout ce qui permet de répondre
+                 * à l'attaque — une gêne qui empêche de se défendre n'est plus
+                 * une gêne, c'est une coupure, et la coupure existe déjà.
+                 *
+                 * Il monte en une demi-seconde et redescend pareil : un
+                 * brouillage qui apparaît d'un coup se lit comme une image
+                 * perdue, pas comme un ennui qui arrive.
+                 */
+                if (cp_actif && cp_moi < ROOM_CP_MAX_PLACES) {
+                    const float reste = couperet.place[cp_moi].brouillage;
+                    if (reste > 0.0f) {
+                        const float f = (reste < 0.5f) ? reste / 0.5f : 1.0f;
+                        room_hud_draw_brouillage(sprites, 512.0f, 288.0f, f, (float)now);
+                    }
                 }
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                 ns_sprite_end(rhi, sprites, screen_rt.handle, 512, 288, off);
@@ -4957,6 +5285,9 @@ play_at_done: ;
 
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);
+                if (cp_actif) {
+                    room_hud_draw_couperet(sprites, &couperet, cp_moi, cp_cible, now);
+                }
                 /*
                  * Les autres joueurs, quand le temps réel est actif. Dessinés
                  * APRÈS l'affichage de la borne et AVANT le menu : une plaque

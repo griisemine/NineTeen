@@ -30,6 +30,7 @@
 
 #include "ns_scene.h"
 #include "ns_sprite.h"
+#include "room_couperet.h"
 #include "room_economie.h"
 
 #include <stdbool.h>
@@ -204,5 +205,51 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
  * même endroit.
  */
 void room_hud_draw_choc(ns_sprite *s, float w, float h, float choc, float phase);
+
+/* ==========================================================================
+ * LE COUPERET — les deux surfaces du mode compétitif
+ * ==========================================================================
+ *
+ * DEUX, et pas une, parce qu'elles répondent à deux questions posées à deux
+ * distances différentes.
+ *
+ * `room_hud_draw_couperet` est par-dessus la vue : « qu'est-ce que je fais
+ * MAINTENANT ». Le compte à rebours, qui est visé, ce que je subis, ce que je
+ * peux acheter. Elle doit se lire sans quitter la borne des yeux, donc elle
+ * tient sur deux bandes — une en haut, une en bas — et laisse le milieu libre.
+ *
+ * `room_hud_draw_arene` est sur LE TÉLÉVISEUR DU BAR : « où en est la salle ».
+ * Le classement complet, les huit places, les camps. On le lit en levant la
+ * tête, entre deux parties, à cinq mètres — c'est exactement ce pour quoi ce
+ * panneau existe déjà, et c'est pour ça que le mode n'a eu besoin d'aucun
+ * écran nouveau. Un tableau de bar dont la raison d'être est qu'on voie « qui
+ * est en train de battre quoi » avait déjà la bonne place et la bonne taille.
+ *
+ * `moi` est la place du joueur local, `ROOM_CP_MAX_PLACES` s'il n'en a pas —
+ * auquel cas rien n'est surligné plutôt qu'une ligne au hasard.
+ */
+void room_hud_draw_couperet(ns_sprite *s, const room_couperet *c, uint8_t moi,
+                            uint8_t cible, double time_seconds);
+
+/*
+ * LE BROUILLAGE, dessiné DANS la dalle qu'on joue.
+ *
+ * Pas par-dessus la vue : ce n'est pas le joueur qu'on gêne, c'est SA BORNE.
+ * Un voile sur tout l'écran se lirait comme un effet de caméra et gênerait
+ * aussi le compte à rebours et les prix des actions — c'est-à-dire tout ce qui
+ * permet de répondre à l'attaque. Mis dans la dalle, il ne gêne QUE la partie,
+ * ce qui est exactement ce qu'il achète.
+ *
+ * Il emprunte la voie que `room_hud_draw_choc` a ouverte : dessiné après
+ * `game_api->draw` et dans la même passe, donc il recouvre le jeu sans qu'un
+ * shader ni une ressource de plus n'existe.
+ *
+ * `force` va de 0 à 1. `phase` est un temps en secondes : c'est lui qui fait
+ * ramper les bandes, et il est passé plutôt que dérivé de `force` parce qu'un
+ * second brouillage prolonge le premier sans que le motif doive resauter.
+ */
+void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float phase);
+void room_hud_draw_arene(ns_sprite *s, float w, float h, const room_couperet *c,
+                         uint8_t moi, double time_seconds);
 
 #endif /* NS_ROOM_HUD_H */
