@@ -6,6 +6,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <stdarg.h>
 #include <time.h>
 
 /* ==========================================================================
@@ -513,4 +514,175 @@ bool room_eco_sauver(const room_eco *e)
         return false;
     }
     return true;
+}
+
+/* ==========================================================================
+ * LA FAÇADE DE LA SALLE — voir room_economie.h pour le raisonnement
+ * ========================================================================== */
+
+static room_eco g_eco;
+static bool     g_ouverte;
+
+/* Le bandeau : ce qui vient de se passer, et depuis combien de temps. Il vit
+ * ici plutôt que dans `room_hud` parce que l'affichage ne doit posséder aucune
+ * des données qu'il montre — c'est la règle que `room_hud.h` s'est donnée, et
+ * un compteur de tickets rangé là-bas finirait par contredire celui-ci. */
+static char  g_msg[80];
+static float g_msg_reste;
+
+/* Le pari en cours. Il est gardé À PART de `g_eco.mise` parce que la reprise
+ * est une VRAIE partie : elle appelle `room_eco_fin_partie`, qui écraserait la
+ * mise d'origine. On la met donc de côté avant de relancer. */
+static bool    g_pari_arme;
+static int32_t g_pari_mise;
+static int32_t g_pari_battre;
+
+/* `SDL_PRINTF_VARARG_FUNC` fait vérifier le format par le compilateur : sans
+ * lui, un « %d » de trop passerait la construction et sortirait un bandeau
+ * illisible chez le joueur. */
+static void dire(SDL_PRINTF_FORMAT_STRING const char *fmt, ...) SDL_PRINTF_VARARG_FUNC(1);
+
+static void dire(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    SDL_vsnprintf(g_msg, sizeof g_msg, fmt, ap);
+    va_end(ap);
+    /* 3,5 s : le temps de lire deux mots en marchant. Le bandeau de réglages
+     * tient 2,6 s pour une ligne plus courte, et c'est la seule mesure dont on
+     * dispose ici. */
+    g_msg_reste = 3.5f;
+}
+
+void room_eco_salle_ouvrir(void)
+{
+    if (g_ouverte) return;
+    room_eco_charger(&g_eco);
+    g_ouverte = true;
+    NS_INFO("portefeuille : %d jeton(s), %d ticket(s), série %d jour(s) — « %s »",
+            g_eco.jetons, g_eco.tickets, g_eco.serie, room_eco_chemin());
+}
+
+void room_eco_salle_fermer(void)
+{
+    if (!g_ouverte) return;
+    /* Une offre laissée ouverte au moment de fermer est un REFUS : on verse.
+     * Perdre les tickets d'une partie parce qu'on a quitté le jeu serait une
+     * punition, et il n'y en a pas dans cette économie. */
+    (void)room_eco_encaisser(&g_eco);
+    g_pari_arme = false;
+    (void)room_eco_sauver(&g_eco);
+    g_ouverte = false;
+}
+
+const room_eco *room_eco_salle(void) { return &g_eco; }
+
+bool room_eco_salle_jeton(void)
+{
+    if (room_eco_inserer(&g_eco)) return true;
+    dire("PLUS DE JETON : VOIR LE MONNAYEUR");
+    return false;
+}
+
+void room_eco_salle_fin(const char *jeu, bool hard, uint32_t score)
+{
+    if (g_pari_arme) {
+        /* La reprise remet la mise d'origine sur la table, puis la joue. */
+        g_eco.mise = g_pari_mise;
+        g_eco.mise_score = g_pari_battre;
+        SDL_strlcpy(g_eco.mise_jeu, (jeu && *jeu) ? jeu : "?", sizeof g_eco.mise_jeu);
+        g_pari_arme = false;
+        g_eco.parties += 1;
+
+        const int32_t verse = room_eco_doubler(&g_eco, (int64_t)score);
+        if (verse > 0) dire("DOUBLE : +%d TICKETS", verse);
+        else           dire("PERDU : %d TICKETS ENVOLES", g_pari_mise);
+        (void)room_eco_sauver(&g_eco);
+        return;
+    }
+
+    const int32_t t = room_eco_fin_partie(&g_eco, jeu, hard, (int64_t)score);
+
+    /* L'offre n'existe que si le lot a été acheté : le quitte ou double est
+     * lui-même un lot de la vitrine, et c'est ce qui donne au premier achat
+     * quelque chose à changer tout de suite. */
+    if (t > 0 && room_eco_lot_acquis(&g_eco, ROOM_ECO_LOT_QUITTE)) {
+        dire("%d TICKETS EN JEU", t);
+        return;      /* la mise reste sur la table : la salle demandera */
+    }
+
+    const int32_t verse = room_eco_encaisser(&g_eco);
+    if (verse > 0) dire("+%d TICKETS", verse);
+    (void)room_eco_sauver(&g_eco);
+}
+
+void room_eco_salle_monnayeur(void)
+{
+    const int32_t rendu = room_eco_monnayeur(&g_eco);
+    if (rendu > 0) {
+        dire("+%d JETONS", rendu);
+    } else {
+        /* Le change, quand le plancher n'a rien à donner : c'est là que les
+         * tickets font des jetons, et seulement là. Cinq à la fois, comme le
+         * plancher — un joueur qui actionne le monnayeur veut de quoi jouer,
+         * pas une pièce. */
+        const int32_t n = room_eco_changer(&g_eco, ROOM_ECO_PLANCHER_ACCUEIL);
+        if (n > 0) dire("CHANGE : +%d JETONS", n);
+        else       dire("%d JETONS EN POCHE", g_eco.jetons);
+    }
+    (void)room_eco_sauver(&g_eco);
+}
+
+void room_eco_salle_vitrine(void)
+{
+    const room_eco_lot l = room_eco_lot_en_vue(&g_eco);
+    if (l == ROOM_ECO_LOT_COUNT) { dire("VITRINE VIDE : TOUT EST A VOUS"); return; }
+
+    if (room_eco_acheter(&g_eco, l)) {
+        dire("%s !", room_eco_lot_titre(l));
+        NS_INFO("vitrine : « %s » acquis (%d tickets) — %s",
+                room_eco_lot_titre(l), room_eco_lot_prix(l), room_eco_lot_quoi(l));
+        (void)room_eco_sauver(&g_eco);
+    } else {
+        /* On ne peut pas l'avoir : on dit son PRIX plutôt que « pas assez ».
+         * Un joueur devant une vitrine veut savoir combien il lui manque. */
+        dire("%s : %d TICKETS", room_eco_lot_titre(l), room_eco_lot_prix(l));
+    }
+}
+
+bool    room_eco_salle_offre(void)        { return g_eco.mise > 0; }
+int32_t room_eco_salle_offre_mise(void)   { return g_eco.mise; }
+int32_t room_eco_salle_offre_battre(void) { return room_eco_mise_a_battre(&g_eco); }
+
+bool room_eco_salle_accepter(void)
+{
+    if (g_eco.mise <= 0) return false;
+    g_pari_arme   = true;
+    g_pari_mise   = g_eco.mise;
+    g_pari_battre = g_eco.mise_score;
+    /* La table est levée le temps de la reprise : sans ça, une partie
+     * abandonnée en cours de pari verserait la mise qu'on avait risquée. */
+    g_eco.mise = 0;
+    g_eco.mise_score = 0;
+    g_eco.mise_jeu[0] = '\0';
+    dire("QUITTE OU DOUBLE : BATTRE %d", g_pari_battre);
+    return true;
+}
+
+void room_eco_salle_refuser(void)
+{
+    const int32_t verse = room_eco_encaisser(&g_eco);
+    if (verse > 0) dire("+%d TICKETS", verse);
+    (void)room_eco_sauver(&g_eco);
+}
+
+const char *room_eco_salle_message(void)       { return (g_msg_reste > 0.0f) ? g_msg : ""; }
+float       room_eco_salle_message_reste(void) { return g_msg_reste; }
+
+void room_eco_salle_avancer(float dt)
+{
+    if (g_msg_reste > 0.0f) {
+        g_msg_reste -= dt;
+        if (g_msg_reste < 0.0f) g_msg_reste = 0.0f;
+    }
 }

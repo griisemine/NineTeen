@@ -298,4 +298,71 @@ void room_eco_set_chemin(const char *chemin);
 void room_eco_charger(room_eco *e);
 bool room_eco_sauver(const room_eco *e);
 
+/* ==========================================================================
+ * LA FAÇADE DE LA SALLE
+ * ==========================================================================
+ *
+ * Pourquoi elle existe, alors que tout ce qui précède suffirait
+ * -------------------------------------------------------------
+ * Parce que `room/main.c` est modifié par d'autres chantiers en ce moment, et
+ * qu'un module qui s'y répandrait entrerait en conflit à chaque ligne. Tout ce
+ * que la salle a besoin de dire à l'économie tient donc dans une poignée
+ * d'appels sans état : le portefeuille, le pari en cours et le bandeau
+ * transitoire vivent ICI, pas là-bas.
+ *
+ * Ce n'est pas seulement une commodité de fusion. `main.c` fait déjà 4 059
+ * lignes et gère la salle, la caméra, le son, le rendu, le duel et le
+ * classement ; y ajouter six variables d'état d'économie les mettrait dans le
+ * même sac que les autres, et la prochaine règle de barème s'écrirait là-bas.
+ * L'interface commune des jeux (`games.h`) a été écrite pour exactement cette
+ * raison, et pour exactement ce fichier.
+ *
+ * Le singleton est assumé : il n'y a qu'un joueur et qu'un portefeuille. Les
+ * fonctions pures au-dessus restent le vrai sujet du test — la façade n'est
+ * qu'un branchement.
+ */
+
+/* Charge le portefeuille. Idempotent. */
+void            room_eco_salle_ouvrir(void);
+/* Sauve et referme. Sans effet si l'on n'a jamais ouvert. */
+void            room_eco_salle_fermer(void);
+/* Le portefeuille courant, pour l'affichage. Jamais NULL. */
+const room_eco *room_eco_salle(void);
+
+/* Insère un jeton pour une partie. Faux s'il n'y en a plus — l'appelant renvoie
+ * alors au monnayeur, et le bandeau le dit déjà. */
+bool room_eco_salle_jeton(void);
+
+/*
+ * Fin de partie. Verse les tickets, OU résout le quitte ou double s'il était
+ * armé. C'est le seul appel que la salle a à faire : la décision de verser, de
+ * proposer ou de résoudre est prise ici.
+ */
+void room_eco_salle_fin(const char *jeu, bool hard, uint32_t score);
+
+/* Le monnayeur et la vitrine, actionnés par le joueur qui s'en approche. */
+void room_eco_salle_monnayeur(void);
+void room_eco_salle_vitrine(void);
+
+/*
+ * LE QUITTE OU DOUBLE.
+ *
+ * `offre` est vraie tant qu'une partie attend une réponse. Accepter rend vrai
+ * s'il faut relancer la même borne EN RÉGIME DIFFICILE — c'est tout ce que la
+ * salle a à savoir. Refuser verse, et ne demande rien de plus qu'accepter :
+ * c'est la contrainte de conception, et c'est pour ça que les deux sont deux
+ * fonctions symétriques plutôt qu'une confirmation et un défaut.
+ */
+bool    room_eco_salle_offre(void);
+int32_t room_eco_salle_offre_mise(void);
+int32_t room_eco_salle_offre_battre(void);
+bool    room_eco_salle_accepter(void);
+void    room_eco_salle_refuser(void);
+
+/* Le bandeau transitoire : ce qui vient de se passer, en un mot. Chaîne vide
+ * quand il n'y a rien à dire. */
+const char *room_eco_salle_message(void);
+float       room_eco_salle_message_reste(void);
+void        room_eco_salle_avancer(float dt);
+
 #endif /* NS_ROOM_ECONOMIE_H */

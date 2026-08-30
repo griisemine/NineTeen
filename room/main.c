@@ -936,6 +936,45 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
  * configuration exacte qui laisse deux d'entre elles dériver sans que rien ne
  * le dise.
  */
+/*
+ * LE COMPTOIR À PORTÉE : le monnayeur, la vitrine, ou rien.
+ *
+ * ON NE PASSE PAS PAR `ns_scene_nearest_poi`, ET C'EST LE POINT DÉLICAT.
+ *
+ * Elle rend le lieu le plus proche TOUTES NATURES CONFONDUES. Filtrer son
+ * résultat marcherait tant qu'aucun autre lieu n'est plus près — et la salle en
+ * déclare huit, dont la porte, à quelques mètres de la vitrine dans l'alcôve
+ * nord-est. Le jour où l'un d'eux passe devant, l'invite de la vitrine
+ * s'éteint : sans erreur, sans message, et pour une raison qu'on ne trouve pas
+ * en regardant la vitrine. On cherche donc parmi les DEUX natures qui nous
+ * intéressent, ce qui rend le résultat indépendant des six autres.
+ *
+ * 1,6 m. Le monnayeur fait 0,60 m de profondeur et la vitrine 0,42 ; leur ancre
+ * étant l'origine du meuble, un joueur planté devant se tient entre 0,6 et
+ * 0,9 m d'elle une fois sa propre demi-largeur de 0,425 m comptée. 1,6 m laisse
+ * donc la marge d'un pas de côté sans allumer l'invite depuis l'allée.
+ *
+ * Les six autres natures n'ont rien à proposer : billard, canapé, bar, radio,
+ * toilettes et porte. Une invite qui s'allumerait devant un canapé apprendrait
+ * au joueur à ne plus la lire.
+ */
+#define ECO_PORTEE_COMPTOIR 1.6f
+
+static ns_poi_kind eco_poi_kind(const ns_scene *scene, const room_camera *cam)
+{
+    if (cam->mode != ROOM_CAM_PLAYER) return NS_POI_NONE;
+
+    ns_poi_kind best_kind = NS_POI_NONE;
+    float       best_dist = ECO_PORTEE_COMPTOIR;
+    for (uint32_t i = 0; i < scene->poi_count; ++i) {
+        const ns_poi *p = &scene->pois[i];
+        if (p->kind != NS_POI_TOKENS && p->kind != NS_POI_PRIZES) continue;
+        const float d = ns_v3_dist(cam->position, p->anchor);
+        if (d < best_dist) { best_dist = d; best_kind = p->kind; }
+    }
+    return best_kind;
+}
+
 static float pitch_onto(ns_v3 eye, ns_v3 target)
 {
     const float ex = target.x - eye.x;
@@ -1753,6 +1792,10 @@ int main(int argc, char **argv)
      */
     uint64_t   demo_seed = 20240418u;
     ns_scores_load();
+    /* Le portefeuille, à côté du classement et pour la même raison : les deux
+     * sont l'état du joueur, ils se chargent ensemble et se sauvent ensemble.
+     * Tout ce que la salle a à en dire tient dans `room_economie.h`. */
+    room_eco_salle_ouvrir();
 
     /*
      * Le classement en ligne, ACTIVABLE et jamais bloquant.
@@ -2457,6 +2500,7 @@ play_at_done: ;
          */
         uint8_t frame_press  = 0;    /* fronts montants des cinq boutons de jeu */
         bool    want_interact = false; /* « E » : le jeton */
+        bool    want_gamble   = false; /* « R » : quitte ou double */
         bool    want_menu     = false; /* « Échap » / Start */
 
         SDL_Event ev;
@@ -2669,6 +2713,19 @@ play_at_done: ;
                      * bouton d'action de la manette hors partie. */
                     if (!ev.key.repeat) want_interact = true;
                     break;
+                case SDLK_R:
+                    /* QUITTE OU DOUBLE. Décidé ici plutôt qu'après la boucle
+                     * parce qu'il ne dépend d'aucune autre entrée : il n'y a
+                     * qu'un état où il veut dire quelque chose, et c'est
+                     * `room_economie` qui le connaît.
+                     *
+                     * Pas de touche pour REFUSER, et ce n'est pas un oubli : le
+                     * refus est déjà l'action d'à côté — rejouer, repartir, ou
+                     * ne rien faire. Lui donner sa propre touche demanderait au
+                     * joueur de choisir entre deux gestes là où l'un des deux
+                     * doit rester le chemin qu'on suit sans y penser. */
+                    if (!ev.key.repeat) want_gamble = true;
+                    break;
                 default:
                     break;
                 }
@@ -2740,10 +2797,27 @@ play_at_done: ;
                 float dead_time = 0.0f;
                 const bool dead = game_api->dead(game, &dead_time);
                 if (dead && (frame_press & (1u << NS_GAME_ACTION)) && dead_time > 0.8f) {
-                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
-                    start_run(game_api, game, runlog, seed, game_hard, &duel);
-                    run_ms = 0;
-                    run_tick = 0; pending_press = 0;
+                    /*
+                     * RELANCER EST UNE PARTIE, DONC UN JETON.
+                     *
+                     * Sans ça, la borne offrait une partie gratuite à qui reste
+                     * devant elle — et le jeton n'aurait coûté qu'à celui qui
+                     * marche. Le geste du bras n'est pas rejoué : on est déjà
+                     * assis devant, la pièce est déjà dans la machine. C'est ce
+                     * que fait une vraie borne quand on remet un crédit.
+                     *
+                     * ET C'EST LE REFUS DU QUITTE OU DOUBLE : appuyer sur
+                     * action pour rejouer verse la mise. Refuser ne demande
+                     * donc aucun geste de plus qu'accepter — il est même le
+                     * geste qu'on ferait sans y penser.
+                     */
+                    if (room_eco_salle_offre()) room_eco_salle_refuser();
+                    if (opt.autoplay || room_eco_salle_jeton()) {
+                        const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                        start_run(game_api, game, runlog, seed, game_hard, &duel);
+                        run_ms = 0;
+                        run_tick = 0; pending_press = 0;
+                    }
                 } else {
                     for (int b = 0; b < NS_GAME_BUTTON_COUNT; ++b) {
                         if (frame_press & (1u << b)) game_api->press(game, (ns_game_button)b);
@@ -2792,6 +2866,29 @@ play_at_done: ;
             }
         }
 
+        /*
+         * QUITTE OU DOUBLE : accepter relance la MÊME borne en régime
+         * difficile, quel que soit celui de la partie d'origine. C'est ce qui
+         * fait le risque, et c'est aussi ce qui rend la reprise comparable —
+         * le score à battre est celui d'une partie qu'on rejoue plus dur.
+         *
+         * Le jeton de la reprise est dû comme celui de n'importe quelle partie.
+         * S'il manque, l'offre RESTE sur la table : on n'a rien perdu, on va
+         * chercher un jeton et on répond en revenant.
+         */
+        if (want_gamble && !menu.open && in_game && game_api->dead(game, NULL)
+            && room_eco_salle_offre()) {
+            if (room_eco_salle_jeton()) {
+                if (room_eco_salle_accepter()) {
+                    game_hard = true;
+                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                    start_run(game_api, game, runlog, seed, game_hard, &duel);
+                    run_ms = 0;
+                    run_tick = 0; pending_press = 0;
+                }
+            }
+        }
+
         if (want_interact && !menu.open) {
             /*
              * `ns_scene_nearest_cabinet` est écrite depuis M4 et n'avait
@@ -2799,6 +2896,36 @@ play_at_done: ;
              * `player_anchor` et `ns_poi`. Elle en a un.
              */
             const ns_cabinet *near = room_viewmodel_target(&scene, &cam);
+
+            /*
+             * LES DEUX COMPTOIRS PASSENT AVANT, et seulement quand il n'y a pas
+             * de borne : on ne se met pas devant un monnayeur pour jouer.
+             * L'ordre est celui de l'invite affichée, sans quoi l'écran
+             * promettrait une action et la touche en ferait une autre.
+             */
+            if (!near) {
+                const ns_poi_kind k = eco_poi_kind(&scene, &cam);
+                if (k == NS_POI_TOKENS)      { room_eco_salle_monnayeur(); }
+                else if (k == NS_POI_PRIZES) { room_eco_salle_vitrine(); }
+            }
+
+            /*
+             * LE JETON EST DÉBITÉ AVANT LE GESTE, ET SEULEMENT S'IL AURA LIEU.
+             *
+             * Avant, parce que le bras insérerait sinon une pièce qu'on n'a
+             * pas : le geste est joué, le son du monnayeur part, et la partie
+             * ne démarre pas — le genre d'incohérence qu'on impute au moteur.
+             *
+             * Seulement s'il aura lieu, parce que `room_viewmodel_interact`
+             * refuse tant qu'un geste est en cours (`room_viewmodel.c:270`) :
+             * débiter d'abord et se faire refuser ensuite ferait payer un jeton
+             * pour rien à chaque appui trop rapide. La condition est celle du
+             * refus, lue au même endroit que lui.
+             */
+            if (near && vmstate.state == ROOM_VM_IDLE && !room_eco_salle_jeton()) {
+                near = NULL;
+            }
+
             if (near && room_viewmodel_interact(&vmstate, near)) {
                 room_sound_coin(&sound, near->coin_slot);
                 NS_INFO("borne « %s » (%s) : jeton", near->name, near->game);
@@ -3174,6 +3301,10 @@ play_at_done: ;
             }
             settings_banner = ns_maxf(0.0f, settings_banner - (float)clock.tick_seconds);
             intro_banner    = ns_maxf(0.0f, intro_banner - (float)clock.tick_seconds);
+            /* Le bandeau de l'économie suit le même pas que les deux autres :
+             * celui de la SIMULATION et non celui du mur, pour qu'une capture
+             * rendue image par image le voie s'effacer au même rythme. */
+            room_eco_salle_avancer((float)clock.tick_seconds);
             room_sound_update(&sound, &scene, &cam, &doors, (float)clock.tick_seconds);
             ns_renderer_tick_particles(renderer, (float)clock.tick_seconds);
 
@@ -3362,6 +3493,23 @@ play_at_done: ;
                     last_rank = finish_run(runlog, run_ms, game_api, game,
                                            game_hard ? "hard" : "normal",
                                            opt.player, opt.offline, opt.autoplay);
+                    /*
+                     * LES TICKETS, juste après le classement et pour la même
+                     * raison d'ordre : le score doit être arrêté avant qu'on le
+                     * tarife. Un seul appel — c'est `room_economie` qui décide
+                     * s'il verse, s'il propose le quitte ou double ou s'il
+                     * résout celui qui était armé.
+                     *
+                     * PAS EN DÉMONSTRATION : `--autoplay` fait tourner les
+                     * bornes toute la nuit pour les captures et l'intégration
+                     * continue, et créditerait un portefeuille que personne n'a
+                     * joué. `finish_run` écarte déjà ces parties du classement
+                     * pour exactement ce motif.
+                     */
+                    if (!opt.autoplay) {
+                        room_eco_salle_fin(game_api->id, game_hard,
+                                           game_api->score(game));
+                    }
                     /* La partie est finie : c'est le moment où son journal
                      * d'entrées est complet. L'écrire plus tôt donnerait une
                      * partie tronquée, plus tard une partie déjà relancée. */
@@ -3857,6 +4005,17 @@ play_at_done: ;
                 hud.intro_timer = (cam.mode == ROOM_CAM_PLAYER && !menu.open)
                                 ? intro_banner : 0.0f;
 
+                /* L'ÉCONOMIE. Quatre champs, tous en lecture : le portefeuille
+                 * et le bandeau appartiennent à `room_economie`, et l'affichage
+                 * ne possède rien de ce qu'il montre. Le lieu à portée est
+                 * calculé par la même fonction que la touche « E » plus haut,
+                 * pour que l'invite ne puisse pas promettre autre chose que ce
+                 * que l'appui fera. */
+                hud.eco = room_eco_salle();
+                hud.poi = eco_poi_kind(&scene, &cam);
+                hud.eco_message = room_eco_salle_message();
+                hud.eco_message_timer = room_eco_salle_message_reste();
+
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);
                 /*
@@ -4008,6 +4167,7 @@ play_at_done: ;
     ns_config_save();
 
     ns_scores_save();
+    room_eco_salle_fermer();
     /* Le temps réel s'arrête AVANT le classement : il emprunte l'URL et le
      * jeton de `ns_online`, et son fil envoie un dernier « je m'en vais » pour
      * ne pas hanter la salle pendant la durée du TTL. */

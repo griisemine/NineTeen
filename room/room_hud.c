@@ -171,12 +171,182 @@ static void draw_intro(ns_sprite *s, const room_hud_state *st)
     room_credits_draw_intro(s, a);
 }
 
+/* ========================================================================== */
+/* L'ÉCONOMIE : le solde, les deux comptoirs, et le quitte ou double          */
+/* ========================================================================== */
+
+/*
+ * LE SOLDE, en haut à gauche.
+ *
+ * En haut à GAUCHE et non à droite : la liste des présents occupe le coin droit
+ * depuis le temps réel, et le score d'une partie occupe le haut du centre. Le
+ * coin gauche est le seul des quatre qui soit libre en toutes circonstances.
+ *
+ * Il reste affiché PENDANT la partie, et c'est délibéré : c'est le moment où le
+ * joueur se demande ce que la partie en cours va lui rapporter. Le cacher
+ * ferait de l'économie quelque chose qui n'existe qu'entre deux parties.
+ *
+ * La série n'est montrée QUE si elle vaut quelque chose. Une ligne « SERIE 0 J »
+ * affichée en permanence à un joueur qui vient d'arriver ne l'informe pas, elle
+ * lui reproche quelque chose — et cette économie ne reproche rien.
+ */
+static void draw_wallet(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->eco) return;
+
+    const float scale = 2.2f;
+    const float lh    = ns_sprite_text_height(scale) + 6.0f;
+    char l[3][40];
+    int  n = 0;
+
+    SDL_snprintf(l[n++], sizeof l[0], "JETONS  %d", st->eco->jetons);
+    SDL_snprintf(l[n++], sizeof l[0], "TICKETS %d", st->eco->tickets);
+    if (st->eco->serie > 0) {
+        SDL_snprintf(l[n++], sizeof l[0], "SERIE   %d J", st->eco->serie);
+    }
+
+    float w = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const float tw = ns_sprite_text_width(l[i], scale);
+        if (tw > w) w = tw;
+    }
+
+    const float x = 22.0f, y = 22.0f;
+    panel(s, x - 12.0f, y - 9.0f, w + 24.0f, lh * (float)n + 18.0f);
+    for (int i = 0; i < n; ++i) {
+        /* La série en or : c'est la seule des trois lignes qui récompense, et
+         * elle doit se distinguer d'un compteur. */
+        ns_sprite_text(s, x, y + lh * (float)i, scale,
+                       (i == 2) ? C_GOLD : C_TEXT, l[i]);
+    }
+}
+
+/*
+ * L'INVITE DES DEUX COMPTOIRS.
+ *
+ * Même forme que celle des bornes — la touche dans un carré, puis le verbe —
+ * parce que c'est le même geste et qu'un joueur ne doit pas avoir à apprendre
+ * deux conventions dans la même salle. Elle est posée plus BAS que celle des
+ * bornes (0,76 contre 0,70) : les deux ne peuvent pas s'afficher en même temps,
+ * mais si la portée d'un comptoir venait un jour à recouvrir celle d'une borne,
+ * elles se liraient encore l'une sous l'autre au lieu de se superposer.
+ */
+static void draw_poi_prompt(ns_sprite *s, const room_hud_state *st)
+{
+    if (st->playing || !st->eco) return;
+    if (st->poi != NS_POI_TOKENS && st->poi != NS_POI_PRIZES) return;
+    if (st->near && st->can_interact) return;   /* la borne d'abord : on vient jouer */
+
+    char line[96];
+    if (st->poi == NS_POI_TOKENS) {
+        SDL_snprintf(line, sizeof line, "PRENDRE DES JETONS");
+    } else {
+        const room_eco_lot l = room_eco_lot_en_vue(st->eco);
+        if (l == ROOM_ECO_LOT_COUNT) {
+            SDL_snprintf(line, sizeof line, "VITRINE : TOUT EST A VOUS");
+        } else {
+            SDL_snprintf(line, sizeof line, "%s : %d TICKETS",
+                         room_eco_lot_titre(l), room_eco_lot_prix(l));
+        }
+    }
+
+    const float scale = 3.0f;
+    const float key_w = ns_sprite_text_width("E", scale);
+    const float txt_w = ns_sprite_text_width(line, scale);
+    const float gap   = 14.0f;
+    const float total = key_w + gap * 2.0f + txt_w;
+    const float h     = ns_sprite_text_height(scale) + 22.0f;
+    const float y     = ROOM_HUD_H * 0.76f;
+    const float x     = (ROOM_HUD_W - total) * 0.5f;
+
+    panel(s, x - 22.0f, y - 11.0f, total + 44.0f, h);
+    ns_sprite_rect(s, x - 7.0f, y - 5.0f, key_w + 14.0f,
+                   ns_sprite_text_height(scale) + 10.0f, C_KEY);
+    static const float dark[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
+    ns_sprite_text(s, x, y, scale, dark, "E");
+    ns_sprite_text(s, x + key_w + gap * 2.0f, y, scale, C_TEXT, line);
+
+    /* CE QUE LE LOT CHANGE, sous l'invite. Un prix sans effet annoncé ne se
+     * décide pas : c'est ce qui distingue une vitrine d'un distributeur. */
+    if (st->poi == NS_POI_PRIZES) {
+        const room_eco_lot l = room_eco_lot_en_vue(st->eco);
+        if (l != ROOM_ECO_LOT_COUNT) {
+            char sub[80];
+            SDL_snprintf(sub, sizeof sub, "%s", room_eco_lot_quoi(l));
+            for (char *p = sub; *p; ++p) *p = (char)SDL_toupper((unsigned char)*p);
+            centred(s, ROOM_HUD_W * 0.5f, y + h + 6.0f, 2.0f, C_DIM, sub);
+        }
+    }
+}
+
+/*
+ * LE BANDEAU : ce qui vient de se passer, en bas au centre.
+ *
+ * Fondu sur la dernière demi-seconde, comme le bandeau de réglages, et pour la
+ * même raison : un texte qui disparaît d'un coup se lit comme un défaut
+ * d'affichage.
+ */
+static void draw_eco_message(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->eco_message || !st->eco_message[0] || st->eco_message_timer <= 0.0f) return;
+
+    const float a = (st->eco_message_timer < 0.5f) ? (st->eco_message_timer / 0.5f) : 1.0f;
+    const float scale = 2.6f;
+    const float w = ns_sprite_text_width(st->eco_message, scale) + 44.0f;
+    const float h = ns_sprite_text_height(scale) + 22.0f;
+    const float x = (ROOM_HUD_W - w) * 0.5f;
+    /* 0,86 de la hauteur : sous l'invite des comptoirs (0,76) et sous le
+     * bandeau de réglages, qui se colle au bord bas. */
+    const float y = ROOM_HUD_H * 0.86f;
+
+    const float bg[4] = { C_PANEL[0], C_PANEL[1], C_PANEL[2], C_PANEL[3] * a };
+    const float fg[4] = { C_GOLD[0], C_GOLD[1], C_GOLD[2], a };
+    ns_sprite_rect(s, x, y, w, h, bg);
+    centred(s, ROOM_HUD_W * 0.5f, y + 11.0f, scale, fg, st->eco_message);
+}
+
+/*
+ * LE QUITTE OU DOUBLE, sur l'écran de fin.
+ *
+ * LE REFUS EST AUSSI FACILE QUE L'ACCEPTATION, et c'est une contrainte de
+ * conception, pas une politesse. Les deux réponses sont une touche, elles sont
+ * écrites sur la même ligne, dans la même taille et dans la même couleur ; ne
+ * rien faire et repartir vaut refus, et verse. Il n'y a ni compte à rebours, ni
+ * « êtes-vous sûr », ni animation qui pousse vers le oui.
+ *
+ * Ce qui est écrit est le RISQUE, pas le gain : « RISQUER 14 » avant « GARDER
+ * 14 ». Un pari qui annonce d'abord ce qu'on peut gagner ment par cadrage,
+ * même quand tous ses chiffres sont justes.
+ */
+static void draw_gamble(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->playing || !st->dead || !st->eco) return;
+    if (st->eco->mise <= 0) return;
+
+    const float w = 640.0f, h = 132.0f;
+    const float x = (ROOM_HUD_W - w) * 0.5f, y = ROOM_HUD_H * 0.34f + 200.0f;
+    panel(s, x, y, w, h);
+
+    char l[96];
+    SDL_snprintf(l, sizeof l, "QUITTE OU DOUBLE : BATTRE %d EN DUR", st->eco->mise_score);
+    centred(s, ROOM_HUD_W * 0.5f, y + 18.0f, 2.4f, C_GOLD, l);
+    SDL_snprintf(l, sizeof l, "R : RISQUER %d      ESPACE : GARDER %d",
+                 st->eco->mise, st->eco->mise);
+    centred(s, ROOM_HUD_W * 0.5f, y + 62.0f, 2.2f, C_TEXT, l);
+    centred(s, ROOM_HUD_W * 0.5f, y + 98.0f, 1.7f, C_DIM,
+            "REPARTIR SANS REPONDRE VAUT GARDER");
+}
+
 void room_hud_draw(ns_sprite *s, const room_hud_state *st)
 {
     if (!s || !st) return;
+    draw_wallet(s, st);
     draw_prompt(s, st);
+    draw_poi_prompt(s, st);
     draw_game_overlay(s, st);
+    draw_gamble(s, st);
     draw_settings(s, st);
+    draw_eco_message(s, st);
     draw_intro(s, st);
 }
 

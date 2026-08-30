@@ -6714,6 +6714,8 @@
       ],
       "yaw": 270.0,
       "pose": "mur",
+      "poi": "vitrine",
+      "_poi": "LE COMPTOIR D'ECHANGE DES TICKETS. Elle etait dans le decor depuis A4 et ne servait a rien — comme le monnayeur avant le poste 7. C'est desormais la ou l'on echange ses tickets contre un lot, et le pendant exact du monnayeur : on prend ses jetons a l'est du comptoir, on depense ses tickets sur le mur est du hall. La nature « vitrine » est declaree dans `ns_scene.c` et rendue par `ns_poi_label` ; sans elle, le lieu serait charge puis ignore avec un WARN a chaque demarrage, ce qui est exactement ce que le monnayeur a subi pendant deux versions.",
       "parts": [
         {
           "_": "le socle plein",

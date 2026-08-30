@@ -30,6 +30,7 @@
 
 #include "ns_scene.h"
 #include "ns_sprite.h"
+#include "room_economie.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -77,6 +78,39 @@ typedef struct room_hud_state {
      * bandeau part de lui-même, la page complète reste dans `Échap`.
      */
     float intro_timer;
+
+    /*
+     * L'ÉCONOMIE — le solde, le lieu qu'on approche, et ce qui vient de se
+     * passer.
+     *
+     * Tout arrive par POINTEUR sur ce que possède `room_economie`, et rien
+     * n'est recopié ici : c'est la règle que ce fichier s'est donnée dès son
+     * en-tête — « un affichage qui possède une donnée finit par la
+     * contredire ». Un compteur de tickets recopié dans le HUD à chaque image
+     * serait exactement ça, et il se désynchroniserait le jour où une image
+     * sauterait.
+     *
+     * `eco` nul veut dire « ne rien afficher », ce qui est le cas de
+     * `--no-hud` et des captures d'écran de décor.
+     */
+    const room_eco *eco;
+
+    /*
+     * Le LIEU à portée, et ce qui s'y fait.
+     *
+     * Deux des huit points d'intérêt déclarés par la salle sont maintenant
+     * actionnables — `NS_POI_TOKENS` (le monnayeur) et `NS_POI_PRIZES` (la
+     * vitrine à lots). `NS_POI_NONE` pour les autres et pour le vide : les six
+     * qui restent — billard, canapé, bar, radio, toilettes, porte — n'ont rien
+     * à proposer, et une invite qui s'allumerait devant un canapé apprendrait
+     * au joueur à ne plus la lire.
+     */
+    ns_poi_kind poi;
+
+    /* Le bandeau transitoire, tel que `room_eco_salle_message` le rend. Vide =
+     * rien à dire. Le minuteur sert au fondu, comme pour les réglages. */
+    const char *eco_message;
+    float       eco_message_timer;
 } room_hud_state;
 
 /*
