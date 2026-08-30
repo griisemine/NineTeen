@@ -190,7 +190,9 @@ Pas un duel : juste les autres joueurs visibles, marchant dans l'allée, devant
 les bornes.
 
 - **Ce qu'il faut** : un état positionnel diffusé à ~20 Hz, interpolé, et un
-  bonhomme à dessiner — qui n'existe pas (on n'a que des bras en vue subjective).
+  bonhomme à dessiner — qui n'existait pas quand ces lignes ont été écrites (on
+  n'avait que des bras en vue subjective). Les deux points sont réglés depuis :
+  4 Hz interpolés plutôt que 20 Hz, et le personnage de `ns_skin`. Voir plus bas.
 - **Le risque** : modéré et surtout visuel. Techniquement c'est le plus simple
   des trois ; c'est le travail d'art qui domine.
 
@@ -267,15 +269,51 @@ Une présence expire en 12 s côté serveur ; le client cesse de rendre des pair
 après 3 s sans réponse. Un joueur immobile est un bogue qu'on regarde, un joueur
 absent est une déconnexion qu'on comprend.
 
-**L'avatar est une plaque au nom du joueur**, avec sa borne et son score, plus
-une liste « DANS LA SALLE » en haut à droite. Pas un bonhomme, et c'est assumé :
-il n'existe aucun modèle de personnage dans ce dépôt — on n'a que des bras en vue
-subjective — et la scène est un tampon de géométrie **cuit au build**, sans
-chemin pour y ajouter un maillage animé à l'exécution. Une plaque répond
-exactement à la question qu'on se pose en entrant dans une salle : **qui est là,
-et à quelle borne**. Elle n'est pas occultée par les murs ; la salle est une
-pièce ouverte, et un lancer de rayon par joueur et par image pour cacher une
-étiquette coûterait plus que ça ne gêne.
+**L'avatar est un personnage qui marche**, surmonté d'une plaque à son nom, avec
+sa borne et son score, plus une liste « DANS LA SALLE » en haut à droite.
+
+Ce paragraphe disait le contraire, et il avait raison de le dire à l'époque : il
+n'existait alors aucun modèle de personnage dans le dépôt. Il en existe un depuis
+— `engine/anim/ns_skin.c`, celui que le joueur porte en troisième personne — et
+les pairs portent le même. Ce qu'il a fallu lever pour ça tient en trois points,
+tous dans `room/room_presence.h` :
+
+- **Le rendu ne savait dessiner QU'UN personnage.**
+  `ns_renderer_set_character` est devenu `ns_renderer_set_characters`. Le
+  maillage reste monté une seule fois ; seules changent la matrice de modèle et
+  les 32 matrices d'os, soit 2 176 octets d'uniformes poussés par corps et par
+  image. Mesuré à 1400x875 en qualité haute : **seize corps ajoutent 0,65 ms à
+  une image qui en prend 24,3**, soit 2,7 %. Il n'y a donc aucun plafond sous la
+  borne du réseau (`NS_RT_MAX_PEERS` = 16).
+- **Les positions arrivent à 4 Hz, le rendu tourne à 60.** Elles sont
+  **interpolées et jamais extrapolées** : le corps montré est celui d'il y a une
+  période, soit **250 ms de retard** plus le trajet réseau. Extrapoler ferait
+  reculer un pair qui s'arrête, c'est-à-dire devant une borne.
+- **La phase de marche n'est pas publiée.** Elle est déduite de la distance que
+  le corps *rendu* parcourt, convertie par `ns_skin_stride_length` : une foulée
+  parcourue fait un tour de cycle, ce qui est la seule façon que les pieds ne
+  patinent pas. À l'arrêt, le cycle revient à la pose de passage.
+
+Le **cap** vient du champ `yaw`, déjà au protocole ; un pair qui ne le publie pas
+— une version antérieure — est orienté par sa direction de déplacement. La
+migration `0004_hauteur_oeil.sql` ajoute `eye`, la hauteur d'œil au-dessus des
+pieds, sans laquelle un pair accroupi s'enfonce de 39 cm dans la moquette.
+
+**Un pair n'est pas un obstacle**, et c'est écrit dans le code : avec 250 ms de
+retard, faire d'un corps un mur bloquerait le joueur contre quelqu'un qui n'est
+plus là. On se traverse.
+
+**L'étiquette, elle, n'est toujours pas occultée par les murs** ; la salle est
+une pièce ouverte, et un lancer de rayon par joueur et par image pour cacher une
+étiquette coûterait plus que ça ne gêne. Le **corps**, lui, l'est : il passe par
+la passe des personnages, qui charge la profondeur de la scène et teste contre
+elle. Un pair derrière une borne est donc caché par la borne, et seul son nom
+flotte au-dessus — voir `docs/render-presence-allee.png`, où c'est le cas du
+marcheur de gauche.
+
+Pour regarder tout ça sans serveur : `--pairs-demo=N` peuple l'allée de N
+marcheurs fabriqués, qui entrent par le même chemin que les vrais pairs. Inerte
+par défaut, comme le reste du temps réel.
 
 ### Le duel en différé
 
