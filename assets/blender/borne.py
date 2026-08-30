@@ -582,6 +582,66 @@ def grilles_hp():
                      chapeau=False, fond=False)
 
 
+def porte_arriere():
+    """La trappe de service, au dos, et pourquoi le dos en avait besoin.
+
+    La face arrière est le segment (-HD, Y_DOS) -> (-HD, PLINTHE_H) du profil :
+    0,72 x 1,60 m de peinture, sans un accident. Ce n'était pas visible tant
+    qu'on regardait les bornes de face — mais les deux rangées de l'îlot sont
+    DOS À DOS, à 32 cm l'une de l'autre (backs à z 0,853 et 0,532, mesurés sur
+    la géométrie produite), et on longe cet intervalle en entrant. La capture
+    « arrivée » montrait une dalle verte lisse de la taille d'une porte, qui ne
+    ressemblait à rien.
+
+    Un dos de borne réelle porte quatre choses, et pas une de plus : une trappe
+    d'accès en saillie, une aération en haut de cette trappe, deux serrures à
+    came, et l'embase du cordon secteur en bas. Elles suffisent parce qu'elles
+    sont ce que l'oeil cherche : une surface qui s'ouvre, un endroit par où l'air
+    sort, un endroit qu'on verrouille, un endroit d'où sort le courant.
+
+    EN SAILLIE ET NON EN RETRAIT. Creuser la trappe demanderait de percer la
+    face arrière du caisson, comme `cadre_ecran` perce celle du cadre — soit un
+    segment `None` de plus dans le profil et un fond à reconstruire. La saillie
+    de 8 mm donne la même lecture : c'est le LISERÉ D'OMBRE qui dit qu'une
+    surface est séparée d'une autre, et il se forme aussi bien en avant qu'en
+    arrière. Une vraie porte de borne recouvre d'ailleurs son ouverture plutôt
+    que de s'y encastrer.
+    """
+    Z = -HD                       # la face arrière
+    # La trappe. 5 cm de dormant de chaque côté, comme sur les vues arrière de
+    # référence ; en bas elle s'arrête au-dessus de la plinthe, en haut sous la
+    # tablette du moniteur.
+    TR_Y0, TR_Y1 = 0.26, 1.34
+    TR_W = W - 0.10
+    cy = (TR_Y0 + TR_Y1) * 0.5
+    boite("dos_trappe", 0.0, cy, Z - 0.004, TR_W, TR_Y1 - TR_Y0, 0.008,
+          MI["noir"])
+
+    # L'aération, en haut de la trappe. Cinq lames, et le même raisonnement que
+    # les grilles de haut-parleur : ce qui fait lire une grille n'est pas sa
+    # couleur mais son MÉTAL, donc du relief et un matériau à part plutôt qu'un
+    # aplat. Trois millimètres de saillie suffisent à accrocher un rasant.
+    for k in range(5):
+        boite("dos_lame_%d" % k, 0.0, 1.28 - k * 0.030, Z - 0.008 - 0.0015,
+              0.30, 0.014, 0.003, MI["grille"])
+
+    # Les deux serrures à came, sur les chants de la trappe et à mi-hauteur.
+    # `pitch` de 90° couche le cylindre sur l'axe de profondeur : sans lui, une
+    # serrure sortirait du dos comme un bouton de porte.
+    for cote in (-1, 1):
+        cylindre("dos_serrure_%d" % cote, cote * 0.265, cy, Z - 0.010,
+                 0.012, 0.012, 0.005, MI["chrome"], seg=12,
+                 pitch=math.pi * 0.5)
+
+    # L'embase du cordon, sous la trappe, et le cordon lui-même jusqu'au sol.
+    # Décentrée : une prise au milieu du dos est ce que dessine quelqu'un qui
+    # n'en a jamais vu.
+    boite("dos_embase", 0.200, 0.190, Z - 0.006, 0.075, 0.055, 0.012,
+          MI["noir"])
+    cylindre("dos_cordon", 0.200, 0.010, Z - 0.012, 0.0055, 0.0055, 0.180,
+             MI["noir"], seg=8)
+
+
 def enseigne():
     """L'enseigne, en saillie de 6 mm sur la face du marquee. Le caisson lumineux
     n'est plus une boîte rapportée : il fait partie du profil, et ce sont les
@@ -924,6 +984,7 @@ def main():
     cadre_ecran()
     plinthe()
     grilles_hp()
+    porte_arriere()
     enseigne()
     porte_monnayeur()
     ancres = commandes()
