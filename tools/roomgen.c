@@ -83,6 +83,10 @@ typedef struct rg_light {
     /* Assume d'être posée DANS un solide. Voir `check_lights_not_enclosed` : le
      * cas normal est une erreur, celui-ci doit s'écrire. */
     bool  inside_ok;
+    /* Assume de n'avoir AUCUN luminaire. Voir `check_light_has_body` : un tube
+     * caché derrière une corniche est un parti pris légitime, mais il faut
+     * l'écrire — sans quoi il ne se distingue pas d'une lampe oubliée. */
+    bool  bare;
 } rg_light;
 
 /*
@@ -213,6 +217,22 @@ typedef struct rg_solid {
      */
     char pose[16];       /* "sol", "meuble", "mur", "suspendu", "libre" */
     char pose_sur[64];   /* le meuble nommé, quand `pose` vaut "meuble" */
+    /* Le prop qui sert de câble, quand `pose` vaut "suspendu". C'est alors LUI
+     * qui subit le contrôle de C-06 : une suspension pend au bout de sa tige,
+     * pas au plafond. */
+    char suspendu_par[64];
+
+    /*
+     * Le LACET de l'instance, en radians, et donc sa direction de regard —
+     * `(sin lacet, cos lacet)`, la convention de tout ce fichier.
+     *
+     * Gardé ici parce que `record_solid` est le seul endroit qui voie à la fois
+     * le nom de l'instance et sa transformation : le lacet DÉCLARÉ ne suffit
+     * pas, une déclaration répétée pouvant faire tourner ses exemplaires
+     * (`yawStep`). Le relire depuis la description dans le contrôle donnerait
+     * le lacet du premier exemplaire pour les cinq.
+     */
+    float yaw;
 } rg_solid;
 
 /* Un sol déclaré, gardé pour savoir sur quoi un objet est censé poser. Les
@@ -222,7 +242,63 @@ typedef struct rg_solid {
 typedef struct rg_floor {
     char  name[64];
     float centre[2], size[2], y;
+    /* Le nom du MATÉRIAU, pas son index : c'est lui que le message d'erreur de
+     * C-08 doit prononcer. « la zone toilettes mélange sol_toilettes et
+     * sol_hall » se corrige ; « elle mélange les matériaux 3 et 7 » demande
+     * d'abord d'aller compter les matériaux. */
+    char  material[64];
 } rg_floor;
+
+/*
+ * UN PANNEAU D'ÉPAISSEUR NULLE, retenu avec sa normale.
+ *
+ * Un `type: "panel"` n'est pas un solide comme un autre : il n'a pas de
+ * volume, donc pas d'intérieur, donc rien de ce que `check_solid_overlaps` ou
+ * `check_inside_shell` savent regarder. Il a en revanche quelque chose qu'aucun
+ * autre morceau n'a — UNE NORMALE — et c'est tout ce dont deux contrôles ont
+ * besoin : celui qui demande qu'une façade regarde la salle (C-04) et celui qui
+ * demande qu'un panneau ne soit pas enterré (C-05).
+ *
+ * Le centre et la normale sont RELEVÉS SUR LA GÉOMÉTRIE ÉMISE, pas recalculés
+ * depuis le lacet déclaré. Le morceau subit deux transformations — la sienne,
+ * puis celle du prop — et recomposer les deux ici ferait une seconde écriture
+ * de la matrice de `geo_mesh.c`, qui divergerait le jour où l'une des deux
+ * serait corrigée. C'est la même raison qui met `reach_point_in_polygon` dans
+ * `reach_grid.c` plutôt qu'ici.
+ */
+#define RG_MAX_PANELS 128
+typedef struct rg_panel {
+    char  owner[64];     /* le prop dont le panneau sort */
+    ns_v3 centre;
+    ns_v3 normal;
+    float width, height;
+} rg_panel;
+
+/*
+ * LA SOUS-FACE DU PLAFOND, gardée là où elle est calculée.
+ *
+ * `parse_ceilings` connaît la cote des dalles et la descente des rails en T ;
+ * plus rien après lui ne les connaît, et C-06 en a besoin pour dire de combien
+ * une suspension pend dans le vide. La redéduire depuis la boîte englobante de
+ * l'objet donnerait le CÂBLE de la dalle manquante, qui descend 24 cm plus bas
+ * que les rails — un message faux d'un quart de mètre.
+ */
+#define RG_MAX_CEILINGS 8
+typedef struct rg_ceiling {
+    char  name[64];
+    float centre[2], size[2];
+    float y;           /* le plan des dalles */
+    float underside;   /* y − railDrop : la surface la plus basse de la trame */
+} rg_ceiling;
+
+/* Le morceau de panneau, le temps que le prop soit placé : l'intervalle de
+ * sommets qu'il occupe dans le maillage local. `emit_prop_parts` le note,
+ * `parse_props` le relit une fois la transformation du prop appliquée. */
+typedef struct rg_panel_span {
+    size_t begin, end;
+    float  width, height;
+} rg_panel_span;
+#define RG_MAX_PANEL_SPANS 16
 
 /*
  * Un mur, en PLAN — sa ligne médiane et son épaisseur.
@@ -338,6 +414,14 @@ typedef struct rg_builder {
     rg_floor floors[RG_MAX_FLOORS];
     size_t   floor_count;
 
+    /* Les panneaux d'épaisseur nulle des props, avec leur normale. Voir
+     * `rg_panel` : c'est la seule donnée qui rende C-04 et C-05 possibles. */
+    rg_panel panels[RG_MAX_PANELS];
+    size_t   panel_count;
+
+    rg_ceiling ceilings[RG_MAX_CEILINGS];
+    size_t     ceiling_count;
+
     /*
      * La géométrie des LUMINAIRES, gardée à part pour un seul contrôle : une
      * lumière posée à l'intérieur d'un solide fermé s'éteint elle-même.
@@ -394,7 +478,7 @@ typedef struct rg_builder {
  * trois copies d'une même lecture finissent par diverger d'un défaut.
  */
 static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind,
-                         const tool_json *doc, const tool_json_value *e)
+                         float yaw, const tool_json *doc, const tool_json_value *e)
 {
     if (b->solid_count >= RG_MAX_SOLIDS) return;   /* le contrôle n'est pas critique */
     rg_solid *s = &b->solids[b->solid_count++];
@@ -403,6 +487,7 @@ static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind,
     snprintf(s->name, sizeof s->name, "%.63s", name);
     s->bounds = b->last_bounds;
     s->kind = kind;
+    s->yaw = yaw;
 
     s->vert_begin = b->last_vert_begin;
     s->vert_end   = b->last_vert_end;
@@ -428,6 +513,7 @@ static void record_solid(rg_builder *b, const char *name, rg_solid_kind kind,
 
     tool_json_get_string(doc, e, "pose", s->pose, sizeof s->pose);
     tool_json_get_string(doc, e, "poseSur", s->pose_sur, sizeof s->pose_sur);
+    tool_json_get_string(doc, e, "suspenduPar", s->suspendu_par, sizeof s->suspendu_par);
 }
 
 /*
@@ -741,20 +827,135 @@ static float shell_signed_distance(const rg_wall_plan *sh, float x, float z, siz
  * écriture vaut aussi bien pour la coquille, où l'on est d'un seul côté, que
  * pour une cloison, qui a deux faces également légitimes.
  */
-static float nearest_parement(const rg_builder *b, float x, float z, const char **wall_out)
+/*
+ * Le parement le plus proche, avec SA NORMALE et le mur dont il est une face.
+ *
+ * Une seule routine plutôt que deux parce que deux contrôles posent la même
+ * question sous deux angles : C-03 veut la distance (« l'affiche touche-t-elle
+ * son mur »), C-04 veut la normale (« la façade regarde-t-elle la salle »).
+ * Écrire deux parcours de la même géométrie, c'est se donner deux occasions de
+ * diverger d'une demi-épaisseur.
+ *
+ * LA NORMALE EST ORIENTÉE VERS LE POINT, et c'est ce qui rend la règle unique
+ * pour les deux natures de mur. Sur la coquille, un point intérieur obtient
+ * ainsi la normale RENTRANTE ; sur une cloison, dont les deux faces sont
+ * également légitimes, il obtient celle de la face qui le regarde. Il n'y a
+ * donc pas de cas particulier à écrire pour l'une ou pour l'autre.
+ *
+ * Ce qu'elle NE rend pas : la profondeur dans l'épaisseur du mur et l'abscisse
+ * le long de la polyligne, dont C-05 a besoin. Ce n'est pas la même question —
+ * le parement le plus proche peut appartenir à un mur, et l'épaisseur qui
+ * enterre le panneau à un autre — et les rendre ici obligerait l'appelant à
+ * démêler deux réponses portant sur deux murs. `panel_in_wall` fait donc son
+ * propre parcours, et la duplication est celle des boucles, pas celle de la
+ * règle.
+ */
+typedef struct rg_face {
+    float to_face;     /* du point au parement, toujours >= 0 */
+    float nx, nz;      /* normale du parement, orientée vers le point */
+    const rg_wall_plan *wall;
+} rg_face;
+
+static bool nearest_face(const rg_builder *b, float x, float z, rg_face *out)
 {
-    float best = 1e9f;
+    rg_face best;
+    memset(&best, 0, sizeof best);
+    best.to_face = 1e9f;
+    bool found = false;
+
     for (size_t w = 0; w < b->wall_plan_count; ++w) {
         const rg_wall_plan *p = &b->wall_plans[w];
-        const size_t segs = p->closed ? p->count : (p->count > 0 ? p->count - 1 : 0);
+        if (p->count < 2) continue;
+        const size_t segs = p->closed ? p->count : p->count - 1;
         for (size_t i = 0; i < segs; ++i) {
-            const float d = plan_segment_distance(p->points[i],
-                                                  p->points[(i + 1) % p->count], x, z);
-            const float to_face = fabsf(d - p->thickness * 0.5f);
-            if (to_face < best) { best = to_face; if (wall_out) *wall_out = p->name; }
+            const ns_v2 a = p->points[i];
+            const ns_v2 c = p->points[(i + 1) % p->count];
+            const float dm = plan_segment_distance(a, c, x, z);
+            const float to_face = fabsf(dm - p->thickness * 0.5f);
+            if (to_face >= best.to_face) continue;
+
+            const float ex = c.x - a.x, ez = c.y - a.y;
+            const float el = sqrtf(ex * ex + ez * ez);
+            float nx = 0.0f, nz = 0.0f;
+            if (el > 1e-9f) {
+                nx = ez / el; nz = -ex / el;
+                if ((x - a.x) * nx + (z - a.y) * nz < 0.0f) { nx = -nx; nz = -nz; }
+            }
+            best.to_face = to_face;
+            best.nx = nx; best.nz = nz;
+            best.wall = p;
+            found = true;
         }
     }
-    return best;
+    if (found && out) *out = best;
+    return found;
+}
+
+static float nearest_parement(const rg_builder *b, float x, float z, const char **wall_out)
+{
+    rg_face f;
+    if (!nearest_face(b, x, z, &f)) return 1e9f;
+    if (wall_out) *wall_out = f.wall->name;
+    return f.to_face;
+}
+
+/*
+ * Le panneau est-il dans l'ÉPAISSEUR d'un mur ?
+ *
+ * `in_opening` distingue les deux réponses qui comptent, et les deux contrôles
+ * n'en veulent pas la même : C-05 refuse ce qui est dans le PLEIN, donc « dedans
+ * et pas dans une baie » ; C-04 se retire de tout ce qui est dans l'épaisseur,
+ * baie comprise, parce qu'un panneau qui n'est sur aucune des deux faces n'a pas
+ * de face à regarder. Une seule routine pour les deux : deux prédicats voisins
+ * finiraient par ne plus dire la même chose du même vantail.
+ */
+static bool panel_in_wall(const rg_builder *b, ns_v3 p,
+                          const rg_wall_plan **wall_out, float *depth_out,
+                          bool *in_opening_out)
+{
+    if (in_opening_out) *in_opening_out = false;
+    for (size_t w = 0; w < b->wall_plan_count; ++w) {
+        const rg_wall_plan *pl = &b->wall_plans[w];
+        if (pl->count < 2) continue;
+        if (p.y < 0.0f || p.y > pl->height) continue;
+
+        const size_t segs = pl->closed ? pl->count : pl->count - 1;
+        const float half = pl->thickness * 0.5f;
+        float cum = 0.0f, best = 1e9f, at = 0.0f;
+        for (size_t i = 0; i < segs; ++i) {
+            const ns_v2 a = pl->points[i];
+            const ns_v2 c = pl->points[(i + 1) % pl->count];
+            const float ex = c.x - a.x, ez = c.y - a.y;
+            const float el = sqrtf(ex * ex + ez * ez);
+            const float d = plan_segment_distance(a, c, p.x, p.z);
+            if (d < best) {
+                best = d;
+                float t = 0.0f;
+                if (el > 1e-9f) {
+                    t = ((p.x - a.x) * ex + (p.z - a.y) * ez) / (el * el);
+                    if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+                }
+                at = cum + t * el;
+            }
+            cum += el;
+        }
+        if (best >= half - 1e-4f) continue;      /* devant le parement : pas dedans */
+
+        /* Une baie déclarée n'est pas du plein : c'est là que va une porte. */
+        bool in_opening = false;
+        for (size_t k = 0; k < pl->opening_count && !in_opening; ++k) {
+            const geo_opening *o = &pl->openings[k];
+            if (at < o->offset || at > o->offset + o->width) continue;
+            if (p.y < o->sill || p.y > o->head) continue;
+            in_opening = true;
+        }
+
+        if (wall_out) *wall_out = pl;
+        if (depth_out) *depth_out = half - best;
+        if (in_opening_out) *in_opening_out = in_opening;
+        return true;
+    }
+    return false;
 }
 
 /*
@@ -1315,9 +1516,9 @@ static void check_grounded(const rg_builder *b)
         if (strcmp(s->pose, "libre") == 0) { free_form++; continue; }
 
         if (strcmp(s->pose, "suspendu") == 0) {
-            /* C-06 n'est pas écrit. On le dit plutôt que de compter cet objet
-             * comme vérifié : un contrôle qui laisse croire qu'il a regardé est
-             * pire que celui qui avoue ne pas l'avoir fait. */
+            /* C'est l'affaire de `check_hanging` (C-06), qui a besoin de la
+             * sous-face du plafond : on ne compte ici que pour que le décompte
+             * de fin de contrôle dise combien d'objets sont passés à l'autre. */
             hanging++;
             continue;
         }
@@ -1446,9 +1647,22 @@ static void check_grounded(const rg_builder *b)
                     s->name, s->pose);
     }
 
-    printf("  pose : %zu objet(s) déclaré(s) (%zu suspendu(s), non vérifié(s) — C-06 "
-           "n'est pas écrit ; %zu libre(s)), %zu SANS clé « pose »\n",
+    printf("  pose : %zu objet(s) déclaré(s) (%zu suspendu(s), renvoyé(s) à C-06 ; "
+           "%zu libre(s)), %zu SANS clé « pose »\n",
            declared, hanging, free_form, missing);
+    /*
+     * LE TROU, CHIFFRÉ À CHAQUE BUILD.
+     *
+     * Ce n'est pas une décoration du décompte. Trois contrôles — C-03 ici, C-04
+     * pour la façade adossée, C-06 pour ce qui pend — se déclenchent sur cette
+     * clé et sur rien d'autre. Tant que le compte n'est pas zéro, ils ne
+     * regardent qu'une partie de la salle, et cette ligne dit laquelle.
+     */
+    if (missing) {
+        printf("      (ces %zu objets ne sont vus ni par C-03, ni par la branche "
+               "« mur » de C-04, ni par C-06 : la clé « pose » est ce qui les y "
+               "ferait entrer)\n", missing);
+    }
 }
 
 /* ========================================================================== */
@@ -1471,14 +1685,1282 @@ static void check_grounded(const rg_builder *b)
  * puisse répondre au build. Un `personnage.rayon` porté à 40 cm est une décision
  * de réglage, pas un état livrable.
  *
- * Deux contrôles s'en servent, et ce n'est pas un hasard : le couloir devant une
- * borne (C-09) et le chemin qui y mène (C-10) mesurent le MÊME corps. Ils l'ont
+ * Trois contrôles s'en servent, et ce n'est pas un hasard : le couloir devant
+ * une borne (C-09), le chemin qui y mène (C-10) et le recensement de ce qui pend
+ * au-dessus du crâne (C-06) mesurent le MÊME corps. Les deux premiers l'ont
  * mesuré chacun de son côté pendant un palier, avec deux littéraux 0,32 — c'est
- * ainsi qu'ils se seraient mis à parler de deux joueurs différents.
+ * ainsi qu'ils se seraient mis à parler de deux joueurs différents. Le bloc est
+ * remonté ici parce que le premier qui s'en sert n'est plus C-09 : une cote
+ * partagée se déclare avant son premier lecteur, sinon elle se recopie.
  */
 #define RG_BODY_RADIUS 0.32f   /* personnage.rayon */
 #define RG_BODY_HEIGHT 1.82f   /* personnage.taille — le crâne, pas les yeux */
 #define RG_BODY_STEP   0.35f   /* personnage.marche — l'obstacle gravi sans saut */
+
+/* ========================================================================== */
+/* C-04 — une façade regarde la salle                                         */
+/* ========================================================================== */
+
+/*
+ * LE LACET À 90° PRÈS, qui est la faute la plus fréquente de cette description.
+ *
+ * Elle a coûté deux fois dans le même fichier, et les deux fois de la même
+ * manière : le lavabo des toilettes présentait au mur son plan de 1,40 m, qui
+ * traversait la brique et ressortait de 15 cm dans la rue ; la radio murale se
+ * présentait de TRANCHE, sa façade regardant le sud le long du mur au lieu de
+ * regarder la salle. Un bloquant et un visible, une seule cause — un axe X pris
+ * pour un axe Z.
+ *
+ * Rien ne le signalait. Un objet tourné de 90° reste dans le bâtiment, ne
+ * pénètre personne, touche son mur : les trois premiers contrôles le voient
+ * passer. Il produit une image, et cette image est plausible tant qu'on ne la
+ * regarde pas depuis l'endroit d'où il devrait se lire.
+ *
+ * CE QU'ON MESURE, et pourquoi c'est le PANNEAU et pas le prop. Un `type:
+ * "panel"` porte une normale — c'est le seul morceau qui en ait une sans
+ * ambiguïté — et c'est cette normale qui décide de ce qu'on voit. Le lacet du
+ * prop, lui, ne dit rien tant que la description ne déclare pas `"pose":
+ * "mur"` : sur les 134 solides de cette salle, ZÉRO le déclarent. Un contrôle
+ * qui n'aurait que cette branche-là ne regarderait rien, et un contrôle qui ne
+ * regarde rien est le pire état d'un contrôle. Les deux branches sont donc
+ * écrites, la seconde attend sa clé, et le décompte dit laquelle a servi.
+ *
+ * LE SEUIL DE DISTANCE, MESURÉ. « Accroché au mur » se lit sur la géométrie :
+ * les treize panneaux réellement accrochés de cette salle sont entre 0,0 et
+ * 10,7 cm de leur parement — le plus profond est la radio murale, dont le
+ * caisson fait 10 cm d'épaisseur. Le panneau libre le plus proche d'un parement
+ * est la vasque du lavabo, à 26,0 cm, et la première FAÇADE debout qui n'est pas
+ * accrochée est celle du comptoir d'accueil, à 32,7 cm. 15 cm tombe entre les
+ * deux mondes et au bord d'aucun : 1,4 fois au-dessus du plus profond des
+ * accrochés, 1,7 fois sous le plus proche des libres.
+ *
+ * LE SEUIL DE PRODUIT SCALAIRE vient de l'audit et se lit en degrés : 0,70,
+ * c'est 45,6°. En deçà, la façade montre plus de tranche que de face. Il ne
+ * s'agit pas d'imposer la perpendiculaire — une affiche posée en biais sur un
+ * pan coupé donne 1,00 parce que c'est le parement qui est en biais avec elle —
+ * mais de refuser celle qui regarde LE LONG du mur, qui donne 0,00.
+ *
+ * CE QU'IL NE VOIT PAS, mesuré plutôt que supposé. Le miroir des deux plans de
+ * lavabo est posé sur la face AVANT de son meuble, à 51,9 cm du parement est, et
+ * sa normale pointe vers ce parement : il regarde le mur depuis un demi-mètre.
+ * Il est au-delà des 15 cm et ce contrôle le laisse passer. Le rattraper
+ * demanderait de savoir que le meuble, lui, est adossé — c'est-à-dire la clé
+ * `"pose": "mur"`, qui n'est pas écrite. Ce n'est pas un oubli du contrôle,
+ * c'est le prix exact de la clé manquante, et il est chiffré ici pour qu'on
+ * puisse le payer.
+ *
+ * LA VARIANTE PLUS FORTE, envisagée et NON écrite. L'audit propose d'exiger
+ * qu'un meuble mural soit moins profond que large. Elle attraperait le lavabo
+ * (0,52 large pour 1,40 de profond) et la radio (0,10 pour 0,40), et laisserait
+ * passer le distributeur (0,86 pour 0,78). Elle porte sur le PROP, donc sur la
+ * même clé absente que la seconde branche ci-dessous : l'écrire aujourd'hui
+ * reviendrait à ajouter une règle qui ne s'appliquerait à aucun objet. Elle
+ * s'écrira le jour où la clé sera là, et pas avant.
+ */
+#define RG_FACING_MIN_DOT    0.70f   /* 45,6° : au-delà, on voit la tranche */
+#define RG_FACING_WALL_REACH 0.15f   /* « accroché au mur », mesuré ci-dessus */
+/*
+ * Un panneau COUCHÉ n'a pas de façade au sens de ce contrôle : la vasque d'un
+ * lavabo regarde le ciel, le dessus d'un babyfoot aussi. On ne juge que ce qui
+ * est debout, c'est-à-dire ce dont la normale a une composante horizontale
+ * franche. 0,30 en projection au sol, c'est 17,5° d'inclinaison : au-delà, la
+ * direction « vers la salle » cesse d'avoir un sens.
+ */
+#define RG_FACING_UPRIGHT    0.30f
+
+/*
+ * VIDE, et pour une bonne raison : les deux fautes de lacet que l'audit a
+ * mesurées (P-04, P-07) sont corrigées dans la description, et le contrôle les
+ * a confirmées rentrées. La mécanique reste, parce que la faute, elle, ne
+ * demande qu'un axe interverti pour revenir.
+ */
+typedef struct rg_facing_debt {
+    const char *name;
+    float       dot;     /* produit scalaire mesuré */
+    const char *why;
+} rg_facing_debt;
+
+static const rg_facing_debt *const RG_FACING_DEBT = NULL;
+#define RG_FACING_DEBT_COUNT 0u
+
+static void check_facing(const rg_builder *b)
+{
+    if (b->wall_plan_count == 0) {
+        tool_warnf("aucun mur dans « walls » : le contrôle « une façade regarde la "
+                   "salle » n'a rien vérifié. C'est le pire état d'un contrôle.");
+        return;
+    }
+
+    size_t panels_seen = 0, props_seen = 0, tolerated = 0;
+    bool debt_seen[RG_FACING_DEBT_COUNT + 1u];   /* + 1 : un tableau de zéro élément est interdit en C */
+    memset(debt_seen, 0, sizeof debt_seen);
+
+    /* ------------------------------------------------------------------ */
+    /* Les PANNEAUX, jugés sur leur propre normale                        */
+    /* ------------------------------------------------------------------ */
+    for (size_t i = 0; i < b->panel_count; ++i) {
+        const rg_panel *pn = &b->panels[i];
+
+        const float hx = pn->normal.x, hz = pn->normal.z;
+        const float hl = sqrtf(hx * hx + hz * hz);
+        if (hl < RG_FACING_UPRIGHT) continue;    /* couché : pas de façade */
+
+        rg_face f;
+        if (!nearest_face(b, pn->centre.x, pn->centre.z, &f)) continue;
+        if (f.to_face > RG_FACING_WALL_REACH) continue;   /* pas accroché à un mur */
+        /*
+         * DANS l'épaisseur du mur, un panneau n'est sur AUCUNE de ses deux
+         * faces, et la question « regarde-t-il la salle » cesse d'avoir un
+         * sens : un vantail de porte posé au milieu de sa baie se voit des deux
+         * côtés, et le côté qu'il « devrait » regarder n'existe pas. Un panneau
+         * enterré, lui, est l'affaire de C-05, qui le refuse avec sa profondeur.
+         *
+         * Ce n'est pas un raffinement : un panneau posé exactement sur la ligne
+         * médiane n'a pas de côté du tout, et la normale rentrante s'y décide à
+         * pile ou face. C'est le vantail de la porte d'entrée de la vraie salle,
+         * et il donnait −1,00.
+         *
+         * Le prédicat est CELUI DE C-05, pas une seconde comparaison écrite ici :
+         * les deux contrôles doivent se partager exactement la même frontière,
+         * sans quoi un panneau posé au millimètre près sur son parement
+         * échapperait aux deux.
+         */
+        if (panel_in_wall(b, pn->centre, NULL, NULL, NULL)) continue;
+
+        panels_seen++;
+        const float dot = (hx / hl) * f.nx + (hz / hl) * f.nz;
+        if (dot >= RG_FACING_MIN_DOT) continue;
+
+        const rg_facing_debt *debt = NULL;
+        for (size_t d = 0; d < RG_FACING_DEBT_COUNT; ++d) {
+            if (strcmp(RG_FACING_DEBT[d].name, pn->owner) != 0) continue;
+            debt_seen[d] = true;
+            if (dot >= RG_FACING_DEBT[d].dot - 0.01f) debt = &RG_FACING_DEBT[d];
+            break;
+        }
+        if (debt) {
+            tolerated++;
+            printf("      · « %s » regarde à %.2f du parement — dette connue : %s\n",
+                   pn->owner, (double)dot, debt->why);
+            continue;
+        }
+
+        tool_fatalf("le panneau de « %s » est accroché au mur « %s » et ne le regarde "
+                    "PAS : produit scalaire %.2f, %.2f demandé.\n"
+                    "  panneau       (%.2f, %.2f, %.2f), à %.1f cm du parement\n"
+                    "  il regarde    (%.2f, %.2f, %.2f)\n"
+                    "  le parement rentre vers (%.2f, %.2f)\n"
+                    "  Un lacet à 90° près laisse l'objet dans le bâtiment, ne pénètre "
+                    "personne et touche son mur : les trois premiers contrôles le "
+                    "voient passer. Il ne montre plus que sa tranche.\n"
+                    "  La convention de ce fichier est qu'un prop regarde son +Z "
+                    "local : c'est le \"yaw\" du prop, ou celui du morceau, qui est "
+                    "en cause — pas sa position.",
+                    pn->owner, f.wall->name, (double)dot, (double)RG_FACING_MIN_DOT,
+                    (double)pn->centre.x, (double)pn->centre.y, (double)pn->centre.z,
+                    (double)(f.to_face * 100.0f),
+                    (double)pn->normal.x, (double)pn->normal.y, (double)pn->normal.z,
+                    (double)f.nx, (double)f.nz);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Les props DÉCLARÉS adossés, jugés sur leur lacet                   */
+    /* ------------------------------------------------------------------ */
+    const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (strcmp(s->pose, "mur") != 0) continue;
+
+        /* Le parement dont il est le plus près est celui auquel il est adossé —
+         * c'est déjà le raisonnement de la branche « mur » de `check_grounded`,
+         * et il n'y en a pas deux. */
+        rg_face best;
+        memset(&best, 0, sizeof best);
+        best.to_face = 1e9f;
+        for (size_t k = s->vert_begin; k < s->vert_end; ++k) {
+            rg_face f;
+            if (!nearest_face(b, verts[k].position[0], verts[k].position[2], &f)) continue;
+            if (f.to_face < best.to_face) best = f;
+        }
+        if (!best.wall) continue;
+
+        props_seen++;
+        /* La direction de regard d'un prop : `(sin lacet, cos lacet)`. C'est la
+         * convention de `parse_props`, et elle n'est PAS celle de la caméra —
+         * confondre les deux fait tourner tout le mobilier d'un quart de tour. */
+        const float dx = sinf(s->yaw), dz = cosf(s->yaw);
+        const float dot = dx * best.nx + dz * best.nz;
+        if (dot >= RG_FACING_MIN_DOT) continue;
+
+        tool_fatalf("« %s » est déclaré adossé au mur « %s » et lui tourne le dos ou "
+                    "le côté : produit scalaire %.2f, %.2f demandé.\n"
+                    "  il regarde              (%.3f, %.3f) — lacet %.1f°\n"
+                    "  le parement rentre vers (%.3f, %.3f)\n"
+                    "  Un meuble adossé qui regarde le long du mur est une "
+                    "interversion d'axes, pas un choix de mise en scène.",
+                    s->name, best.wall->name, (double)dot, (double)RG_FACING_MIN_DOT,
+                    (double)dx, (double)dz, (double)(s->yaw / NS_DEG2RAD),
+                    (double)best.nx, (double)best.nz);
+    }
+
+    for (size_t d = 0; d < RG_FACING_DEBT_COUNT; ++d) {
+        if (debt_seen[d]) continue;
+        tool_warnf("« %s » regarde de nouveau la salle : retirer sa ligne de "
+                   "`RG_FACING_DEBT` dans tools/roomgen.c (%s)",
+                   RG_FACING_DEBT[d].name, RG_FACING_DEBT[d].why);
+    }
+
+    printf("  façades : %zu panneau(x) accroché(s) au mur confronté(s) à leur "
+           "parement, %zu prop(s) déclaré(s) « mur », %zu toléré(s) par la dette "
+           "déclarée\n", panels_seen, props_seen, tolerated);
+    if (props_seen == 0) {
+        printf("      (aucun prop ne déclare \"pose\": \"mur\" : cette branche-là "
+               "n'a rien vérifié)\n");
+    }
+}
+
+/* ========================================================================== */
+/* C-05 — un panneau d'épaisseur nulle n'est pas dans un mur                  */
+/* ========================================================================== */
+
+/*
+ * LE DÉFAUT QUI NE PRODUIT MÊME PAS DE RÉSULTAT.
+ *
+ * `check_fixture_naming` justifie son existence par « le pire cas de figure —
+ * un défaut qui produit un résultat, et qu'on ne trouve qu'en mesurant ». Ici il
+ * ne produit même pas de résultat : un panneau enterré dans une cloison ne rend
+ * aucun pixel, ne lève aucune erreur, n'écrit rien dans le journal. Il manque,
+ * et rien ne dit qu'il manque.
+ *
+ * Deux fois dans cette salle. Le panneau « toilettes » était à 2 cm derrière le
+ * parement, donc invisible ; le bloc SORTIE était aux sept dixièmes au-dessus du
+ * linteau, dans le mur plein, et n'en montrait qu'une tranche verte. Les deux se
+ * corrigent en changeant une coordonnée de deux centimètres, et les deux ont
+ * traversé plusieurs paliers.
+ *
+ * DEUX RÈGLES, et il faut les deux, parce que « enterré » a deux formes.
+ *
+ * 1. DANS L'ÉPAISSEUR D'UN MUR. C'est une question de plan, pas de rayon : le
+ *    centre du panneau est à moins d'une demi-épaisseur de la ligne médiane du
+ *    mur. La mesure est exacte, elle ne dépend d'aucune direction de tir, et
+ *    elle donne la PROFONDEUR — le chiffre qui dit de combien reculer.
+ *
+ *    Avec une exception qui n'en est pas une : une BAIE. Le vantail de la porte
+ *    d'entrée est un panneau posé au milieu des 20 cm du mur, et c'est
+ *    exactement là qu'une porte se trouve. On excuse donc un panneau dont le
+ *    centre tombe dans une baie déclarée — en abscisse le long de la polyligne
+ *    ET en hauteur entre l'allège et le linteau. C'est le centre qui est
+ *    éprouvé, pas les bords : un vantail de 70 cm dans une baie de 1,21 m
+ *    déborde forcément sur le plein aux extrémités du battant, et le lui
+ *    reprocher ferait refuser toutes les portes de la salle.
+ *
+ * 2. PLAQUÉ CONTRE UN SOLIDE. Un rayon le long de la normale, la première
+ *    surface rencontrée. C'est l'outil de `light_is_enclosed` avec un rayon au
+ *    lieu de sept — un panneau a une normale, donc une seule direction à
+ *    éprouver, là où une source n'en a aucune.
+ *
+ * LE SEUIL DE 5 mm, dérivé. C'est le jeu qu'un panneau doit avoir devant lui
+ * pour être rendu. Deux surfaces séparées de moins que la précision du tampon de
+ * profondeur se disputent le pixel et scintillent ; au-delà, elles se
+ * départagent. La salle donne la borne inférieure de ce qui est VOULU : les
+ * façades du distributeur, de la vitrine à lots et du monnayeur sont posées
+ * 2 mm devant leur caisson, et la description le dit en toutes lettres — « la
+ * meme marge de deux millimetres que la vitrine a lots et le monnayeur ». Un
+ * seuil de 5 mm refuserait donc ces trois-là s'il portait sur leur PROPRE
+ * caisson : le rayon ignore l'objet dont il part, et ne juge que ce qui
+ * appartient à quelqu'un d'autre. Entre deux objets distincts, 5 mm n'est pas
+ * une marge de fabrication, c'est un objet dans un autre.
+ *
+ * Mesuré sur cette salle : des trente-sept panneaux, le plus serré — la façade
+ * de la radio murale — a 88 mm d'air devant lui. Le seuil est donc dix-sept fois
+ * sous le cas le plus juste, ce qui est exactement ce qu'on attend d'un
+ * garde-fou : il ne discute pas les cas limites, il attrape le zéro.
+ *
+ * CE QU'IL NE VOIT PAS. Un panneau qui ne touche RIEN. Le bloc SORTIE du sas
+ * flotte aujourd'hui à 73,8 cm du parement du fond, à 2,42 m de haut, accroché à
+ * rien : ce contrôle-ci le trouve parfaitement visible, et il l'est. C'est
+ * l'affaire de C-03 — sa branche « mur » exige 30 mm — le jour où la clé
+ * « pose » sera écrite. Deux contrôles voisins, deux questions différentes ; ce
+ * paragraphe est là pour qu'on ne croie pas que celui-ci répond aux deux.
+ */
+#define RG_PANEL_AIR 0.005f
+
+
+/*
+ * La première surface qu'un rayon rencontre, tous solides confondus, en
+ * ignorant celui dont il part.
+ *
+ * La boîte englobante PRÉ-FILTRE et le triangle TRANCHE, comme dans C-02 et pour
+ * la même raison : le pré-filtre est gratuit et la boîte d'un objet pivoté
+ * enfle de la moitié de sa diagonale.
+ */
+static float first_hit_distance(const rg_builder *b, ns_v3 origin, ns_v3 dir,
+                                const char *ignore, const char **hit_name)
+{
+    const gltf_vertex *v = (const gltf_vertex *)b->verts.data;
+    const ns_v3 inv = ns_v3_make(1.0f / (dir.x != 0.0f ? dir.x : 1e-20f),
+                                 1.0f / (dir.y != 0.0f ? dir.y : 1e-20f),
+                                 1.0f / (dir.z != 0.0f ? dir.z : 1e-20f));
+    float nearest = 1e9f;
+
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (s->tri_count == 0) continue;
+        if (ignore && strcmp(s->name, ignore) == 0) continue;
+        float slab = 0.0f;
+        if (!ns_ray_aabb(origin, inv, s->bounds, nearest, &slab)) continue;
+
+        const geo_primitives *g =
+            &TOOL_VEC_AT(&b->prim_blocks, geo_primitives, s->prim_block);
+        for (size_t k = 0; k < s->tri_count; ++k) {
+            const uint32_t *t = g->storage + k * 3;
+            const ns_v3 a = ns_v3_make(v[t[0]].position[0], v[t[0]].position[1],
+                                       v[t[0]].position[2]);
+            const ns_v3 c = ns_v3_make(v[t[1]].position[0], v[t[1]].position[1],
+                                       v[t[1]].position[2]);
+            const ns_v3 e = ns_v3_make(v[t[2]].position[0], v[t[2]].position[1],
+                                       v[t[2]].position[2]);
+            float dist = 0.0f, bu = 0.0f, bv = 0.0f;
+            if (ns_ray_triangle(origin, dir, a, c, e, nearest, &dist, &bu, &bv)
+             && dist < nearest) {
+                nearest = dist;
+                if (hit_name) *hit_name = s->name;
+            }
+        }
+    }
+    return nearest;
+}
+
+/*
+ * LA DETTE, ET ELLE N'EST PAS VIDE — c'est ce que ce contrôle rapporte le jour
+ * où on l'écrit.
+ *
+ * Les deux défauts que l'audit avait mesurés sont corrigés : le panneau
+ * « toilettes » (P-08) est ressorti de sa cloison et le bloc SORTIE (P-15) est
+ * descendu sous son linteau. Le contrôle les a confirmés rentrés.
+ *
+ * Il en a trouvé un TROISIÈME, que personne n'avait mesuré. Le tableau des
+ * meilleurs de la semaine — 2,40 x 1,20 m, le seul second affichage vivant des
+ * scores, celui que `room_hud_draw_scoreboard` pilote — est posé 3 mm DERRIÈRE
+ * le parement du mur sud. Son cadre entier, 6 cm de profondeur, est dans la
+ * brique. Il ne rend rien.
+ *
+ * LA CAUSE EST LISIBLE DANS LA DESCRIPTION, et elle vaut d'être dite : le
+ * commentaire du morceau annonce « sa face arriere touche le parement du mur sud
+ * (z -7,10), sa face avant sort a -7,04 ». Le parement du mur sud n'est plus à
+ * −7,10 : la ligne médiane est à −7,135 et la face intérieure à −7,035. Le
+ * commentaire raisonne juste sur un plan périmé — c'est exactement la classe de
+ * défaut que ce fichier reproche partout ailleurs, un commentaire rassurant qui
+ * tient lieu de mesure.
+ *
+ * La correction est d'avancer le prop de 5 mm en z. Elle appartient à la
+ * description, pas à ce fichier. La ligne ci-dessous porte donc la cote mesurée,
+ * le contrôle reste fatal pour tout panneau plus profond, et il réclamera le
+ * retrait de cette ligne dès que le tableau sera devant son mur.
+ */
+typedef struct rg_panel_debt {
+    const char *name;
+    float       depth;   /* profondeur mesurée, en mètres */
+    const char *why;
+} rg_panel_debt;
+
+static const rg_panel_debt RG_PANEL_DEBT[] = {
+    { "tableau_semaine", 0.003f,
+      "le cadre est dans le mur sud et la planche 3 mm derrière son parement ; "
+      "son commentaire place le parement à z −7,10, où il n'est plus (−7,035)" },
+};
+#define RG_PANEL_DEBT_COUNT (sizeof RG_PANEL_DEBT / sizeof RG_PANEL_DEBT[0])
+
+static void check_panel_visible(const rg_builder *b)
+{
+    if (b->panel_count == 0) {
+        tool_warnf("aucun panneau dans la description : le contrôle de visibilité "
+                   "des panneaux n'a rien vérifié. C'est le pire état d'un contrôle.");
+        return;
+    }
+
+    size_t tolerated = 0;
+    float tightest = 1e9f;
+    const char *tightest_name = "?";
+    bool debt_seen[RG_PANEL_DEBT_COUNT];
+    bool debt_here[RG_PANEL_DEBT_COUNT];
+    memset(debt_seen, 0, sizeof debt_seen);
+    memset(debt_here, 0, sizeof debt_here);
+    /*
+     * Une dette nomme un OBJET, et roomgen n'est pas l'outil d'une seule
+     * description : sur une salle qui ne contient pas cet objet, la ligne ne
+     * réclame rien parce qu'elle ne parle de rien. Sans cette passe, chaque
+     * description d'essai héritait des avertissements d'une autre — et un
+     * avertissement qui apparaît là où il n'a pas de sens est un avertissement
+     * qu'on apprend à ne plus lire.
+     */
+    for (size_t i = 0; i < b->panel_count; ++i) {
+        for (size_t d = 0; d < RG_PANEL_DEBT_COUNT; ++d) {
+            if (strcmp(RG_PANEL_DEBT[d].name, b->panels[i].owner) == 0) debt_here[d] = true;
+        }
+    }
+
+    for (size_t i = 0; i < b->panel_count; ++i) {
+        const rg_panel *pn = &b->panels[i];
+
+        const rg_wall_plan *wall = NULL;
+        float depth = 0.0f;
+        bool in_opening = false;
+        if (panel_in_wall(b, pn->centre, &wall, &depth, &in_opening) && !in_opening) {
+            const rg_panel_debt *debt = NULL;
+            for (size_t d = 0; d < RG_PANEL_DEBT_COUNT; ++d) {
+                if (strcmp(RG_PANEL_DEBT[d].name, pn->owner) != 0) continue;
+                debt_seen[d] = true;
+                if (depth <= RG_PANEL_DEBT[d].depth + 1e-3f) debt = &RG_PANEL_DEBT[d];
+                break;
+            }
+            if (debt) {
+                tolerated++;
+                printf("      · « %s » est à %.1f cm dans « %s » — dette connue : %s\n",
+                       pn->owner, (double)(depth * 100.0f), wall->name, debt->why);
+                continue;
+            }
+            tool_fatalf("le panneau de « %s » est ENTERRÉ de %.1f cm dans le mur "
+                        "« %s », hors de toute baie : il ne rendra aucun pixel.\n"
+                        "  centre        (%.3f, %.3f, %.3f)\n"
+                        "  mur           épaisseur %.2f m, donc parement à %.2f m de "
+                        "la médiane\n"
+                        "  Un panneau enterré ne produit ni erreur, ni avertissement, "
+                        "ni image : rien ne le signale, il manque simplement.\n"
+                        "  Le sortir de %.1f cm le long de la normale rentrante suffit. "
+                        "S'il doit être DANS le mur, c'est une baie qu'il faut "
+                        "déclarer, pas un panneau qu'il faut enfoncer.",
+                        pn->owner, (double)(depth * 100.0f), wall->name,
+                        (double)pn->centre.x, (double)pn->centre.y, (double)pn->centre.z,
+                        (double)wall->thickness, (double)(wall->thickness * 0.5f),
+                        (double)(depth * 100.0f));
+        }
+
+        const char *who = NULL;
+        const float air = first_hit_distance(b, pn->centre, pn->normal, pn->owner, &who);
+        if (air < tightest) { tightest = air; tightest_name = pn->owner; }
+        if (air >= RG_PANEL_AIR) continue;
+
+        tool_fatalf("le panneau de « %s » est PLAQUÉ contre « %s » : %.1f mm d'air "
+                    "devant lui, %.0f mm demandés.\n"
+                    "  centre        (%.3f, %.3f, %.3f)\n"
+                    "  il regarde    (%.2f, %.2f, %.2f)\n"
+                    "  Deux surfaces plus proches que la précision du tampon de "
+                    "profondeur se disputent le pixel : le panneau scintille ou "
+                    "disparaît, selon l'angle de la caméra.\n"
+                    "  Les façades de cette salle sont posées 2 mm devant LEUR "
+                    "PROPRE caisson, et le rayon ignore l'objet dont il part : "
+                    "ce qui est mesuré ici, c'est un objet DANS un autre.",
+                    pn->owner, who ? who : "?", (double)(air * 1000.0f),
+                    (double)(RG_PANEL_AIR * 1000.0f),
+                    (double)pn->centre.x, (double)pn->centre.y, (double)pn->centre.z,
+                    (double)pn->normal.x, (double)pn->normal.y, (double)pn->normal.z);
+    }
+
+    for (size_t d = 0; d < RG_PANEL_DEBT_COUNT; ++d) {
+        if (debt_seen[d] || !debt_here[d]) continue;
+        tool_warnf("le panneau de « %s » n'est plus enterré : retirer sa ligne de "
+                   "`RG_PANEL_DEBT` dans tools/roomgen.c (%s)",
+                   RG_PANEL_DEBT[d].name, RG_PANEL_DEBT[d].why);
+    }
+
+    printf("  %zu panneau(x) : le plus juste a %.0f mm d'air devant lui (« %s »), "
+           "%zu enterré(s) et déclaré(s) dans la dette\n",
+           b->panel_count,
+           (double)(tightest < 1e8f ? tightest * 1000.0f : 0.0f),
+           tightest_name, tolerated);
+}
+
+/* ========================================================================== */
+/* C-06 — ce qui pend est accroché                                            */
+/* ========================================================================== */
+
+/*
+ * DEUX SUSPENSIONS ONT PENDU DANS LE VIDE PENDANT TOUT UN PALIER.
+ *
+ * Celle du comptoir et celle du salon : leurs chaînes s'arrêtaient à 1,198 m et
+ * 1,078 m sous la sous-face du plafond, sur rien. Le rendu ne s'en plaint pas —
+ * une chaîne qui finit en l'air est une chaîne, et le regard d'un joueur qui
+ * marche ne monte pas jusque-là. On ne le voit qu'en levant la tête, ou en
+ * mesurant.
+ *
+ * LA RÈGLE. Un prop `"pose": "suspendu"` doit avoir de la géométrie à moins de
+ * `RG_HANG_REACH` de la sous-face du plafond au-dessus de lui — ou déclarer le
+ * prop qui lui sert de câble, `"suspenduPar": "cable_comptoir"`, auquel cas
+ * c'est le CÂBLE qui subit le contrôle. Un abat-jour n'a aucune raison de
+ * toucher le plafond ; sa tige, si.
+ *
+ * LE SEUIL, MESURÉ. La salle porte huit objets qui pendent, et ils forment deux
+ * populations sans rien entre elles :
+ *
+ *     six tiges de suspension ......... montent à 3,100 m, soit 1,6 cm DANS
+ *                                       les rails (sous-face 3,084 m)
+ *     deux câbles, comptoir et salon .. s'arrêtent à 2,990 m, soit 9,4 cm
+ *                                       de vide
+ *
+ * 5 cm ne sépare pas deux valeurs voisines : il est trois fois au-dessus du plus
+ * grand débordement légitime et deux fois sous le plus petit vide mesuré. C'est
+ * la même forme de dérivation que `RG_REACH_MIN_SHARE`, et pour la même raison —
+ * un seuil choisi au milieu d'un intervalle vide ne se discute pas.
+ *
+ * LA SOUS-FACE, PAS LA DALLE. Le plafond suspendu porte ses rails en T 1,6 cm
+ * sous le plan des dalles, et c'est le rail qu'une tige rencontre en montant.
+ * Mesurer jusqu'aux dalles ajouterait 1,6 cm d'erreur systématique à toutes les
+ * suspensions — assez pour faire passer une tige juste trop courte.
+ *
+ * CE QU'IL VÉRIFIE AUJOURD'HUI : RIEN, et il faut le dire. Aucun des 134 solides
+ * de cette salle ne déclare `"pose"`, donc aucun ne déclare `"suspendu"`. Le
+ * contrôle est écrit, il est éprouvé sur des cas fabriqués dans
+ * `tests/test_place.c`, et il attend sa clé.
+ *
+ * ALORS IL COMPTE CE QU'IL NE PEUT PAS JUGER, et c'est tout ce qu'il peut faire
+ * d'utile en attendant. Un prop dont TOUTE la géométrie est au-dessus du crâne
+ * du joueur (1,82 m) et qui ne touche aucun parement ne se tient sur rien et
+ * n'est fixé à rien : il pend, quelle que soit la clé qu'on lui écrive. Le
+ * contrôle les dénombre et donne le plus grand vide mesuré. Ce n'est ni une
+ * erreur ni un avertissement — ce serait affirmer un verdict qu'il n'a pas les
+ * moyens de rendre, puisqu'un objet peut parfaitement être tenu par son voisin
+ * sans que rien ne le déclare. C'est un CHIFFRE, à mettre en face du coût de la
+ * clé manquante : sans elle, ces objets-là ne sont vus par personne.
+ */
+#define RG_HANG_REACH 0.05f
+
+/* La sous-face du plafond au-dessus d'un point : la PLUS BASSE des trames qui
+ * couvrent l'endroit, parce que c'est celle qu'une tige rencontre d'abord. */
+static bool ceiling_above(const rg_builder *b, float x, float z,
+                          float *out_y, const char **name)
+{
+    bool found = false;
+    float best = 0.0f;
+    for (size_t i = 0; i < b->ceiling_count; ++i) {
+        const rg_ceiling *c = &b->ceilings[i];
+        if (!xz_covers(x, z, c->centre[0] - c->size[0] * 0.5f,
+                             c->centre[0] + c->size[0] * 0.5f,
+                             c->centre[1] - c->size[1] * 0.5f,
+                             c->centre[1] + c->size[1] * 0.5f)) continue;
+        if (!found || c->underside < best) {
+            best = c->underside;
+            if (name) *name = c->name;
+            found = true;
+        }
+    }
+    if (found && out_y) *out_y = best;
+    return found;
+}
+
+/*
+ * VIDE. Les deux suspensions de P-10 ont reçu leur câble, et le contrôle
+ * mesure les deux accrochées dès que la clé les lui donne.
+ */
+typedef struct rg_hang_debt {
+    const char *name;
+    float       gap;     /* vide mesuré jusqu'à la sous-face, en mètres */
+    const char *why;
+} rg_hang_debt;
+
+static const rg_hang_debt *const RG_HANG_DEBT = NULL;
+#define RG_HANG_DEBT_COUNT 0u
+
+static void check_hanging(const rg_builder *b)
+{
+    size_t checked = 0, by_cable = 0, tolerated = 0;
+    bool debt_seen[RG_HANG_DEBT_COUNT + 1u];   /* + 1 : un tableau de zéro élément est interdit en C */
+    memset(debt_seen, 0, sizeof debt_seen);
+
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (strcmp(s->pose, "suspendu") != 0) continue;
+        checked++;
+
+        /* Ce qui subit le contrôle : l'objet, ou le câble qu'il déclare. */
+        const rg_solid *hung = s;
+        if (s->suspendu_par[0]) {
+            hung = NULL;
+            for (size_t k = 0; k < b->solid_count; ++k) {
+                if (k != i && strcmp(b->solids[k].name, s->suspendu_par) == 0) {
+                    hung = &b->solids[k];
+                    break;
+                }
+            }
+            if (!hung) {
+                tool_fatalf("« %s » est déclaré suspendu par « %s », qui n'existe pas.\n"
+                            "  Un nom de câble qui ne désigne rien est un contrôle qui "
+                            "ne vérifie rien, en silence.",
+                            s->name, s->suspendu_par);
+            }
+            by_cable++;
+        }
+
+        const float cx = (hung->bounds.min.x + hung->bounds.max.x) * 0.5f;
+        const float cz = (hung->bounds.min.z + hung->bounds.max.z) * 0.5f;
+        float under = 0.0f;
+        const char *ceiling = NULL;
+        if (!ceiling_above(b, cx, cz, &under, &ceiling)) {
+            tool_fatalf("« %s » est déclaré suspendu et il n'y a AUCUN plafond "
+                        "au-dessus de lui.\n"
+                        "  empreinte     (%.2f, %.2f)\n"
+                        "  Soit l'objet est ailleurs qu'où on le croit, soit une "
+                        "trame de « ceilings » ne va pas jusque-là — c'est déjà "
+                        "arrivé deux fois dans ce fichier, au bout du couloir et "
+                        "au-dessus des lavabos.",
+                        s->name, (double)cx, (double)cz);
+        }
+
+        const float gap = under - hung->bounds.max.y;
+        if (gap <= RG_HANG_REACH) continue;
+
+        const rg_hang_debt *debt = NULL;
+        for (size_t d = 0; d < RG_HANG_DEBT_COUNT; ++d) {
+            if (strcmp(RG_HANG_DEBT[d].name, s->name) != 0) continue;
+            debt_seen[d] = true;
+            if (gap <= RG_HANG_DEBT[d].gap + 1e-3f) debt = &RG_HANG_DEBT[d];
+            break;
+        }
+        if (debt) {
+            tolerated++;
+            printf("      · « %s » pend à %.3f m sous le plafond — dette connue : %s\n",
+                   s->name, (double)gap, debt->why);
+            continue;
+        }
+
+        if (hung == s) {
+            tool_fatalf("« %s » est déclarée suspendue et son sommet est à %.3f m sous "
+                        "le plafond, sans câble. Elle pend dans le vide.\n"
+                        "  sommet de l'objet   y = %.3f\n"
+                        "  sous-face « %s »    y = %.3f\n"
+                        "  %.0f mm de jeu sont tolérés ; %.0f mm ont été mesurés.\n"
+                        "  Un abat-jour n'a aucune raison de toucher le plafond : "
+                        "déclarer la tige qui l'y tient, \"suspenduPar\": \"<nom>\", "
+                        "et c'est elle qui sera mesurée.",
+                        s->name, (double)gap, (double)hung->bounds.max.y,
+                        ceiling ? ceiling : "?", (double)under,
+                        (double)(RG_HANG_REACH * 1000.0f), (double)(gap * 1000.0f));
+        }
+        tool_fatalf("« %s » est déclarée suspendue par « %s », et « %s » s'arrête à "
+                    "%.3f m sous le plafond. Le câble ne tient à rien.\n"
+                    "  sommet du câble     y = %.3f\n"
+                    "  sous-face « %s »    y = %.3f\n"
+                    "  %.0f mm de jeu sont tolérés ; %.0f mm ont été mesurés.\n"
+                    "  La sous-face est celle des RAILS, pas des dalles : ils "
+                    "descendent de quelques millimètres, et c'est le rail qu'une "
+                    "tige rencontre en montant.",
+                    s->name, hung->name, hung->name, (double)gap,
+                    (double)hung->bounds.max.y, ceiling ? ceiling : "?", (double)under,
+                    (double)(RG_HANG_REACH * 1000.0f), (double)(gap * 1000.0f));
+    }
+
+    for (size_t d = 0; d < RG_HANG_DEBT_COUNT; ++d) {
+        if (debt_seen[d]) continue;
+        tool_warnf("« %s » est de nouveau accrochée : retirer sa ligne de "
+                   "`RG_HANG_DEBT` dans tools/roomgen.c (%s)",
+                   RG_HANG_DEBT[d].name, RG_HANG_DEBT[d].why);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Le recensement de ce qu'il ne peut pas juger                       */
+    /* ------------------------------------------------------------------ */
+    const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
+    size_t candidates = 0;
+    float widest = 0.0f;
+    const char *widest_name = "?";
+
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (s->kind != RG_SOLID_PROP || s->pose[0]) continue;
+        /* Toute la géométrie au-dessus du crâne : rien ne peut la porter par en
+         * dessous. C'est la cote du joueur, pas un seuil choisi — voir le bloc
+         * « LE CORPS DU JOUEUR ». */
+        if (s->bounds.min.y < RG_BODY_HEIGHT) continue;
+
+        float to_wall = 1e9f;
+        for (size_t k = s->vert_begin; k < s->vert_end; ++k) {
+            const float d = nearest_parement(b, verts[k].position[0],
+                                             verts[k].position[2], NULL);
+            if (d < to_wall) to_wall = d;
+        }
+        if (to_wall <= RG_POSE_MUR_TOLERANCE) continue;   /* fixé au mur */
+
+        const float cx = (s->bounds.min.x + s->bounds.max.x) * 0.5f;
+        const float cz = (s->bounds.min.z + s->bounds.max.z) * 0.5f;
+        float under = 0.0f;
+        if (!ceiling_above(b, cx, cz, &under, NULL)) continue;
+        const float gap = under - s->bounds.max.y;
+        if (gap <= RG_HANG_REACH) continue;               /* accroché en haut */
+
+        candidates++;
+        if (gap > widest) { widest = gap; widest_name = s->name; }
+    }
+
+    if (checked == 0) {
+        printf("  suspensions : AUCUN objet ne déclare \"pose\": \"suspendu\" — ce "
+               "contrôle n'a rien vérifié\n");
+    } else {
+        printf("  %zu suspension(s) confrontée(s) à la sous-face du plafond (%zu par "
+               "leur câble), %zu tolérée(s) par la dette déclarée\n",
+               checked, by_cable, tolerated);
+    }
+    if (candidates) {
+        printf("      (%zu prop(s) tiennent entièrement au-dessus de 1,82 m sans "
+               "toucher de parement ni le plafond — le plus grand vide est %.3f m, "
+               "« %s ». Le contrôle ne les juge pas : ils ne déclarent pas leur "
+               "pose)\n", candidates, (double)widest, widest_name);
+    }
+}
+
+/* ========================================================================== */
+/* C-07 — une source de lumière a un luminaire                                */
+/* ========================================================================== */
+
+/*
+ * LE SYMÉTRIQUE DE `check_lights_not_enclosed`, et il a la même valeur.
+ *
+ * Le contrôle existant vérifie qu'une source n'est pas ENFERMÉE dans son
+ * luminaire, où elle s'éteindrait elle-même. Il lui manquait son symétrique :
+ * une source qui n'est dans RIEN est une lumière sans lampe. Les deux défauts
+ * sont le même vu des deux côtés — une source dont le résultat à l'écran ne
+ * ressemble pas à sa cause — et le second est celui que ce fichier s'interdit
+ * en toutes lettres, dans le commentaire de `suspension_billard` : « Une source
+ * sans objet visible est exactement ce que le plan s'interdit : c'est ce qui
+ * fait qu'une pièce paraît éclairée par magie. »
+ *
+ * LA MESURE : distance du point-source à la surface la plus proche d'un PROP.
+ * Pas à un sommet — un grand triangle passe près d'un point sans qu'aucun de ses
+ * sommets n'en soit près — et pas à une boîte englobante, qui enfle un objet
+ * pivoté de la moitié de sa diagonale. Distance point-triangle, avec la boîte en
+ * pré-filtre, comme partout ailleurs dans ce fichier.
+ *
+ * POURQUOI LES PROPS SEULS. Un mur, un pilier, une poutre ne sont pas des
+ * luminaires : une source collée à une poutre reste une source sans lampe.
+ * `check_lights_not_enclosed` regarde déjà `props_mesh` pour la même raison ; on
+ * parcourt ici les solides de genre PROP plutôt que ce maillage-là, parce qu'eux
+ * portent leur NOM et que le message doit pouvoir dire ce qui est le plus près.
+ *
+ * LE SEUIL DE 40 cm, ET SA DÉRIVATION — qui est une mesure sur cette salle.
+ * Vingt-cinq sources ne sont pas des dalles de faux plafond. Elles se rangent en
+ * deux populations, et il n'y a rien entre les deux :
+ *
+ *     quatorze sources DANS leur luminaire ... 6 cm à 18 cm
+ *     onze sources sans aucun luminaire ...... 73 cm à 3,04 m
+ *
+ * 40 cm est 2,2 fois au-dessus de la plus éloignée des premières et 1,8 fois
+ * sous la plus proche des secondes. Le seuil ne prétend pas juger si une ampoule
+ * est bien placée dans son abat-jour — c'est l'affaire de C-02 et de C-03 — il
+ * sépare « il y a une lampe » de « il n'y en a pas », et ces deux-là ne sont pas
+ * voisins.
+ *
+ * L'ÉCHAPPATOIRE EST EXPLICITE : `"nu": true`. Un tube caché derrière une
+ * corniche est un parti pris légitime, et l'audit le dit des quatre néons
+ * muraux. Mais il faut l'écrire — sans quoi il ne se distingue en rien d'une
+ * lampe qu'on a oublié de poser.
+ */
+#define RG_LIGHT_BODY_REACH 0.40f
+
+/* Distance d'un point à un triangle : la projection si elle tombe dedans, sinon
+ * le bord le plus proche. Écrite ici parce qu'aucune des deux mesures existantes
+ * ne répond à la question — `parity_odd_rays` rend la distance le long de sept
+ * directions choisies, ce qui est une borne supérieure, et une boîte englobante
+ * une borne inférieure. */
+static float point_tri_dist_sq(ns_v3 p, ns_v3 a, ns_v3 b, ns_v3 c)
+{
+    const ns_v3 ab = ns_v3_sub(b, a), ac = ns_v3_sub(c, a), ap = ns_v3_sub(p, a);
+    const float d1 = ns_v3_dot(ab, ap), d2 = ns_v3_dot(ac, ap);
+    if (d1 <= 0.0f && d2 <= 0.0f) return ns_v3_len_sq(ap);
+
+    const ns_v3 bp = ns_v3_sub(p, b);
+    const float d3 = ns_v3_dot(ab, bp), d4 = ns_v3_dot(ac, bp);
+    if (d3 >= 0.0f && d4 <= d3) return ns_v3_len_sq(bp);
+
+    const ns_v3 cp = ns_v3_sub(p, c);
+    const float d5 = ns_v3_dot(ab, cp), d6 = ns_v3_dot(ac, cp);
+    if (d6 >= 0.0f && d5 <= d6) return ns_v3_len_sq(cp);
+
+    const float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
+        const float v = d1 / (d1 - d3);
+        return ns_v3_len_sq(ns_v3_sub(p, ns_v3_add(a, ns_v3_scale(ab, v))));
+    }
+    const float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
+        const float v = d2 / (d2 - d6);
+        return ns_v3_len_sq(ns_v3_sub(p, ns_v3_add(a, ns_v3_scale(ac, v))));
+    }
+    const float va = d3 * d6 - d5 * d4;
+    if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
+        const float v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return ns_v3_len_sq(ns_v3_sub(p, ns_v3_add(b,
+                    ns_v3_scale(ns_v3_sub(c, b), v))));
+    }
+    const float denom = 1.0f / (va + vb + vc);
+    const float v = vb * denom, w = vc * denom;
+    return ns_v3_len_sq(ns_v3_sub(p, ns_v3_add(a,
+                ns_v3_add(ns_v3_scale(ab, v), ns_v3_scale(ac, w)))));
+}
+
+/* Distance de la boîte au point : le pré-filtre. Zéro si le point est dedans. */
+static float aabb_dist_sq(ns_aabb bb, ns_v3 p)
+{
+    const float dx = p.x < bb.min.x ? bb.min.x - p.x : (p.x > bb.max.x ? p.x - bb.max.x : 0.0f);
+    const float dy = p.y < bb.min.y ? bb.min.y - p.y : (p.y > bb.max.y ? p.y - bb.max.y : 0.0f);
+    const float dz = p.z < bb.min.z ? bb.min.z - p.z : (p.z > bb.max.z ? p.z - bb.max.z : 0.0f);
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static float nearest_prop_surface(const rg_builder *b, ns_v3 p, const char **who)
+{
+    const gltf_vertex *v = (const gltf_vertex *)b->verts.data;
+    float best = 1e9f;
+    for (size_t i = 0; i < b->solid_count; ++i) {
+        const rg_solid *s = &b->solids[i];
+        if (s->kind != RG_SOLID_PROP || s->tri_count == 0) continue;
+        if (aabb_dist_sq(s->bounds, p) >= best) continue;
+
+        const geo_primitives *g =
+            &TOOL_VEC_AT(&b->prim_blocks, geo_primitives, s->prim_block);
+        for (size_t k = 0; k < s->tri_count; ++k) {
+            const uint32_t *t = g->storage + k * 3;
+            const float d = point_tri_dist_sq(p,
+                ns_v3_make(v[t[0]].position[0], v[t[0]].position[1], v[t[0]].position[2]),
+                ns_v3_make(v[t[1]].position[0], v[t[1]].position[1], v[t[1]].position[2]),
+                ns_v3_make(v[t[2]].position[0], v[t[2]].position[1], v[t[2]].position[2]));
+            if (d < best) { best = d; if (who) *who = s->name; }
+        }
+    }
+    return best < 1e8f ? sqrtf(best) : 1e9f;
+}
+
+/*
+ * LA DETTE, ET ELLE N'EST PAS VIDE — c'est ce que ce contrôle rapporte le jour
+ * où on l'écrit.
+ *
+ * Onze sources de cette salle n'ont aucun luminaire. Ce n'est pas une découverte
+ * de ce contrôle au sens strict : l'audit de placement en avait mesuré sept dans
+ * sa section « Ce qui manque », et la description elle-même reconnaît le défaut
+ * en toutes lettres à propos de `plafonnier_toilettes_nord` — « c'est exactement
+ * le defaut que ce fichier reproche ailleurs aux lumieres sans lampe ». Il en
+ * reste onze parce que quatre s'y sont ajoutées depuis, en dupliquant des
+ * sources qui n'avaient déjà pas de lampe.
+ *
+ * Leur correction est une modification de la DESCRIPTION — poser un tube, une
+ * applique, un pavé de faux plafond, ou écrire `"nu": true` pour celles qui sont
+ * volontairement cachées. Elle ne se fait pas ici. Le choix est donc le même que
+ * pour `RG_OUTSIDE_DEBT`, et il se tranche pareil : on nomme les onze AVEC leur
+ * cote, le contrôle reste fatal pour la douzième, et chaque ligne réclame son
+ * retrait le jour où elle est payée. Une source de la liste qui s'éloignerait
+ * encore redevient fatale.
+ *
+ * DEUX D'ENTRE ELLES SONT PLUS QU'UN LUMINAIRE MANQUANT, et méritent d'être
+ * lues : `plafonnier_toilettes_nord` déclare un `panelSize` sans déclarer
+ * `ceilingPanel`, donc `parse_ceilings` ne lui pose AUCUNE dalle lumineuse — la
+ * clé qui manque est d'un seul mot. Et `plafonnier_classement`, à 3,04 m du prop
+ * le plus proche, est la source la plus isolée de la salle : elle éclaire la
+ * borne de classement depuis le vide.
+ *
+ * POURQUOI CES LIGNES NE SONT PAS DES `tool_warnf`, contrairement aux trois
+ * autres tables. Elles le seraient si la dette était une surprise. Elle ne l'est
+ * pas : elle est nommée, mesurée, et elle ne peut pas s'étendre en silence. Ce
+ * qui MÉRITE un avertissement, c'est ce qui demande une action immédiate — une
+ * ligne qui ne sert plus, et qu'il faut retirer avant qu'elle ne couvre autre
+ * chose que ce pour quoi elle a été écrite. C'est le seul cas qui en émet ici.
+ */
+typedef struct rg_light_debt {
+    const char *name;
+    float       nearest;   /* mètres jusqu'au prop le plus proche, mesurés */
+    const char *why;
+} rg_light_debt;
+
+static const rg_light_debt RG_LIGHT_BODY_DEBT[] = {
+    /* Le pavé de faux plafond qui n'en est pas un : la lumière déclare son
+     * `panelSize` — 0,90 x 0,45 — mais pas `ceilingPanel`, si bien que
+     * `parse_ceilings` ne lui pose aucune dalle. Un mot manque. */
+    { "plafonnier_toilettes_nord", 0.73f,
+      "déclare « panelSize » sans « ceilingPanel » : aucune dalle lumineuse ne "
+      "lui est posée. Un seul mot à ajouter" },
+
+    /* Les six tubes. L'audit les dit « peut-être voulus nus — un tube caché
+     * derrière une corniche est un parti pris légitime. Mais il faut alors
+     * l'écrire ». C'est `"nu": true`, et personne ne l'a écrit. */
+    { "neon_mur_ouest_1", 1.26f, "tube bleu du mur ouest, aucun luminaire posé" },
+    { "neon_mur_ouest_2", 1.62f, "tube bleu du mur ouest, aucun luminaire posé" },
+    { "neon_mur_ouest_3", 1.73f, "tube bleu du mur ouest, aucun luminaire posé" },
+    { "neon_mur_est_1",   1.66f, "tube magenta du mur est, aucun luminaire posé" },
+    { "neon_mur_est_2",   0.74f, "tube magenta du mur est, aucun luminaire posé" },
+    { "neon_mur_est_3",   1.85f, "tube magenta du mur est, aucun luminaire posé" },
+
+    /* Les trois qui portent le nom d'un luminaire absent. Ce sont celles que
+     * l'audit désigne : « Deux d'entre elles s'appellent applique, une
+     * plafonnier : trois noms qui promettent un luminaire qui n'existe pas. » */
+    { "applique_entree_1", 1.39f, "s'appelle « applique » et n'en a pas" },
+    { "applique_entree_2", 1.24f, "s'appelle « applique » et n'en a pas" },
+    { "applique_technique", 1.40f, "s'appelle « applique » et n'en a pas" },
+
+    /* La plus isolée de la salle : elle éclaire la borne de classement depuis
+     * trois mètres de vide. */
+    { "plafonnier_classement", 3.04f,
+      "s'appelle « plafonnier » et pend à 3,04 m du prop le plus proche" },
+};
+#define RG_LIGHT_BODY_DEBT_COUNT \
+    (sizeof RG_LIGHT_BODY_DEBT / sizeof RG_LIGHT_BODY_DEBT[0])
+
+static void check_light_has_body(const rg_builder *b)
+{
+    size_t checked = 0, bare = 0, tolerated = 0;
+    float worst = 0.0f;
+    const char *worst_name = "?";
+    bool debt_seen[RG_LIGHT_BODY_DEBT_COUNT];
+    bool debt_here[RG_LIGHT_BODY_DEBT_COUNT];
+    memset(debt_seen, 0, sizeof debt_seen);
+    memset(debt_here, 0, sizeof debt_here);
+    /* Même raison que dans C-05 : une ligne qui nomme une source absente de
+     * cette description ne réclame rien. */
+    for (size_t i = 0; i < b->light_count; ++i) {
+        for (size_t k = 0; k < RG_LIGHT_BODY_DEBT_COUNT; ++k) {
+            if (strcmp(RG_LIGHT_BODY_DEBT[k].name, b->lights[i].name) == 0) debt_here[k] = true;
+        }
+    }
+
+    for (size_t i = 0; i < b->light_count; ++i) {
+        const rg_light *l = &b->lights[i];
+        /* Une dalle de faux plafond EST son luminaire : `parse_ceilings` la
+         * pose à partir de cette liste-là. Lui demander un prop en plus ferait
+         * refuser tout le plafond. */
+        if (l->ceiling_panel) continue;
+        if (l->bare) { bare++; continue; }
+        checked++;
+
+        const ns_v3 p = ns_v3_make(l->position[0], l->position[1], l->position[2]);
+        const char *who = NULL;
+        const float d = nearest_prop_surface(b, p, &who);
+        if (d <= RG_LIGHT_BODY_REACH) {
+            if (d > worst) { worst = d; worst_name = l->name; }
+            continue;
+        }
+
+        const rg_light_debt *debt = NULL;
+        for (size_t k = 0; k < RG_LIGHT_BODY_DEBT_COUNT; ++k) {
+            if (strcmp(RG_LIGHT_BODY_DEBT[k].name, l->name) != 0) continue;
+            debt_seen[k] = true;
+            if (d <= RG_LIGHT_BODY_DEBT[k].nearest + 0.01f) debt = &RG_LIGHT_BODY_DEBT[k];
+            break;
+        }
+        if (debt) {
+            tolerated++;
+            printf("      · « %s » : rien à moins de %.2f m — %s\n",
+                   l->name, (double)d, debt->why);
+            continue;
+        }
+
+        tool_fatalf("la lumière « %s » n'a AUCUN luminaire : le prop le plus proche, "
+                    "« %s », est à %.2f m, pour %.2f m demandés.\n"
+                    "  source        (%.2f, %.2f, %.2f)\n"
+                    "  Une source sans objet visible fait qu'une pièce paraît éclairée "
+                    "par magie — c'est ce que la description s'interdit elle-même dans "
+                    "le commentaire de « suspension_billard ».\n"
+                    "  Trois corrections possibles, et une seule est un renoncement : "
+                    "poser le luminaire ; déclarer \"ceilingPanel\": true si c'est un "
+                    "pavé de faux plafond ; écrire \"nu\": true si le tube est "
+                    "volontairement caché.",
+                    l->name, who ? who : "?", (double)d,
+                    (double)RG_LIGHT_BODY_REACH,
+                    (double)p.x, (double)p.y, (double)p.z);
+    }
+
+    for (size_t k = 0; k < RG_LIGHT_BODY_DEBT_COUNT; ++k) {
+        if (debt_seen[k] || !debt_here[k]) continue;
+        tool_warnf("« %s » a de nouveau un luminaire : retirer sa ligne de "
+                   "`RG_LIGHT_BODY_DEBT` dans tools/roomgen.c (%s)",
+                   RG_LIGHT_BODY_DEBT[k].name, RG_LIGHT_BODY_DEBT[k].why);
+    }
+
+    printf("  %zu source(s) confrontée(s) à leur luminaire : la plus éloignée à "
+           "%.2f m (« %s »), %zu déclarée(s) nue(s), %zu sans lampe et déclarée(s) "
+           "dans la dette\n",
+           checked, (double)worst, worst_name, bare, tolerated);
+}
+
+/* ========================================================================== */
+/* C-08 — une pièce a un sol, pas deux                                        */
+/* ========================================================================== */
+
+/*
+ * LE PIÈGE, ET IL EST DOCUMENTÉ AVANT D'ÊTRE ÉVITÉ.
+ *
+ * Le carrelage du bloc sanitaire n'allait ni jusqu'à la cloison est ni jusqu'à
+ * la cloison nord : 3,15 m² sur 11,05, soit 28,5 % de la pièce, étaient de la
+ * moquette d'arcade. La première version de ce contrôle — écrite, puis exécutée
+ * — comptait le nombre de rectangles de `floors` couvrant chaque point : grille
+ * de 10 cm, 26 415 points intérieurs, ZÉRO trou et ZÉRO double couverture. Elle
+ * n'attrapait rien. La couverture était parfaite ; c'est le MATÉRIAU qui était
+ * faux.
+ *
+ * C'est le même piège que le R-15 de `REVUE-STRICTE.md`, qui a vu la moquette et
+ * en a conclu que les sols se recouvraient. Le symptôme ressemble à un défaut de
+ * couverture et n'en est pas un.
+ *
+ * LA RÈGLE QUI ATTRAPE. La description nomme déjà ses pièces : `soundZones` les
+ * borne par une boîte. Pour chaque zone, on échantillonne son emprise au sol et
+ * on exige que tous les rectangles de `floors` qui la couvrent partagent UN SEUL
+ * matériau — ou que la zone déclare celui qu'elle accepte, `"sol":
+ * "sol_toilettes"`. Ce sont bien les MATÉRIAUX qu'on compte, pas les rectangles :
+ * la zone du sas est couverte par deux rectangles, `sol_hall` et `sol_sas`, qui
+ * portent tous deux la moquette — deux rectangles, un sol, et c'est juste.
+ *
+ * LE CONTRÔLE DE COUVERTURE EST ÉCRIT QUAND MÊME, comme garde-fou et non comme
+ * correctif. Le commentaire de `floors` AFFIRME la propriété en prose — « Trois
+ * rectangles disjoints plutôt qu'un grand recouvert : deux surfaces coplanaires
+ * se disputent le tampon de profondeur, et le scintillement qui en résulte ne se
+ * voit qu'en mouvement » — et personne ne la vérifiait. Elle est vraie
+ * aujourd'hui ; c'est le bon moment pour l'écrire, exactement comme C-09 a été
+ * écrit pendant que les dix-neuf bornes passaient.
+ *
+ * DEUX PRÉCAUTIONS, ET CHACUNE A COÛTÉ UN FAUX POSITIF EN ESSAI.
+ *
+ * 1. ON N'ÉCHANTILLONNE QUE LE SOL FOULABLE, c'est-à-dire l'intérieur du
+ *    PAREMENT et non celui de la ligne médiane. `sol_hall` et `sol_toilettes` se
+ *    recouvrent réellement sur une bande de 2,05 cm de large et 7,67 m de long,
+ *    soit 0,157 m² — mais cette bande est SOUS le mur de 20 cm qui sépare le
+ *    hall du bloc sanitaire. Deux surfaces coplanaires sous un mur plein ne
+ *    scintillent pas : elles ne se voient pas. Le recouvrement est un about de
+ *    dalle, pas un défaut, et le contrôle qui le refuserait serait retiré le
+ *    jour même.
+ *
+ * 2. LE RECOUVREMENT SE MESURE ENTRE RECTANGLES, PAS PAR ÉCHANTILLONNAGE. Deux
+ *    dalles qui s'aboutent exactement — `sol_hall` finit à z = 7,20 et `sol_sas`
+ *    commence à z = 7,20 — donnent un point d'échantillonnage doublement couvert
+ *    si la grille tombe pile sur la jointure. Le verdict dépendrait alors de
+ *    l'alignement de la grille, ce qui est le défaut que `test_reach.c` éprouve
+ *    sur cinq alignements pour C-10. On calcule donc l'intersection des
+ *    rectangles, exactement, et on ne l'échantillonne que pour savoir si elle
+ *    tombe sous un mur.
+ *
+ * LE PAS DE 10 cm est celui de l'audit, et il est repris tel quel pour que ses
+ * chiffres restent reproductibles ici. Un trou plus petit que 10 cm dans un sol
+ * est un trou qu'aucune caméra ne franchit.
+ */
+#define RG_FLOOR_SAMPLE   0.10f
+#define RG_FLOOR_OVERLAP  0.001f   /* 1 mm : le bruit du flottant, pas une tolérance */
+
+/* Le point est-il sur le sol FOULABLE : dans un contour fermé, et au-delà du
+ * parement de ce contour ? Voir la précaution 1 ci-dessus. */
+static bool inside_parement(const rg_builder *b, float x, float z)
+{
+    for (size_t c = 0; c < b->shell_count; ++c) {
+        const rg_wall_plan *sh = &b->wall_plans[b->shells[c]];
+        if (shell_signed_distance(sh, x, z, NULL) >= sh->thickness * 0.5f) return true;
+    }
+    return false;
+}
+
+static const rg_floor *floor_under(const rg_builder *b, float x, float z, size_t skip)
+{
+    for (size_t f = 0; f < b->floor_count; ++f) {
+        if (f == skip) continue;
+        const rg_floor *fl = &b->floors[f];
+        if (xz_covers(x, z, fl->centre[0] - fl->size[0] * 0.5f,
+                            fl->centre[0] + fl->size[0] * 0.5f,
+                            fl->centre[1] - fl->size[1] * 0.5f,
+                            fl->centre[1] + fl->size[1] * 0.5f)) return fl;
+    }
+    return NULL;
+}
+
+static void check_floor_material(const tool_json *doc, const tool_json_value *root,
+                                 const rg_builder *b)
+{
+    if (b->floor_count == 0 || b->shell_count == 0) {
+        tool_warnf("aucun sol ou aucun contour fermé : le contrôle « une pièce a un "
+                   "sol, pas deux » n'a rien vérifié. C'est le pire état d'un contrôle.");
+        return;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* a. Deux dalles coplanaires, mesurées entre rectangles              */
+    /* ------------------------------------------------------------------ */
+    for (size_t i = 0; i < b->floor_count; ++i) {
+        for (size_t j = i + 1; j < b->floor_count; ++j) {
+            const rg_floor *A = &b->floors[i], *B = &b->floors[j];
+            if (fabsf(A->y - B->y) > RG_FLOOR_OVERLAP) continue;   /* étagés : voulu */
+
+            const float ax0 = A->centre[0] - A->size[0] * 0.5f;
+            const float ax1 = A->centre[0] + A->size[0] * 0.5f;
+            const float az0 = A->centre[1] - A->size[1] * 0.5f;
+            const float az1 = A->centre[1] + A->size[1] * 0.5f;
+            const float bx0 = B->centre[0] - B->size[0] * 0.5f;
+            const float bx1 = B->centre[0] + B->size[0] * 0.5f;
+            const float bz0 = B->centre[1] - B->size[1] * 0.5f;
+            const float bz1 = B->centre[1] + B->size[1] * 0.5f;
+
+            const float ox = overlap_1d(ax0, ax1, bx0, bx1);
+            const float oz = overlap_1d(az0, az1, bz0, bz1);
+            if (ox <= RG_FLOOR_OVERLAP || oz <= RG_FLOOR_OVERLAP) continue;
+
+            /* Sous un mur, deux dalles coplanaires ne se voient pas. On ne
+             * refuse que ce qui est FOULABLE. */
+            const float lo_x = ax0 > bx0 ? ax0 : bx0, hi_x = ax1 < bx1 ? ax1 : bx1;
+            const float lo_z = az0 > bz0 ? az0 : bz0, hi_z = az1 < bz1 ? az1 : bz1;
+            /*
+             * Le pas s'ADAPTE au recouvrement, et ce n'est pas un raffinement :
+             * au pas fixe de 10 cm, une bande de 2 cm ne reçoit AUCUN
+             * échantillon et se déclare invisible par défaut. C'est exactement
+             * la bande que produisent `sol_hall` et `sol_toilettes` de la vraie
+             * salle — 2,05 cm — et le contrôle aurait rendu la bonne réponse
+             * pour la mauvaise raison, ce qui est la façon dont un garde-fou
+             * cesse d'en être un sans que personne ne le voie.
+             */
+            const float step_x = ns_minf(RG_FLOOR_SAMPLE, (hi_x - lo_x) * 0.5f);
+            const float step_z = ns_minf(RG_FLOOR_SAMPLE, (hi_z - lo_z) * 0.5f);
+            bool visible = false;
+            float vx = 0.0f, vz = 0.0f;
+            for (float sx = lo_x + step_x * 0.5f; sx < hi_x && !visible; sx += step_x) {
+                for (float sz = lo_z + step_z * 0.5f; sz < hi_z; sz += step_z) {
+                    if (!inside_parement(b, sx, sz)) continue;
+                    visible = true; vx = sx; vz = sz;
+                    break;
+                }
+            }
+            if (!visible) continue;
+
+            tool_fatalf("« %s » et « %s » sont COPLANAIRES sur %.2f x %.2f m à "
+                        "y = %.3f, et le recouvrement est foulable.\n"
+                        "  premier point visible   (%.2f, %.2f)\n"
+                        "  Deux surfaces coplanaires se disputent le tampon de "
+                        "profondeur : le scintillement qui en résulte ne se voit qu'en "
+                        "MOUVEMENT, donc jamais sur une capture.\n"
+                        "  Trois rectangles disjoints valent mieux qu'un grand "
+                        "recouvert — c'est ce que le commentaire de « floors » promet, "
+                        "et c'est ce que ce contrôle mesure.",
+                        A->name, B->name, (double)ox, (double)oz, (double)A->y,
+                        (double)vx, (double)vz);
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* b. Un trou dans le sol foulable                                    */
+    /* ------------------------------------------------------------------ */
+    float mnx = 1e9f, mxx = -1e9f, mnz = 1e9f, mxz = -1e9f;
+    for (size_t c = 0; c < b->shell_count; ++c) {
+        const rg_wall_plan *sh = &b->wall_plans[b->shells[c]];
+        for (size_t i = 0; i < sh->count; ++i) {
+            if (sh->points[i].x < mnx) mnx = sh->points[i].x;
+            if (sh->points[i].x > mxx) mxx = sh->points[i].x;
+            if (sh->points[i].y < mnz) mnz = sh->points[i].y;
+            if (sh->points[i].y > mxz) mxz = sh->points[i].y;
+        }
+    }
+
+    /* Les indices sont ENTIERS et la coordonnée se recalcule à chaque pas :
+     * accumuler deux cents additions flottantes ferait dériver le dernier
+     * échantillon, et le balayage dépendrait alors de la taille de la salle. */
+    const int nx_s = (int)((mxx - mnx) / RG_FLOOR_SAMPLE) + 1;
+    const int nz_s = (int)((mxz - mnz) / RG_FLOOR_SAMPLE) + 1;
+    size_t interior = 0;
+    for (int ix = 0; ix <= nx_s; ++ix) {
+        const float x = mnx + (float)ix * RG_FLOOR_SAMPLE;
+        for (int iz = 0; iz <= nz_s; ++iz) {
+            const float z = mnz + (float)iz * RG_FLOOR_SAMPLE;
+            if (!inside_parement(b, x, z)) continue;
+            interior++;
+            if (floor_under(b, x, z, (size_t)-1)) continue;
+            tool_fatalf("il n'y a AUCUN sol sous (%.2f, %.2f), qui est pourtant à "
+                        "l'intérieur du parement.\n"
+                        "  Le joueur y marche : le contrôle d'accessibilité compte cet "
+                        "endroit dans l'aire atteignable, et il tomberait à travers.\n"
+                        "  Un rectangle de « floors » manque, ou l'un d'eux est trop "
+                        "court.",
+                        (double)x, (double)z);
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* c. Une pièce, un matériau                                          */
+    /* ------------------------------------------------------------------ */
+    const tool_json_value *zones = tool_json_get(doc, root, "soundZones");
+    const int zone_count = tool_json_array_count(doc, zones);
+    size_t zones_checked = 0, zones_declared = 0;
+
+    for (int i = 0; i < zone_count; ++i) {
+        const tool_json_value *e = tool_json_at(doc, zones, i);
+        char name[64];
+        tool_json_get_string(doc, e, "name", name, sizeof name);
+        char want[64];
+        tool_json_get_string(doc, e, "sol", want, sizeof want);
+
+        float mn[3], mx[3];
+        tool_json_get_vec3(doc, e, "min", mn, 0.0f);
+        tool_json_get_vec3(doc, e, "max", mx, 0.0f);
+
+        const rg_floor *first = NULL;
+        const rg_floor *other = NULL;
+        float fx = 0.0f, fz = 0.0f, ox2 = 0.0f, oz2 = 0.0f;
+        size_t samples = 0;
+
+        const int zn_x = (int)((mx[0] - mn[0]) / RG_FLOOR_SAMPLE) + 1;
+        const int zn_z = (int)((mx[2] - mn[2]) / RG_FLOOR_SAMPLE) + 1;
+        for (int ix = 0; ix <= zn_x; ++ix) {
+            const float x = ns_minf(mn[0] + (float)ix * RG_FLOOR_SAMPLE, mx[0]);
+            for (int iz = 0; iz <= zn_z; ++iz) {
+                const float z = ns_minf(mn[2] + (float)iz * RG_FLOOR_SAMPLE, mx[2]);
+                if (!inside_parement(b, x, z)) continue;
+                const rg_floor *fl = floor_under(b, x, z, (size_t)-1);
+                if (!fl) continue;
+                samples++;
+                if (!first) { first = fl; fx = x; fz = z; continue; }
+                if (strcmp(first->material, fl->material) == 0) continue;
+                if (!other) { other = fl; ox2 = x; oz2 = z; }
+            }
+        }
+
+        if (samples == 0) {
+            tool_fatalf("la zone sonore « %s » ne couvre AUCUN sol foulable.\n"
+                        "  boîte  (%.2f, %.2f) à (%.2f, %.2f)\n"
+                        "  Une zone posée hors du bâtiment ne se déclenche jamais : "
+                        "elle règle la réverbération d'un endroit où personne ne va, "
+                        "et l'endroit où l'on va n'a pas la sienne.",
+                        name[0] ? name : "?", (double)mn[0], (double)mn[2],
+                        (double)mx[0], (double)mx[2]);
+        }
+
+        if (want[0]) {
+            zones_declared++;
+            if (strcmp(first->material, want) != 0
+             || (other && strcmp(other->material, want) != 0)) {
+                const rg_floor *bad = strcmp(first->material, want) != 0 ? first : other;
+                tool_fatalf("la zone sonore « %s » déclare le sol « %s », et « %s » y "
+                            "pose « %s ».\n"
+                            "  Une déclaration de sol qui ne correspond pas à ce qui "
+                            "est posé est pire qu'une absence de déclaration : elle "
+                            "éteint le contrôle en affirmant le contraire de la mesure.",
+                            name[0] ? name : "?", want, bad->name, bad->material);
+            }
+            continue;
+        }
+
+        zones_checked++;
+        if (!other) continue;
+
+        tool_fatalf("la zone sonore « %s » mélange DEUX sols : « %s » (%s) et « %s » "
+                    "(%s).\n"
+                    "  premier point   (%.2f, %.2f) sur « %s »\n"
+                    "  second point    (%.2f, %.2f) sur « %s »\n"
+                    "  Une pièce a un sol. Le carrelage du bloc sanitaire s'arrêtait "
+                    "ainsi à 3,15 m² de sa cloison, et c'est de la moquette d'arcade "
+                    "qu'on voyait dans les toilettes — sur 28,5 %% de la pièce, sans "
+                    "qu'aucun contrôle ne puisse le dire.\n"
+                    "  Si le mélange est voulu, l'écrire dans la zone : "
+                    "\"sol\": \"%s\".",
+                    name[0] ? name : "?", first->name, first->material,
+                    other->name, other->material,
+                    (double)fx, (double)fz, first->name,
+                    (double)ox2, (double)oz2, other->name,
+                    first->material);
+    }
+
+    printf("  sols : %zu point(s) foulable(s) échantillonné(s) au pas de %.0f cm, "
+           "aucun trou et aucune dalle coplanaire ; %d zone(s) confrontée(s) à leur "
+           "matériau (%zu sur mesure, %zu déclarant le leur)\n",
+           interior, (double)(RG_FLOOR_SAMPLE * 100.0f), zone_count,
+           zones_checked, zones_declared);
+}
+
 
 /* ========================================================================== */
 /* C-09 — on peut se tenir devant une borne                                   */
@@ -2454,6 +3936,7 @@ static void parse_floors(rg_builder *b, const tool_json *doc, const tool_json_va
             f->centre[0] = centre[0]; f->centre[1] = centre[1];
             f->size[0] = size[0]; f->size[1] = size[1];
             f->y = y;
+            snprintf(f->material, sizeof f->material, "%.63s", mat_name);
         }
 
         geo_mesh m; geo_mesh_init(&m);
@@ -2662,7 +4145,7 @@ static void parse_boxes(rg_builder *b, const tool_json *doc, const tool_json_val
             char name[GLTF_MAX_NAME];
             instance_name(name, sizeof name, base_name, k, rep.count);
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name, RG_SOLID_BOX, doc, e);
+            record_solid(b, name, RG_SOLID_BOX, x.yaw, doc, e);
         }
     }
 }
@@ -3216,7 +4699,7 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
         geo_mesh_append(&placed, &local, &x, -1);
         geo_mesh_free(&local);
         emit_object(b, name, &placed, RG_SMOOTH_HARD);
-        record_solid(b, name, RG_SOLID_CABINET, doc, e);
+        record_solid(b, name, RG_SOLID_CABINET, x.yaw, doc, e);
 
         /* Report du repère local vers le monde. Le lacet suit la convention de
          * `geo_xform` : X' = X cos + Z sin, Z' = -X sin + Z cos. */
@@ -3329,8 +4812,10 @@ static void parse_cabinets(rg_builder *b, const tool_json *doc, const tool_json_
  * relisable, et ce qui permet de déplacer un meuble sans recalculer dix lignes.
  */
 static void emit_prop_parts(rg_builder *b, const tool_json *doc, const tool_json_value *e,
-                            geo_mesh *out, const char *owner)
+                            geo_mesh *out, const char *owner,
+                            rg_panel_span *spans, size_t *span_count)
 {
+    if (span_count) *span_count = 0;
     /*
      * Un objet est SOIT un empilement de morceaux paramétriques, SOIT un modèle
      * importé — jamais les deux.
@@ -3520,7 +5005,31 @@ static void emit_prop_parts(rg_builder *b, const tool_json *doc, const tool_json
         geo_xform x = GEO_XFORM_IDENTITY;
         x.origin = ns_v3_make(at[0], at[1], at[2]);
         x.yaw = yaw; x.pitch = pitch; x.roll = roll;
+
+        /* Le panneau est noté par l'INTERVALLE DE SOMMETS qu'il va occuper, et
+         * relu plus tard : c'est la seule façon d'obtenir sa normale sans
+         * réécrire ici la composition des deux rotations que `geo_mesh_append`
+         * applique déjà. Une seconde écriture d'une matrice est une matrice qui
+         * finit par différer de l'autre d'un signe. */
+        const size_t before = geo_mesh_vertex_count(out);
         geo_mesh_append(out, &piece, &x, -1);
+        if (spans && span_count && strcmp(type, "panel") == 0) {
+            if (*span_count >= RG_MAX_PANEL_SPANS) {
+                tool_fatalf("« %s » déclare plus de %d panneaux, ce que le contrôle "
+                            "de visibilité (C-05) ne suit plus.\n"
+                            "  Un objet fait de trente panneaux n'est pas un objet : "
+                            "c'est un décor qui mérite son propre générateur.",
+                            owner, RG_MAX_PANEL_SPANS);
+            }
+            rg_panel_span *sp = &spans[(*span_count)++];
+            sp->begin = before;
+            sp->end   = geo_mesh_vertex_count(out);
+            sp->width = 0.0f; sp->height = 0.0f;
+            float size2[2];
+            if (tool_json_get_floats(doc, p, "size", size2, 2, 0.0f) == 2) {
+                sp->width = size2[0]; sp->height = size2[1];
+            }
+        }
         geo_mesh_free(&piece);
     }
 }
@@ -3546,7 +5055,9 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
         const rg_repeat rep = read_repeat(doc, e);
         for (int k = 0; k < rep.count; ++k) {
             geo_mesh local; geo_mesh_init(&local);
-            emit_prop_parts(b, doc, e, &local, base_name);
+            rg_panel_span spans[RG_MAX_PANEL_SPANS];
+            size_t span_count = 0;
+            emit_prop_parts(b, doc, e, &local, base_name, spans, &span_count);
 
             geo_xform x = GEO_XFORM_IDENTITY;
             x.origin = ns_v3_make(at[0] + rep.step.x * (float)k,
@@ -3562,6 +5073,43 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
              * lieu que le moteur ne saurait plus rattacher à sa géométrie. */
             char name[64];
             instance_name(name, sizeof name, base_name, k, rep.count);
+
+            /*
+             * Les panneaux, relevés sur la géométrie PLACÉE.
+             *
+             * `placed` était vide avant l'ajout : les indices notés dans
+             * `local` y désignent donc les mêmes sommets, transformés. La
+             * normale est celle que `geo_mesh_append` vient d'écrire — pas une
+             * recomposition des deux rotations, qui serait une seconde version
+             * de la même matrice.
+             */
+            for (size_t sp = 0; sp < span_count; ++sp) {
+                if (b->panel_count >= RG_MAX_PANELS) {
+                    tool_fatalf("plus de %d panneaux dans la salle : le contrôle de "
+                                "visibilité (C-05) cesserait d'en voir, en silence — "
+                                "ce qui est exactement ce qu'il existe pour empêcher.",
+                                RG_MAX_PANELS);
+                }
+                const size_t v0 = spans[sp].begin, v1 = spans[sp].end;
+                if (v1 <= v0) continue;
+                rg_panel *pn = &b->panels[b->panel_count++];
+                memset(pn, 0, sizeof *pn);
+                snprintf(pn->owner, sizeof pn->owner, "%.63s", name);
+                pn->width  = spans[sp].width;
+                pn->height = spans[sp].height;
+                ns_v3 sum = ns_v3_zero();
+                for (size_t v = v0; v < v1; ++v) {
+                    const gltf_vertex *gv = &TOOL_VEC_AT(&placed.verts, gltf_vertex, v);
+                    sum.x += gv->position[0];
+                    sum.y += gv->position[1];
+                    sum.z += gv->position[2];
+                }
+                const float inv = 1.0f / (float)(v1 - v0);
+                pn->centre = ns_v3_scale(sum, inv);
+                const gltf_vertex *gv0 = &TOOL_VEC_AT(&placed.verts, gltf_vertex, v0);
+                pn->normal = ns_v3_norm(ns_v3_make(gv0->normal[0], gv0->normal[1],
+                                                   gv0->normal[2]));
+            }
             /* Copiée dans l'accumulateur AVANT `emit_object`, qui LIBÈRE le
              * maillage qu'on lui passe. La première version copiait après :
              * l'accumulateur restait vide et le contrôle des lumières enfermées
@@ -3572,7 +5120,7 @@ static void parse_props(rg_builder *b, const tool_json *doc, const tool_json_val
                 geo_mesh_append(&b->props_mesh, &placed, &id, -1);
             }
             emit_object(b, name, &placed, RG_SMOOTH_HARD);
-            record_solid(b, name, RG_SOLID_PROP, doc, e);
+            record_solid(b, name, RG_SOLID_PROP, x.yaw, doc, e);
 
             /* Un point d'intérêt déclaré : le moteur cessera de repérer le
              * billard et le canapé en cherchant des sous-chaînes dans les noms de
@@ -3652,6 +5200,17 @@ static void parse_ceilings(rg_builder *b, const tool_json *doc, const tool_json_
         const float rail_w = tool_json_get_float(doc, e, "railWidth", 0.024f);
         const float rail_h = tool_json_get_float(doc, e, "railDrop", 0.045f);
         const float plenum = tool_json_get_float(doc, e, "plenum", 0.38f);
+
+        /* Gardé pour C-06 : la sous-face est la cote des dalles moins la
+         * descente des rails, et c'est ici la seule fois qu'on tient les deux. */
+        if (b->ceiling_count < RG_MAX_CEILINGS) {
+            rg_ceiling *cl = &b->ceilings[b->ceiling_count++];
+            snprintf(cl->name, sizeof cl->name, "%.63s", name);
+            cl->centre[0] = centre[0]; cl->centre[1] = centre[1];
+            cl->size[0] = size[0]; cl->size[1] = size[1];
+            cl->y = y;
+            cl->underside = y - rail_h;
+        }
 
         /* Le pas est ajusté pour que la trame tombe juste sur l'emprise : une
          * demi-dalle au bord se verrait immédiatement. */
@@ -3800,7 +5359,8 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
          * disait. Une clé mal orthographiée casse maintenant le build. */
         static const char *const light_keys[] = {
             "name", "at", "color", "intensity", "range", "radius",
-            "flicker", "ceilingPanel", "panelSize", "repeat", "insideOk", NULL
+            "flicker", "ceilingPanel", "panelSize", "repeat", "insideOk",
+            "nu", NULL
         };
         char what[128];
         snprintf(what, sizeof what, "lumière « %s »", base_name);
@@ -3819,6 +5379,7 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
         const bool flicker = tool_json_get_bool(doc, e, "flicker", false);
         const bool panel = tool_json_get_bool(doc, e, "ceilingPanel", false);
         const bool inside_ok = tool_json_get_bool(doc, e, "insideOk", false);
+        const bool bare = tool_json_get_bool(doc, e, "nu", false);
         float panel_size[2] = { 0.60f, 0.60f };
         tool_json_get_vec2(doc, e, "panelSize", panel_size, 0.60f);
 
@@ -3842,6 +5403,7 @@ static void parse_lights(rg_builder *b, const tool_json *doc, const tool_json_va
             l->flicker = flicker;
             l->ceiling_panel = panel;
             l->inside_ok = inside_ok;
+            l->bare = bare;
             l->panel_size[0] = panel_size[0];
             l->panel_size[1] = panel_size[1];
         }
@@ -4320,12 +5882,25 @@ int main(int argc, char **argv)
     check_inside_shell(&b);
     check_solid_overlaps(&b);
     check_grounded(&b);
+    /* C-04 à C-06 après C-03, et dans cet ordre : les trois se déclenchent sur
+     * la même clé « pose » ou sur la géométrie qu'elle décrit, et le décompte de
+     * C-03 dit combien d'objets ne la portent pas. Lire « 134 SANS clé pose »
+     * puis « aucun prop ne déclare suspendu » se comprend ; l'inverse non. */
+    check_facing(&b);
+    check_panel_visible(&b);
+    check_hanging(&b);
+    check_floor_material(&doc, root, &b);
     check_cabinet_clearance(&b);
     /* Après C-09, et ce n'est pas indifférent : C-09 dit qu'on tient DEVANT une
      * borne, C-10 dit qu'on peut y ARRIVER. Le second sans le premier laisserait
      * croire qu'une borne encastrée dans sa voisine est jouable. */
     check_reachable(&doc, root, &b);
     check_lights_not_enclosed(&b);
+    /* Le symétrique du précédent, et immédiatement après lui : « la source est
+     * dans son luminaire » et « la source n'a pas de luminaire » sont la même
+     * question posée dans les deux sens, et les lire à la suite est ce qui rend
+     * la paire évidente. */
+    check_light_has_body(&b);
     check_fixture_naming(&b);
 
     if (b.meshes.count == 0) tool_fatalf("%s : la description ne produit aucun objet", in_path);

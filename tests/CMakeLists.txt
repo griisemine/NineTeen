@@ -310,6 +310,30 @@ nineteen_set_warnings(ns_test_reach)
 nineteen_apply_sanitizers(ns_test_reach)
 add_test(NAME acces COMMAND ns_test_reach)
 
+# LE PLACEMENT : les cinq contrôles C-04 à C-08 de `tools/roomgen.c`.
+#
+# Ils existent parce que `docs/AUDIT-PLACEMENT.md` a mesuré vingt-trois objets
+# mal placés dans une salle que tous les contrôles d'alors laissaient passer :
+# une façade tournée de 90° reste dans le bâtiment, ne pénètre personne et touche
+# son mur ; un panneau enterré de deux centimètres ne rend aucun pixel et ne lève
+# aucune erreur ; une source sans lampe éclaire.
+#
+# CE TEST APPELLE L'OUTIL, pas une bibliothèque, et c'est une décision plutôt
+# qu'un pis-aller : les cinq contrôles lisent un `rg_builder` que seul `roomgen`
+# sait construire, et les extraire dans un module en ferait une seconde version
+# de la même règle. On lui donne donc des descriptions de salle écrites à la main
+# — un carré de 6 x 4 m — et on lit ce qu'il refuse, message compris. Un contrôle
+# qui refuserait au bon moment en nommant le mauvais objet échouerait ici.
+#
+# Le chemin du binaire est passé en argument plutôt que compilé dans le test :
+# `$<TARGET_FILE:roomgen>` connaît la configuration, pas nous, et un chemin
+# recopié dans une définition serait faux le jour d'un preset multi-config.
+add_executable(ns_test_place test_place.c)
+nineteen_set_warnings(ns_test_place)
+nineteen_apply_sanitizers(ns_test_place)
+add_dependencies(ns_test_place roomgen)
+add_test(NAME placement COMMAND ns_test_place "$<TARGET_FILE:roomgen>")
+
 # Les générateurs paramétriques, au-dessus du substrat.
 #
 # Les cas de refus valent autant que les invariants : `geo_wall_run` promet de
