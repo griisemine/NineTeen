@@ -334,6 +334,25 @@ const room_eco *room_eco_salle(void);
 bool room_eco_salle_jeton(void);
 
 /*
+ * LA GRAINE D'UNE PARTIE QUI COMMENCE — et c'est ici que le tournoi du jour
+ * cesse d'être une fonction que personne n'appelle.
+ *
+ * Par défaut, c'est la graine du JOUR pour ce jeu : toutes les parties d'aujour-
+ * d'hui sur une borne donnée sont la même partie, pour tout le monde. C'est ce
+ * que le tournoi veut dire, et c'est ce que l'affiche annonce.
+ *
+ * Le lot `PARTIE LIBRE` rend une graine tirée de l'horloge à la place. C'est
+ * lui qui redonne la variété, et c'est pour ça qu'il est le plus cher des
+ * quatre : un joueur qui a fait soixante parties a gagné le droit de
+ * s'entraîner sur autre chose que la grille du jour.
+ *
+ * Les chemins de CAPTURE ne passent pas par ici et gardent leur graine fixe :
+ * `--play-at=` et l'avance rapide de `--warmup=` doivent rendre la même image
+ * d'un jour à l'autre, ce qu'une graine dérivée de la date leur retirerait.
+ */
+uint64_t room_eco_salle_graine(const char *jeu);
+
+/*
  * Fin de partie. Verse les tickets, OU résout le quitte ou double s'il était
  * armé. C'est le seul appel que la salle a à faire : la décision de verser, de
  * proposer ou de résoudre est prise ici.

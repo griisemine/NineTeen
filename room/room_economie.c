@@ -584,6 +584,18 @@ bool room_eco_salle_jeton(void)
     return false;
 }
 
+uint64_t room_eco_salle_graine(const char *jeu)
+{
+    if (room_eco_lot_acquis(&g_eco, ROOM_ECO_LOT_LIBRE)) {
+        /* `SDL_GetPerformanceCounter` et non `rand()` : c'est la source que
+         * `main.c` employait pour TOUTES les parties avant le tournoi, et la
+         * garder ici veut dire que le lot rend exactement l'ancien
+         * comportement plutôt qu'un autre. */
+        return (uint64_t)SDL_GetPerformanceCounter();
+    }
+    return room_eco_graine_du_jour(jeu);
+}
+
 void room_eco_salle_fin(const char *jeu, bool hard, uint32_t score)
 {
     if (g_pari_arme) {

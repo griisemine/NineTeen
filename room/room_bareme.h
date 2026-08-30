@@ -242,6 +242,6 @@
     X(QUITTE,    60,  "QUITTE OU DOUBLE", "risquer ses tickets apres coup")   \
     X(DIFFICILE, 150, "REGIME DIFFICILE", "le regime dur sur les 19 bornes")  \
     X(DOREE,     320, "PLAQUE DOREE",     "la salle vous passe en or")        \
-    X(LIBRE,     600, "TOURNOI LIBRE",    "rejouer la partie du jour")
+    X(LIBRE,     600, "PARTIE LIBRE",     "jouer autre chose que celle du jour")
 
 #endif /* NS_ROOM_BAREME_H */

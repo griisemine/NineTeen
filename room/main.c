@@ -2824,7 +2824,7 @@ play_at_done: ;
                      */
                     if (room_eco_salle_offre()) room_eco_salle_refuser();
                     if (opt.autoplay || room_eco_salle_jeton()) {
-                        const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                        const uint64_t seed = room_eco_salle_graine(game_api->id);
                         start_run(game_api, game, runlog, seed, game_hard, &duel);
                         run_ms = 0;
                         run_tick = 0; pending_press = 0;
@@ -2892,7 +2892,7 @@ play_at_done: ;
             if (room_eco_salle_jeton()) {
                 if (room_eco_salle_accepter()) {
                     game_hard = true;
-                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                    const uint64_t seed = room_eco_salle_graine(game_api->id);
                     start_run(game_api, game, runlog, seed, game_hard, &duel);
                     run_ms = 0;
                     run_tick = 0; pending_press = 0;
@@ -2948,8 +2948,21 @@ play_at_done: ;
                  * qui en lançait un.
                  */
                 if (LOAD_GAME(near->game)) {
-                    const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0);
-                    const uint64_t seed = (uint64_t)SDL_GetPerformanceCounter();
+                    /*
+                     * LE RÉGIME, ET LE LOT QUI L'OUVRE PARTOUT.
+                     *
+                     * La borne déclare sa difficulté depuis A4 : six caissons
+                     * portent « hard », les treize autres non. Le lot
+                     * `REGIME DIFFICILE` ouvre le régime dur sur les dix-neuf,
+                     * ce qui est la seule chose qu'un joueur puisse acheter et
+                     * qui change ce qu'il JOUE — et qui paie 25 % de plus.
+                     */
+                    const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0)
+                                   || room_eco_lot_acquis(room_eco_salle(),
+                                                          ROOM_ECO_LOT_DIFFICILE);
+                    /* LA PARTIE DU JOUR : la graine vient de la date, pas de
+                     * l'horloge à haute résolution. Voir `room_economie.h`. */
+                    const uint64_t seed = room_eco_salle_graine(near->game);
                     game_hard = hard;
                     start_run(game_api, game, runlog, seed, hard, &duel);
                     run_ms = 0;

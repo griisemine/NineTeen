@@ -90,7 +90,8 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `Maj` gauche | courir |
 | `Espace` | sauter |
 | `Ctrl` gauche ou `C` | s'accroupir |
-| `E` | devant une borne : insérer un jeton et jouer |
+| `E` | devant une borne : insérer un jeton et jouer. Devant le **monnayeur** : prendre des jetons. Devant la **vitrine** : échanger ses tickets |
+| `R` | après une partie : **quitte ou double** (si le lot est acquis) |
 | `Échap` | le menu — réglages, **commandes**, **crédits**, quitter |
 | `F2` | capture d'écran dans le répertoire utilisateur |
 | `F5` | basculer caméra joueur / caméra libre |
@@ -263,8 +264,40 @@ installation en lecture seule :
 - macOS : `~/Library/Application Support/recognizer/Nineteen/`
 - Windows : `%APPDATA%\recognizer\Nineteen\`
 
-On y trouve `nineteen.log`, les captures de `F2`, et `settings.cfg` — ce dernier n'étant écrit que si
-un réglage a changé.
+On y trouve `nineteen.log`, les captures de `F2`, `settings.cfg` — ce dernier n'étant écrit que si
+un réglage a changé —, `scores.txt` et `portefeuille.txt`.
+
+`portefeuille.txt` porte les jetons, les tickets, la série et les lots acquis. Il est écrit
+atomiquement, comme les deux autres : un temporaire puis un renommage, de sorte qu'une coupure de
+courant laisse l'ancien fichier intact plutôt qu'un fichier à moitié écrit. Le supprimer remet
+l'économie à zéro et ne casse rien — le jeu repart d'un portefeuille neuf sans un message
+d'erreur, ce qui est le cas du premier lancement.
+
+## L'économie : jeton, partie, tickets, lot
+
+**Une partie coûte un jeton, et on n'est jamais bloqué.** Le monnayeur — le meuble jaune à
+l'est du comptoir, le premier objet éclairé quand on sort du sas — complète jusqu'à cinq jetons,
+gratuitement, autant de fois qu'on le demande. Il n'y a pas de minuterie, pas de compte à
+rebours, et **aucune voie d'achat** : ni monnaie réelle, ni boutique, ni coffre aléatoire payant.
+
+Une partie terminée rend des **tickets**, selon un barème calibré jeu par jeu pour qu'une bonne
+partie rapporte à peu près autant partout — les huit jeux ne marquent pas dans la même unité, et
+le score médian mesuré va de 38 points à 124 600. Les tickets s'échangent à la **vitrine à lots**,
+sur le mur est du hall, contre quatre déverrouillages. Le solde se lit en haut à gauche.
+
+Trois choses donnent envie de revenir, et aucune ne punit l'absence :
+
+- **le tournoi du jour** — les huit jeux tirés d'une graine dérivée de la date, la même pour tout
+  le monde, remise à zéro à minuit UTC ;
+- **la série** — jours consécutifs joués, qui ajoute jusqu'à sept tickets par partie ;
+- **le quitte ou double** — risquer les tickets d'une partie sur une reprise en régime difficile.
+  Refuser est aussi facile qu'accepter : rejouer, repartir ou ne rien faire valent refus, et
+  versent.
+
+Le barème complet, ses mesures, les lots et ce qui a été écarté : **`docs/ECONOMIE.md`**. Les
+taux sont aussi affichés dans la salle — l'affiche `jetons` porte la grille des huit, le
+`reglement` les six règles, et les deux sont dessinées à la construction depuis la même table que
+le jeu, de sorte qu'elles ne *peuvent* pas le contredire.
 
 ## Ce qui manque encore, dit franchement
 

@@ -167,6 +167,26 @@ static void test_bareme_entrees_absurdes(void)
 {
     CHECK(room_eco_tickets_pour("envol", false, -1, 0) == 0, "score -1 rapporte");
     CHECK(room_eco_tickets_pour("envol", false, INT64_MIN, 0) == 0, "score minimal rapporte");
+    /*
+     * -1 000, ET C'EST LA PREUVE PAR MUTATION QUI L'A EXIGÉ.
+     *
+     * Les deux lignes ci-dessus ne suffisaient pas : retirer le bornage du
+     * score négatif dans `room_eco_tickets_pour` ne faisait tomber AUCUNE
+     * assertion. La raison est arithmétique et elle est vicieuse — `-1 / 4`
+     * vaut 0 en C, la division entière tronquant vers zéro, et `INT64_MIN / 4`
+     * vaut 0xE000000000000000, dont les 32 bits de poids faible sont NULS : le
+     * retour en `int32_t` valait donc 0 dans les deux cas, et le test passait
+     * sur un code cassé.
+     *
+     * Il fallait un score négatif dont le quotient ne tombe ni sur zéro ni sur
+     * un multiple de 2^32. -1 000 donne -250, qu'aucun bornage ne rattrape.
+     */
+    CHECK(room_eco_tickets_pour("envol", false, -1000, 0) == 0,
+          "un score de -1000 rapporte %d tickets",
+          room_eco_tickets_pour("envol", false, -1000, 0));
+    CHECK(room_eco_tickets_pour("aplomb", true, -987654321, 3) >= 0,
+          "un grand score négatif rapporte %d tickets",
+          room_eco_tickets_pour("aplomb", true, -987654321, 3));
     CHECK(room_eco_tickets_pour(NULL, false, 1000, 0) == 0, "jeu NULL rapporte");
     CHECK(room_eco_tickets_pour("", false, 1000, 0) == 0, "jeu vide rapporte");
     CHECK(room_eco_tickets_pour("pacman", false, 1000, 0) == 0,
@@ -195,6 +215,57 @@ static void test_bareme_entrees_absurdes(void)
 /* ========================================================================== */
 /* 2. LE PORTEFEUILLE : jamais sous zéro, jamais bloqué                       */
 /* ========================================================================== */
+
+/*
+ * `room_eco_valide` DIT NON, et il a fallu la preuve par mutation pour s'en
+ * assurer.
+ *
+ * Casser cette fonction — lui faire accepter un solde négatif — ne faisait
+ * tomber aucune assertion, et pour une raison qui rend le test complice : rien
+ * dans les autres cas ne PRODUIT de solde négatif, puisque c'est justement ce
+ * qu'on a rendu impossible. La fonction n'était donc appelée que sur des états
+ * sains, où elle rend vrai quoi qu'on lui ait fait dire. Un contrôle qui ne
+ * voit jamais le cas qu'il refuse ne refuse rien.
+ *
+ * On lui donne donc les états invalides à la main, un champ à la fois.
+ */
+static void test_validite_dit_non(void)
+{
+    room_eco e;
+
+    room_eco_reset(&e); e.jetons = -1;
+    CHECK(!room_eco_valide(&e), "un solde de -1 jeton est déclaré valide");
+    room_eco_reset(&e); e.tickets = -1;
+    CHECK(!room_eco_valide(&e), "un solde de -1 ticket est déclaré valide");
+    room_eco_reset(&e); e.serie = -3;
+    CHECK(!room_eco_valide(&e), "une série négative est déclarée valide");
+    room_eco_reset(&e); e.serie_record = -1;
+    CHECK(!room_eco_valide(&e), "un record négatif est déclaré valide");
+    room_eco_reset(&e); e.parties = -1;
+    CHECK(!room_eco_valide(&e), "un compte de parties négatif est déclaré valide");
+    room_eco_reset(&e); e.tickets_gagnes = -1;
+    CHECK(!room_eco_valide(&e), "un cumul de gains négatif est déclaré valide");
+    room_eco_reset(&e); e.mise = -5;
+    CHECK(!room_eco_valide(&e), "une mise négative est déclarée valide");
+
+    /* Une mise sans jeu : le quitte ou double n'aurait rien à relancer, et les
+     * tickets resteraient sur la table pour toujours. */
+    room_eco_reset(&e); e.mise = 12;
+    CHECK(!room_eco_valide(&e), "une mise sans jeu est déclarée valide");
+
+    /* Une série au-dessus de son propre record est incohérente par
+     * construction : c'est la signature d'un fichier tronqué entre les deux. */
+    room_eco_reset(&e); e.serie = 9; e.serie_record = 2;
+    CHECK(!room_eco_valide(&e), "une série au-dessus de son record est déclarée valide");
+
+    CHECK(!room_eco_valide(NULL), "un portefeuille nul est déclaré valide");
+
+    /* Et le cas sain, pour que le contrôle ne soit pas un « toujours faux ». */
+    room_eco_reset(&e);
+    e.jetons = 3; e.tickets = 40; e.serie = 2; e.serie_record = 5;
+    SDL_strlcpy(e.mise_jeu, "envol", sizeof e.mise_jeu); e.mise = 11;
+    CHECK(room_eco_valide(&e), "un portefeuille sain est déclaré invalide");
+}
 
 static void test_jamais_sous_zero(void)
 {
@@ -707,6 +778,163 @@ static void test_session(void)
 }
 
 /* ========================================================================== */
+/* 9. LA FAÇADE — le seul endroit où une DÉCISION est prise hors du pur       */
+/* ========================================================================== */
+
+/*
+ * Tout ce qui précède vérifie des fonctions pures ; la façade, elle, choisit.
+ * Elle choisit surtout UNE chose que rien d'autre ne choisit : la graine d'une
+ * partie qui commence, c'est-à-dire si l'on joue la partie du jour ou non.
+ *
+ * LA PREUVE PAR MUTATION L'A EXIGÉ. Remplacer `room_eco_salle_graine` par une
+ * constante ne faisait tomber aucune assertion : le tournoi était vérifié de
+ * bout en bout dans sa partie pure — même graine le même jour, autre le
+ * lendemain, propagée aux huit jeux — et pas du tout à l'endroit où la salle
+ * décide de s'en servir. C'est exactement le défaut que le dépôt passe son
+ * temps à rendre impossible : une propriété vraie, et un chemin réel qui ne
+ * l'emprunte pas.
+ */
+/*
+ * Prépare le portefeuille du singleton par le CHEMIN NORMAL : on écrit le
+ * fichier, puis on ouvre.
+ *
+ * Et non par un `(room_eco *)room_eco_salle()`, qui compilait mais coûtait deux
+ * avertissements `-Wcast-qual` — or ce dépôt tient zéro avertissement. La
+ * version const-cassée était aussi un mauvais test : elle posait un état que le
+ * jeu ne peut pas atteindre, alors que celle-ci emprunte le même chargement que
+ * le joueur et vérifie donc aussi qu'il marche.
+ */
+static void facade_prepare(int32_t jetons, int32_t tickets, uint32_t lots)
+{
+    char contenu[256];
+    SDL_snprintf(contenu, sizeof contenu,
+                 "v1\njetons=%d\ntickets=%d\nserie=0\nrecord=0\n"
+                 "jour=0\nlots=%u\nparties=0\ngagnes=0\n",
+                 jetons, tickets, lots);
+    ecrire_fichier(g_tmp, contenu);
+    room_eco_salle_ouvrir();
+}
+
+#define LOT_BIT(l) (1u << (unsigned)(l))
+
+static void test_facade(void)
+{
+    room_eco_set_chemin(g_tmp);
+    room_eco_set_horloge(1787054400ll);   /* 2026-08-30 12:00 UTC */
+    facade_prepare(0, 0, 0u);
+
+    /* PAR DÉFAUT, LA PARTIE DU JOUR — et la même à chaque appel. */
+    const uint64_t g1 = room_eco_salle_graine("envol");
+    const uint64_t g2 = room_eco_salle_graine("envol");
+    CHECK(g1 == g2, "deux parties du même jour tirent deux graines");
+    CHECK(g1 == room_eco_graine_du_jour("envol"),
+          "la borne ne tire pas la graine du jour");
+    CHECK(room_eco_salle_graine("snake") != g1,
+          "deux jeux différents tirent la même graine du jour");
+
+    /* Demain, autre chose. */
+    room_eco_set_horloge(1787054400ll + 86400);
+    CHECK(room_eco_salle_graine("envol") != g1,
+          "la borne tire demain la graine d'aujourd'hui");
+    room_eco_set_horloge(1787054400ll);
+
+    /* Le monnayeur et le jeton, par le chemin de la salle. */
+    CHECK(room_eco_salle()->jetons == 0, "portefeuille de test non vide");
+    CHECK(!room_eco_salle_jeton(), "un jeton s'est inséré à vide");
+    room_eco_salle_monnayeur();
+    CHECK(room_eco_salle()->jetons == ROOM_ECO_PLANCHER_ACCUEIL,
+          "le monnayeur de la salle a rendu %d jetons", room_eco_salle()->jetons);
+    CHECK(room_eco_salle_jeton(), "le jeton rendu ne s'insère pas");
+
+    /* Une partie : sans le lot, elle verse d'office et ne propose rien. */
+    room_eco_salle_fin("envol", false, 38);
+    CHECK(!room_eco_salle_offre(), "une offre sans le lot QUITTE OU DOUBLE");
+    CHECK(room_eco_salle()->tickets > 0, "la partie n'a rien versé");
+    CHECK(room_eco_salle_message()[0] != '\0', "aucun bandeau après une partie");
+
+    /* LE LOT `PARTIE LIBRE` REND LA GRAINE LIBRE — c'est tout ce qu'il fait,
+     * et c'est ce que la vitrine annonce. */
+    room_eco_salle_fermer();
+    facade_prepare(9, 0, LOT_BIT(ROOM_ECO_LOT_LIBRE));
+    bool differe = false;
+    for (int i = 0; i < 8 && !differe; ++i) {
+        if (room_eco_salle_graine("envol") != room_eco_graine_du_jour("envol")) {
+            differe = true;
+        }
+    }
+    CHECK(differe, "PARTIE LIBRE rend encore la graine du jour");
+
+    /* LE QUITTE OU DOUBLE PAR LA FAÇADE, une fois le lot acquis. */
+    room_eco_salle_fermer();
+    facade_prepare(9, 500, LOT_BIT(ROOM_ECO_LOT_QUITTE));
+    CHECK(room_eco_salle_graine("envol") == room_eco_graine_du_jour("envol"),
+          "sans le lot PARTIE LIBRE, la graine n'est pas celle du jour");
+
+    const int32_t avant = room_eco_salle()->tickets;
+    room_eco_salle_fin("shooter", false, 3105);
+    CHECK(room_eco_salle_offre(), "aucune offre alors que le lot est acquis");
+    CHECK(room_eco_salle()->tickets == avant,
+          "les tickets ont été versés malgré l'offre");
+    const int32_t mise = room_eco_salle_offre_mise();
+    CHECK(mise > 0, "mise nulle");
+    CHECK(room_eco_salle_offre_battre() == 3105, "score à battre %d",
+          room_eco_salle_offre_battre());
+
+    /* Refuser verse, et l'offre disparaît. */
+    room_eco_salle_refuser();
+    CHECK(!room_eco_salle_offre(), "l'offre survit au refus");
+    CHECK(room_eco_salle()->tickets == avant + mise,
+          "le refus a versé %d au lieu de %d",
+          room_eco_salle()->tickets - avant, mise);
+
+    /* Accepter, puis PERDRE la reprise : la mise part, le reste ne bouge pas. */
+    const int32_t socle = room_eco_salle()->tickets;
+    room_eco_salle_fin("shooter", false, 3105);
+    const int32_t mise2 = room_eco_salle_offre_mise();
+    CHECK(mise2 > 0, "mise nulle");
+    CHECK(room_eco_salle_accepter(), "l'acceptation a échoué");
+    CHECK(!room_eco_salle_offre(), "l'offre reste ouverte pendant la reprise");
+    room_eco_salle_fin("shooter", true, 0);          /* la reprise est ratée */
+    CHECK(room_eco_salle()->tickets == socle,
+          "une reprise perdue a laissé %d au lieu de %d",
+          room_eco_salle()->tickets, socle);
+
+    /* Accepter, puis GAGNER : le double est versé. */
+    room_eco_salle_fin("shooter", false, 3105);
+    const int32_t mise3  = room_eco_salle_offre_mise();
+    const int32_t socle3 = room_eco_salle()->tickets;
+    CHECK(room_eco_salle_accepter(), "l'acceptation a échoué");
+    room_eco_salle_fin("shooter", true, 999999);     /* la reprise est réussie */
+    CHECK(room_eco_salle()->tickets == socle3 + mise3 * 2,
+          "une reprise gagnée a versé %d au lieu de %d",
+          room_eco_salle()->tickets - socle3, mise3 * 2);
+
+    /* Le bandeau s'efface tout seul, et il ne s'efface QUE par le temps. */
+    CHECK(room_eco_salle_message()[0] != '\0', "bandeau vide");
+    room_eco_salle_avancer(10.0f);
+    CHECK(room_eco_salle_message()[0] == '\0', "le bandeau ne s'efface pas");
+    CHECK(room_eco_salle_message_reste() == 0.0f, "minuteur de bandeau non nul");
+
+    /* Fermer sauve, et une offre ouverte au moment de fermer est un REFUS. */
+    room_eco_salle_fin("envol", false, 38);
+    const int32_t en_jeu = room_eco_salle_offre_mise();
+    CHECK(en_jeu > 0, "rien en jeu avant fermeture");
+    const int32_t solde = room_eco_salle()->tickets;
+    room_eco_salle_fermer();
+
+    room_eco relu;
+    room_eco_charger(&relu);
+    CHECK(relu.tickets == solde + en_jeu,
+          "la mise ouverte à la fermeture a été perdue : %d au lieu de %d",
+          relu.tickets, solde + en_jeu);
+    CHECK(room_eco_valide(&relu), "l'état sauvé par la façade est invalide");
+
+    room_eco_set_horloge(0);
+    (void)SDL_RemovePath(g_tmp);
+    room_eco_set_chemin(NULL);
+}
+
+/* ========================================================================== */
 
 int main(void)
 {
@@ -723,6 +951,7 @@ int main(void)
     test_bareme_calibre();
     test_bareme_couvre_les_jeux();
     test_bareme_entrees_absurdes();
+    test_validite_dit_non();
     test_jamais_sous_zero();
     test_tournoi();
     test_serie();
@@ -730,6 +959,10 @@ int main(void)
     test_lots();
     test_persistance();
     test_session();
+    /* La façade EN DERNIER : elle est la seule à laisser un fichier derrière
+     * elle et à toucher au singleton, donc la seule qui pourrait fausser un
+     * test suivant. */
+    test_facade();
 
     printf("économie : %d contrôle(s), %d échec(s)\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
