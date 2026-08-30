@@ -205,13 +205,16 @@ struct ns_renderer {
     SDL_GPUComputePipeline  *pipe_exposure;
     SDL_GPUGraphicsPipeline *pipe_viewmodel;
 
-    /* Le PERSONNAGE : maillage monté une fois, pose renouvelée à chaque image. */
+    /* LES PERSONNAGES : un seul maillage monté une fois, autant de poses que de
+     * corps à l'image. Le tableau pèse 17 x 2 160 octets, soit 36 Kio dans une
+     * structure déjà allouée au tas — voir `NS_MAX_CHARACTERS`. */
     SDL_GPUGraphicsPipeline *pipe_character;
     ns_buffer   char_vertices, char_indices;
     ns_texture  char_albedo;
     uint32_t    char_index_count;
     bool        char_ready;
-    ns_character_draw character;
+    ns_character_draw character[NS_MAX_CHARACTERS];
+    uint32_t          character_count;
     SDL_GPUTextureFormat     tonemap_format;
 
     /* Tampon des lumières, réécrit à chaque image (elles scintillent). */
@@ -1040,29 +1043,82 @@ bool ns_renderer_upload_character(ns_rhi *r, ns_renderer *rd, const struct ns_sk
     return true;
 }
 
-void ns_renderer_set_character(ns_renderer *rd, const ns_character_draw *draw)
+void ns_renderer_set_characters(ns_renderer *rd, const ns_character_draw *draw,
+                                uint32_t count)
 {
     if (!rd) return;
-    if (!draw) { rd->character.visible = false; return; }
-    rd->character = *draw;
+    if (!draw || count == 0) { rd->character_count = 0; return; }
+    if (count > NS_MAX_CHARACTERS) count = NS_MAX_CHARACTERS;
+    for (uint32_t i = 0; i < count; ++i) rd->character[i] = draw[i];
+    rd->character_count = count;
+}
+
+/* Un corps qui ne rapporterait aucun pixel. Sorti en fonction parce que la
+ * question se pose deux fois : pour savoir s'il faut OUVRIR la passe, et pour
+ * savoir s'il faut dessiner CE corps-là une fois qu'elle l'est. */
+static bool character_worth_drawing(const ns_character_draw *d)
+{
+    if (!d->visible || d->joint_count <= 0) return false;
+    /* Complètement effacé : quatre mille sept cents triangles mélangés à zéro
+     * coûtent exactement ce qu'ils rapportent. C'est aussi la fin du fondu de
+     * sortie d'un pair qui s'est tu. */
+    return d->opacity > 0.002f;
 }
 
 /*
- * La passe du personnage.
+ * La passe des personnages.
  *
- * Après l'éclairage et le brouillard, avant le viewmodel : il est DANS le monde,
- * donc il doit recevoir la brume qui le sépare de la caméra — et les bras du
- * joueur, qui ne sont pas dans le monde, passent après lui.
+ * Après l'éclairage et le brouillard, avant le viewmodel : ils sont DANS le
+ * monde, donc ils doivent recevoir la brume qui les sépare de la caméra — et les
+ * bras du joueur, qui ne sont pas dans le monde, passent après eux.
+ *
+ * UNE SEULE PASSE POUR TOUS, et c'est le point du pluriel : le pipeline, les
+ * tampons de sommets et d'indices, la texture et le tampon de lumières sont liés
+ * UNE fois. Ce qui se répète par corps, ce sont deux pushes d'uniformes
+ * (2 176 + 80 octets) et un appel de dessin. Le chiffre complet est au-dessus de
+ * `NS_MAX_CHARACTERS`.
+ *
+ * CE QUE ÇA COÛTE VRAIMENT, et c'est MESURÉ.
+ *
+ * Relevé du temps GPU (`--bench`), rendu hors écran 1400x875, qualité haute,
+ * moyenne sur 119 images, corps fabriqués par `--pairs-demo=` ; deux séries
+ * complètes, pour que la dispersion se voie :
+ *
+ *      0 corps  ->  24,2  et  24,3 ms/image
+ *      4 corps  ->  24,4  et  24,2 ms/image
+ *      8 corps  ->  24,6  et  24,6 ms/image
+ *     16 corps  ->  24,8  et  25,0 ms/image
+ *
+ * Seize corps coûtent donc 0,65 ms sur une image qui en prend 24,3, soit 2,7 %
+ * — environ 41 microsecondes par corps, pour 4 672 triangles éclairés chacun.
+ *
+ * C'est la raison pour laquelle il n'y a AUCUN plafond sous la borne du réseau,
+ * et pour laquelle le dessin instancié n'a pas lieu d'être écrit : il
+ * remplacerait 16 appels par 1 sur une dépense qui vaut le quarantième de
+ * l'image, au prix d'un tampon de stockage et d'un shader de plus à tenir en
+ * accord avec sa structure C.
+ *
+ * À LIRE AVEC PRUDENCE : cette mesure est prise sur une machine, à une
+ * résolution, à un palier. Elle établit un ORDRE DE GRANDEUR — le personnage ne
+ * pèse rien devant le lancer de rayons du même palier — et non une garantie.
+ * La première série lancée après une recompilation donnait 144 ms par image sur
+ * les trois premières mesures avant de retomber à 24 : c'est le cache de
+ * pipelines qui se remplit, et c'est pourquoi les chiffres ci-dessus sont ceux
+ * de séries entièrement à chaud.
  */
 static void pass_character(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                            const ns_camera *cam, const ns_m4 *view_proj,
                            SDL_GPUTexture *target, uint32_t light_count)
 {
-    if (!rd->char_ready || !rd->pipe_character || !rd->character.visible) return;
-    if (rd->character.joint_count <= 0) return;
-    /* Complètement effacé : on n'ouvre même pas la passe. Un millier de
-     * triangles mélangés à zéro coûte exactement ce qu'ils rapportent. */
-    if (rd->character.opacity <= 0.002f) return;
+    if (!rd->char_ready || !rd->pipe_character) return;
+
+    /* Rien à montrer : la passe ne s'ouvre pas. Ouvrir puis ne rien dessiner
+     * coûterait quand même le chargement et le rangement des deux cibles. */
+    uint32_t to_draw = 0;
+    for (uint32_t i = 0; i < rd->character_count; ++i) {
+        if (character_worth_drawing(&rd->character[i])) to_draw++;
+    }
+    if (to_draw == 0) return;
 
     SDL_GPUCommandBuffer *cmd = ns_rhi_cmd(r);
 
@@ -1100,39 +1156,54 @@ static void pass_character(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
     SDL_GPUBuffer *lights = rd->lights.handle;
     SDL_BindGPUFragmentStorageBuffers(pass, 0, &lights, 1);
 
-    character_vs_ubo vu;
-    SDL_zero(vu);
-    SDL_memcpy(vu.view_proj, view_proj->m, sizeof vu.view_proj);
-    SDL_memcpy(vu.model, rd->character.model.m, sizeof vu.model);
-    for (int i = 0; i < rd->character.joint_count && i < NS_MAX_CHARACTER_JOINTS; ++i) {
-        SDL_memcpy(vu.joint[i], rd->character.joint[i].m, sizeof(float) * 16);
-    }
-    /* Les os NON employés reçoivent l'identité et non des zéros : une matrice
-     * nulle enverrait à l'origine du monde tout sommet qui la citerait par
-     * erreur, en tirant un triangle en travers de l'écran. */
-    for (int i = rd->character.joint_count; i < NS_MAX_CHARACTER_JOINTS; ++i) {
-        const ns_m4 id = ns_m4_identity();
-        SDL_memcpy(vu.joint[i], id.m, sizeof(float) * 16);
-    }
-    SDL_PushGPUVertexUniformData(cmd, 0, &vu, sizeof vu);
+    /*
+     * UN CORPS, UN COUPLE D'UNIFORMES, UN DESSIN.
+     *
+     * `view_proj` est recopié dans chaque bloc alors qu'il ne change pas d'un
+     * corps à l'autre : c'est 64 des 2 176 octets, et le sortir dans un second
+     * bloc d'uniformes obligerait `character.vert` à en déclarer deux, donc à
+     * garder deux structures C en accord avec lui au lieu d'une. Trois pour cent
+     * du transfert contre une occasion de plus de les désaccorder — ce fichier
+     * dit déjà, plus haut, ce que coûte un bloc partagé qui dérive.
+     */
+    for (uint32_t c = 0; c < rd->character_count; ++c) {
+        const ns_character_draw *d = &rd->character[c];
+        if (!character_worth_drawing(d)) continue;
 
-    character_fs_ubo fu;
-    SDL_zero(fu);
-    fu.fade[0] = ns_clampf(rd->character.opacity, 0.0f, 1.0f);
-    fu.base_color[0] = rd->character.tint[0];
-    fu.base_color[1] = rd->character.tint[1];
-    fu.base_color[2] = rd->character.tint[2];
-    fu.base_color[3] = rd->character.roughness;
-    fu.camera[0] = cam->position.x;
-    fu.camera[1] = cam->position.y;
-    fu.camera[2] = cam->position.z;
-    fu.camera[3] = rd->character.metallic;
-    SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
-    fu.ambient[3] = rd->settings.ambient_intensity;
-    fu.counts[0] = (int32_t)light_count;
-    SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
+        character_vs_ubo vu;
+        SDL_zero(vu);
+        SDL_memcpy(vu.view_proj, view_proj->m, sizeof vu.view_proj);
+        SDL_memcpy(vu.model, d->model.m, sizeof vu.model);
+        for (int i = 0; i < d->joint_count && i < NS_MAX_CHARACTER_JOINTS; ++i) {
+            SDL_memcpy(vu.joint[i], d->joint[i].m, sizeof(float) * 16);
+        }
+        /* Les os NON employés reçoivent l'identité et non des zéros : une matrice
+         * nulle enverrait à l'origine du monde tout sommet qui la citerait par
+         * erreur, en tirant un triangle en travers de l'écran. */
+        for (int i = d->joint_count; i < NS_MAX_CHARACTER_JOINTS; ++i) {
+            const ns_m4 id = ns_m4_identity();
+            SDL_memcpy(vu.joint[i], id.m, sizeof(float) * 16);
+        }
+        SDL_PushGPUVertexUniformData(cmd, 0, &vu, sizeof vu);
 
-    SDL_DrawGPUIndexedPrimitives(pass, rd->char_index_count, 1, 0, 0, 0);
+        character_fs_ubo fu;
+        SDL_zero(fu);
+        fu.fade[0] = ns_clampf(d->opacity, 0.0f, 1.0f);
+        fu.base_color[0] = d->tint[0];
+        fu.base_color[1] = d->tint[1];
+        fu.base_color[2] = d->tint[2];
+        fu.base_color[3] = d->roughness;
+        fu.camera[0] = cam->position.x;
+        fu.camera[1] = cam->position.y;
+        fu.camera[2] = cam->position.z;
+        fu.camera[3] = d->metallic;
+        SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
+        fu.ambient[3] = rd->settings.ambient_intensity;
+        fu.counts[0] = (int32_t)light_count;
+        SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
+
+        SDL_DrawGPUIndexedPrimitives(pass, rd->char_index_count, 1, 0, 0, 0);
+    }
     SDL_EndGPURenderPass(pass);
 }
 

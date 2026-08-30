@@ -2015,6 +2015,16 @@ int main(int argc, char **argv)
         }
     }
 
+    /*
+     * LE TABLEAU DES CORPS DE L'IMAGE, alloue une fois pour toutes.
+     *
+     * Trente-six kilo-octets — dix-sept poses de 2 160 — hors de la boucle de
+     * rendu plutot que dedans : le remplir coute ce qu'il coute, mais le
+     * reserver soixante fois par seconde sur la pile n'apporterait rien.
+     */
+    ns_character_draw poses[NS_MAX_CHARACTERS];
+    uint32_t          poses_n = 0;
+
     room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
                           ? NULL : room_attract_create(rhi, &scene);
 
@@ -3611,6 +3621,16 @@ play_at_done: ;
             const ns_camera render_cam = room_camera_resolve(&cam, &scene.bvh, (float)clock.alpha);
 
             /*
+             * TOUS LES CORPS DE L'IMAGE. Le joueur est pour l'instant le seul,
+             * et c'est bien pour ca que le tableau existe : le rendu ne sait
+             * plus dessiner UN personnage, il en dessine une liste, et les
+             * autres joueurs viendront s'y inscrire sans que cette boucle
+             * change. Le compteur est remis a zero a chaque image — un corps qui
+             * n'est pas reinscrit disparait.
+             */
+            poses_n = 0;
+
+            /*
              * LA POSE DU PERSONNAGE.
              *
              * Sa phase d'animation vient de la DISTANCE PARCOURUE, pas du temps
@@ -3787,10 +3807,10 @@ play_at_done: ;
                  */
                 d.opacity = room_camera_actor_opacity(&cam,
                                 room_camera_third_arm(&cam, (float)clock.alpha));
-                ns_renderer_set_character(renderer, &d);
-            } else {
-                ns_renderer_set_character(renderer, NULL);
+                poses[poses_n++] = d;
             }
+
+            ns_renderer_set_characters(renderer, poses, poses_n);
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             /*
