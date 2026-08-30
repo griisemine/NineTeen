@@ -558,3 +558,24 @@ target_link_libraries(ns_test_presence PRIVATE nineteen::games nineteen::engine)
 nineteen_set_warnings(ns_test_presence)
 nineteen_apply_sanitizers(ns_test_presence)
 add_test(NAME presence COMMAND ns_test_presence)
+
+# L'ÉCONOMIE DE LA SALLE : jeton -> partie -> tickets -> lot.
+#
+# `room_economie.c` est compilé ici depuis `room/`, comme `ns_test_bvh` le fait
+# déjà pour la caméra et `ns_test_pad` pour la manette. C'est un fichier de
+# jeu, pas de moteur, et le descendre dans `engine/` pour le tester reviendrait
+# à déplacer du code pour arranger un build.
+#
+# Il lie `nineteen::games` parce que deux des contrôles ne veulent rien dire
+# sans les jeux eux-mêmes : celui qui confronte la table du barème à la liste
+# des jeux PORTÉS — un neuvième jeu sans tarif paierait zéro ticket en silence
+# — et celui qui vérifie que la graine du tournoi arrive vraiment jusqu'aux
+# huit états de départ, au lieu de s'arrêter à une fonction que personne
+# n'appelle.
+add_executable(ns_test_economie test_economie.c
+    "${CMAKE_SOURCE_DIR}/room/room_economie.c")
+target_include_directories(ns_test_economie PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_economie PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_economie)
+nineteen_apply_sanitizers(ns_test_economie)
+add_test(NAME economie COMMAND ns_test_economie)

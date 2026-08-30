@@ -1176,6 +1176,13 @@
       "fit": true
     },
     {
+      "_": "LA FACE DE LA VITRINE A LOTS, et non une affiche murale : c'est la seule planche de `posterart` qui sorte en paysage, aux cotes du meuble (1,62 x 0,76 m, soit 2,13:1). Elle est dessinee depuis la table `ROOM_ECO_LOTS` de `room/room_bareme.h` — la meme que la vitrine echange et que le jeu debite — donc elle ne peut pas promettre un lot qui n'existe pas ni taire celui qu'on vient d'ajouter.\nLa vitrine portait `affiche_6` : l'avertissement « lumieres clignotantes ». Une vitrine a lots qui affiche un avertissement d'epilepsie apprend au joueur que ce meuble ne le concerne pas, et c'est la ou l'on echange ses tickets. L'avertissement reste accroche au mur.",
+      "name": "affiche_lots",
+      "texture": "affiche_lots.png",
+      "roughness": 0.6,
+      "fit": true
+    },
+    {
       "name": "jaune",
       "texture": "painted_panel.jpg",
       "roughness": 0.38,
@@ -6780,6 +6787,8 @@
       ],
       "yaw": 270.0,
       "pose": "mur",
+      "poi": "vitrine",
+      "_poi": "LE COMPTOIR D'ECHANGE DES TICKETS. Elle etait dans le decor depuis A4 et ne servait a rien — comme le monnayeur avant le poste 7. C'est desormais la ou l'on echange ses tickets contre un lot, et le pendant exact du monnayeur : on prend ses jetons a l'est du comptoir, on depense ses tickets sur le mur est du hall. La nature « vitrine » est declaree dans `ns_scene.c` et rendue par `ns_poi_label` ; sans elle, le lieu serait charge puis ignore avec un WARN a chaque demarrage, ce qui est exactement ce que le monnayeur a subi pendant deux versions.",
       "parts": [
         {
           "_": "le socle plein",
@@ -6813,9 +6822,9 @@
           "chamfer": 0.008
         },
         {
-          "_": "les lots, en facade. La face avant du caisson est en z local +0,21.",
+          "_": "les lots, en facade. La face avant du caisson est en z local +0,21.\nElle portait `affiche_6` — l'avertissement « lumieres clignotantes » — sur le meuble dont le nom est `vitrine_lots`. Elle porte maintenant la planche qui LIT la table des lots, comme le motif `plan` lit ce fichier : ce qu'on voit sur le meuble est ce que le meuble echange.",
           "type": "panel",
-          "material": "affiche_6",
+          "material": "affiche_lots",
           "at": [
             0.0,
             1.28,

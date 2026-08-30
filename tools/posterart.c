@@ -76,10 +76,41 @@
  * sortir en ligne de commande donnerait huit appels de quinze arguments dans
  * `assets/CMakeLists.txt`, où personne ne les relirait, et permettrait d'écrire
  * un texte que la mise en page ne peut pas contenir.
+ *
+ * SAUF LES CHIFFRES DE L'ÉCONOMIE, et c'est la demande explicite du
+ * propriétaire : « fait en sorte que les affiches aient du sens dans le jeu ».
+ * Quatre des huit planches parlaient d'argent, et les quatre mentaient.
+ *
+ *   `jetons`    annonçait « 5 POUR 1 EURO » et « 20 POUR 3 EUROS ». Il n'y a
+ *               pas d'euro dans ce jeu, il n'y a aucune voie d'achat, et le
+ *               monnayeur rend les jetons gratuitement.
+ *   `reglement` énonçait six articles inventés — la file d'attente, les verres
+ *               sur les panneaux, la queue de billard sur son râtelier — dont
+ *               un seul se trouvait être vrai par accident.
+ *   `records`   affichait huit noms et huit scores inventés, sans rapport avec
+ *               ce que les jeux marquent réellement.
+ *   `tournoi`   annonçait « SAMEDI 21 HEURES, INSCRIPTION AU COMPTOIR ». Le
+ *               tournoi de cette salle est QUOTIDIEN et ne s'inscrit nulle
+ *               part.
+ *
+ * Les quatre lisent maintenant `room/room_bareme.h`, qui est la source unique
+ * des taux et que le jeu lit aussi. Ce n'est pas un raffinement : une affiche
+ * qui recopie un chiffre est une deuxième description de l'économie, et deux
+ * descriptions d'une même chose finissent toujours par se contredire — ici EN
+ * SILENCE, puisque le seul endroit où on lit l'affiche est un mur, à cinq
+ * mètres. C'est exactement le raisonnement du motif `plan`, qui trace la salle
+ * au lieu de la dessiner de mémoire, et le résultat est le même : changer un
+ * taux redessine les affiches au build suivant, et il n'existe aucun chemin par
+ * lequel elles pourraient dire autre chose que le jeu.
+ *
+ * `room_bareme.h` n'a AUCUNE dépendance — ni SDL, ni moteur, ni allocation —
+ * et c'est ce qui permet à cet outil d'hôte de le lire. Y ajouter un include de
+ * moteur casserait `posterart` et rouvrirait la porte aux deux descriptions.
  */
 #include "tools_common.h"
 #include "tool_json.h"
 #include "ns_font5x7.h"
+#include "room_bareme.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -434,6 +465,28 @@ static void finition(toile *t)
  * diagonales, et c'est ce qui la distingue de loin des sept autres, avant même
  * qu'on lise le mot.
  */
+/* La table du barème, dépliée depuis la source unique. Les colonnes sont
+ * l'identifiant du jeu et son diviseur de régime normal : c'est le taux qu'un
+ * joueur lit avant de jouer. Le régime difficile a le sien, mais l'afficher
+ * doublerait la grille pour une information qui ne sert qu'une fois le choix
+ * fait — et le règlement dit déjà qu'il paie davantage. */
+typedef struct taux_ligne { const char *jeu; int div_n, div_h; } taux_ligne;
+#define POSTER_TAUX(id, mn, dn, mh, dh) { #id, (dn), (dh) },
+static const taux_ligne g_taux[] = { ROOM_ECO_BAREME(POSTER_TAUX) };
+#undef POSTER_TAUX
+
+/* Un entier en toutes lettres, majuscules comprises : la fonte du jeu n'a pas
+ * de minuscules, et `p_texte` les rendrait en blanc. */
+static void maj(char *out, size_t cap, const char *src)
+{
+    size_t i = 0;
+    for (; src[i] && i + 1 < cap; ++i) {
+        const char c = src[i];
+        out[i] = (c >= 'a' && c <= 'z') ? (char)(c - 'a' + 'A') : c;
+    }
+    out[i] = '\0';
+}
+
 static void motif_tournoi(toile *t)
 {
     const float W = (float)t->w, H = (float)t->h;
@@ -455,13 +508,22 @@ static void motif_tournoi(toile *t)
     const float mx = W * 0.5f;
     const float utile = W * 0.80f;
 
-    p_texte_c(t, "LA SAISON DES DIX-NEUF", mx, H * 0.075f,
-              cellule("LA SAISON DES DIX-NEUF", utile, H * 0.03f), C_CYAN, 1.0f);
+    p_texte_c(t, "LA MEME PARTIE POUR TOUS", mx, H * 0.075f,
+              cellule("LA MEME PARTIE POUR TOUS", utile, H * 0.03f), C_CYAN, 1.0f);
 
     const float ct = cellule("TOURNOI", W * 0.84f, H * 0.135f);
     p_titre_c(t, "TOURNOI", mx, H * 0.115f, ct, C_AMBRE, C_ENCRE);
-    p_texte_c(t, "DES HUIT JEUX", mx, H * 0.115f + ct * 8.4f,
-              cellule("DES HUIT JEUX", utile * 0.72f, H * 0.038f), C_MAGENTA, 1.0f);
+    {
+        /* « DES HUIT JEUX » était une affirmation dans le vide : rien ne
+         * garantissait que le tournoi porte sur huit jeux, et rien ne l'aurait
+         * corrigée s'il en avait porté neuf. Le nombre est compté dans la
+         * table du barème, qui est la même que celle des jeux portés — c'est
+         * `tests/test_economie.c` qui tient les deux d'accord. */
+        char l[32];
+        snprintf(l, sizeof l, "DES %d JEUX", (int)(sizeof g_taux / sizeof g_taux[0]));
+        p_texte_c(t, l, mx, H * 0.115f + ct * 8.4f,
+                  cellule(l, utile * 0.72f, H * 0.038f), C_MAGENTA, 1.0f);
+    }
 
     /*
      * L'ARBRE. Huit inscrits de chaque côté, trois tours, une finale.
@@ -515,12 +577,30 @@ static void motif_tournoi(toile *t)
         p_texte_c(t, "19", mx, yc - ci * 3.5f, ci, C_ENCRE, 1.0f);
     }
 
-    p_texte_c(t, "SAMEDI 21 HEURES", mx, H * 0.800f,
-              cellule("SAMEDI 21 HEURES", utile, H * 0.052f), C_BLANC, 1.0f);
-    p_texte_c(t, "INSCRIPTION AU COMPTOIR", mx, H * 0.870f,
-              cellule("INSCRIPTION AU COMPTOIR", utile, H * 0.030f), C_CYAN, 1.0f);
-    p_texte_c(t, "UN JETON PAR TOUR", mx, H * 0.910f,
-              cellule("UN JETON PAR TOUR", utile * 0.8f, H * 0.030f), C_CYAN, 1.0f);
+    /*
+     * LE BAS DE LA PLANCHE, ET CE QU'IL DISAIT.
+     *
+     * « SAMEDI 21 HEURES » et « INSCRIPTION AU COMPTOIR » : le tournoi de cette
+     * salle est QUOTIDIEN, il ne s'inscrit nulle part, et il n'y a personne au
+     * comptoir. Un joueur qui lisait ça revenait le samedi.
+     *
+     * Ce qui est écrit maintenant est ce que le code fait : la graine des huit
+     * jeux dérive de la DATE, elle est la même pour tout le monde, et elle
+     * change à minuit UTC. UTC est dit en toutes lettres parce que c'est le
+     * seul détail que le joueur ne peut pas deviner, et parce que le choix est
+     * délibéré — un minuit local ferait basculer Tokyo neuf heures avant Paris,
+     * et les deux joueraient des grilles différentes en croyant s'affronter.
+     * Le raisonnement complet est dans `room/room_economie.h`.
+     */
+    p_texte_c(t, "TOUS LES JOURS", mx, H * 0.800f,
+              cellule("TOUS LES JOURS", utile, H * 0.052f), C_BLANC, 1.0f);
+    p_texte_c(t, "REMISE A ZERO A MINUIT UTC", mx, H * 0.870f,
+              cellule("REMISE A ZERO A MINUIT UTC", utile, H * 0.030f), C_CYAN, 1.0f);
+    {
+        char l[48];
+        snprintf(l, sizeof l, "%d JETON PAR TOUR, SANS INSCRIPTION", ROOM_ECO_COUT_PARTIE);
+        p_texte_c(t, l, mx, H * 0.910f, cellule(l, utile, H * 0.030f), C_CYAN, 1.0f);
+    }
 }
 
 /* ==========================================================================
@@ -560,21 +640,68 @@ static void motif_reglement(toile *t)
               cellule("DE LA SALLE", W * 0.42f, H * 0.028f), C_ROUGE, 1.0f);
 
     /*
-     * Les six articles. Deux lignes de dix-neuf caractères au plus : c'est ce
-     * que la largeur utile autorise à une cellule de cinq pixels, et une
-     * cellule plus fine ne se lirait plus du tout depuis l'allée.
+     * LES SIX ARTICLES, ET CE QU'ILS SONT DEVENUS.
+     *
+     * Ils étaient inventés — la file d'attente à gauche de l'écran, les verres
+     * interdits sur les panneaux, la queue de billard à remettre sur son
+     * râtelier. Du décor crédible, et six affirmations qu'aucune ligne de code
+     * ne tenait : on peut poser un verre où l'on veut dans cette salle, il n'y
+     * a pas de file, et la queue de billard n'existe pas.
+     *
+     * Ce sont maintenant les VRAIES règles de l'économie, et elles sont écrites
+     * depuis les constantes plutôt que recopiées. Le règlement d'une salle est
+     * exactement l'endroit où un joueur va chercher ce qu'une partie coûte et
+     * ce qu'elle rapporte ; il devait le dire juste.
+     *
+     * Deux lignes de dix-neuf caractères au plus : c'est ce que la largeur
+     * utile autorise à une cellule de cinq pixels, et une cellule plus fine ne
+     * se lirait plus du tout depuis l'allée. Les six libellés sont donc
+     * composés puis MESURÉS plus bas — un chiffre qui grandirait au point de
+     * déborder arrête le programme au lieu de sortir une affiche coupée.
      */
-    static const char *const regles[6][2] = {
-        { "UN JETON PAR",       "PARTIE, PAS DEUX"   },
-        { "ON NE SECOUE PAS",   "LES BORNES"         },
-        { "LA FILE ATTEND A",   "GAUCHE DE L'ECRAN"  },
-        { "NI VERRE NI BOITE",  "SUR LES PANNEAUX"   },
-        { "UN RECORD SE FAIT",  "VISER AU COMPTOIR"  },
-        { "LA QUEUE RETOURNE",  "SUR SON RATELIER"   },
-    };
+    char regles[6][2][24];
+    snprintf(regles[0][0], sizeof regles[0][0], "%d JETON PAR PARTIE", ROOM_ECO_COUT_PARTIE);
+    snprintf(regles[0][1], sizeof regles[0][1], "PAS DEUX");
+    snprintf(regles[1][0], sizeof regles[1][0], "LE MONNAYEUR REND");
+    snprintf(regles[1][1], sizeof regles[1][1], "JUSQU'A %d, GRATUIT", ROOM_ECO_PLANCHER_ACCUEIL);
+    snprintf(regles[2][0], sizeof regles[2][0], "UNE PARTIE PAIE");
+    snprintf(regles[2][1], sizeof regles[2][1], "EN TICKETS");
+    snprintf(regles[3][0], sizeof regles[3][0], "%d TICKETS RENDENT", ROOM_ECO_TICKETS_PAR_JETON);
+    snprintf(regles[3][1], sizeof regles[3][1], "%d JETON AU CHANGE", ROOM_ECO_COUT_PARTIE);
+    snprintf(regles[4][0], sizeof regles[4][0], "LE DUR PAIE %d%%", ROOM_ECO_PRIME_DIFFICILE_PCT);
+    snprintf(regles[4][1], sizeof regles[4][1], "DE PLUS");
+    snprintf(regles[5][0], sizeof regles[5][0], "%d JOURS DE SUITE", ROOM_ECO_SERIE_MAX);
+    snprintf(regles[5][1], sizeof regles[5][1], "PAYENT LE MAXIMUM");
+
+    /*
+     * LE CONTRÔLE QUI FAIT ÉCHOUER LA CONSTRUCTION.
+     *
+     * Une affiche ne peut pas mentir tant qu'elle lit la source unique — mais
+     * elle peut devenir ILLISIBLE, ce qui revient au même pour qui la regarde.
+     * Un taux qui passerait à cinq chiffres allongerait une ligne au-delà de ce
+     * que la planche contient, et le texte sortirait du cadre rouge sans que
+     * rien ne le signale. On le mesure ici, sur les douze lignes composées :
+     * dix-neuf caractères est la limite tenue par la mise en page.
+     */
+    for (int i = 0; i < 6; ++i) {
+        for (int k = 0; k < 2; ++k) {
+            if (strlen(regles[i][k]) > 19u) {
+                tool_fatalf("reglement : l'article %d ligne %d fait %zu caracteres "
+                            "(19 au plus) : « %s » — un taux de room_bareme.h a "
+                            "grandi au-dela de ce que la planche contient",
+                            i + 1, k + 1, strlen(regles[i][k]), regles[i][k]);
+            }
+        }
+    }
+
     const float ytop = H * 0.225f;
     const float pas  = H * 0.108f;
-    const float cr   = cellule("LA QUEUE RETOURNE", W * 0.665f, H * 0.030f);
+    /* La cellule est calée sur la limite de la mise en page — dix-neuf
+     * caractères — et non sur la plus longue ligne effectivement composée :
+     * sinon un taux qui gagne un chiffre rétrécirait TOUT le règlement d'un
+     * build à l'autre, et l'affiche changerait de taille sans qu'on l'ait
+     * demandé. Le contrôle plus haut garantit qu'aucune ligne ne dépasse. */
+    const float cr   = cellule("MMMMMMMMMMMMMMMMMMM", W * 0.665f, H * 0.030f);
     const float cn   = floorf(cr * 1.9f);
     const float xnum = W * 0.095f;
     const float xtxt = W * 0.235f;
@@ -604,12 +731,32 @@ static void motif_reglement(toile *t)
 }
 
 /* ==========================================================================
- * MOTIF 3 — JETONS. La promotion du monnayeur.
+ * MOTIF 3 — JETONS. LA GRILLE DES TAUX, lue dans l'économie du jeu.
  * ==========================================================================
  * Composition RADIALE : un éclat de secteurs et une pièce frappée. C'est la
- * seule des huit qui n'ait ni horizon ni grille — tout y part du centre, ce qui
- * est exactement ce qu'on veut d'une promotion : un prix, et rien d'autre.
+ * seule des huit qui n'ait ni horizon ni grille — tout y part du centre.
+ *
+ * CE QU'ELLE DISAIT, ET POURQUOI C'ÉTAIT LE PIRE DES HUIT MENSONGES. Elle
+ * annonçait « 5 POUR 1 EURO » en réserve dans un bandeau d'or, et « 20 POUR
+ * 3 EUROS » juste en dessous. C'était le décor plausible d'une vraie salle de
+ * 1985, et c'est devenu faux le jour où le monnayeur a été branché : il n'y a
+ * pas d'euro dans ce jeu, il n'y a AUCUNE voie d'achat, et les jetons sont
+ * gratuits. Une affiche qui réclame de l'argent dans un jeu qui n'en prend pas
+ * ne se contente pas d'être inexacte, elle décrit un autre jeu.
+ *
+ * CE QU'ELLE DIT MAINTENANT : les vrais taux. La pièce reste — c'est elle qui
+ * fait lire « jeton » de l'autre bout de la salle — mais elle remonte et rétré-
+ * cit pour laisser la moitié basse à la GRILLE, huit lignes lues dans
+ * `ROOM_ECO_BAREME`. C'est la seule information qu'un joueur cherche vraiment
+ * ici : combien de points valent un ticket, sur le jeu devant lequel il est.
+ *
+ * La grille tient en huit lignes parce que le barème a huit jeux, et le nombre
+ * n'est écrit nulle part : la boucle parcourt la table. Porter un neuvième jeu
+ * ajoute sa ligne tout seul — et si la place venait à manquer, c'est la hauteur
+ * de cellule calculée qui rétrécirait, pas une ligne qui disparaîtrait en
+ * silence.
  */
+
 static void motif_jetons(toile *t)
 {
     const float W = (float)t->w, H = (float)t->h;
@@ -617,7 +764,19 @@ static void motif_jetons(toile *t)
     const float bas[3]  = { 0.030f, 0.010f, 0.004f };
     fond_degrade(t, haut, bas);
 
-    const float mx = W * 0.5f, my = H * 0.455f;
+    /*
+     * La pièce remonte à 0,320 de la hauteur : elle était centrée à 0,455 quand
+     * la planche ne portait qu'un prix. La grille des huit taux demande la
+     * moitié basse, et une pièce laissée au centre l'aurait chevauchée.
+     *
+     * 0,320 et non 0,285, qui était le premier essai : à 0,285 le bord haut du
+     * jeton tombait à 169 px pour une ligne de texte qui descend à 195, et
+     * « 10 TICKETS = 1 JETON » passait DERRIÈRE la pièce. Mesuré sur la sortie,
+     * pas déduit — c'est le genre de recouvrement qu'on ne voit qu'en ouvrant
+     * l'image. À 0,320, le jeton occupe 205 à 451 px : 10 px sous le texte,
+     * 15 px au-dessus du bandeau de la grille.
+     */
+    const float mx = W * 0.5f, my = H * 0.320f;
 
     /* L'éclat : quatorze secteurs sur vingt-huit, en triangles qui débordent
      * largement de la planche pour qu'aucun sommet ne se voie. */
@@ -637,7 +796,7 @@ static void motif_jetons(toile *t)
     /* LA PIÈCE. Un jeton d'arcade n'est pas une médaille : il est CANNELÉ sur
      * la tranche, et c'est cette couronne d'encoches qui le rend reconnaissable
      * même quand on ne lit plus ce qui est frappé dessus. */
-    const float r = W * 0.235f;
+    const float r = W * 0.150f;
     const float or_sombre[3] = { 0.44f, 0.24f, 0.030f };
     const float or_clair[3]  = { 1.00f, 0.78f, 0.22f };
     p_anneau(t, mx, my, 0.0f, r * 1.045f, or_sombre, 1.0f);
@@ -663,21 +822,62 @@ static void motif_jetons(toile *t)
                 W * 0.012f, or_clair, 0.55f);
     }
 
-    p_titre_c(t, "JETONS", mx, H * 0.055f,
-              cellule("JETONS", W * 0.84f, H * 0.115f), C_AMBRE, C_ENCRE);
-    p_texte_c(t, "LE COMPTOIR EN REND", mx, H * 0.170f,
-              cellule("LE COMPTOIR EN REND", W * 0.72f, H * 0.030f), C_ORANGE, 1.0f);
+    p_titre_c(t, "JETONS", mx, H * 0.030f,
+              cellule("JETONS", W * 0.84f, H * 0.095f), C_AMBRE, C_ENCRE);
 
-    /* Le prix, en réserve dans un bandeau : c'est la seule information que
-     * quelqu'un cherche vraiment sur cette affiche. */
-    p_rect(t, W * 0.075f, H * 0.760f, W - W * 0.075f, H * 0.860f, C_AMBRE, 1.0f);
-    p_texte_c(t, "5 POUR 1 EURO", mx, H * 0.780f,
-              cellule("5 POUR 1 EURO", W * 0.78f, H * 0.058f), C_ENCRE, 1.0f);
-    p_texte_c(t, "20 POUR 3 EUROS", mx, H * 0.888f,
-              cellule("20 POUR 3 EUROS", W * 0.62f, H * 0.036f), C_AMBRE, 1.0f);
-    p_texte_c(t, "LE JETON NE SE REPREND PAS", mx, H * 0.940f,
-              cellule("LE JETON NE SE REPREND PAS", W * 0.72f, H * 0.024f),
-              C_ORANGE, 0.9f);
+    /* Les deux chiffres qui gouvernent le monnayeur, écrits depuis les
+     * constantes. « LE MONNAYEUR EN REND N » est ce que la machine fait
+     * vraiment : elle complète jusqu'au plancher, gratuitement. */
+    {
+        char l[64];
+        snprintf(l, sizeof l, "LE MONNAYEUR EN REND %d", ROOM_ECO_PLANCHER_ACCUEIL);
+        p_texte_c(t, l, mx, H * 0.132f, cellule(l, W * 0.74f, H * 0.028f), C_ORANGE, 1.0f);
+        snprintf(l, sizeof l, "%d TICKETS = %d JETON",
+                 ROOM_ECO_TICKETS_PAR_JETON, ROOM_ECO_COUT_PARTIE);
+        p_texte_c(t, l, mx, H * 0.170f, cellule(l, W * 0.62f, H * 0.026f), C_AMBRE, 0.95f);
+    }
+
+    /*
+     * LA GRILLE. Un bandeau d'or pour l'intitulé, puis une ligne par jeu :
+     * le nom à gauche, le nombre de points qui valent un ticket à droite,
+     * aligné à DROITE parce qu'une colonne de nombres alignée à gauche ne se
+     * compare pas — la même règle que le tableau des scores.
+     */
+    const float gy0 = H * 0.455f, gy1 = H * 0.905f;
+    p_rect(t, W * 0.060f, gy0, W - W * 0.060f, gy0 + H * 0.052f, C_AMBRE, 1.0f);
+    p_texte_c(t, "POINTS PAR TICKET", mx, gy0 + H * 0.010f,
+              cellule("POINTS PAR TICKET", W * 0.70f, H * 0.032f), C_ENCRE, 1.0f);
+
+    {
+        const int n = (int)(sizeof g_taux / sizeof g_taux[0]);
+        const float ytop = gy0 + H * 0.075f;
+        const float pas  = (gy1 - ytop) / (float)(n > 0 ? n : 1);
+        /* La cellule est calée sur le PIRE cas de la table — le plus long nom
+         * et le plus grand nombre — et non sur la première ligne : sinon une
+         * ligne plus large que les autres déborderait toute seule. */
+        const float cel = minf(cellule("ASTEROID 00000", W * 0.74f, H * 0.030f),
+                               floorf(pas / 9.0f));
+        for (int i = 0; i < n; ++i) {
+            const float y = ytop + pas * (float)i;
+            char nom[24], val[16];
+            maj(nom, sizeof nom, g_taux[i].jeu);
+            snprintf(val, sizeof val, "%d", g_taux[i].div_n);
+            /* Une ligne sur deux sur fond légèrement plus clair : c'est ce qui
+             * permet de suivre une ligne du nom jusqu'au nombre sans règle. */
+            if ((i & 1) == 0) {
+                p_rect(t, W * 0.075f, y - cel * 1.2f, W - W * 0.075f,
+                       y + cel * 8.2f, C_AMBRE, 0.10f);
+            }
+            p_texte(t, nom, W * 0.100f, y, cel, C_AMBRE, 1.0f);
+            p_texte_d(t, val, W - W * 0.100f, y, cel, C_BLANC, 1.0f);
+        }
+    }
+
+    /* La ligne qui manquait à toutes les versions de cette affiche : ce jeu ne
+     * prend pas d'argent. Elle est écrite en toutes lettres parce que c'est
+     * précisément ce que les deux prix en euros faisaient croire. */
+    p_texte_c(t, "AUCUN EURO ICI, JAMAIS", mx, H * 0.935f,
+              cellule("AUCUN EURO ICI, JAMAIS", W * 0.76f, H * 0.030f), C_ORANGE, 0.95f);
 }
 
 /* ==========================================================================
@@ -1190,8 +1390,8 @@ static void motif_records(toile *t)
     p_cadre(t, 0.0f, 0.0f, W, H, W * 0.014f, C_VERT, 0.8f);
 
     const float mx = W * 0.5f;
-    p_texte_c(t, "TABLEAU DU MOIS", mx, H * 0.048f,
-              cellule("TABLEAU DU MOIS", W * 0.70f, H * 0.042f), C_VERT, 1.0f);
+    p_texte_c(t, "SCORE DE REFERENCE", mx, H * 0.048f,
+              cellule("SCORE DE REFERENCE", W * 0.70f, H * 0.042f), C_VERT, 1.0f);
 
     /* Le dormant, puis la dalle. Le premier est un aplat gris ; c'est le
      * contraste entre les deux qui fait lire « écran » plutôt que « cadre ». */
@@ -1205,38 +1405,60 @@ static void motif_records(toile *t)
     p_rect(t, ex0, ey0, ex1, ey1, dalle, 1.0f);
 
     const float exm = (ex0 + ex1) * 0.5f;
-    p_texte_c(t, "MEILLEURS SCORES", exm, ey0 + H * 0.030f,
-              cellule("MEILLEURS SCORES", (ex1 - ex0) * 0.86f, H * 0.036f), C_VERT, 1.0f);
+    p_texte_c(t, "UNE BONNE PARTIE VAUT", exm, ey0 + H * 0.030f,
+              cellule("UNE BONNE PARTIE VAUT", (ex1 - ex0) * 0.86f, H * 0.036f),
+              C_VERT, 1.0f);
     p_rect(t, ex0 + W * 0.045f, ey0 + H * 0.082f, ex1 - W * 0.045f,
            ey0 + H * 0.082f + 2.0f, C_VERT, 0.65f);
 
     /*
-     * Les huit lignes. Trois colonnes, dont la dernière est alignée à DROITE :
-     * une colonne de scores alignée à gauche ne se compare pas, et c'est la
-     * seule chose qu'on fait avec un tableau de scores.
+     * CE QUE CETTE AFFICHE PEUT DIRE DE VRAI, ET CE QU'ELLE NE PEUT PAS.
      *
-     * Les noms sont des initiales inventées. Il n'y a là aucun clin d'œil à
-     * chercher : les cinq noms qu'on lisait sur l'affiche remplacée étaient
-     * ceux des personnages d'une série, et c'est précisément ce qui la rendait
-     * indistribuable.
+     * Elle affichait huit noms et huit scores INVENTÉS — LEA 812340, NOE
+     * 774100 — sans rapport avec ce qu'un seul des huit jeux marque. Le plus
+     * gros score réellement atteint par un autopilote sur ce dépôt est 416 300
+     * (aplomb), et six des huit jeux ne dépassent jamais cinq chiffres : ces
+     * huit lignes décrivaient un jeu qui n'existe pas.
+     *
+     * On ne peut pas les remplacer par les VRAIS records du joueur, et il faut
+     * le dire plutôt que de le contourner : cette planche est dessinée À LA
+     * CONSTRUCTION, des mois avant qu'un joueur existe, et les records vivent
+     * dans son fichier `scores.txt`. Une affiche murale cuite dans le paquet ne
+     * peut pas les lire. Les vrais records SONT affichés dans la salle, en deux
+     * endroits qui les lisent à l'exécution : la dalle de `borne_classement`
+     * (`room_hud_draw_leaderboard`) et le tableau du bar
+     * (`room_hud_draw_scoreboard`).
+     *
+     * Ce que la planche peut dire de vrai, c'est le SCORE DE RÉFÉRENCE : la
+     * médiane mesurée sur chaque jeu, celle-là même qui a servi à poser son
+     * taux dans `room_bareme.h`. C'est l'information utile pour qui regarde le
+     * mur avant de jouer — « à combien dois-je viser » — et c'est le seul
+     * chiffre de l'économie qui soit à la fois vrai et connu à la construction.
+     *
+     * Trois colonnes, dont la dernière alignée à DROITE : une colonne de
+     * nombres alignée à gauche ne se compare pas, et comparer est la seule
+     * chose qu'on fait avec un tableau de scores.
      */
-    static const char *const lignes[8][3] = {
-        { "1", "LEA", "812340" }, { "2", "NOE", "774100" },
-        { "3", "IVA", "690820" }, { "4", "ZOE", "651975" },
-        { "5", "OMA", "604300" }, { "6", "RIK", "588640" },
-        { "7", "YAN", "512205" }, { "8", "PAM", "497880" },
-    };
+    const int n = (int)(sizeof g_taux / sizeof g_taux[0]);
     const float cl = cellule("MMMMMMMMMMM", (ex1 - ex0) * 0.82f, H * 0.034f);
     const float y0 = ey0 + H * 0.115f;
-    const float pas = H * 0.0655f;
-    for (int i = 0; i < 8; ++i) {
+    const float pas = (ey1 - H * 0.020f - y0) / (float)(n > 0 ? n : 1);
+    for (int i = 0; i < n; ++i) {
         const float y = y0 + pas * (float)i;
         /* La première ligne est plus claire : sur un tube, la ligne du haut du
          * tableau est celle qui clignote. */
         const float a = (i == 0) ? 1.0f : 0.80f;
-        p_texte(t, lignes[i][0], ex0 + W * 0.055f, y, cl, C_VERT, a);
-        p_texte(t, lignes[i][1], ex0 + W * 0.155f, y, cl, C_VERT, a);
-        p_texte_d(t, lignes[i][2], ex1 - W * 0.055f, y, cl, C_VERT, a);
+        char rang[4], nom[24], val[16];
+        snprintf(rang, sizeof rang, "%d", i + 1);
+        maj(nom, sizeof nom, g_taux[i].jeu);
+        /* La médiane se recompose depuis le taux : `diviseur x cible` est la
+         * définition même du diviseur, et la recomposer plutôt que de la
+         * recopier garantit que la colonne suit le taux affiché sur l'affiche
+         * `jetons`. Les deux planches ne peuvent pas se contredire. */
+        snprintf(val, sizeof val, "%d", g_taux[i].div_n * ROOM_ECO_CIBLE_TICKETS);
+        p_texte(t, rang, ex0 + W * 0.055f, y, cl, C_VERT, a);
+        p_texte(t, nom, ex0 + W * 0.135f, y, cl, C_VERT, a);
+        p_texte_d(t, val, ex1 - W * 0.055f, y, cl, C_VERT, a);
     }
 
     /*
@@ -1258,12 +1480,96 @@ static void motif_records(toile *t)
                 dalle, 0.030f);
     }
 
-    p_texte_c(t, "RELEVE LE PREMIER DE CHAQUE MOIS", mx, H * 0.895f,
-              cellule("RELEVE LE PREMIER DE CHAQUE MOIS", W * 0.84f, H * 0.026f),
-              C_VERT, 0.9f);
-    p_texte_c(t, "LE VOTRE SE VALIDE AU COMPTOIR", mx, H * 0.940f,
-              cellule("LE VOTRE SE VALIDE AU COMPTOIR", W * 0.80f, H * 0.024f),
+    {
+        char l[64];
+        snprintf(l, sizeof l, "CE SCORE VAUT %d TICKETS", ROOM_ECO_CIBLE_TICKETS);
+        p_texte_c(t, l, mx, H * 0.895f, cellule(l, W * 0.84f, H * 0.026f), C_VERT, 0.9f);
+    }
+    /* Et où sont les VRAIS records, puisque cette planche ne peut pas les
+     * porter : sur la borne de classement, qui les lit à l'exécution. */
+    p_texte_c(t, "VOS RECORDS SONT SUR LA BORNE DE CLASSEMENT", mx, H * 0.940f,
+              cellule("VOS RECORDS SONT SUR LA BORNE DE CLASSEMENT", W * 0.84f, H * 0.024f),
               C_VERT, 0.7f);
+}
+
+/* ==========================================================================
+ * MOTIF 9 — LOTS. La face de la vitrine, lue dans l'économie.
+ * ==========================================================================
+ * Elle n'est pas accrochée à un mur : c'est la face du meuble `vitrine_lots`,
+ * dans l'alcôve nord-est du hall, et elle est la SEULE des neuf planches qui
+ * soit à la fois un décor et une interface.
+ *
+ * CE QU'IL Y AVAIT À LA PLACE. Le meuble portait `affiche_6`, c'est-à-dire
+ * `affiche_attention.png` — l'avertissement « LUMIÈRES CLIGNOTANTES / EN CAS DE
+ * MALAISE, ARRÊTEZ LA PARTIE ». Une vitrine à lots qui affiche un avertissement
+ * d'épilepsie n'est pas seulement hors sujet : elle enseigne au joueur que ce
+ * meuble ne le concerne pas, et il ne s'en approche plus. L'avertissement, lui,
+ * est déjà accroché au mur où il doit être.
+ *
+ * ELLE EST EN PAYSAGE, et les cotes viennent du meuble : la face fait 1,62 x
+ * 0,76 m, soit 2,13:1. Les huit autres planches sont en portrait parce qu'elles
+ * remplissent des cadres de 0,777 x 0,971 m ; celle-ci prendrait des bandes
+ * noires ou serait étirée de 113 %.
+ *
+ * Le titre au-dessus, les lots en dessous, un par ligne : le nom à gauche, le
+ * prix à droite. C'est la même mise en page que la grille de l'affiche
+ * `jetons`, et c'est voulu — le joueur qui a lu l'une sait lire l'autre.
+ */
+static void motif_lots(toile *t)
+{
+    const float W = (float)t->w, H = (float)t->h;
+    const float haut[3] = { 0.055f, 0.020f, 0.075f };
+    const float bas[3]  = { 0.020f, 0.010f, 0.035f };
+    fond_degrade(t, haut, bas);
+
+    /* Un halo derrière le titre : sans lui, la planche est un tableau posé sur
+     * du noir, et une vitrine doit avoir l'air éclairée de l'intérieur. */
+    for (int i = 30; i > 0; --i) {
+        p_anneau(t, W * 0.5f, H * 0.16f, 0.0f, W * 0.42f * (float)i / 30.0f,
+                 C_MAGENTA, 0.006f);
+    }
+
+    p_cadre(t, 0.0f, 0.0f, W, H, H * 0.030f, C_AMBRE, 1.0f);
+
+    const float mx = W * 0.5f;
+    p_titre_c(t, "VITRINE A LOTS", mx, H * 0.055f,
+              cellule("VITRINE A LOTS", W * 0.66f, H * 0.150f), C_AMBRE, C_ENCRE);
+    p_texte_c(t, "VOS TICKETS S'ECHANGENT ICI", mx, H * 0.245f,
+              cellule("VOS TICKETS S'ECHANGENT ICI", W * 0.56f, H * 0.062f),
+              C_CYAN, 1.0f);
+
+    /*
+     * Les lots, dépliés depuis `ROOM_ECO_LOTS`. Le nombre n'est écrit nulle
+     * part : ajouter un lot ajoute sa ligne, et le pas se recalcule. C'est ce
+     * qui interdit à cette planche de promettre un lot qui n'existe pas, ou de
+     * taire celui qu'on vient d'ajouter.
+     */
+    typedef struct { const char *titre; int prix; const char *quoi; } lot_ligne;
+#define POSTER_LOT(cle, prix, titre, quoi) { (titre), (prix), (quoi) },
+    static const lot_ligne lots[] = { ROOM_ECO_LOTS(POSTER_LOT) };
+#undef POSTER_LOT
+
+    const int   n    = (int)(sizeof lots / sizeof lots[0]);
+    const float ytop = H * 0.365f;
+    const float ybas = H * 0.945f;
+    const float pas  = (ybas - ytop) / (float)(n > 0 ? n : 1);
+    /* La cellule est calée sur le pire cas de la table — le titre le plus long
+     * et le prix le plus grand — et non sur la première ligne : une ligne plus
+     * large que les autres déborderait toute seule. */
+    const float cel  = minf(cellule("REGIME DIFFICILE 0000", W * 0.86f, H * 0.10f),
+                            floorf(pas / 10.0f));
+
+    for (int i = 0; i < n; ++i) {
+        const float y = ytop + pas * (float)i;
+        if ((i & 1) == 0) {
+            p_rect(t, W * 0.045f, y - cel * 1.4f, W - W * 0.045f, y + cel * 8.6f,
+                   C_AMBRE, 0.09f);
+        }
+        char prix[16];
+        snprintf(prix, sizeof prix, "%d", lots[i].prix);
+        p_texte(t, lots[i].titre, W * 0.065f, y, cel, C_BLANC, 1.0f);
+        p_texte_d(t, prix, W - W * 0.065f, y, cel, C_AMBRE, 1.0f);
+    }
 }
 
 /* ==========================================================================
@@ -1284,6 +1590,7 @@ static const motif_def g_motifs[] = {
     { "attention", "l'avertissement lumieres clignotantes"    },
     { "orbite",    "la reclame d'un jeu invente"              },
     { "records",   "le tableau des meilleurs scores"          },
+    { "lots",      "la face de la vitrine, lue dans l'economie" },
 };
 
 static void ecrire(const toile *t, const char *chemin)
@@ -1348,6 +1655,7 @@ int main(int argc, char **argv)
     else if (strcmp(motif, "attention") == 0) motif_attention(&t);
     else if (strcmp(motif, "orbite") == 0)    motif_orbite(&t);
     else if (strcmp(motif, "records") == 0)   motif_records(&t);
+    else if (strcmp(motif, "lots") == 0)      motif_lots(&t);
     else tool_fatalf("motif inconnu : « %s »", motif);
 
     finition(&t);

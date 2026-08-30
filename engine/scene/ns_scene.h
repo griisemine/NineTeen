@@ -129,6 +129,7 @@ typedef enum ns_poi_kind {
     NS_POI_EXIT,
     NS_POI_LEADERBOARD,
     NS_POI_TOKENS,          /* le monnayeur : la ou l'on prend ses jetons */
+    NS_POI_PRIZES,          /* la vitrine a lots : la ou l'on depense ses tickets */
     NS_POI_KIND_COUNT
 } ns_poi_kind;
 

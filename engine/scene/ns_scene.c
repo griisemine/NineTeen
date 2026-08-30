@@ -110,6 +110,12 @@ static ns_poi_kind ns_poi_kind_from_name(const char *name)
          * sous lequel le prochain se cachera. */
         { "monnayeur",   NS_POI_TOKENS },
         { "tokens",      NS_POI_TOKENS },
+        /* La vitrine a lots. Elle etait dans le decor depuis A4 et ne servait a
+         * rien : c'est desormais le comptoir d'echange des tickets, et il lui
+         * fallait une nature pour que la salle puisse la declarer. */
+        { "vitrine",     NS_POI_PRIZES },
+        { "lots",        NS_POI_PRIZES },
+        { "prizes",      NS_POI_PRIZES },
     };
     if (!name || !name[0]) return NS_POI_NONE;
     for (size_t t = 0; t < SDL_arraysize(table); ++t) {
@@ -1397,9 +1403,25 @@ static void add_cabinet_screen_lights(ns_scene *s)
 /* Points d'intérêt                                                           */
 /* ========================================================================== */
 
+/*
+ * Un libellé par nature, et la table doit les avoir TOUTES.
+ *
+ * Elle s'arrêtait à « Classement » pour un `NS_POI_KIND_COUNT` qui valait déjà
+ * un de plus : `ns_poi_label(NS_POI_TOKENS)` rendait le pointeur nul que
+ * l'initialisation partielle laisse derrière elle, et `detect_points_of_interest`
+ * le passait à un « %-12s ». Le défaut ne s'est jamais vu parce que la salle
+ * DÉCLARE ses lieux et que cette trace-là n'est imprimée que par le repérage de
+ * secours — mais une salle sans `pois` l'aurait atteint.
+ *
+ * Le contrôle qui suit fige la correspondance : ajouter une nature sans son
+ * libellé ne compile plus.
+ */
 static const char *const g_poi_labels[NS_POI_KIND_COUNT] = {
-    "", "Billard", "Canapé", "Bar", "Radio", "Toilettes", "Sortie", "Classement"
+    "", "Billard", "Canapé", "Bar", "Radio", "Toilettes", "Sortie", "Classement",
+    "Monnayeur", "Vitrine"
 };
+_Static_assert(SDL_arraysize(g_poi_labels) == NS_POI_KIND_COUNT,
+               "chaque nature de lieu doit avoir son libellé");
 
 const char *ns_poi_label(ns_poi_kind kind)
 {

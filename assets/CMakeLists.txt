@@ -471,13 +471,28 @@ endforeach()
 # `plan` LIT la description de la salle au lieu de la recopier : une affiche qui
 # montrerait un plan périmé serait pire qu'une affiche absente, et celle-ci suit
 # les murs, les dix-neuf bornes et la position de départ à chaque build.
-set(POSTER_MOTIFS tournoi reglement jetons concert plan attention orbite records)
+#
+# `lots` N'EST PAS UNE AFFICHE MURALE : c'est la face du meuble `vitrine_lots`,
+# et elle sort donc en PAYSAGE. Ses cotes viennent du meuble — la face fait
+# 1,62 x 0,76 m, soit 2,13:1 — quand les huit autres remplissent des cadres de
+# 0,777 x 0,971 m. Sortie au gabarit portrait, elle serait etiree de 113 %.
+#
+# Ce qu'elle remplace : la vitrine portait `affiche_6`, c'est-a-dire
+# `affiche_attention.png`, l'avertissement « lumieres clignotantes ». Une
+# vitrine a lots qui affiche un avertissement d'epilepsie apprend au joueur que
+# ce meuble ne le concerne pas. L'avertissement reste accroche au mur, ou il
+# doit etre.
+set(POSTER_MOTIFS tournoi reglement jetons concert plan attention orbite records lots)
 foreach(motif IN LISTS POSTER_MOTIFS)
     set(_png "${GEN}/sideart/affiche_${motif}.png")
+    set(_dim --width=820 --height=1024)
+    if(motif STREQUAL "lots")
+        set(_dim --width=1024 --height=480)
+    endif()
     add_custom_command(
         OUTPUT  "${_png}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
-        COMMAND posterart "--motif=${motif}"
+        COMMAND posterart "--motif=${motif}" ${_dim}
                           "--salle=${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
                           "${_png}"
         DEPENDS posterart "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json"
@@ -674,12 +689,28 @@ list(LENGTH _cc0_textures  _n_cc0)
 # sortent du compte en meme temps, retirees de `_room_textures` : le total ne
 # bouge pas. Trois planches en plus, trois fichiers en moins, la salle en
 # emploie toujours autant.
-# +26 : le crepi des murs s'ajoute. Il ne compense PAS `mur_gris.jpg` dans ce
-# compte-ci, et c'est la difference entre les deux controles : `roomgen` compte
-# ce que la salle DECLARE — employe ou retire — donc l'image remplacee reste au
-# total en passant dans `retiredTextures`, et la planche dessinee s'ajoute. Le
-# controle de COPIE, lui, cesse de l'emporter dans le paquet.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 26")
+#
+# +27, et les DEUX raisons sont a lire ensemble parce qu'elles sont arrivees par
+# deux chemins differents et qu'elles ont failli s'annuler : chacun des deux
+# lots a monte ce compte de 25 a 26, pour une planche differente. Une resolution
+# distraite aurait garde 26 et perdu une planche sans que rien ne le dise —
+# sauf ce controle, qui l'aurait justement dit.
+#
+#   +1 LE CREPI DES MURS. Il ne compense PAS `mur_gris.jpg` dans ce compte-ci,
+#   et c'est la difference entre les deux controles : `roomgen` compte ce que la
+#   salle DECLARE — employe ou retire — donc l'image remplacee reste au total en
+#   passant dans `retiredTextures`, et la planche dessinee s'ajoute. Le controle
+#   de COPIE, lui, cesse de l'emporter dans le paquet.
+#
+#   +1 `affiche_lots`, la neuvieme planche de `posterart`, qui est la face de la
+#   vitrine et non une affiche murale. Elle ne remplace aucun fichier — elle
+#   remplace un EMPLOI : le meuble portait `affiche_6`, l'avertissement
+#   « lumieres clignotantes », qui reste accroche au mur ou il doit etre.
+#
+# Ce controle a fait exactement son travail sur ces deux lots : chaque planche
+# ajoutee sans le compte a arrete le build (« 92 pour 91 presentes »). C'est le
+# comportement voulu.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 27")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
