@@ -28,7 +28,19 @@ import (
 	"nineteen/internal/web"
 )
 
-const version = "15.0.0"
+// version — celle du PROJET, recopiee de `CMakeLists.txt`.
+//
+// Elle etait restee a 15.0.0 pendant deux versions. Le site lit `/api/v1/version`
+// pour sa page de telechargement et pour construire les liens de release GitHub :
+// il annoncait donc « Version 15.0.0 » et pointait vers des paquets
+// `Nineteen-15.0.0-*` qui n'existent pas. Rien ne le disait, parce que rien ne
+// confrontait cette ligne a quoi que ce soit.
+//
+// C'est maintenant le cas : `TestVersionSuitCMake` lit `CMakeLists.txt` et
+// echoue si les deux divergent. Le serveur Go ne peut pas lire ce fichier au
+// demarrage — le conteneur ne contient que `server/` — donc la copie reste, mais
+// elle est desormais CONTROLEE.
+const version = "17.0.0"
 
 // isLoopbackAddr dit si une adresse d'ecoute ne sort pas de la machine.
 //
@@ -314,9 +326,37 @@ func staticHandler() (http.Handler, error) {
 		// Les fichiers versionnés peuvent être mis en cache longtemps ; le HTML
 		// ne doit pas l'être, sinon une mise à jour du site n'atteint jamais
 		// les visiteurs déjà venus.
-		if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") {
+		//
+		// LE MÉDIA A SA PROPRE DURÉE, et il en a besoin. Depuis que la page
+		// montre le jeu, elle référence une cinquantaine de fichiers — deux
+		// formats de vidéo par jeu, dix-neuf photos de bornes, huit vues de
+		// salle — et le `no-cache` générique forçait une revalidation pour
+		// CHACUN à chaque visite. Les réponses étaient des 304, donc le
+		// gaspillage n'était pas en octets mais en allers-retours : cinquante
+		// requêtes conditionnelles avant que la page ne se peigne.
+		//
+		// La durée reste modérée, et c'est délibéré : ces noms de fichiers ne
+		// portent pas d'empreinte de contenu, donc `tools/site-media.py` peut
+		// réécrire `salle.mp4` sans que son nom change. Une journée est le
+		// compromis : assez pour qu'une visite de retour ne redemande rien,
+		// assez peu pour qu'un média régénéré atteigne tout le monde le
+		// lendemain sans purge manuelle.
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, ".css"), strings.HasSuffix(path, ".js"):
 			w.Header().Set("Cache-Control", "public, max-age=3600")
-		} else {
+		case strings.HasPrefix(path, "/media/"), strings.HasPrefix(path, "/img/"),
+			strings.HasPrefix(path, "/fonts/"):
+			// Le manifeste est l'exception dans son propre dossier : c'est lui
+			// qui annonce les autres, donc le mettre en cache aussi longtemps
+			// qu'eux ferait afficher l'ancienne galerie avec les nouveaux
+			// fichiers.
+			if strings.HasSuffix(path, ".json") {
+				w.Header().Set("Cache-Control", "no-cache")
+			} else {
+				w.Header().Set("Cache-Control", "public, max-age=86400")
+			}
+		default:
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		fileServer.ServeHTTP(w, r)

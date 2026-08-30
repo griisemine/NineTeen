@@ -58,6 +58,31 @@ void ns_clock_begin_frame(ns_clock *c)
     c->frame_index++;
 }
 
+void ns_clock_begin_frame_fixed(ns_clock *c, double dt)
+{
+    NS_ASSERT(c != NULL);
+    NS_ASSERT(dt > 0.0);
+
+    /*
+     * L'horloge murale est relue et JETÉE. Elle l'est quand même pour que
+     * `last_counter` reste au présent : sans ça, une seule image rendue au
+     * temps réel après la séquence verrait tout le temps de la capture d'un
+     * coup, et le garde-fou anti-spirale la ramènerait à 0,25 s — un saut
+     * visible plutôt qu'une reprise.
+     */
+    c->last_counter = SDL_GetPerformanceCounter();
+    c->frame_seconds = dt;
+    c->accumulator += dt;
+
+    /* Pas de garde-fou ici : dt est choisi, pas subi. Le brider reviendrait à
+     * refuser une séquence à moins de 4 images par seconde, qui est un cadrage
+     * légitime pour un plan fixe. */
+    const double inst = 1.0 / dt;
+    c->fps_smoothed = (c->fps_smoothed <= 0.0) ? inst : c->fps_smoothed * 0.92 + inst * 0.08;
+
+    c->frame_index++;
+}
+
 bool ns_clock_consume_tick(ns_clock *c)
 {
     NS_ASSERT(c != NULL);

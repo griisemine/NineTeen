@@ -131,6 +131,19 @@ void ns_clock_init(ns_clock *c, double tick_hz);
 /* À appeler une fois par image : met à jour frame_seconds et remplit l'accumulateur. */
 void ns_clock_begin_frame(ns_clock *c);
 
+/*
+ * Variante à durée IMPOSÉE, pour l'écriture d'une séquence d'images.
+ *
+ * Une séquence capturée hors écran rend aussi vite que la machine le permet :
+ * mesuré ici, 760 images par seconde en headless sur Metal. L'horloge murale
+ * ferait donc avancer la simulation de 1,3 ms par image, et 200 images
+ * filmeraient un quart de seconde de jeu — un ralenti de facteur 25, dont le
+ * facteur dépendrait de la machine qui a lancé la capture. En imposant dt on
+ * obtient l'inverse : la même durée filmée partout, et un film dont la vitesse
+ * est celle qu'on a demandée.
+ */
+void ns_clock_begin_frame_fixed(ns_clock *c, double dt);
+
 /* Boucle : while (ns_clock_consume_tick(c)) { simuler(c->tick_seconds); } */
 bool ns_clock_consume_tick(ns_clock *c);
 

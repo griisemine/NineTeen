@@ -239,6 +239,34 @@ a:hover { color: #ffc862; }
         radial-gradient(120% 80% at 20% 100%, rgba(7,8,11,0.9), transparent 60%);
 }
 
+/* LA VIDÉO D'ACCUEIL ET SON REPLI FIXE, EMPILÉS.
+ *
+ * Les deux sont dans le flux et superposés ; c'est le média qui décide lequel
+ * se voit, pas le script. Par défaut l'image fixe est cachée et la vidéo joue.
+ * Sous `prefers-reduced-motion`, l'inverse — et l'image porte alors l'`alt`,
+ * donc la page reste décrite pour tout le monde.
+ *
+ * Pourquoi pas un simple `poster` sans image ? Parce qu'un visiteur qui a
+ * demandé moins d'animation ne doit pas TÉLÉCHARGER la vidéo pour voir une
+ * image fixe. `app.js` retire les `<source>` dans ce cas : la balise vidéo ne
+ * demande alors plus rien au réseau, et c'est le `<img>` qui s'affiche. */
+.hero-plate-fixe { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-plate-fixe { display: block; }
+    #video-salle { display: none; }
+}
+
+.lede-note {
+    margin: -0.9rem 0 1.8rem;
+    font-size: var(--t-sm);
+    color: var(--muted);
+}
+.lede-note code {
+    font-family: var(--mono); font-size: 0.9em;
+    color: #c9cbd3;
+}
+
 .hero-text { position: relative; max-width: 34ch; padding-bottom: 2.5rem; }
 
 .eyebrow {
@@ -359,6 +387,114 @@ a:hover { color: #ffc862; }
 }
 .cab.is-new { border-color: var(--amber-dim); }
 .cab.is-new .cab-meta { color: var(--amber); }
+
+/* La borne PHOTOGRAPHIÉE. L'image passe avant le libellé, parce que c'est elle
+   qu'on est venu voir ; le libellé reste sous elle en texte, et non incrusté
+   dessus, pour que son contraste ne dépende pas des pixels du rendu. */
+.cab-photo {
+    padding: 0;
+    overflow: hidden;
+}
+.cab-photo img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-bottom: 1px solid var(--edge);
+}
+.cab-photo .cab-corps {
+    padding: 0.9rem 1.1rem 1.1rem;
+    display: flex; flex-direction: column; gap: 0.35rem;
+}
+.cab-photo .cab-slot {
+    font-family: var(--mono); font-size: var(--t-xs);
+    color: var(--amber); letter-spacing: 0.1em;
+}
+
+/* --- Les boucles de jeu ------------------------------------------------ */
+
+.loops {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 1.1rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.loops-attente { color: var(--muted); font-style: italic; }
+
+.loop {
+    position: relative;
+    background: linear-gradient(180deg, var(--cabinet-2), var(--cabinet));
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255, 176, 31, 0.28);
+}
+
+/* Toute la vignette est UN bouton : elle se prend au clavier, elle s'annonce
+   comme un contrôle, et son étiquette dit ce qu'elle fait. Un `<div>` avec un
+   écouteur de survol ne donnerait ni l'un ni l'autre. */
+.loop-bouton {
+    display: block; width: 100%;
+    padding: 0; margin: 0;
+    background: none; border: none; color: inherit;
+    font: inherit; text-align: left; cursor: pointer;
+}
+.loop-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #05070a;
+}
+.loop-media video,
+.loop-media img {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+}
+/* La vidéo est au-dessus de l'affiche et invisible tant qu'elle ne joue pas :
+   pas de fondu, pas de bascule d'affichage — donc pas de saut de mise en page
+   quand elle démarre. */
+.loop-media video { opacity: 0; transition: opacity 160ms ease; }
+.loop.is-playing .loop-media video { opacity: 1; }
+
+.loop-corps {
+    padding: 0.9rem 1.1rem 1.1rem;
+    display: flex; align-items: baseline; gap: 0.6rem;
+}
+.loop-nom { font-family: var(--marquee-face); font-size: var(--t-lg); }
+.loop-etat {
+    margin-left: auto;
+    font-family: var(--mono); font-size: var(--t-xs);
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em;
+}
+.loop.is-playing .loop-etat { color: var(--screen); }
+
+.loop-bouton:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+/* Sous `prefers-reduced-motion` la vignette ne joue plus au survol — voir
+   `app.js`, qui n'attache alors que le clic. L'affiche reste, et le libellé le
+   dit. */
+
+/* --- Les vues de la salle --------------------------------------------- */
+
+.vues {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; gap: 1.1rem;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.vues figure {
+    margin: 0;
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.vues img {
+    width: 100%; aspect-ratio: 16 / 9; object-fit: cover;
+    border-bottom: 1px solid var(--edge);
+}
+.vues figcaption {
+    padding: 0.85rem 1.1rem;
+    font-size: var(--t-sm);
+    color: #b6bcc9;
+}
 
 /* --- Classement : le seul endroit traité comme un écran ---------------- */
 

@@ -49,6 +49,19 @@ typedef struct options {
     bool        headless;
     const char *env_path;   /* --env= : le fichier de reglages du personnage */
     const char *screenshot;
+    /*
+     * --sequence= : le même rendu que --screenshot, mais une image PAR image,
+     * numérotée, pour qu'ffmpeg en fasse un film.
+     *
+     * Ce que ça remplace : filmer en relançant le binaire par image, avec
+     * --pos=/--yaw= incrémentés. Mesuré ici, un lancement coûte 2,2 s de
+     * chargement d'assets pour 0,1 s de rendu ; 240 images auraient donc pris
+     * neuf minutes de chargement pour vingt secondes de rendu. Surtout, ça ne
+     * peut pas filmer une PARTIE : chaque processus repart d'un état neuf, donc
+     * rien ne bouge à l'écran d'une image à l'autre sauf la caméra.
+     */
+    const char *sequence;
+    double      sequence_fps;
     int         frames;
     int         width, height;
     bool        fullscreen;
@@ -118,6 +131,11 @@ static void print_usage(const char *exe)
         "                       cherché dans le dossier courant, puis à côté du\n"
         "                       binaire, puis dans les assets)\n"
         "  --screenshot=CHEMIN  écrit une capture PNG puis quitte\n"
+        "  --sequence=PREFIXE   écrit PREFIXE0000.png, PREFIXE0001.png… une par\n"
+        "                       image rendue : de quoi monter un film. Le temps\n"
+        "                       avance alors d'un pas FIXE par image, donc la\n"
+        "                       vitesse du film ne dépend pas de la machine\n"
+        "  --sequence-fps=F     ce pas fixe, en images par seconde (défaut 30)\n"
         "  --frames=N           nombre d'images à rendre avant la capture (défaut 4)\n"
         "  --width=N --height=N résolution (défaut 1600x900)\n"
         "  --scale=F            échelle de rendu interne, 0.4 à 2.0 — sans elle,\n"
@@ -311,6 +329,10 @@ static bool parse_options(int argc, char **argv, options *o)
             o->env_path = a + 6;
         } else if (SDL_strncmp(a, "--screenshot=", 13) == 0) {
             o->screenshot = a + 13;
+        } else if (SDL_strncmp(a, "--sequence=", 11) == 0) {
+            o->sequence = a + 11;
+        } else if (SDL_strncmp(a, "--sequence-fps=", 15) == 0) {
+            o->sequence_fps = SDL_atof(a + 15);
         } else if (SDL_strncmp(a, "--frames=", 9) == 0) {
             o->frames = SDL_atoi(a + 9);
         } else if (SDL_strncmp(a, "--width=", 8) == 0) {
@@ -418,6 +440,19 @@ static bool parse_options(int argc, char **argv, options *o)
         return false;
     }
     if (o->frames < 1) o->frames = 1;
+
+    /*
+     * Le pas de la séquence est BORNÉ des deux côtés, et refusé plutôt que
+     * corrigé en silence : une faute de frappe sur `--sequence-fps=` produirait
+     * sinon un film au ralenti ou en accéléré, qui a l'air d'un défaut du jeu.
+     */
+    if (o->sequence != NULL) {
+        if (o->sequence_fps == 0.0) o->sequence_fps = 30.0;
+        if (o->sequence_fps < 1.0 || o->sequence_fps > 240.0) {
+            fprintf(stderr, "--sequence-fps doit tenir entre 1 et 240\n");
+            return false;
+        }
+    }
     return true;
 }
 
@@ -495,6 +530,27 @@ static const char *quality_name(ns_quality q)
         case NS_QUALITY_ULTRA:  return "ultra";
     }
     return "medium";
+}
+
+/*
+ * Une image de la séquence, numérotée.
+ *
+ * Le numéro est sur QUATRE chiffres et part de zéro parce que c'est ce que
+ * `ffmpeg -i PREFIXE%04d.png` lit sans autre réglage. Passé 9999 images — cinq
+ * minutes à 30 im/s — le format déborderait ; on s'arrête plutôt que d'écraser
+ * silencieusement la première image, parce qu'un film qui reboucle au milieu
+ * ressemble à un défaut d'encodage et se cherche longtemps.
+ */
+static bool write_sequence_frame(ns_rhi *rhi, SDL_GPUTexture *target, uint32_t w, uint32_t h,
+                                 const char *prefix, int index)
+{
+    if (index > 9999) {
+        NS_ERROR("séquence : 10000 images atteintes, le numéro déborderait — arrêt");
+        return false;
+    }
+    char path[1024];
+    SDL_snprintf(path, sizeof path, "%s%04d.png", prefix, index);
+    return ns_rhi_capture_texture_png(rhi, target, w, h, ns_rhi_swapchain_format(rhi), path);
 }
 
 /* ==========================================================================
@@ -3612,7 +3668,13 @@ play_at_done: ;
             }
         }
 
-        ns_clock_begin_frame(&clock);
+        /* Une séquence avance d'un pas CHOISI, jamais du temps qu'a pris le
+         * rendu : voir `ns_clock_begin_frame_fixed`. */
+        if (opt.sequence != NULL) {
+            ns_clock_begin_frame_fixed(&clock, 1.0 / opt.sequence_fps);
+        } else {
+            ns_clock_begin_frame(&clock);
+        }
         while (ns_clock_consume_tick(&clock)) {
             /*
              * Les portes AVANT la caméra, et ce n'est pas indifférent : la
@@ -4118,6 +4180,13 @@ play_at_done: ;
                 static const float night[4] = { 0.02f, 0.02f, 0.03f, 1.0f };
                 ns_sprite_end(rhi, sprites, target, w, h, night);
                 ns_rhi_end_frame(rhi);
+                /* La séquence est écrite AVANT l'incrément, pour que la
+                 * première image porte le numéro 0 sur les deux chemins de
+                 * rendu — celui-ci et celui de la salle. */
+                if (opt.sequence && !write_sequence_frame(rhi, target, (uint32_t)w, (uint32_t)h,
+                                                          opt.sequence, frames_rendered)) {
+                    running = false;
+                }
                 frames_rendered++;
                 /*
                  * `--frames=` s'arrête, capture ou pas.
@@ -4131,7 +4200,7 @@ play_at_done: ;
                  * images doit compter les images ; qu'on en fasse une PNG est
                  * une autre question.
                  */
-                if (frames_rendered >= opt.frames && (opt.screenshot || opt.headless)) {
+                if (frames_rendered >= opt.frames && (opt.screenshot || opt.sequence || opt.headless)) {
                     if (opt.screenshot) {
                         ns_rhi_capture_texture_png(rhi, target, w, h,
                                                    ns_rhi_swapchain_format(rhi), opt.screenshot);
@@ -4512,6 +4581,10 @@ play_at_done: ;
             }
 
             ns_rhi_end_frame(rhi);
+            if (opt.sequence && !write_sequence_frame(rhi, target, (uint32_t)w, (uint32_t)h,
+                                                      opt.sequence, frames_rendered)) {
+                running = false;
+            }
             frames_rendered++;
 
             /*
@@ -4585,7 +4658,10 @@ play_at_done: ;
              * ne peux pas le savoir, et je ne le prétends pas. Les captures
              * courtes (4 à 8 images) passent, c'est ce dont elles ont besoin.
              */
-            if (opt.headless && frames_rendered >= opt.frames) {
+            /* `--sequence` compte ses images comme `--headless` : sans ça, une
+             * séquence lancée avec une fenêtre tournerait sans fin en écrivant
+             * des PNG jusqu'à remplir le disque. */
+            if ((opt.headless || opt.sequence) && frames_rendered >= opt.frames) {
                 ns_texture_destroy(rhi, &offscreen);
                 running = false;
             }
