@@ -556,6 +556,176 @@ En jeu : `--duel-direct=hôte:port,identifiant,place`, avec `--game=`.
 
 ---
 
+## L'ARÈNE — le même relais, à N places
+
+Le mode compétitif met **deux à huit joueurs** dans la même salle en même temps : chacun sur sa
+borne, des points, des sabotages qu'on s'achète et qu'on lance sur les autres, et un « couperet »
+qui élimine périodiquement le dernier du classement.
+
+Le transport qu'il demande est celui du duel, **au nombre de places près**. C'est donc le même
+relais, sur le même port, avec un type de trame de plus — et la même bêtise volontaire.
+
+### Ce qu'elle transporte
+
+Le cadrage ne bouge pas : `uint16 longueur (petit-boutiste) | uint8 type | charge`, 512 octets de
+charge au maximum.
+
+| Type | Sens | Charge |
+|---|---|---|
+| `0x10` `fJoin` | client → relais | `uint64 salon` \| `uint8 place` \| `uint8 places_attendues` \| `char pseudo[24]` |
+| `0x11` `fRoster` | relais → tous | `uint8 n` \| `{ uint8 place ; char pseudo[24] } × n` |
+| `0x02` `fStart` | relais → tous | `uint64 graine` — **la même trame que le duel** |
+| `0x05` `fBye` | relais → tous | `uint8 place` : qui est parti |
+| `≥ 0x20` | client → relais | **diffusé tel quel** à toutes les *autres* places, précédé de l'octet de place de l'émetteur |
+
+`fJoin` est un type **nouveau**, et pas un `fHello` rallongé. Un `if len(charge) >= 34` sur le
+HELLO ferait dépendre le *sens* d'une trame de sa *longueur* : le jour où un client installé
+allonge son HELLO d'un champ, il se réveille dans l'arène. Le chemin du duel n'est donc pas
+touché — même HELLO, mêmes places 0 et 1, même recopie vers l'**autre** et non une diffusion.
+
+Tout ce qui est au-dessus de `0x20` traverse sans être interprété : c'est par là que passent
+l'état des joueurs, les sabotages et le verdict du couperet, et le relais n'a pas à savoir ce que
+c'est. En dessous de `0x20`, les types appartiennent au relais et ne sont **jamais** rediffusés —
+sans quoi n'importe qui fabriquerait un START, un tableau des places, ou le départ d'un autre.
+
+### Ce qu'elle n'arbitre pas, et la conséquence assumée
+
+Le relais **apparie et diffuse**. Il ne connaît ni score, ni classement, ni couperet, ni minuterie
+de partie. Aucune règle de jeu n'est portée en Go : la règle vit en C, une seule fois, chez le
+joueur de **la place 0**, qui est l'arbitre et publie son verdict comme n'importe quelle autre
+trame.
+
+**La place 0 peut donc mentir.** C'est écrit ici parce que c'est une concession, et c'est
+exactement la même que celle du duel — deux clients complices peuvent se mentir l'un à l'autre —
+assumée pour la même raison : l'autorité sur les scores **enregistrés** reste le journal scellé
+par HMAC, envoyé par HTTP et recalculé par le serveur. Rien de l'arène ne le touche.
+
+L'alternative aurait été un arbitre en Go. Il faudrait alors y porter la règle du couperet, celle
+des sabotages et le barème des points, en double de leur version C — soit la duplication qui
+finit toujours par diverger, pour défendre un classement qui n'est de toute façon pas décidé là.
+
+### L'identité de l'émetteur est **insérée**
+
+Le relais écrit un octet devant chaque trame libre qu'il diffuse : la place de l'émetteur. Le
+raisonnement, parce que l'autre option — diffuser brut — était défendable :
+
+- **Le prix réel est d'un octet sur le fil, pas d'une recopie.** Le relais recopie déjà chaque
+  charge une fois (`readFrame` alloue, `frame` recopie ailleurs) ; la version préfixée alloue une
+  fois et recopie une fois, exactement comme l'autre. Il n'y a pas de tampon supplémentaire.
+- **Sans elle, un sabotage « de la part de la place 3 » se fabrique en changeant un octet chez
+  soi.** Le mode entier repose sur qui a envoyé quoi.
+- **Le client n'y gagnerait rien** : il devrait de toute façon écrire sa place dans la charge pour
+  que la trame veuille dire quelque chose. On ne supprime pas un octet, on décide **qui** l'écrit
+  — et celui qui l'écrit ici ne peut pas se tromper de place.
+
+Ce que ça ne ferme pas, et il faut le dire aussi net : l'arbitre ment de sa propre place. On ferme
+l'usurpation *entre joueurs*, pas la malhonnêteté de la place 0, qui est assumée plus haut.
+
+### Les règles d'appariement
+
+- `places_attendues` va de **2 à 8**. Toutes les places d'un même salon doivent annoncer la même
+  valeur ; la première annonce fait foi, une autre valeur fait refuser la connexion. Sans cette
+  règle, un salon de huit et un salon de trois partageraient une table et personne ne recevrait
+  jamais de START.
+- `place` doit être inférieure à `places_attendues`, et **libre**.
+- `fStart` part quand **toutes** les places sont prises, avec une graine tirée par `crypto/rand`,
+  bit de poids fort effacé — la même règle que le duel, et pour la raison déjà écrite : la graine
+  traverse des entiers signés.
+- `fRoster` part à **chaque** arrivée et à **chaque** départ, à tout le monde. C'est ce qui permet
+  d'afficher un salon en train de se remplir plutôt qu'un écran d'attente muet, et c'est aussi le
+  seul endroit où un client apprend le pseudo des autres. Les places y sortent dans l'ordre : le
+  client qui dessine le salon n'a pas à trier.
+- Un **départ en cours de partie ne ferme pas le salon** : le mode continue avec un joueur de
+  moins, et les restants reçoivent le `fBye` portant la place du partant, puis le tableau à jour.
+- Un salon **dont il ne reste qu'une place est fermé** : il quitte la table, son identifiant
+  redevient libre. On ne coupe pas pour autant la socket du dernier — une socket fermée par le
+  relais est indiscernable d'une panne de réseau, et c'est justement le joueur à qui il faut
+  montrer une fin de mode.
+- Un salon **déjà lancé n'accepte plus personne**, même sur une place libérée. Un arrivant
+  recevrait la graine d'une partie commencée depuis longtemps : il serait au pas 0 pendant que les
+  autres sont au pas 40 000, et le relais n'a rien pour le rattraper. Le rattraper serait le
+  travail de l'arbitre, donc une règle de jeu, donc pas là.
+- Un salon **incomplet attend `pairTimeout`** (60 s), et non les 10 s d'inactivité du pas
+  verrouillé : un joueur qui patiente devant un salon à moitié plein n'a rien à envoyer.
+- La charge utile d'une trame libre s'arrête à **511 octets** et non 512 : l'octet de place doit
+  tenir devant. Une charge de 512 fait **fermer la connexion** plutôt que d'être rognée — un octet
+  perdu au bout d'une charge n'est pas une trame trop longue, c'est une charge qui veut dire autre
+  chose.
+
+Le pseudo est recopié tel quel, à trois coupes près qui ne sont pas des règles de jeu mais de
+l'hygiène de champ : au premier octet nul, sans les octets de commande (avec lesquels un joueur
+écrirait ce qu'il veut sur l'écran d'un autre), et à 23 octets sans couper une séquence UTF-8 en
+deux — 23 et non 24 pour que le champ soit **toujours** terminé par un zéro, puisqu'il atterrit
+dans un `char[24]` en C.
+
+### Le plafond se compte en places, pas en salons
+
+Une place coûte une file de 256 trames, et un salon en a jusqu'à **quatre fois plus** qu'un duel.
+Continuer à ne compter que les sessions aurait quadruplé le pire cas en silence.
+
+Le calcul, par place et **au pire** :
+
+```
+file             256 emplacements × 24 octets (en-tête de tranche)  =    6 144
+trames retenues  256 × (3 + 512) octets                            =  131 840
+                                                                     ---------
+                                                          137 984 octets = 134,8 Kio
+```
+
+C'est bien le pire et pas la moyenne : il suppose une file pleine de trames maximales dont chacune
+n'est plus retenue que par cette file-là — une trame diffusée est **une** allocation partagée par
+ses destinataires, pas une par destinataire. Il ne compte ni l'en-tête du canal ni les piles des
+deux routines, et il ignore l'arrondi de l'allocateur, qui joue contre nous.
+
+- **512 places = 70 647 808 octets = 67,4 Mio.** C'est le plafond retenu, et c'est *exactement* ce
+  que 256 duels ont toujours pu coûter : le budget ne bouge pas, seule la façon de le dépenser
+  change. Il paie 256 duels, ou 64 salons de huit, ou n'importe quel mélange.
+- Pour comparaison, ce que l'ancien plafond de 256 **sessions** aurait donné seul le jour de
+  l'arène : 256 salons pleins = 2 048 places = **269,5 Mio**, quatre fois le budget, sans que rien
+  ne le dise.
+
+Les deux verrous coexistent donc : 256 sessions bornent la *table* (ouvrir des connexions avec des
+identifiants différents ne doit pas la faire grossir sans fin), 512 places bornent la *mémoire*.
+
+### Comment c'est prouvé
+
+Le relais n'avait aucun test Go. Il en a maintenant **12, plus 16 sous-tests**, dans
+`server/internal/duel/relay_test.go`, tous sur un vrai écouteur TCP sur `127.0.0.1:0` plutôt que
+sur `net.Pipe` : les délais de lecture, la socket fermée vue d'en face et le cadrage sur un flux
+qui peut se couper n'importe où sont précisément ce qu'on veut éprouver.
+
+```sh
+cd server && go test -race ./internal/duel/     # ok, 0 échec
+```
+
+| Ce qui est vérifié | Pourquoi c'est là |
+|---|---|
+| le duel à deux : même graine, trame recopiée **telle quelle** vers l'autre et pas vers l'émetteur, `fBye` de motif `01` | s'il tombe, c'est un client installé qui tombe |
+| le START ne part qu'après la **dernière** arrivée, et il est le même pour tous | c'est la définition d'un salon complet |
+| le tableau grandit à chaque arrivée, rétrécit à chaque départ | c'est le seul écran d'attente qui dit quelque chose |
+| une trame `0x20` de la place 2 arrive aux places 0, 1 et 3, **précédée de `02`**, et pas à la place 2 | la diffusion et l'identité, en une assertion |
+| les types réservés au relais ne sont **pas** rediffusés | sinon n'importe qui fabrique un START |
+| sept refus : place prise, place hors du salon, `places_attendues` divergentes, bornes 0/1/9/255, JOIN trop court, identifiant déjà pris par un duel, salon déjà lancé | c'est la moitié qu'aucun test C ne pouvait atteindre |
+| un départ en cours de partie laisse le salon vivant, et les restants reçoivent le `fBye` avec la **bonne** place | la règle du mode en dépend |
+| **120 connexions qui raccrochent au même signal** (12 duels et 12 salons de huit) | le cas qui a déjà emporté le processus : sans le champ `closed`, deux départs simultanés écrivent dans un canal fermé |
+| une trame annonçant plus que `frameMax` fait tomber la connexion **sans allouer** | vérifié par le *temps* : on n'envoie que l'en-tête, et un relais qui allouerait d'abord resterait bloqué jusqu'aux 10 s d'inactivité |
+
+Et le duel a été vérifié **par son vrai client**, pas seulement par un test Go : le
+`ns_test_lockstep` du dépôt, inchangé, lancé contre le relais modifié.
+
+```
+duel sain :
+  240 pas joués, état commun f6f3bdc6e12d2f52
+divergence provoquée :
+  divergence détectée au pas 48 (falsifiée au pas 48)
+29 vérifications, 0 échec(s)
+```
+
+Ce qui n'est **pas** prouvé ici, et qu'il faut dire : le client C de l'arène ne fait pas partie de
+ce qui est décrit ci-dessus. Ce document décrit le transport, et rien de ce que le mode en fera.
+
+---
+
 ## Ce qui reste
 
 - **Le déterminisme sur TROIS systèmes**, et pas seulement sur deux

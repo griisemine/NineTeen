@@ -96,6 +96,7 @@ NINETEEN_LOG=json \
 | `NINETEEN_LOG` | `text` ou `json` |
 | `NINETEEN_PUBLIC_URL` | l'adresse que **le jeu** doit viser, annoncée au joueur sur la page de téléchargement. Vide = rien n'est annoncé. Voir ci-dessous |
 | `NINETEEN_RELEASE_PUBLIEE` | à `1`, la page rallume ses trois boutons de téléchargement |
+| `NINETEEN_DUEL_ADDR` | adresse d'écoute du **relais temps réel** (duel à deux et arène à N places), sur son propre port. **Vide par défaut : rien ne s'ouvre.** Voir ci-dessous |
 | `NINETEEN_BIND`, `NINETEEN_PORT` | *(docker-compose seulement)* interface et port **publiés** sur l'hôte. Défaut `127.0.0.1` et `8080` : le service ne sort pas de la machine tant que personne ne l'a demandé |
 
 #### `NINETEEN_PUBLIC_URL` — l'adresse que le serveur annonce au joueur
@@ -127,6 +128,41 @@ nom. `TestLeSiteNeSupposePasSonPropreHote` interdit qu'un `localhost` y revienne
 
 Les identifiants ne sont jamais dans le code. Le dépôt d'origine les gardait en clair dans un
 fichier commité — ils sont donc encore dans l'historique git et **doivent être changés**.
+
+#### `NINETEEN_DUEL_ADDR` — le relais temps réel
+
+**Vide par défaut, et ça ne changera pas** : un serveur de classement n'a aucune raison d'ouvrir
+un port de plus tant que personne ne joue en direct. La promesse « rien ne s'ouvre sans qu'on le
+demande » vaut aussi pour le serveur.
+
+```sh
+NINETEEN_DUEL_ADDR=0.0.0.0:8081 ./nineteend …     # dans nineteend
+./duelrelay -addr 0.0.0.0:8081                    # ou tout seul, sans base
+```
+
+**Un seul port pour les deux modes.** Le duel à deux places et l'arène à 2–8 places sont le même
+relais : même cadrage, même graine tirée par `crypto/rand`, un type de trame de plus. Il n'y a
+donc ni seconde variable, ni second processus à déployer pour l'arène — voir
+`docs/RESEAU-TEMPS-REEL.md`.
+
+**Ce relais n'a aucune autorité.** Il ne connaît ni score, ni classement, ni règle de jeu : il
+apparie et recopie. L'autorité sur les scores enregistrés reste le journal scellé par HMAC, envoyé
+par HTTP et recalculé par le serveur. C'est pourquoi il peut vivre ailleurs que le classement, et
+pourquoi `duelrelay` existe comme binaire séparé : il ne touche à aucune base.
+
+Trois conséquences pour l'exploitant :
+
+- **Ce n'est pas du HTTP.** Un reverse proxy qui ne relaie que le port 8080 ne le transporte pas ;
+  c'est un port TCP à publier, ou à ne pas publier.
+- **Il ne parle pas TLS**, comme le reste du réseau de ce projet et pour la même raison (voir
+  `engine/net/ns_http.h`).
+- **La mémoire est bornée par construction** : 512 places ouvertes au maximum, toutes sessions
+  confondues, soit 67,4 Mio dans le pire cas — 256 duels, ou 64 salons de huit, ou n'importe quel
+  mélange. Le calcul est écrit dans `server/internal/duel/relay.go`.
+
+Le `docker-compose` fourni **ne le publie pas** et ne transmet pas la variable : la composition
+sert le site et le classement. Un relais se déploie à côté, avec `duelrelay`, ou en ajoutant
+soi-même l'entrée `ports` qui va bien.
 
 ### Derrière un reverse proxy
 
