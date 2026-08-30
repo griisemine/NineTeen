@@ -99,6 +99,7 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `F6` | caméra orbite |
 | `F7` / `F8` | palier de qualité / échelle de rendu |
 | `F9` | ouvrir ou abandonner une manche du **Couperet**, le mode compétitif |
+| `Maj`+`F9` | l'ouvrir en **équipes** : deux camps |
 | `F10` | première ou troisième personne |
 | `Tab` | pendant une manche : changer de **cible** |
 | `1` à `6` | pendant une manche : acheter une action — brouillage, inversion, coupure, blindage, relais, leurre |
@@ -341,9 +342,11 @@ propre camp, ni un spectre, ni une borne déjà éteinte.
 **Être sorti ne met pas à la porte.** Un éliminé devient **spectre** : il ne joue plus, mais il
 garde ses fusibles, en reçoit un à chaque lame, et continue d'agir. Sortir vous change de métier.
 
-**Les équipes.** Le couperet classe les **camps** et ne descend au joueur qu'à l'intérieur du camp
-condamné. C'est ce qui rend le rôle de soutien survivable : celui qui dépense tout en blindages
-sur son porteur ne marque rien et n'est pourtant pas condamné pour ça.
+**Les équipes** — `Maj`+`F9`, ou `--couperet=8x2` sur la ligne de commande. Le couperet classe
+les **camps** et ne descend au joueur qu'à l'intérieur du camp condamné. C'est ce qui rend le rôle
+de soutien survivable : celui qui dépense tout en blindages sur son porteur ne marque rien et
+n'est pourtant pas condamné pour ça. Deux camps de quatre plutôt que quatre camps de deux, parce
+qu'à deux chacun est son propre porteur et le rôle disparaît.
 
 **L'équilibre est mesuré, pas affirmé.** `tests/test_couperet.c` ne simule pas les parties, il les
 **joue** : les huit autopilotes du dépôt constituent un vivier de durées et de scores réels, et le

@@ -118,6 +118,22 @@ static const room_credit_line g_controls[] = {
     { "F",       "COGNER LA BORNE - LA MAIN QUITTE LES BOUTONS", false },
     { "ECHAP",   "EN PARTIE : SORTIR DE LA PARTIE, PAS DU JEU", false },
 
+    /*
+     * LE COUPERET a sa propre section, et pas une ligne dans « LE RESTE ».
+     *
+     * C'est le seul MODE du jeu, et il est entierement invisible : rien dans la
+     * salle ne dit qu'il existe, aucun meuble ne l'ouvre, aucune affiche ne le
+     * nomme. Une touche de fonction perdue au milieu des outils de capture et
+     * de qualite le laisserait exactement aussi cache qu'avant. La regle que
+     * cette page s'est deja donnee vaut ici : une commande qui existe et que
+     * rien n'annonce est une commande que personne n'emploie.
+     */
+    { "LE COUPERET - LE MODE COMPETITIF", NULL, true },
+    { "F9",       "OUVRIR OU ABANDONNER UNE MANCHE - MAJ+F9 EN EQUIPES", false },
+    { "TAB",      "EN MANCHE : CHANGER DE CIBLE", false },
+    { "1 A 6",    "ACHETER UNE ACTION - LE PRIX EST ECRIT EN BAS DE L'ECRAN", false },
+    { "",         "BROUILLAGE, INVERSION, COUPURE, BLINDAGE, RELAIS, LEURRE", false },
+
     { "LE RESTE", NULL, true },
     { "ECHAP",    "LES REGLAGES, LES COMMANDES, LES CREDITS, QUITTER", false },
     { "F2",       "CAPTURE D'ECRAN DANS LE REPERTOIRE UTILISATEUR", false },

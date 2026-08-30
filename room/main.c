@@ -144,6 +144,7 @@ typedef struct options {
      * automatique ne peut faire.
      */
     int         couperet;
+    int         couperet_camps;   /* 0 ou 1 = chacun pour soi, 2 a 4 = équipes */
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -195,8 +196,10 @@ static void print_usage(const char *exe)
         "                       SPEC vaut « hôte:port,identifiant,place » — la place\n"
         "                       est 0 ou 1, et les deux joueurs donnent le même\n"
         "                       identifiant. À employer avec --game=. Inerte sans.\n"
-        "  --couperet[=N]       ouvre une manche du mode compétitif sur N places\n"
-        "                       (2 a 8, defaut 8). F9 fait la meme chose en jeu.\n"
+        "  --couperet[=NxE]     ouvre une manche du mode compétitif sur N places\n"
+        "                       (2 a 8, defaut 8), reparties en E camps. Sans le\n"
+        "                       « xE », c'est chacun pour soi. En jeu : F9 pour\n"
+        "                       chacun pour soi, Maj+F9 pour deux equipes.\n"
         "  --rejouer=F          rejoue le journal d'entrées F et imprime le score,\n"
         "                       sans fenêtre ni GPU : c'est ce qui rend un rapport\n"
         "                       de bug reproductible\n"
@@ -436,7 +439,13 @@ static bool parse_options(int argc, char **argv, options *o)
         } else if (SDL_strncmp(a, "--duel-direct=", 14) == 0) {
             o->duel_live = a + 14;
         } else if (SDL_strncmp(a, "--couperet=", 11) == 0) {
+            /* « N » ou « NxE » : N places, réparties en E camps. Le « x » et
+             * pas une seconde option, parce que les deux nombres ne veulent
+             * rien dire l'un sans l'autre — quatre camps de deux et deux camps
+             * de quatre sont deux modes différents à huit places. */
             o->couperet = SDL_atoi(a + 11);
+            const char *x = SDL_strchr(a + 11, 'x');
+            o->couperet_camps = x ? SDL_atoi(x + 1) : 0;
         } else if (SDL_strcmp(a, "--couperet") == 0) {
             o->couperet = ROOM_CP_MAX_PLACES;
         } else if (SDL_strncmp(a, "--rejouer=", 10) == 0) {
@@ -985,7 +994,8 @@ static uint64_t duel_live_open(duel_ghost *d, const char *spec,
  * ce qui est exactement ce qu'il doit faire de sept joueurs qui ne marquent
  * rien — et c'est déjà de quoi photographier les deux surfaces du mode.
  */
-static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, const char *moi)
+static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, uint8_t camps,
+                              const char *moi)
 {
     /*
      * Des noms de salle, et TOUS SOUS QUATORZE CARACTÈRES : c'est la largeur de
@@ -1001,14 +1011,32 @@ static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, const char *moi
     if (places < 2) places = 2;
     if (places > ROOM_CP_MAX_PLACES) places = ROOM_CP_MAX_PLACES;
 
-    room_cp_ouvrir(c, places, false);
+    /*
+     * LES CAMPS SONT DISTRIBUÉS EN ALTERNANCE et non par blocs : à quatre
+     * places et deux camps, ce sont 0-1-0-1 et non 0-0-1-1. Les places suivent
+     * l'ordre du classement affiché, et deux coéquipiers côte à côte dans un
+     * tableau se lisent comme un bloc qui mène ou qui perd, alors que c'est le
+     * CAMP qu'on veut lire — le couperet, lui, classe les camps.
+     */
+    if (camps < 2) camps = 1;
+    if (camps > places) camps = places;
+
+    room_cp_ouvrir(c, places, camps > 1);
     (void)room_cp_asseoir(c, 0, (moi && moi[0]) ? moi : "VOUS", 0);
     for (uint8_t i = 1; i < places; ++i) {
-        (void)room_cp_asseoir(c, i, g_noms[(i - 1u) % (ROOM_CP_MAX_PLACES - 1u)], i);
+        (void)room_cp_asseoir(c, i, g_noms[(i - 1u) % (ROOM_CP_MAX_PLACES - 1u)],
+                              (uint8_t)(i % camps));
     }
     room_cp_lancer(c, (uint64_t)SDL_GetPerformanceCounter());
-    NS_INFO("couperet : manche ouverte, %u places, lame toutes les %.0f s",
-            (unsigned)places, (double)room_cp_periode());
+    if (camps > 1) {
+        NS_INFO("couperet : manche ouverte, %u places en %u camps, "
+                "lame toutes les %.0f s",
+                (unsigned)places, (unsigned)camps, (double)room_cp_periode());
+    } else {
+        NS_INFO("couperet : manche ouverte, %u places, chacun pour soi, "
+                "lame toutes les %.0f s",
+                (unsigned)places, (double)room_cp_periode());
+    }
     return 0;
 }
 
@@ -2132,7 +2160,8 @@ int main(int argc, char **argv)
     float   cp_verdict = 0.0f;
     room_cp_ouvrir(&couperet, 2, false);
     if (opt.couperet > 0) {
-        cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet, opt.player);
+        cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet,
+                                 (uint8_t)opt.couperet_camps, opt.player);
         cp_actif = (couperet.phase == ROOM_CP_COURSE);
     }
     /*
@@ -3342,9 +3371,25 @@ play_at_done: ;
                             NS_INFO("couperet : manche abandonnée");
                         } else {
                             cp_verdict = 0.0f;
+                            /*
+                             * MAJ+F9 OUVRE UNE MANCHE EN ÉQUIPES, deux camps.
+                             *
+                             * Deux camps et pas trois : à huit places, deux
+                             * camps de quatre laissent la place à un porteur et
+                             * à trois soutiens, ce qui est la configuration où
+                             * le rôle de soutien existe vraiment. À quatre camps
+                             * de deux, chacun est son propre porteur et le mode
+                             * n'est plus qu'un chacun-pour-soi à moitié. La
+                             * ligne de commande, elle, prend n'importe quel
+                             * découpage (`--couperet=8x4`).
+                             */
+                            const bool equipes =
+                                (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
                             cp_moi = couperet_ouvrir(&couperet, opt.couperet
                                                      ? (uint8_t)opt.couperet
                                                      : ROOM_CP_MAX_PLACES,
+                                                     equipes ? 2u
+                                                     : (uint8_t)opt.couperet_camps,
                                                      opt.player);
                             cp_actif = (couperet.phase == ROOM_CP_COURSE);
                             cp_cible = ROOM_CP_MAX_PLACES;

@@ -583,7 +583,20 @@ static void test_credits(void)
     }
     CHECK(promises_pad, "la page des commandes annonce la manette : il y en a une");
 
-    static const char *const gestes[] = { "STICK GAUCHE", "STICK DROIT", "SAUTER", "COURIR" };
+    /*
+     * ET ELLE ANNONCE LE COUPERET, pour la raison qui a fait ajouter la manette
+     * juste au-dessus : c'est le seul MODE du jeu, rien dans la salle ne dit
+     * qu'il existe, et sa touche est une touche de fonction. Non annoncée ici,
+     * elle n'est nulle part — et un mode que personne ne trouve n'existe pas.
+     */
+    bool promet_couperet = false;
+    for (i = 0; i < cn; ++i) {
+        if (cl[i].what && SDL_strstr(cl[i].what, "COUPERET")) promet_couperet = true;
+    }
+    CHECK(promet_couperet, "la page des commandes annonce le Couperet : il existe");
+
+    static const char *const gestes[] = { "STICK GAUCHE", "STICK DROIT", "SAUTER", "COURIR",
+                                          "F9", "TAB", "1 A 6" };
     for (size_t k = 0; k < SDL_arraysize(gestes); ++k) {
         bool trouve = false;
         for (i = 0; i < cn; ++i) {
