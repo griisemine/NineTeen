@@ -132,6 +132,28 @@ typedef struct room_sound {
     int clip_jeton_insere, clip_jeton_refuse, clip_jeton_bac;
 
     /*
+     * LES CINQ BRUITS DU COUPERET, synthétisés par `tools/stepgen` comme le
+     * reste de la banque. −1 chacun si la banque manque, et alors le geste reste
+     * MUET : c'est la règle du coup de poing et des trois jetons, et elle vaut
+     * ici plus qu'ailleurs. Le mode se joue à huit sur une seule salle ; un son
+     * emprunté y dirait faux à sept personnes à la fois.
+     */
+    int clip_cp_tic, clip_cp_lame;
+    int clip_cp_coupure, clip_cp_blindage, clip_cp_renvoi;
+
+    /*
+     * LA SECONDE ENTIÈRE DÉJÀ ANNONCÉE PAR LE TIC, de 10 à 1 ; 0 quand rien ne
+     * court.
+     *
+     * Cet état vit ICI et pas chez l'appelant, exactement pour la raison déjà
+     * écrite au-dessus de la rafale du monnayeur : `room/main.c` pousse des
+     * événements et lit un classement, il n'a pas à porter un compte à rebours
+     * POUR UN SON. C'est aussi le même motif que la cadence des pas, qui compare
+     * une distance à celle du pas précédent.
+     */
+    int cp_tic_seconde;
+
+    /*
      * LES CHASSES D'EAU.
      *
      * Ponctuelles, jamais en boucle. Une salle où la chasse tire toutes les dix
@@ -291,6 +313,127 @@ void room_sound_jeton_bac(room_sound *s, ns_v3 position, int nombre);
  * que l'intervalle est ici d'une demi-seconde au lieu de trois quarts.
  */
 void room_sound_frappe(room_sound *s, ns_v3 position);
+
+/* ==========================================================================
+ * LE COUPERET
+ * ==========================================================================
+ *
+ * Le mode compétitif de `room_couperet.h` était entièrement MUET, et c'était son
+ * défaut le plus coûteux : sa règle tient dans une minuterie de quarante-cinq
+ * secondes, et une minuterie qu'on ne peut pas entendre n'arbitre rien. Le
+ * joueur a les yeux sur la dalle d'une borne — c'est même tout le mode, puisqu'il
+ * faut jouer pour marquer — donc il ne regarde pas le compte à rebours.
+ *
+ * C'est aussi ce qui décide de tout ce qui suit : ces cinq sons ne sont pas des
+ * ornements posés sur une interface, ils sont le SEUL canal par lequel la règle
+ * atteint un joueur occupé ailleurs. Un son qui manque ici ne rend pas le mode
+ * moins agréable, il le rend moins jouable.
+ *
+ * SPATIALISÉS OU NON : LA QUESTION EST TRANCHÉE, ET PAS DE LA MÊME FAÇON POUR
+ * LES CINQ
+ * --------------------------------------------------------------------------
+ * DEUX NE LE SONT PAS — le tic et la lame — et ils passent donc par
+ * `ns_audio_play` et non `ns_audio_play_3d`.
+ *
+ *   LE TIC parce qu'un compte à rebours n'est pas un objet de la salle. Il ne
+ *   sort de nulle part : il sort du COMPTEUR, c'est-à-dire de l'installation,
+ *   c'est-à-dire de partout. Et surtout, spatialisé, il serait atténué par la
+ *   distance et bouché par un mur — or il existe exactement pour être entendu
+ *   par quelqu'un qui a la tête dans une borne, au fond de la salle, derrière
+ *   une cloison. Un compte à rebours qu'on peut perdre en marchant n'est pas un
+ *   compte à rebours. Il y a une seconde raison, et elle est aussi forte : le
+ *   tic sonne DIX FOIS de suite, et une source 3D changerait de niveau et de
+ *   côté à chaque tour de tête. L'oreille entendrait dix événements distincts là
+ *   où il faut qu'elle entende un seul battement répété.
+ *
+ *   LA LAME parce qu'elle concerne toute la salle. Elle vient du compteur, pas
+ *   d'un joueur. La placer sur la borne de l'éliminé dirait « il s'est passé
+ *   quelque chose là-bas » alors que le fait est « la manche vient de sortir
+ *   quelqu'un » — ce qui est vrai pour les huit à la fois, et doit donc leur
+ *   parvenir à l'identique. Un joueur qui entendrait la lame plus fort parce
+ *   qu'il se trouve à côté du perdant apprendrait une chose fausse.
+ *
+ * TROIS LE SONT — la coupure, le blindage et le renvoi — et c'est le même
+ * argument dans l'autre sens : ce sont les trois seuls qui aient un LIEU.
+ *
+ *   LA COUPURE part de la borne qu'on vient d'éteindre. C'est elle qui apprend
+ *   au joueur d'où vient le coup, et c'est la seule occasion de l'apprendre : la
+ *   partie annulée, il ne reste rien à regarder. Sa portée est la deuxième plus
+ *   longue du fichier après la chasse d'eau, parce qu'une borne qui meurt doit
+ *   faire se retourner — même raison que le coup de poing.
+ *
+ *   LE BLINDAGE ET LE RENVOI partent de la borne qui a tenu. Ils sont la réponse
+ *   à une attaque dirigée contre UNE borne, et s'ils ne sortaient pas de
+ *   l'endroit où l'attaque devait atterrir, ils ne se liraient pas comme une
+ *   réponse. Leur portée est en revanche courte : à huit joueurs qui achètent
+ *   des actions en permanence, des tintements métalliques audibles de partout
+ *   deviendraient la TEXTURE du mode au lieu d'en être la ponctuation.
+ *
+ * NI HAUTEUR NI GAIN TIRÉS AU SORT POUR LE TIC ET LA LAME, et c'est l'exact
+ * contraire de la règle que tout le reste de ce fichier applique — donc il faut
+ * le justifier. Partout ailleurs, la variation existe pour casser la répétition
+ * exacte d'une forme d'onde, que l'oreille repère avant tout le reste. Ici, on
+ * VEUT qu'elle la repère : le tic doit s'entendre comme dix fois la même chose,
+ * sans quoi il n'est plus un compte ; la lame doit s'entendre comme la même
+ * chose qu'il y a quarante-cinq secondes, sans quoi elle n'est plus un repère.
+ * Faire varier l'un des deux ferait porter l'attention sur la variation au lieu
+ * du compte. Les trois autres, eux, peuvent partir plusieurs fois en quelques
+ * secondes et gardent la règle commune, dans une plage étroite.
+ */
+
+/*
+ * LE BATTEMENT DES DIX DERNIÈRES SECONDES.
+ *
+ * À appeler À CHAQUE IMAGE avec `couperet.prochain` tant que la manche court :
+ * cette fonction décide elle-même quand battre, et ne joue rien le reste du
+ * temps. C'est le choix qu'`room_sound` fait déjà pour la rafale du monnayeur et
+ * pour la cadence des pas, et pour la même raison — le compte à rebours d'un son
+ * n'a pas sa place chez l'appelant.
+ *
+ * LA RÈGLE, exactement : un tic à chaque fois que le compte à rebours FRANCHIT
+ * une seconde entière entre 10 et 1, soit DIX tics. Le dixième tombe à une
+ * seconde du couperet, et la lame occupe le temps du onzième — c'est elle, le
+ * dernier battement.
+ *
+ * Au-delà de 10 s, rien, et l'état se réarme : appeler cette fonction pendant le
+ * salon, où `prochain` vaut la période entière, est donc sans effet. À 0 ou
+ * moins, rien non plus.
+ *
+ * UNE IMAGE LONGUE NE FAIT JAMAIS DEUX TICS. Si le compte passe de 3,4 à 1,2 en
+ * une seule image — un chargement, une machine à genoux —, seul « 2 » sonne et
+ * « 3 » est perdu. C'est délibéré : deux clips lancés à la même image ne
+ * s'entendraient pas comme deux secondes mais comme un seul bruit plus épais,
+ * ce qui est le défaut que la rafale du monnayeur existe pour éviter.
+ */
+void room_sound_couperet_tic(room_sound *s, float prochain);
+
+/* LA LAME EST TOMBÉE — `ROOM_CP_EVT_COUPERET`. Sans position : voir plus haut,
+ * elle vient du compteur et concerne la salle entière. */
+void room_sound_couperet_lame(room_sound *s);
+
+/* ON VIENT D'ÉTEINDRE UNE BORNE — `ROOM_CP_EVT_ACTION` avec `ROOM_CP_COUPURE`.
+ * `position` est celle de la borne de la CIBLE : c'est ce qui apprend au joueur
+ * d'où vient le coup. */
+void room_sound_couperet_coupure(room_sound *s, ns_v3 position);
+
+/* UNE ATTAQUE A ÉTÉ ENCAISSÉE — `ROOM_CP_EVT_ABSORBE`. `position` est celle de
+ * la borne qui a tenu. */
+void room_sound_couperet_blindage(room_sound *s, ns_v3 position);
+
+/*
+ * LE LEURRE A RETOURNÉ LA SURTENSION — `ROOM_CP_EVT_RENVOYE`. `position` est
+ * celle de la borne qui a renvoyé, c'est-à-dire d'où repart l'attaque.
+ *
+ * C'est un son À PART et non le blindage rejoué, alors que les deux disent « ça
+ * n'a pas marché » à l'attaquant. `ROOM_CP_EVT_ABSORBE` et `ROOM_CP_EVT_RENVOYE`
+ * sont deux événements distincts parce que ce sont deux verdicts distincts : la
+ * plaque a tenu, ou l'attaque revient sur son auteur. Les jouer avec le même
+ * fichier ferait exactement ce que `SF-fermport.wav` faisait au jeton — dire une
+ * chose à la place d'une autre, et l'attaquant n'apprendrait jamais ce que coûte
+ * un leurre. Les deux fichiers glissent d'ailleurs en sens contraire, ce qui est
+ * la seule différence qu'une oreille classe sans qu'on la lui explique.
+ */
+void room_sound_couperet_renvoi(room_sound *s, ns_v3 position);
 
 void room_sound_shutdown(room_sound *s);
 

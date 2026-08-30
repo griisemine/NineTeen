@@ -5,6 +5,7 @@
 #include "ns_core.h"
 #include "ns_env.h"
 
+#include <math.h>
 #include <string.h>
 
 /*
@@ -53,6 +54,34 @@
  */
 #define RS_COIN_RADIUS    0.6f
 #define RS_COIN_MAX       6.0f
+
+/*
+ * LE COUPERET. Deux portées seulement, parce que trois des cinq sons sont
+ * placés et deux ne le sont pas du tout — voir `room_sound.h`, la question y est
+ * tranchée et argumentée.
+ *
+ * LA COUPURE porte loin : c'est la deuxième plus longue portée du fichier après
+ * la chasse d'eau. Une borne qu'on éteint doit faire se retourner, comme un coup
+ * de poing, et pour une raison de plus que lui : la partie de la victime est
+ * annulée, donc ce son est la SEULE occasion qu'ont les autres d'apprendre qui
+ * vient de frapper qui. Douze mètres et non les quatorze du coup, parce qu'une
+ * alimentation qui tombe n'est pas un impact — elle est moins forte à la source.
+ *
+ * LE BLINDAGE ET LE RENVOI portent court, et c'est l'inverse du raisonnement
+ * ci-dessus. Ils répondent à une attaque dirigée contre une borne précise, donc
+ * ils regardent deux joueurs — celui qui a tenu et celui qui a payé. À huit
+ * joueurs qui achètent des actions en permanence, des tintements métalliques
+ * audibles de partout deviendraient la TEXTURE du mode au lieu d'en être la
+ * ponctuation. Huit mètres : de quoi entendre la borne d'à côté encaisser, pas
+ * de quoi entendre celle du fond.
+ */
+#define RS_CP_COUPURE_RADIUS  1.0f
+#define RS_CP_COUPURE_MAX    12.0f
+#define RS_CP_PLAQUE_RADIUS   0.9f
+#define RS_CP_PLAQUE_MAX      8.0f
+
+/* Les dix dernières secondes. Une par tic, dix tics : voir `room_sound.h`. */
+#define RS_CP_TIC_DEPUIS     10.0f
 
 #define RS_FLUSH_RADIUS   1.6f
 #define RS_FLUSH_MAX     12.0f
@@ -187,6 +216,12 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_flush = NS_AUDIO_INVALID;
     s->clip_jeton_insere = s->clip_jeton_refuse = NS_AUDIO_INVALID;
     s->clip_jeton_bac = NS_AUDIO_INVALID;
+    /* Explicitement, et pas par le `memset` : 0 est un identifiant de clip
+     * VALIDE, donc un champ laissé à zéro ferait jouer le premier son chargé de
+     * la salle à chaque couperet. */
+    s->clip_cp_tic = s->clip_cp_lame = NS_AUDIO_INVALID;
+    s->clip_cp_coupure = s->clip_cp_blindage = NS_AUDIO_INVALID;
+    s->clip_cp_renvoi = NS_AUDIO_INVALID;
     for (int i = 0; i < 3; ++i) s->clip_cabinet[i] = NS_AUDIO_INVALID;
     for (int k = 0; k < NS_STEP_COUNT; ++k) {
         for (int v = 0; v < ROOM_STEP_VARIANTS; ++v) s->clip_step[k][v] = NS_AUDIO_INVALID;
@@ -220,6 +255,11 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
     s->clip_jeton_insere = ns_audio_load("sounds/jeton_insere.wav");
     s->clip_jeton_refuse = ns_audio_load("sounds/jeton_refuse.wav");
     s->clip_jeton_bac    = ns_audio_load("sounds/jeton_bac.wav");
+    s->clip_cp_tic      = ns_audio_load("sounds/couperet_tic.wav");
+    s->clip_cp_lame     = ns_audio_load("sounds/couperet_lame.wav");
+    s->clip_cp_coupure  = ns_audio_load("sounds/couperet_coupure.wav");
+    s->clip_cp_blindage = ns_audio_load("sounds/couperet_blindage.wav");
+    s->clip_cp_renvoi   = ns_audio_load("sounds/couperet_renvoi.wav");
 
     /* La banque de `tools/stepgen`. Le nom du matériau vient de
      * `ns_footstep_label` — le MÊME que celui que `salle.room.json` écrit et que
@@ -383,6 +423,15 @@ void room_sound_init(room_sound *s, const ns_scene *scene)
             s->clip_jeton_insere >= 0 ? "chargé" : "ABSENT",
             s->clip_jeton_refuse >= 0 ? "chargé" : "ABSENT",
             s->clip_jeton_bac    >= 0 ? "chargé" : "ABSENT");
+    /* Sa ligne aussi, et pour la même raison : le Couperet est le seul mode dont
+     * la règle passe par le son. Une banque incomplète le rendrait muet EN
+     * SILENCE, et un joueur attribuerait au mode ce qui est un défaut de build. */
+    NS_INFO("son : couperet — tic %s, lame %s, coupure %s, blindage %s, renvoi %s",
+            s->clip_cp_tic      >= 0 ? "chargé" : "ABSENT",
+            s->clip_cp_lame     >= 0 ? "chargé" : "ABSENT",
+            s->clip_cp_coupure  >= 0 ? "chargé" : "ABSENT",
+            s->clip_cp_blindage >= 0 ? "chargé" : "ABSENT",
+            s->clip_cp_renvoi   >= 0 ? "chargé" : "ABSENT");
 }
 
 void room_sound_shutdown(room_sound *s)
@@ -764,6 +813,120 @@ void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *
     }
 
     ns_audio_update(dt);
+}
+
+/* --------------------------------------------------------------------------
+ * Le Couperet
+ * --------------------------------------------------------------------------
+ * Le raisonnement complet — pourquoi cinq sons, lesquels sont placés dans la
+ * salle et lesquels ne le sont pas, pourquoi deux d'entre eux ne varient ni en
+ * hauteur ni en gain — est dans `room_sound.h`. Ce qui suit ne fait que
+ * l'appliquer.
+ */
+
+/*
+ * Les trois qui sont PLACÉS, par une fonction et trois jeux de bornes — même
+ * construction que `play_jeton`, et pour la même raison : ce qui diffère
+ * réellement d'un geste à l'autre tient dans quelques nombres, et trois copies
+ * laisseraient trois endroits où corriger une portée.
+ */
+static void play_couperet(room_sound *s, int clip, ns_v3 at,
+                          float radius, float max_distance,
+                          float pitch_lo, float pitch_hi,
+                          float gain_lo, float gain_hi)
+{
+    /* MUET plutôt qu'emprunté : voir `room_sound.h`. */
+    if (!s->ready || clip < 0) return;
+
+    ns_rng r;
+    ns_rng_seed(&r, (uint64_t)s->rng++, 0x0CAFu);
+
+    ns_audio_play_3d(clip, NS_BUS_SFX, at,
+                     rand_range(&r, gain_lo, gain_hi),
+                     rand_range(&r, pitch_lo, pitch_hi),
+                     radius, max_distance);
+}
+
+void room_sound_couperet_tic(room_sound *s, float prochain)
+{
+    if (!s->ready) return;
+
+    /*
+     * Au-delà de dix secondes — et pendant le salon, où `prochain` vaut la
+     * période entière —, on ne bat pas, ET ON RÉARME. Ce réarmement est ce qui
+     * fait que la manche suivante recommence à dix : sans lui, le compteur
+     * resterait sur « 1 » et le couperet d'après serait muet.
+     */
+    if (!(prochain > 0.0f) || prochain > RS_CP_TIC_DEPUIS) {
+        s->cp_tic_seconde = 0;
+        return;
+    }
+
+    /*
+     * `ceilf` et non une troncature : à 9,99 s il reste « dix secondes » à
+     * annoncer, pas neuf. La suite des valeurs prises est donc exactement
+     * 10, 9, … 1 quand le compte descend de 10 à 0, soit dix tics.
+     *
+     * Ce test attrape aussi l'image longue : si le compte saute de 3,4 à 1,2, la
+     * valeur passe de 4 à 2 et un seul tic part. Deux clips lancés à la même
+     * image ne s'entendraient pas comme deux secondes.
+     */
+    const int seconde = (int)ceilf(prochain);
+    if (seconde == s->cp_tic_seconde) return;
+    s->cp_tic_seconde = seconde;
+
+    if (s->clip_cp_tic < 0) return;
+
+    /*
+     * NI POSITION, NI HAUTEUR, NI GAIN TIRÉS AU SORT — les trois décisions sont
+     * argumentées dans `room_sound.h`, et les trois vont dans le même sens : ce
+     * son est une HORLOGE. Ce qu'il transmet est un compte, et un compte se
+     * transmet en étant dix fois identique.
+     *
+     * Le gain est celui d'un son qui doit passer par-dessus la borne qu'on est
+     * en train de jouer sans couvrir ce qu'elle raconte. Il ne suit PAS
+     * `ROOM_LEVEL_STEPS` ni `ROOM_LEVEL_TONE` : ces deux réglages existent pour
+     * baisser du décor, et le tic n'est pas du décor — c'est une règle du jeu.
+     */
+    ns_audio_play(s->clip_cp_tic, NS_BUS_SFX, 0.34f, 1.0f);
+}
+
+void room_sound_couperet_lame(room_sound *s)
+{
+    if (!s->ready || s->clip_cp_lame < 0) return;
+
+    /* Le seul son du mode qui ait le droit d'être gros, et le seul qui parvienne
+     * à l'identique aux huit joueurs. Ni position, ni variation : voir
+     * `room_sound.h`. */
+    ns_audio_play(s->clip_cp_lame, NS_BUS_SFX, 0.95f, 1.0f);
+}
+
+void room_sound_couperet_coupure(room_sound *s, ns_v3 position)
+{
+    /* Le plus fort des trois qui sont placés : c'est une borne qui meurt, et la
+     * partie annulée avec elle. */
+    play_couperet(s, s->clip_cp_coupure, position,
+                  RS_CP_COUPURE_RADIUS, RS_CP_COUPURE_MAX,
+                  0.96f, 1.04f, 0.85f, 1.00f);
+}
+
+void room_sound_couperet_blindage(room_sound *s, ns_v3 position)
+{
+    /* Le plus discret des trois, et c'est une décision et non un réglage : une
+     * attaque encaissée est une bonne nouvelle, et une bonne nouvelle est un
+     * accusé de réception. Elle n'a pas à traverser la salle. */
+    play_couperet(s, s->clip_cp_blindage, position,
+                  RS_CP_PLAQUE_RADIUS, RS_CP_PLAQUE_MAX,
+                  0.95f, 1.05f, 0.70f, 0.85f);
+}
+
+void room_sound_couperet_renvoi(room_sound *s, ns_v3 position)
+{
+    /* Entre les deux : plus fort que le blindage parce qu'il annonce que
+     * l'attaque REPART, moins que la coupure parce qu'il ne détruit rien. */
+    play_couperet(s, s->clip_cp_renvoi, position,
+                  RS_CP_PLAQUE_RADIUS, RS_CP_PLAQUE_MAX,
+                  0.96f, 1.04f, 0.80f, 0.95f);
 }
 
 void room_sound_frappe(room_sound *s, ns_v3 position)
