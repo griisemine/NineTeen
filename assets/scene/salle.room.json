@@ -6,6 +6,7 @@
   "_echelle": "Le mètre. Le modèle d'origine est en unités Blender à 2,06 par mètre — l'auteur l'a écrit lui-même, HAUTEUR_CAMERA_DEBOUT 3.5F pour un œil debout (legacy/room/room.c:90) — et le moteur V15 l'a lu comme des mètres, ce qui donnait un joueur de 82 cm au milieu de bornes de 2,40 m. Le problème cesse d'exister ici par construction.",
   "_plan": "LE PLAN DE 2020, MESURE — docs/RELEVE-2020.md, etabli objet par objet sur legacy/room/textures/salle.obj et legacy/room/room.c.\nECHELLE. 2,06 unites Blender par metre, l'auteur l'ecrit lui-meme (HAUTEUR_CAMERA_DEBOUT 3.5F pour un oeil debout, room.c:90). x_m = x_u/2,06 ; z_m = z_u/2,06 - 4,68 ; y_m = (y_u - 0,100)/2,06.\nLE PIEGE, ET IL A DEJA COUTE. « 19,3 x 14,4 m » est l'ENVELOPPE batie — MUR_SAL_Cube.002, bloc sanitaire compris. Le HALL PROPRE fait 14,43 x 14,27 en lignes medianes et 184,4 m2 de plancher. Les deux chiffres sont justes et mesurent deux choses ; c'est sur cette ambiguite qu'on a rebati une emprise de +/-9,65, ou courent encore les moulures dans les versions anterieures a celle-ci.\nCE QUE CE FICHIER DECRIT AUJOURD'HUI, et qui est le plan de 2020 au centimetre : un hall de 14,43 x 14,27 ferme par DEUX PANS COUPES SYMETRIQUES de 5,06 m au nord-ouest et au nord-est ; un couloir d'entree de 1,67 m de libre sur 8,9, contour ferme a part, dont la joue ouest epouse le pan coupe nord-est sur ses 1,32 derniers metres et s'y ouvre par une trouee de 1,51 m sous un linteau a 2,33 ; un bloc sanitaire de 35,8 m2 a l'EST, coupe en quatre par trois cloisons et desservi par deux portes coulissantes ; un comptoir centre sur x = 0 sous une enseigne de 2,55 m centree sur x = 0 ; treize piliers dont douze engages ; une estrade de 2,427 x 3,398 centree sur (0 ; -4,68) ; un salon ferme a l'ouest par 4,38 m de cloison qui aboutit au seul pilier libre de la salle.\nCE QUI RESTE DIFFERENT DE 2020, ET QUI EST VOULU : DIX-NEUF bornes et non seize — le jeu s'appelle Nineteen —, dont six sur le mur ouest la ou 2020 n'avait que deux caissons COMING SOON, et un poste de classement au centre la ou 2020 mettait un caisson COMING SOON, son classement etant un moniteur pose sur le comptoir. Voir le commentaire de cabinets[borne_classement].\nCE QU'IL NE FAUT PAS REPRENDRE de 2020 : ses bornes de 2,39 m sous un plafond de 2,92, ses UV de plafond bouclant tous les 8,69 m, ses sept materiaux qui sont des aplats de 24 x 24 pixels, et la tige du luminaire du billard qui traverse le plafond sur 1,61 m. Le proprietaire veut son PLAN, pas ses defauts.",
   "_convention": "Les points de mur se lisent [x, z] et suivent la LIGNE MÉDIANE. Ils sont listés de sorte qu'en marchant de l'un au suivant, l'intérieur soit à gauche : c'est la seule règle à tenir, tout le reste en découle (face intérieure, sens des onglets, côté des moulures).",
+  "_pose": "LA POSE DE CHAQUE SOLIDE, déclarée et non déduite.\nLes 146 solides de cette description — 32 boîtes, 19 bornes, 95 props — portent tous la clé « pose ». Elle vaut « sol », « meuble » (+ « poseSur »), « mur », « suspendu » (+ « suspenduPar ») ou « libre », et c'est elle qui déclenche TROIS contrôles de tools/roomgen.c : C-03 (ce qui est posé touche son support), la branche « mur » de C-04 (une façade adossée regarde la salle) et C-06 (ce qui pend est accroché). Sans elle, les trois étaient écrits, éprouvés et INERTES — le build l'annonçait à chaque passage : « 146 SANS clé pose ».\nRÉPARTITION : 66 « sol » (19 boîtes, les 19 bornes, 28 props), 7 « meuble », 22 « mur », 11 « suspendu » (dont 2 par leur câble), 40 « libre » (13 boîtes, 27 props).\n« libre » N'EST PAS UN LAISSEZ-PASSER, et chaque objet qui la porte dit dans son propre « _pose » pourquoi aucune des quatre autres ne convient. Quatre familles la portent, et toutes les quatre pour une raison mesurée : les huit ampoules et les sept appliques (le modèle de cage a sa platine en +Z local, la convention de C-04 est inversée pour lui), les six tubes néon et les cinq poutres (contre un mur mais sans façade — « mur » vaut aujourd'hui pour deux affirmations distinctes), les quatre pilastres sud et leurs socles (centre d'empreinte dans la maçonnerie, hors de tout rectangle de « floors »), et trois cas isolés — la suspension du billard, fixée à la POUTRE et non au plafond, et les deux vantaux de cabine, pendus à leurs gonds.",
   "_tableau": "Le TABLEAU DU BAR, derriere le comptoir. Il est DECLARE et non deduit : le moteur y dessine le classement et les joueurs en direct, comme il dessine une partie dans la dalle d'une borne. Il portait `background_classement.png`, une image peinte de 2020 avec des scores dessus — un tableau de scores qui ne bouge pas est une decoration. Le nommer ici est la seule facon que le moteur sache lequel des 190 materiaux de la salle est un ecran vivant : le deviner par son nom serait exactement l'heuristique qu'on a passe le projet a retirer.",
   "scoreboard": "classement_fond",
   "units": "metres",
@@ -1916,12 +1917,12 @@
       "range": 4.2
     },
     {
-      "_": "Le coin technique, où sont les caisses. Faible : on n'y joue pas, on doit seulement voir qu'il existe.",
+      "_": "Suit sa cage. at (-6,900 ; 2,250 ; -0,210) -> (-6,864 ; 2,190 ; -0,100) : écart LOCAL inchangé, 1,8 cm devant la gueule de la cage — la source reste hors du luminaire, ce que `check_lights_not_enclosed` vérifie.",
       "name": "applique_technique",
       "at": [
-        -6.9,
-        2.25,
-        -0.21
+        -6.864,
+        2.19,
+        -0.1
       ],
       "color": [
         1.0,
@@ -2705,6 +2706,7 @@
       "_": "LES TREIZE PILIERS DE 2020, a leurs cotes mesurees. La salle n'en avait que DEUX, libres, en (+-5,4 ; -4,8) — ni au bon endroit, ni en bon nombre, ni du bon type.\nDOUZE SONT ENGAGES DANS LES MURS : ce sont des pilastres, qui debordent de 6 a 18 cm dans la piece et rythment le mur sud en cinq travees, les murs est et ouest en trois. Deux entraxes seulement dans toute la grille, 3,155 et 3,297 m, repetes a l'identique sur les quatre colonnes. C'est ce rythme qui fait lire une salle comme un batiment et non comme une boite, et il avait entierement disparu.\nLe treizieme est le SEUL isole : il coiffe le bout nord de la cloison du salon.\nSection 0,486 x 0,486 m, du sol au plafond.",
       "_engage": "outsideOk sur les douze pilastres, et c'est le cas d'emploi exact de cette cle : un pilastre est ENGAGE dans le mur par definition — il en deborde de 6 a 18 cm dans la piece, et le reste de sa section est dans la maconnerie. Le controle a raison de signaler qu'ils passent le parement ; c'est a la description de dire que c'est voulu. Le treizieme, celui du salon, est libre et n'en a pas besoin — il le porte quand meme pour que les treize se lisent d'un bloc.",
       "name": "pilier_sud_ouest",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.257,
@@ -2721,6 +2723,8 @@
     },
     {
       "name": "pilier_sud_1",
+      "_pose": "« libre » et non « sol », et c'est une LIMITE DU CONTRÔLE, pas de l'objet : ce pilastre repose bien sur le sol à y = 0,000, mais il est ENGAGÉ dans la maçonnerie et le centre de son empreinte tombe à z = -7,256, alors que le rectangle « sol_hall » s'arrête à z = -7,200. C-03 teste le CENTRE de l'empreinte et répond « il n'y a AUCUN sol sous lui » (message obtenu en le déclarant « sol »). Les six pilastres dont le centre reste sur le sol le déclarent, eux. Voir le rapport : soit C-03 accepte un sol trouvé sous une PARTIE de l'empreinte, soit « sol_hall » va jusqu'au nu extérieur — cette seconde voie a été essayée et refusée par C-08, qui voit alors « sol_hall » et « sol_sas » coplanaires sur 2,07 x 0,12 m de surface foulable.",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         -4.804,
@@ -2737,6 +2741,8 @@
     },
     {
       "name": "pilier_sud_2",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         -1.648,
@@ -2753,6 +2759,8 @@
     },
     {
       "name": "pilier_sud_3",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         1.648,
@@ -2769,6 +2777,8 @@
     },
     {
       "name": "pilier_sud_4",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         4.804,
@@ -2785,6 +2795,7 @@
     },
     {
       "name": "pilier_sud_est",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -2801,6 +2812,7 @@
     },
     {
       "name": "pilier_ouest_1",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -2817,6 +2829,7 @@
     },
     {
       "name": "pilier_ouest_2",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -2833,6 +2846,7 @@
     },
     {
       "name": "pilier_ouest_3",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -2849,6 +2863,7 @@
     },
     {
       "name": "pilier_est_1",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -2865,6 +2880,7 @@
     },
     {
       "name": "pilier_est_2",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -2881,6 +2897,7 @@
     },
     {
       "name": "pilier_est_3",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -2897,6 +2914,7 @@
     },
     {
       "name": "pilier_salon",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         1.648,
@@ -2913,6 +2931,7 @@
     },
     {
       "name": "socle_pilier_sud_ouest",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.257,
@@ -2932,6 +2951,8 @@
     },
     {
       "name": "socle_pilier_sud_1",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         -4.804,
@@ -2951,6 +2972,8 @@
     },
     {
       "name": "socle_pilier_sud_2",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         -1.648,
@@ -2970,6 +2993,8 @@
     },
     {
       "name": "socle_pilier_sud_3",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         1.648,
@@ -2989,6 +3014,8 @@
     },
     {
       "name": "socle_pilier_sud_4",
+      "_pose": "Même cas que « pilier_sud_1 » : centre d'empreinte à z = -7,256, hors de « sol_hall ».",
+      "pose": "libre",
       "outsideOk": true,
       "at": [
         4.804,
@@ -3008,6 +3035,7 @@
     },
     {
       "name": "socle_pilier_sud_est",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -3027,6 +3055,7 @@
     },
     {
       "name": "socle_pilier_ouest_1",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -3046,6 +3075,7 @@
     },
     {
       "name": "socle_pilier_ouest_2",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -3065,6 +3095,7 @@
     },
     {
       "name": "socle_pilier_ouest_3",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         -7.3,
@@ -3084,6 +3115,7 @@
     },
     {
       "name": "socle_pilier_est_1",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -3103,6 +3135,7 @@
     },
     {
       "name": "socle_pilier_est_2",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -3122,6 +3155,7 @@
     },
     {
       "name": "socle_pilier_est_3",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         7.269,
@@ -3141,6 +3175,7 @@
     },
     {
       "name": "socle_pilier_salon",
+      "pose": "sol",
       "outsideOk": true,
       "at": [
         1.648,
@@ -3161,6 +3196,8 @@
     {
       "_audit": "AUDIT P-14. La cinquieme repetition sortait du batiment par le pan coupe : 1,048 m au-dela du parement, 0,85 m sur le trottoir, et un about de poutre claire se voyait depuis la rue au-dessus du linteau. Quatre repetitions ici ; la cinquieme est declaree a part, arretee au parement.\nA noter, mesure par l'historien sur salle.obj : AUCUNE poutre de plafond n'existe dans le modele de 2020. Les seize materiaux nommes poutre* y servent des cadres d'affiche et une cloison. Ces poutres sont une invention de la reconstruction — bonne pour le bati, mais qu'on ne peut pas justifier par la fidelite.",
       "name": "poutre",
+      "_pose": "Une poutre ne se pose pas : elle porte. Celles-ci courent d'un mur long à l'autre à y 2,700..2,900 et n'ont ni sol ni support sous elles. « mur » ne convient pas non plus — leurs abouts sont bien à 1,5 cm du parement (x ±7,100 pour un parement à ±7,115), mais C-04 exigerait alors qu'elles REGARDENT ce parement, ce qu'une poutre ne fait pas. Le vide de 1,5 cm à chaque about est mesuré et laissé : voir le rapport.",
+      "pose": "libre",
       "at": [
         0.0,
         2.7,
@@ -3198,6 +3235,8 @@
         "pilier_salon"
       ],
       "name": "poutre_5",
+      "_pose": "Même cas que « poutre » : une poutre porte, elle ne se pose pas.",
+      "pose": "libre",
       "at": [
         0.0,
         2.7,
@@ -3213,6 +3252,7 @@
     },
     {
       "name": "estrade",
+      "pose": "sol",
       "at": [
         0.0,
         0.0,
@@ -3242,6 +3282,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_envol",
       "materialSide": "flanc_envol",
       "materialTrim": "borne_cadre",
@@ -3260,6 +3301,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_aplomb",
       "materialSide": "flanc_aplomb",
       "materialTrim": "borne_cadre",
@@ -3278,6 +3320,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_asteroid",
       "materialSide": "flanc_asteroid",
       "materialTrim": "borne_cadre",
@@ -3296,6 +3339,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_demineur",
       "materialSide": "flanc_demineur",
       "materialTrim": "borne_cadre",
@@ -3315,6 +3359,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_snake",
       "materialSide": "flanc_snake",
       "materialTrim": "borne_cadre",
@@ -3334,6 +3379,7 @@
         1.293
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_shooter",
       "materialSide": "flanc_shooter",
       "materialTrim": "borne_cadre",
@@ -3353,6 +3399,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_shooter",
       "materialSide": "flanc_shooter",
       "materialTrim": "borne_cadre",
@@ -3371,6 +3418,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_snake",
       "materialSide": "flanc_snake",
       "materialTrim": "borne_cadre",
@@ -3389,6 +3437,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_demineur",
       "materialSide": "flanc_demineur",
       "materialTrim": "borne_cadre",
@@ -3407,6 +3456,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_asteroid",
       "materialSide": "flanc_asteroid",
       "materialTrim": "borne_cadre",
@@ -3426,6 +3476,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_aplomb",
       "materialSide": "flanc_aplomb",
       "materialTrim": "borne_cadre",
@@ -3445,6 +3496,7 @@
         0.092
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "materialBody": "caisson_envol",
       "materialSide": "flanc_envol",
       "materialTrim": "borne_cadre",
@@ -3465,6 +3517,7 @@
         -2.955
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_dedale",
       "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
@@ -3485,6 +3538,7 @@
         -2.013
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_dedale",
       "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
@@ -3503,6 +3557,7 @@
         -1.071
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_piano",
       "materialSide": "flanc_piano",
       "materialTrim": "borne_cadre",
@@ -3521,6 +3576,7 @@
         -0.129
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_piano",
       "materialSide": "flanc_piano",
       "materialTrim": "borne_cadre",
@@ -3539,6 +3595,7 @@
         0.813
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_piano",
       "materialSide": "flanc_piano",
       "materialTrim": "borne_cadre",
@@ -3557,6 +3614,7 @@
         1.755
       ],
       "yaw": 90.0,
+      "pose": "sol",
       "materialBody": "caisson_dedale",
       "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
@@ -3576,6 +3634,7 @@
         -4.541
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "materialBody": "caisson_leaderboard",
       "materialSide": "flanc_leaderboard",
       "materialTrim": "borne_cadre",
@@ -3810,6 +3869,8 @@
         6.2
       ],
       "yaw": 0.0,
+      "_pose": "C-06 : « le câble ne tient à rien », 94 mm mesurés pour 50 tolérés. P-10 n'était corrigé qu'à moitié — les deux chaînes en V avaient bien été remplacées par un câble, mais ce câble s'arrêtait à 2,990 m pour une sous-face de rails à 3,084 m. Le commentaire de `check_hanging` chiffrait déjà ce vide (« deux câbles, comptoir et salon, s'arrêtent à 2,990 m, soit 9,4 cm de vide ») sans pouvoir le refuser, faute de la clé. hauteur 1.13 -> 1.24 m : le sommet passe de 2,990 à 3,100, c'est-à-dire le plan des dalles, et entre de 1,6 cm dans les rails — exactement la cote des six tiges de « suspension_banc_* », qui montent toutes à 3,100.",
+      "pose": "suspendu",
       "parts": [
         {
           "type": "cylinder",
@@ -3820,7 +3881,7 @@
             0.0
           ],
           "radius": 0.008,
-          "height": 1.13,
+          "height": 1.24,
           "sides": 8
         }
       ]
@@ -3833,6 +3894,8 @@
         -4.4
       ],
       "yaw": 0.0,
+      "_pose": "C-06 : « le câble ne tient à rien », 94 mm mesurés pour 50 tolérés. P-10 n'était corrigé qu'à moitié — les deux chaînes en V avaient bien été remplacées par un câble, mais ce câble s'arrêtait à 2,990 m pour une sous-face de rails à 3,084 m. Le commentaire de `check_hanging` chiffrait déjà ce vide (« deux câbles, comptoir et salon, s'arrêtent à 2,990 m, soit 9,4 cm de vide ») sans pouvoir le refuser, faute de la clé. hauteur 1.01 -> 1.12 m : le sommet passe de 2,990 à 3,100, c'est-à-dire le plan des dalles, et entre de 1,6 cm dans les rails — exactement la cote des six tiges de « suspension_banc_* », qui montent toutes à 3,100.",
+      "pose": "suspendu",
       "parts": [
         {
           "type": "cylinder",
@@ -3843,7 +3906,7 @@
             0.0
           ],
           "radius": 0.008,
-          "height": 1.01,
+          "height": 1.12,
           "sides": 8
         }
       ]
@@ -3856,6 +3919,7 @@
         -4.694
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "poi": "billard",
       "anchor": [
         0.0,
@@ -3883,6 +3947,8 @@
         -4.694
       ],
       "yaw": 0.0,
+      "_pose": "« libre », et la raison est un cas que C-06 ne prévoit pas : cette suspension ne pend PAS du plafond, elle est fixée à la POUTRE. Son câble monte à y = 2,900, c'est-à-dire au millimètre le dessus de « poutre_1 » (2,700..2,900), qu'il traverse de part en part. Déclarée « suspendu », C-06 la mesurerait contre la sous-face des rails (3,084) et annoncerait 0,184 m de vide — un verdict faux, parce qu'il n'y a rien à corriger. Voir le rapport : C-06 gagnerait une clé « accroché à <nom> ».",
+      "pose": "libre",
       "parts": [
         {
           "_": "LA SUSPENSION. La salle déclarait sa lumière et pas son luminaire — une source sans objet visible, ce que le plan s'interdit. Trois morceaux : le câble, l'abat-jour tronconique, l'ampoule. L'abat-jour est ouvert vers le bas (pas de bouchon bas) pour qu'on voie l'ampoule dedans depuis la table.",
@@ -3936,6 +4002,8 @@
         -4.694
       ],
       "yaw": 0.0,
+      "pose": "meuble",
+      "poseSur": "billard",
       "parts": [
         {
           "_": "la blanche, celle qu'on joue",
@@ -3985,6 +4053,8 @@
         -4.694
       ],
       "yaw": 0.0,
+      "pose": "meuble",
+      "poseSur": "billard",
       "parts": [
         {
           "_": "les trois barres du triangle, posees sur le drap (0,784) — a 0,787, trois millimetres au-dessus : a la cote exacte du drap leurs sommets bas comptent DANS le solide de la table et roomgen arrete le build",
@@ -4120,6 +4190,8 @@
         -4.694
       ],
       "yaw": 0.0,
+      "pose": "meuble",
+      "poseSur": "billard",
       "parts": [
         {
           "type": "box",
@@ -4148,6 +4220,8 @@
         -4.694
       ],
       "yaw": 110.2,
+      "pose": "meuble",
+      "poseSur": "billard",
       "parts": [
         {
           "type": "cylinder",
@@ -4187,6 +4261,7 @@
         6.05
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "poi": "bar",
       "anchor": [
         0.0,
@@ -4263,6 +4338,7 @@
         5.3
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "repeat": {
         "count": 2,
         "step": [
@@ -4286,6 +4362,7 @@
         -5.1
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "model": "cc0/models/sofa_03/sofa_03.gltf",
       "material": "canape_tissu",
       "poi": "canape"
@@ -4299,6 +4376,7 @@
         -3.9
       ],
       "yaw": 12.0,
+      "pose": "sol",
       "model": "models/CoffeeTable_01/CoffeeTable_01.gltf",
       "material": "table_salon",
       "_": "Un vrai modele au lieu de deux boites — un plateau sur un pied, qui se lisait comme un plateau sur un pied."
@@ -4311,7 +4389,9 @@
         0.0,
         5.2
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "C-04 : « produit scalaire -1,00 ». Le comptoir est adossé au parement est du couloir (x 6,953 ; son plateau va jusqu'à 6,95) et son commentaire affirme « tourné vers la salle » — mais lacet 90 envoie son +Z local sur +X, c'est-à-dire DANS le mur. La phrase disait une chose et le lacet l'inverse. yaw 90 -> 270 : l'emprise ne bouge pas d'un millimètre (rotation d'un demi-tour d'un meuble symétrique), seul le poste radio du plateau passe de z 4,783 à 5,617 et la façade regarde enfin le couloir.",
+      "pose": "mur",
       "parts": [
         {
           "type": "box",
@@ -4365,11 +4445,13 @@
       "name": "distributeur",
       "_atmo": "SPEC-ATMOSPHERE poste 11 (§2.3 J) : « un distributeur de boissons se met SUR LE TRAJET, pas dans l'angle mort ». De (-9,20 ; 5,60) a (-9,25 ; -0,30), sur le mur ouest entre le tapis technique et le billard, vu de toute la travee ouest.\nEt une correction que le deplacement a rendue visible : les deux panneaux de facade etaient poses a z local 0,356 pour un caisson dont la demi-profondeur vaut 0,39 — ENFOUIS de 3,4 cm. Amene dans la lumiere, le distributeur etait une dalle noire sans un seul detail. Ils passent a 0,392, la meme marge de deux millimetres que la vitrine a lots et le monnayeur.",
       "at": [
-        -3.2,
+        -2.466,
         0.0,
-        -6.7
+        -6.645
       ],
-      "yaw": 90.0,
+      "yaw": 0.0,
+      "_pose": "C-04 : « produit scalaire -0,00 ». Le distributeur avait CHANGÉ DE MUR sans changer de lacet. Son commentaire `_atmo` le place encore « sur le mur ouest » (x -9,20) avec le lacet 90 qui y convenait ; `_place`, plus récent, le met « contre le mur SUD ». Il présentait donc au mur sud son FLANC, et sa façade — les deux panneaux bleu et jaune, en z local +0,392 — regardait l'est, le long du mur. yaw 90 -> 0 : la façade regarde enfin la salle, et l'emprise reprend son sens (0,86 le long du mur, 0,78 de profondeur — les cotes que l'audit lui attribue).\nat z -6,700 -> -6,645 : C-03 mesurait 4,1 cm au parement (les sommets d'un caisson chanfreiné de 14 mm rentrent d'autant). Le dos tombe maintenant sur le parement sud, z = -7,035.\nat x -3,200 -> -2,466, ET C'EST LA TROUVAILLE : à x = -3,200 le caisson OCCUPAIT « affiche_sud ». Le cadre 2020 est un panneau plat en z = -7,030, x -3,7775..-3,0005 ; le caisson couvrait x -3,630..-2,770, soit 0,6295 m des 0,777 m de l'affiche, sur toute sa hauteur utile — 81 % de l'image dans le solide. Vu à la capture --pos=-3.3,1.55,-4.6 --yaw=270 : il n'en dépassait qu'un liséré jaune au-dessus du caisson. Aucun contrôle ne pouvait le dire : C-02 compare des BOÎTES, et la boîte d'un panneau d'épaisseur nulle a un recouvrement de 0,000 m sur son axe — elle ne devient jamais une « boîte commune ». Recentré sur x = -2,466, c'est-à-dire au milieu de ce qui reste de la travée entre l'affiche (-3,0005) et le socle du pilastre sud n° 2 (-1,931) : 10,5 cm de dégagement de chaque côté.",
+      "pose": "mur",
       "parts": [
         {
           "type": "box",
@@ -4422,6 +4504,7 @@
         6.05
       ],
       "yaw": 195.0,
+      "pose": "sol",
       "parts": [
         {
           "type": "box",
@@ -4478,6 +4561,7 @@
         1.9
       ],
       "yaw": 90.0,
+      "pose": "mur",
       "poi": "radio",
       "anchor": [
         0.0,
@@ -4523,7 +4607,9 @@
         0.0,
         0.558
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "C-04 : « produit scalaire -1,00 ». Le plan de lavabo présentait sa FACE AVANT au parement est. Le commentaire de `check_facing` dans tools/roomgen.c le chiffrait déjà sans pouvoir le refuser : « le miroir est posé sur la face AVANT de son meuble, à 51,9 cm du parement est, et sa normale pointe vers ce parement ». Mesure : miroir en x = 11,333 pour un parement à 11,852. yaw 90 -> 270. L'emprise du caisson ne bouge pas (0,52 de profondeur, symétrique) ; ce qui bouge est ce qui compte : le miroir passe de 11,333 à 11,851, soit 1 mm devant le parement, et regarde la pièce ; le dormant, qui « saille de 1,4 cm devant la glace », est enfin devant elle (11,837) et non derrière ; et l'ancre du point d'intérêt passe de x = 12,303 — 25 cm DEHORS, au-delà du nu extérieur 12,052 — à 10,881, dans les toilettes.",
+      "pose": "mur",
       "poi": "toilettes",
       "anchor": [
         0.0,
@@ -4647,7 +4733,9 @@
         0.0,
         -5.18
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "Même demi-tour que « lavabo_toilettes », même preuve.",
+      "pose": "mur",
       "parts": [
         {
           "type": "box",
@@ -4766,6 +4854,7 @@
         -3.1
       ],
       "yaw": 24.0,
+      "pose": "sol",
       "_": "La flaque et son panneau suivent le sas de lavabos, ou l'on entre : ils etaient contre l'ancien lavabo, dont la place est desormais coupee par « cloison_wc_est ».",
       "parts": [
         {
@@ -4788,11 +4877,14 @@
     {
       "name": "robinet_toilettes",
       "at": [
-        11.462,
+        11.722,
         0.0,
         0.558
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "C-03 « meuble » : « FLOTTE de 1,0 cm » — socle du robinet à y = 0,870 pour un dessus de marbre à 0,860. Les trois pièces descendent de 1 cm (0,87 -> 0,86 ; 1,00 -> 0,99 ; 1,10 -> 1,09) : le socle repose sur le plan, le bec garde sa hauteur relative.",
+      "pose": "meuble",
+      "poseSur": "lavabo_toilettes",
       "_": "Suit son lavabo, au meme ecart de 0,13 m.",
       "parts": [
         {
@@ -4800,7 +4892,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            0.87,
+            0.86,
             0.0
           ],
           "size": [
@@ -4816,7 +4908,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            1.0,
+            0.99,
             0.0
           ],
           "size": [
@@ -4831,7 +4923,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            1.1,
+            1.09,
             0.075
           ],
           "size": [
@@ -4847,11 +4939,14 @@
     {
       "name": "robinet_toilettes_2",
       "at": [
-        11.462,
+        11.722,
         0.0,
         -5.18
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "C-03 « meuble » : « FLOTTE de 1,0 cm » — socle du robinet à y = 0,870 pour un dessus de marbre à 0,860. Les trois pièces descendent de 1 cm (0,87 -> 0,86 ; 1,00 -> 0,99 ; 1,10 -> 1,09) : le socle repose sur le plan, le bec garde sa hauteur relative.",
+      "pose": "meuble",
+      "poseSur": "lavabo_toilettes_2",
       "_": "Celui du bloc hommes.",
       "parts": [
         {
@@ -4859,7 +4954,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            0.87,
+            0.86,
             0.0
           ],
           "size": [
@@ -4874,7 +4969,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            1.0,
+            0.99,
             0.0
           ],
           "size": [
@@ -4889,7 +4984,7 @@
           "material": "borne_chrome",
           "at": [
             0.0,
-            1.1,
+            1.09,
             0.075
           ],
           "size": [
@@ -4911,6 +5006,7 @@
         -0.3
       ],
       "yaw": 270.0,
+      "pose": "mur",
       "_": "Sur le mur est, au NORD de la baie, tourne vers la salle. Il etait a (7,44 ; -1,38) : c'est-a-dire EN PLEIN MILIEU de l'ouverture, suspendu dans le vide entre 1,57 et 1,87 m — a hauteur de tete d'un joueur qui en fait 1,82. Un panneau qui indique une porte ne se met pas dans la porte.",
       "parts": [
         {
@@ -4936,6 +5032,7 @@
         -4.3
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "type": "box",
@@ -5006,6 +5103,7 @@
         -0.3
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "parts": [
         {
           "type": "box",
@@ -5077,6 +5175,8 @@
         -3.62
       ],
       "yaw": 0.0,
+      "_pose": "Un vantail pendu à ses gonds. Il n'est ni au sol (il commence à y = 0,150, le jeu réglementaire d'une cabine sanitaire), ni sur un meuble — son empreinte tombe 4 cm au-delà de celle de « cabine_toilettes » (z -3,610 pour une cabine qui s'arrête à -3,650, et cet écart est voulu : à la cote exacte de la joue, ses 35 mm d'épaisseur y entraient de 17 mm) — ni contre un parement, dont il est à 17,0 cm. Les trois messages ont été obtenus en le déclarant.",
+      "pose": "libre",
       "_": "Fermee, devant la cabine du bloc hommes ; son gond est contre la joue ouest. z = -3,62 et non -3,65 : a la cote exacte de la joue, ses 35 mm d'epaisseur y entraient de 17 mm et roomgen arrete le build.",
       "parts": [
         {
@@ -5119,6 +5219,8 @@
         -0.98
       ],
       "yaw": 142.0,
+      "_pose": "Même cas que « porte_cabine_1 » : un vantail pendu à la joue de sa cabine.",
+      "pose": "libre",
       "_": "Entrouverte de 38 degres, devant la cabine du bloc femmes. Elle etait a (-7,14 ; -5,45), c'est-a-dire DANS LE MUR OUEST DU HALL, a 13,4 m de la cabine qu'elle est censee fermer et de l'autre cote du batiment. C'est le detail qui fait la difference entre un bloc sanitaire et un placard : on voit qu'il y a quelque chose derriere.",
       "parts": [
         {
@@ -5162,6 +5264,7 @@
         -0.675
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "le vantail",
@@ -5206,6 +5309,7 @@
         -4.175
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "le vantail",
@@ -5250,6 +5354,7 @@
         12.66
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "poi": "porte",
       "anchor": [
         -0.35,
@@ -5291,9 +5396,11 @@
       "at": [
         6.12,
         2.42,
-        11.9
+        12.618
       ],
       "yaw": 180.0,
+      "_pose": "C-03 l'a mesuré à 57,3 cm du parement le plus proche : le bloc de secours PENDAIT AU MILIEU DU COULOIR. Son propre commentaire annonçait « ramené sur le parement intérieur, 12 cm en avant de la ligne médiane » ; la médiane du mur nord du couloir est à z = 12,738 et il était à z = 11,900, soit 0,718 m plus au sud. z 11,900 -> 12,618, c'est-à-dire 12 cm en avant de la médiane et 2 cm en avant du parement (12,638) — la même garde que les huit affiches. Preuve : C-03 « mur », qui ne trouvait aucun parement à moins de 3 cm.",
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5318,6 +5425,7 @@
         7.02
       ],
       "yaw": 180.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5358,6 +5466,7 @@
         -5.553
       ],
       "yaw": 90.0,
+      "pose": "mur",
       "repeat": {
         "count": 2,
         "step": [
@@ -5391,6 +5500,7 @@
         4.795
       ],
       "yaw": 114.8,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5416,6 +5526,7 @@
         -7.03
       ],
       "yaw": 0.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5442,6 +5553,7 @@
         -7.03
       ],
       "yaw": 0.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5468,6 +5580,7 @@
         -7.03
       ],
       "yaw": 0.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5493,6 +5606,7 @@
         -7.03
       ],
       "yaw": 0.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5518,6 +5632,7 @@
         -5.4
       ],
       "yaw": 270.0,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5543,6 +5658,7 @@
         3.051
       ],
       "yaw": 245.2,
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5566,9 +5682,11 @@
       "at": [
         -2.4,
         1.43,
-        6.95
+        7.015
       ],
       "yaw": 180.0,
+      "_pose": "C-03 l'a mesurée à 8,5 cm du parement nord : la seule des huit affiches à ne pas toucher son mur. Les sept autres sont à 0,5 ou 1,5 cm (affiche_sud à z = -7,030 pour un parement à -7,035). z 6,950 -> 7,015, soit 2 cm en avant du parement nord (7,035) — la garde des affiches du mur sud. Rien derrière elle : le comptoir s'arrête à z = 6,739 et le cadre de l'enseigne occupe x -1,325..1,325.",
+      "pose": "mur",
       "parts": [
         {
           "type": "panel",
@@ -5594,6 +5712,7 @@
         11.1
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "type": "box",
@@ -5617,11 +5736,13 @@
       "_": "L'extincteur réglementaire, à 1,10 m du sol comme le veut l'usage. Il porte trois matériaux — corps, verre du manomètre, étiquette — et c'est très exactement ce qui distingue un modèle d'une boîte peinte : sans la table de correspondance, tout l'objet serait rouge mat.",
       "name": "extincteur",
       "at": [
-        6.941,
+        6.9915,
         1.1,
         -0.103
       ],
       "yaw": 270.0,
+      "_pose": "C-03 l'a mesuré à 5,1 cm du parement est : un extincteur accroché à rien, à 1,10 m du sol. Le sommet est du modèle est à at.x + 0,1235 ; le parement est du hall est à x = 7,115. at.x 6,941 -> 6,9915, ce qui pose son dos SUR le parement (7,0645 -> 7,115). Il ne bouge que de 5 cm et ne touche ni « pilier_est_2 » (z -0,909..-0,423) ni « vitrine_lots » (z 0,25..2,05).",
+      "pose": "mur",
       "model": "cc0/models/korean_fire_extinguisher_01/korean_fire_extinguisher_01.gltf",
       "material": "extincteur_corps",
       "materials": [
@@ -5633,11 +5754,14 @@
     {
       "name": "boombox",
       "at": [
-        -4.244,
-        1.025,
-        5.767
+        -2.3,
+        1.06,
+        6.05
       ],
       "yaw": 196.0,
+      "_pose": "C-03 « meuble » : « son empreinte (-4,25 ; 5,74) tombe HORS de celle du meuble ([-2,80 5,54] - [2,80 6,74]) ». Le boombox était 1,45 m à l'OUEST du comptoir, en l'air à y = 1,025, et il chevauchait le jukebox (0,31 x 0,23 m d'emprise commune sur 0,378 m de hauteur). Le commentaire de `solid_top_under` dans tools/roomgen.c le décrit encore « posé sur son plateau à 1,048 m » : c'était vrai d'un comptoir qui n'est plus là — `jukebox._place` le dit, « le bar est revenu au centre » et les objets de l'ouest y sont restés. at (-4,244 ; 1,025 ; 5,767) -> (-2,300 ; 1,060 ; 6,050) : sur le plateau, près de son extrémité ouest, base à 1,060 qui est le dessus du caisson (le bandeau noir de 0,998 à 1,048 passe DESSOUS et n'est pas la surface d'appui). C-03 l'accepte à 0,000 de jeu.",
+      "pose": "meuble",
+      "poseSur": "bar_accueil",
       "model": "models/boombox/boombox.gltf",
       "material": "boombox_corps"
     },
@@ -5656,6 +5780,7 @@
         4.15
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle"
     },
@@ -5668,6 +5793,7 @@
         -1.6
       ],
       "yaw": 90.0,
+      "pose": "mur",
       "model": "models/dartboard/dartboard.gltf",
       "material": "cible_flechettes"
     },
@@ -5679,6 +5805,7 @@
         -6.3
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "model": "models/potted_plant_01/potted_plant_01.gltf",
       "material": "plante",
       "_": "Ecartee de 0,60 m a l'est : « cloison_salon » occupe x 1,502 a 1,794."
@@ -5692,6 +5819,7 @@
         -3.4
       ],
       "yaw": 100.0,
+      "pose": "sol",
       "model": "models/ArmChair_01/ArmChair_01.gltf",
       "material": "fauteuil",
       "_": "Ecarte de 0,80 m a l'est. A 2,10 il laissait 0,3 m entre lui et « cloison_salon » (parement x = 1,794) : une poche de 0,5 m2 ou l'on ne pouvait pas entrer, mesuree par le controle d'accessibilite."
@@ -5704,6 +5832,7 @@
         -3.5
       ],
       "yaw": 62.0,
+      "pose": "sol",
       "model": "models/WetFloorSign_01/WetFloorSign_01.gltf",
       "material": "panneau_sol_mouille",
       "_": "Contre le mur ouest du sas de lavabos. Il etait a (8,60 ; -3,00), c'est-a-dire DEVANT la baie « porte_toilettes_2 » : le controle d'accessibilite a declare le bloc hommes inatteignable, poche de 1,3 m2. Un panneau qui signale un sol mouille ne se met pas dans la porte."
@@ -5717,6 +5846,8 @@
         8.2
       ],
       "yaw": 90.0,
+      "_pose": "« libre » et non « mur », et c'est une LIMITE DE C-04 mesurée sur ce modèle. L'applique touche bien son parement — sa platine y est noyée — mais la convention « un prop regarde son +Z local » est FAUSSE pour `industrial_caged_sconce` : c'est la PLATINE qui occupe son +Z local (z local 0 à 0,3285, platine en +0,3285) et la cage qui sort en -Z. Les quatre appliques donnent donc toutes un produit scalaire de -1,00, quel que soit le mur, et C-04 les refuserait alors qu'elles sont correctement posées. Voir le rapport.",
+      "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
       "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur."
@@ -5730,6 +5861,8 @@
         -6.9
       ],
       "yaw": 180.0,
+      "_pose": "Même cas que « applique_sas » : la platine du modèle est en +Z local, C-04 lit -1,00.",
+      "pose": "libre",
       "repeat": {
         "count": 4,
         "step": [
@@ -5753,6 +5886,8 @@
         -6.78
       ],
       "yaw": 0.0,
+      "_pose": "Une ampoule portée par sa cage. Elle n'est ni au sol, ni sur le dessus d'un meuble (elle est 12 cm DEVANT la cage, pas posée dessus), ni à moins de 3 cm d'un parement — C-03 la mesure à 22,3 cm du mur sud. C-03 n'a pas de cas « portée par » : c'est l'une des huit ampoules que le recensement de C-06 compte comme flottantes, et elles le sont toutes pour la même raison, écrite ici.",
+      "pose": "libre",
       "repeat": {
         "count": 4,
         "step": [
@@ -5785,6 +5920,8 @@
         6.2
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
+      "suspenduPar": "cable_comptoir",
       "model": "models/caged_hanging_light/caged_hanging_light.gltf",
       "material": "suspension_cage",
       "_": "Au-dessus du comptoir. Une suspension basse sur un bar est ce qui le designe comme un endroit ou l'on s'accoude."
@@ -5797,6 +5934,8 @@
         8.2
       ],
       "yaw": 0.0,
+      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "pose": "libre",
       "parts": [
         {
           "type": "sphere",
@@ -5821,6 +5960,8 @@
         6.2
       ],
       "yaw": 0.0,
+      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "pose": "libre",
       "parts": [
         {
           "type": "sphere",
@@ -5844,6 +5985,8 @@
         -4.4
       ],
       "yaw": 14.0,
+      "pose": "suspendu",
+      "suspenduPar": "cable_salon",
       "model": "models/caged_hanging_light/caged_hanging_light.gltf",
       "material": "suspension_cage",
       "_": "Une SUSPENSION basse au-dessus du coin salon, et pas une applique murale.\nL'applique etait sur le mur est, a trois metres du canape : a cette distance, l'attenuation en 1/d2 divise son eclairement par neuf, et tripler son intensite ne montait la mediane du coin que de 11 a 13. Ce n'etait pas la lampe qui etait faible, c'etait la distance. Une suspension a 1,2 m au-dessus de la table basse eclaire ce qu'on veut eclairer — exactement le raisonnement de la lampe du billard."
@@ -5856,6 +5999,8 @@
         -4.4
       ],
       "yaw": 0.0,
+      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "pose": "libre",
       "parts": [
         {
           "type": "sphere",
@@ -5880,6 +6025,7 @@
         3.75
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "les deux joues",
@@ -5972,6 +6118,7 @@
         3.75
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "les deux joues",
@@ -6063,6 +6210,7 @@
         3.9
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "quatre pieds",
@@ -6272,6 +6420,7 @@
         -6.55
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.",
@@ -6347,6 +6496,7 @@
         -6.8
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "les deux joues, 0,60 d'emprise en z comme la spec l'ecrit, centrees a z +0,05 : de l'arriere du dossier (-0,25) a 0,10 devant l'assise.",
@@ -6422,6 +6572,7 @@
         3.9
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.",
@@ -6471,6 +6622,7 @@
         5.32
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "parts": [
         {
           "_": "le pied, la colonne, le plateau. `at[1]` est le DESSOUS d'un cylindre : ils s'empilent.",
@@ -6527,6 +6679,7 @@
         0.7
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle",
       "_place": "Au bout OUEST de l'ilot, dans l'allee : l'ilot s'arrete a x = -3,631, et la poubelle degage de 47 cm. Elle etait posee dans le flanc d'une borne."
@@ -6546,6 +6699,7 @@
         -6.75
       ],
       "yaw": 0.0,
+      "pose": "sol",
       "model": "models/metal_trash_can/metal_trash_can.gltf",
       "material": "poubelle"
     },
@@ -6558,6 +6712,7 @@
         1.15
       ],
       "yaw": 270.0,
+      "pose": "mur",
       "parts": [
         {
           "_": "le socle plein",
@@ -6628,6 +6783,7 @@
         -7.03
       ],
       "yaw": 0.0,
+      "pose": "mur",
       "parts": [
         {
           "_": "le cadre, en retrait. Sa face arriere touche le parement du mur sud (z -7,10), sa face avant sort a -7,04.",
@@ -6684,6 +6840,7 @@
         6.243
       ],
       "yaw": 180.0,
+      "pose": "sol",
       "poi": "monnayeur",
       "parts": [
         {
@@ -6772,6 +6929,7 @@
         3.75
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -6825,6 +6983,7 @@
         3.75
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -6878,6 +7037,7 @@
         3.9
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -6931,6 +7091,7 @@
         -6.4
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -6984,6 +7145,7 @@
         -6.4
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -7037,6 +7199,7 @@
         6.05
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "le cable",
@@ -7090,6 +7253,7 @@
         0.67
       ],
       "yaw": 0.0,
+      "pose": "suspendu",
       "parts": [
         {
           "_": "moitie HARD, fond BLEU, cote x < 0",
@@ -7204,6 +7368,8 @@
         -5.6
       ],
       "yaw": 0.0,
+      "_pose": "« libre » et non « mur », pour la même raison que les poutres : le tube est bien à 2,0 cm de son parement, mais un tube n'a pas de façade et C-04, déclenché par la même clé, exigerait qu'il en montre une. Son lacet de 0 donne un produit scalaire de 0,00 contre la normale d'un mur qui rentre en ±X. Voir le rapport : « mur » vaut aujourd'hui pour deux affirmations distinctes.",
+      "pose": "libre",
       "repeat": {
         "count": 3,
         "step": [
@@ -7239,6 +7405,8 @@
         -5.6
       ],
       "yaw": 0.0,
+      "_pose": "Même cas que « tube_neon_ouest » : un tube n'a pas de façade.",
+      "pose": "libre",
       "repeat": {
         "count": 3,
         "step": [
@@ -7274,6 +7442,8 @@
         5.6
       ],
       "yaw": 270.0,
+      "_pose": "Même cas que « applique_sas » : la platine du modèle est en +Z local, C-04 lit -1,00.",
+      "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
       "repeat": {
@@ -7293,6 +7463,8 @@
         5.6
       ],
       "yaw": 0.0,
+      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "pose": "libre",
       "repeat": {
         "count": 2,
         "step": [
@@ -7321,21 +7493,25 @@
       "name": "applique_technique",
       "at": [
         -6.882,
-        2.35,
-        -0.21
+        2.29,
+        -0.1
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
+      "_pose": "Elle était VISSÉE SUR RIEN. C-06 la comptait parmi les douze props entièrement au-dessus du crâne du joueur sans toucher ni parement ni plafond ; C-03 la mesure à 23,3 cm du parement ouest. La cause est le lacet : le modèle `industrial_caged_sconce` porte sa PLATINE en +Z local, si bien que yaw 90 l'envoyait vers +X — la platine vers la salle et les deux cages vers le mur, à 56 cm du parement. Son propre commentaire annonçait pourtant « 0,233 m du parement ouest, la cote de `applique_sas` » : c'est la cote de la GUEULE de la cage, et elle est juste ; c'est le corps qui partait du mauvais côté. yaw 90 -> 270. La platine tombe alors en x = -7,2105, soit 9,55 cm au-delà du parement (-7,115) et 4,5 mm en deçà de la médiane — au millimètre la pose de `applique_sas` (platine 7,0485 pour un parement 6,953) ; la gueule reste à 23,35 cm du mur, exactement où elle était.\nat z -0,210 -> -0,100 et y 2,350 -> 2,290, tous deux imposés par C-02 une fois l'applique ramenée contre le mur : à sa place d'origine, la platine PÉNÉTRAIT « pilier_ouest_2 » (0,154 x 0,386 x 0,066 m, confirmé au triangle) puis, remontée en z, « tube_neon_ouest_3 » (0,050 x 0,049 x 0,172 m). Le mur ouest n'a AUCUNE bande libre de 0,562 m à cette hauteur : les trois tubes néon et les trois pilastres se la partagent, la plus large lacune fait 0,461 m. L'applique passe donc SOUS la ligne de néons — sommet 2,569 pour un tube qui commence à 2,580 — et au nord du pilastre, dont l'angle s'arrête à z = -0,423 pour une applique qui commence maintenant à -0,381.",
+      "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage"
     },
     {
       "name": "ampoule_technique",
       "at": [
-        -6.762,
-        2.32,
-        -0.21
+        -7.002,
+        2.26,
+        -0.1
       ],
       "yaw": 0.0,
+      "_pose": "Suit sa cage dans le demi-tour et la descente, à position LOCALE inchangée (z local +0,12, dans la douille — c'est l'assemblage que `RG_OVERLAP_ASSEMBLY` déclare dans tools/roomgen.c). x -6,762 -> -7,002, z -0,210 -> -0,100, y 2,320 -> 2,260.",
+      "pose": "libre",
       "parts": [
         {
           "type": "sphere",
