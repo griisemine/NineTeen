@@ -6,7 +6,9 @@ droit de faire :
 
 1. les **textures et modèles rapportés** (Poly Haven, CC0) — ci-dessous ;
 2. le **personnage** (CesiumMan, CC BY 4.0), la seule attribution qui soit une
-   obligation et non une politesse — section « Le personnage » ;
+   obligation et non une politesse — section « Le personnage ». Le fichier
+   livré en est désormais une **œuvre dérivée** : sa texture a été repeinte, ce
+   que la même licence oblige à déclarer ;
 3. le **logiciel tiers** lié dans le binaire — section « Le logiciel tiers » ;
 4. les **images de 2020**, dont la provenance n'est pas établie, et dont huit
    sont identifiées comme appartenant à des tiers — section « Les images de
@@ -203,9 +205,57 @@ CesiumMan a été retenu sur quatre critères, dans cet ordre :
    couche le personnage sur le flanc. `ns_skin` les traite, et
    `tests/test_skin.c` le vérifie.
 
-L'animation qu'il porte est une marche. Les autres allures — l'arrêt, la course
-— sont dérivées d'elle au runtime plutôt que téléchargées : c'est la part
-« que tu vas animer » de la demande.
+### Ce qui a été MODIFIÉ, et pourquoi il faut le dire
+
+**Le fichier livré n'est plus CesiumMan tel que Khronos le publie : c'est une
+ŒUVRE DÉRIVÉE.** CC BY 4.0 autorise expressément d'adapter, à deux conditions
+qui sont tenues ici — attribuer l'original, et *indiquer si des modifications
+ont été apportées*. Voici lesquelles, et il n'y en a pas d'autres.
+
+**Sa TEXTURE a été remplacée.** L'image embarquée d'origine est le LOGOTYPE de
+Cesium — des rubans bleus et verts sur fond blanc, plus le disque du logo sur
+une cuisse. C'est une livrée de fichier d'exemple, faite pour montrer qu'un
+lecteur glTF échantillonne bien une texture, pas pour faire un personnage : à la
+troisième personne, le joueur ne voyait pas quelqu'un, il voyait un mannequin de
+test. Elle est remplacée par une planche PEINTE dans le dépôt — blouson, jean,
+chaussures, peau, cheveux, visage — produite par `tools/skinart.c` et
+reproductible d'une commande :
+
+    ./build/…/tools/skinart assets/models/personnage/personnage.glb
+
+**La GÉOMÉTRIE, les POIDS, le SQUELETTE et l'ANIMATION ne sont pas touchés** :
+3 273 sommets, 4 672 triangles, 19 os, 57 canaux, 2,00 s de cycle, à
+l'identique. Seul le contenu de la vue de tampon qui porte l'image change, et
+`tools/glb_image.c` REFUSE d'écrire s'il devait déplacer autre chose.
+
+Pourquoi la texture est écrite DANS le `.glb` plutôt que livrée à côté : parce
+que la chaîne de build copie déjà ce fichier tel quel vers le répertoire
+d'assets, et qu'une planche à côté aurait demandé une règle de plus pour un
+résultat identique. Le prix est celui-ci : le fichier versionné est une
+adaptation, et cette section est la contrepartie que la licence exige.
+
+**Habiller un modèle CC BY est autorisé ; effacer d'où il vient ne l'est pas.**
+L'attribution ci-dessus ne bouge donc pas d'une ligne, et le test `menu`
+continue de la défendre à l'écran de crédits.
+
+### Les allures : ce qui est dérivé du cycle unique, et ce qui ne l'est pas
+
+L'animation qu'il porte est une marche, et c'est TOUT ce qu'il porte. Les autres
+allures en sont dérivées au lieu d'être téléchargées — c'est la part « que tu
+vas animer » de la demande — et voici où chacune en est, parce que cette
+phrase a longtemps été écrite ici sans que la moitié soit vraie.
+
+| Allure | État | Comment |
+|---|---|---|
+| **marche**, **course** | tenu | la phase suit la DISTANCE parcourue, pas le temps : la cadence suit l'allure toute seule |
+| **arrêt** | tenu | la phase revient à la pose de passage MESURÉE, et le corps garde un balancement postural — sans lui, une image de marche figée est une statue |
+| **accroupi** | tenu depuis cette version | les jambes se plient autour de l'axe des épaules mesuré, et l'angle est CALÉ pour que le personnage accroupi fasse exactement `personnage.tailleAccroupi` |
+| **course accroupie** | approché | le pli est appliqué par-dessus le cycle, donc il marche en marchant ; mais il ne respecte pas le contact de CHAQUE pied indépendamment |
+
+Ce qui reste hors de portée sans un second cycle : tout ce qui n'est pas une
+déformation continue de la marche — s'asseoir, ramasser, être poussé. Un cycle
+ne se fabrique pas par arithmétique, et le dire vaut mieux que de le laisser
+croire.
 
 ---
 
@@ -416,9 +466,20 @@ et c'est ce que la section « Le personnage » exigeait déjà.
 
 | Endroit | État | Où |
 |---|---|---|
-| **l'écran de crédits** | tenu depuis 17.0.0 | `Échap` → `CREDITS` ; le contenu est dans `room/room_credits.c` |
+| **l'écran de crédits** | tenu depuis 17.0.0 ; **à compléter** | `Échap` → `CREDITS` ; le contenu est dans `room/room_credits.c` |
 | **l'archive** | tenu | ce fichier est installé à la racine du paquet (`room/CMakeLists.txt`) |
 | **la page de téléchargement** | **pas tenu** | il n'y a pas encore de page |
+
+**Ce que l'écran de crédits ne dit pas encore.** CC BY 4.0 demande quatre
+choses dans l'attribution — l'œuvre, l'auteur, la licence, et *l'indication
+qu'elle a été modifiée*. L'écran porte les trois premières et pas la quatrième,
+depuis que la texture du personnage est repeinte : il faudrait y lire quelque
+chose comme « CesiumMan — © 2017 Cesium — CC BY 4.0 — texture modifiée ». Ce
+document, lui, le dit, et il est installé à la racine du paquet ; l'archive est
+donc en règle, l'écran est incomplet. `room/room_credits.c` et
+`tests/test_menu.c` appartiennent à un autre poste, et une mention légale ne se
+corrige pas dans le dos de celui qui la défend : c'est signalé plutôt que
+changé.
 
 L'écran de crédits n'est pas seulement écrit, il est **défendu** :
 `tests/test_menu.c` vérifie que la table porte l'œuvre (*CesiumMan*), l'auteur

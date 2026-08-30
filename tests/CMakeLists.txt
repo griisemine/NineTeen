@@ -144,6 +144,22 @@ nineteen_set_warnings(ns_test_skin)
 nineteen_apply_sanitizers(ns_test_skin)
 add_test(NAME peau COMMAND ns_test_skin "${CMAKE_BINARY_DIR}/assets")
 
+# Les ALLURES que le fichier n'a pas : l'accroupi et le balancement d'arret,
+# derives du cycle de marche unique. Il lit le meme vrai fichier que `peau`, et
+# pour la meme raison : ce qu'il verifie est justement ce qu'on mesure DESSUS.
+#
+# Les quatre defauts qu'il cherche sont muets eux aussi, et tous les quatre se
+# lisent a l'ecran comme un probleme d'animation plutot que de mesure : jambes
+# mal reperees et il plie les BRAS ; signe a l'envers et il s'accroupit en
+# ARRIERE ; remontee du bassin oubliee et il FLOTTE a trente centimetres du
+# sol ; calibration ratee et sa tete traverse le linteau sous lequel sa
+# capsule passe.
+add_executable(ns_test_allure test_allure.c)
+target_link_libraries(ns_test_allure PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_allure)
+nineteen_apply_sanitizers(ns_test_allure)
+add_test(NAME allure COMMAND ns_test_allure "${CMAKE_BINARY_DIR}/assets")
+
 # Le mixeur, rendu dans un WAV plutôt que vers un périphérique.
 #
 # C'est ce test qui rend vraie une phrase que `docs/CHANGELOG-V15.md` a affirmée

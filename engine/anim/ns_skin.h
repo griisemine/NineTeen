@@ -243,11 +243,19 @@ void ns_skin_pose_allure(const ns_skin *s, float time, const ns_skin_allure *all
  * accroupi fait alors exactement la taille que sa capsule de collision
  * annonce — et changer de modèle ne demande rien.
  *
+ * `penche_buste` est l'inclinaison du dos, en fraction de l'angle de cuisse.
+ * C'est le seul chiffre de tout ceci qui ne se mesure pas : il ARBITRE entre
+ * deux façons de descendre des mêmes trente-neuf centimètres. À zéro, le dos
+ * reste vertical et tout vient du genou — cent quarante et un degrés, c'est-à-
+ * dire le mollet contre la cuisse. À un, le personnage se plie en deux. Le seul
+ * juge est l'œil, et c'est pour ça qu'il se règle dans `nineteen.env` plutôt
+ * que d'être écrit ici.
+ *
  * Rend false si le squelette ne s'y prête pas (pas deux jambes repérables) :
  * l'appelant doit alors laisser l'accroupi à zéro plutôt que de plier au
  * hasard.
  */
-bool ns_skin_crouch_calibrate(ns_skin *s, float rapport);
+bool ns_skin_crouch_calibrate(ns_skin *s, float rapport, float penche_buste);
 
 /* Vrai une fois la calibration réussie. */
 bool ns_skin_can_crouch(const ns_skin *s);

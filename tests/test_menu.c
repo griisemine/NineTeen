@@ -380,6 +380,11 @@ static void test_credits(void)
     CHECK(credits_contain("CESIUMMAN"), "les crédits nomment l'œuvre : CesiumMan");
     CHECK(credits_contain("CESIUM"),    "…et son auteur : Cesium");
     CHECK(credits_contain("CC BY 4.0"), "…et sa licence : CC BY 4.0");
+    /* La cinquième mention, exigée par CC BY 4.0 § 3.a.1.B des lors que l'oeuvre
+     * est modifiee — et elle l'est : la texture d'origine a ete remplacee par
+     * une peau peinte. L'omettre laisserait croire que Cesium a dessine ce
+     * blouson. */
+    CHECK(credits_contain("MODIFIE"), "…et qu'elle a ete MODIFIEE");
     CHECK(credits_contain("CREATIVECOMMONS.ORG"), "…et le lien vers cette licence");
 
     /* Les bibliothèques dont la licence exige, elle aussi, que la mention

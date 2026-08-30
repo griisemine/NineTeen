@@ -1990,7 +1990,8 @@ int main(int argc, char **argv)
          */
         if (cam.body_height_stand > 0.01f) {
             (void)ns_skin_crouch_calibrate(personnage,
-                                           cam.body_height_crouch / cam.body_height_stand);
+                                           cam.body_height_crouch / cam.body_height_stand,
+                                           ns_env_float("personnage.busteAccroupi", 0.55f));
         }
         if (ns_skin_duration(personnage) > 0.0f) {
             NS_INFO("personnage : un seul cycle d'animation (%.2f s) — la cadence "
@@ -3684,7 +3685,6 @@ play_at_done: ;
                     allure.accroupi = ns_clampf((cam.eye_height_stand - eye) / plage,
                                                 0.0f, 1.0f);
                 }
-                if (SDL_getenv("NS_FORCE_ACCROUPI")) allure.accroupi = (float)SDL_atof(SDL_getenv("NS_FORCE_ACCROUPI"));
                 allure.souffle = b.breath;
                 allure.souffle_force = 1.0f - ns_clampf(b.amount, 0.0f, 1.0f);
                 ns_skin_pose_allure(personnage, when, &allure, d.joint,

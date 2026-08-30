@@ -27,11 +27,20 @@ static const float C_FOOT[4]  = { 0.50f, 0.45f, 0.40f, 1.00f };
  * Chaque entrée dit l'AUTEUR et la LICENCE. Une attribution qui nomme l'œuvre
  * sans nommer l'auteur n'attribue rien, et CC BY 4.0 demande nommément le
  * titre, l'auteur, la licence et un lien vers elle : les quatre sont là.
+ *
+ * ET UNE CINQUIÈME MENTION, qui manquait. CC BY 4.0 § 3.a.1.B demande
+ * d'indiquer si l'œuvre a été MODIFIÉE. Elle l'a été : la texture d'origine —
+ * le logotype de Cesium, rubans bleus et verts — a été remplacée par une peau
+ * peinte dans son espace UV (`tools/skinart`). Le maillage, le squelette et
+ * l'animation sont intacts ; la peau ne l'est pas, et c'est une modification au
+ * sens de la licence. Ne pas le dire aurait laissé croire que Cesium a dessiné
+ * ce blouson rouge.
  */
 static const room_credit_line g_credits[] = {
     { "LE PERSONNAGE", NULL, true },
     { "CESIUMMAN",            "(C) 2017 CESIUM", false },
     { "LICENCE",              "CC BY 4.0 INTERNATIONAL", false },
+    { "MODIFIE",              "TEXTURE REPEINTE - MAILLAGE ET ANIMATION INTACTS", false },
     { "",                     "CREATIVECOMMONS.ORG/LICENSES/BY/4.0/", false },
 
     { "DECOR ET MOBILIER", NULL, true },
