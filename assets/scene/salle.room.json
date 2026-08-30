@@ -783,7 +783,7 @@
     },
     {
       "name": "ecran_aplomb",
-      "texture": "tetris_font.jpg",
+      "texture": "ecran_aplomb_repos.jpg",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -791,7 +791,8 @@
         1.0
       ],
       "emissiveStrength": 1.35,
-      "fit": true
+      "fit": true,
+      "_nom": "Le fichier s'appelait `tetris_font.jpg`. Son CONTENU est propre — l'ecran d'aide du jeu d'empilement de 2020, ouvert et regarde, le mot n'y figure pas — mais TETRIS est une marque de Tetris Holding, le jeu a ete debaptise en APLOMB, et il restait ce mot-la dans l'arborescence du paquet livre et dans le nom de materiau que `salle.gltf` en tirait. Recopie sous un autre nom a l'octet pres par `assets/CMakeLists.txt` : le rendu ne bouge pas d'un texel."
     },
     {
       "name": "ecran_asteroid",

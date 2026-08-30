@@ -651,6 +651,43 @@ list(APPEND MARQUEE_ART "${_crepi}" "${GEN}/scene/textures/mur_crepi.png"
                         "${GEN}/materials/mur_crepi${_map_n}"
                         "${GEN}/materials/mur_crepi${_map_orm}")
 
+# L'ECRAN AU REPOS DE LA BORNE APLOMB, renomme.
+# Voir « LES IMAGES DE 2020 QU'ON RECOPIE SOUS UN AUTRE NOM » plus haut : c'est
+# `tetris_font.jpg` a l'octet pres, sous un nom qui ne porte pas de marque.
+set(_aplomb_repos "${GEN}/sideart/ecran_aplomb_repos.jpg")
+add_custom_command(
+    OUTPUT  "${_aplomb_repos}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SRC_ROOM}/textures/tetris_font.jpg" "${_aplomb_repos}"
+    DEPENDS "${SRC_ROOM}/textures/tetris_font.jpg"
+    COMMENT "Ecran au repos d'APLOMB : ecran_aplomb_repos.jpg"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/scene/textures/ecran_aplomb_repos.jpg"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_aplomb_repos}"
+                               "${GEN}/scene/textures/ecran_aplomb_repos.jpg"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${_aplomb_repos}"
+    VERBATIM
+)
+# `--strength=0.5`, comme les autres ecrans : une dalle est LISSE, et le relief
+# deduit du contraste y graverait l'interface du jeu dans le verre.
+add_custom_command(
+    OUTPUT  "${GEN}/materials/ecran_aplomb_repos${_map_n}"
+            "${GEN}/materials/ecran_aplomb_repos${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.5
+                   "${_aplomb_repos}" "${GEN}/materials"
+    DEPENDS texgen "${_aplomb_repos}"
+    COMMENT "Materiau PBR : ecran_aplomb_repos"
+    VERBATIM
+)
+list(APPEND MARQUEE_ART "${_aplomb_repos}"
+                        "${GEN}/scene/textures/ecran_aplomb_repos.jpg"
+                        "${GEN}/materials/ecran_aplomb_repos${_map_n}"
+                        "${GEN}/materials/ecran_aplomb_repos${_map_orm}")
+
 # Les images de tiers, retirées de TOUTES les listes : compte, dé-cuisson et
 # copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une image n'est
 # plus employée, il n'empêche pas de la livrer.
@@ -666,8 +703,35 @@ set(TEXTURES_TIERS poster_1.png poster_2.png poster_3.jpg poster_4.jpg
                    flappy_easy_font.jpg flappy_hard_font.jpg
                    floor.jpg)
 
+# ---------------------------------------------------------------------------
+# LES IMAGES DE 2020 QU'ON RECOPIE SOUS UN AUTRE NOM
+# ---------------------------------------------------------------------------
+#
+# `tetris_font.jpg` est l'ecran d'aide du jeu d'empilement de 2020 : l'art du
+# projet, ouvert et regarde, et le mot TETRIS n'y figure pas. Ce qui posait
+# probleme n'etait donc pas l'image mais son NOM — et le nom de materiau qu'il
+# entrainait dans `salle.gltf`. TETRIS est une marque de Tetris Holding ; le jeu
+# a ete debaptise en APLOMB, son enseigne redessinee, sa cle de classement
+# migree (`0003_debaptise.sql`), et il restait ce mot-la dans l'arborescence du
+# paquet livre. Aucune revendication, aucun affichage, mais un mot qu'on
+# prefere ne pas livrer.
+#
+# La copie renommee passe par le meme chemin que les planches DESSINEES : elle
+# entre dans `${GEN}/sideart`, elle est recopiee dans les textures de scene, et
+# `texgen` en derive ses cartes sous le nouveau nom. C'est un octet pour octet —
+# le fichier n'est pas retouche, seulement renomme — donc le rendu ne bouge pas
+# d'un texel, et c'est verifiable en comparant les deux fichiers.
+#
+# Consequence sur le COMPTE, et c'est pour ca que ce renommage a eu son propre
+# lot : l'image sort du glob de 2020 et rentre dans les planches generees. Le
+# total ne bouge pas, mais les deux termes de l'addition, si.
+set(TEXTURES_RENOMMEES tetris_font.jpg)
+
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 foreach(_p IN LISTS TEXTURES_TIERS)
+    list(REMOVE_ITEM _room_textures "${SRC_ROOM}/textures/${_p}")
+endforeach()
+foreach(_p IN LISTS TEXTURES_RENOMMEES)
     list(REMOVE_ITEM _room_textures "${SRC_ROOM}/textures/${_p}")
 endforeach()
 
@@ -725,7 +789,13 @@ list(LENGTH _cc0_textures  _n_cc0)
 #   Elle ne remplace aucun fichier non plus : le meuble portait le materiau
 #   `jaune`, un aplat sans texture, qui reste employe ailleurs dans la salle.
 #
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 28")
+#   +1 `ecran_aplomb_repos.jpg`, qui n'est pas une planche neuve mais
+#   `tetris_font.jpg` RENOMMEE, octet pour octet. Elle quitte le glob de 2020 —
+#   donc `_n_room` perd un — et rentre ici : le total ne bouge pas, les deux
+#   termes de l'addition si. Voir « LES IMAGES DE 2020 QU'ON RECOPIE SOUS UN
+#   AUTRE NOM ».
+#
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 29")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -827,6 +897,12 @@ file(GLOB LEGACY_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.p
 # sont des oeuvres tierces ou des captures qui en contiennent, et ne doivent ni
 # etre de-cuites, ni etre copiees.
 foreach(_p IN LISTS TEXTURES_TIERS)
+    list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_p}")
+endforeach()
+# Celles-la sont copiees plus bas SOUS UN AUTRE NOM : les laisser ici les
+# livrerait deux fois, sous les deux noms, ce qui est exactement le contraire du
+# but. Voir « LES IMAGES DE 2020 QU'ON RECOPIE SOUS UN AUTRE NOM ».
+foreach(_p IN LISTS TEXTURES_RENOMMEES)
     list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_p}")
 endforeach()
 
@@ -1394,6 +1470,18 @@ foreach(_f IN LISTS RETIRED_TEXTURES)
     get_filename_component(_b "${_f}" NAME_WE)
     list(APPEND _retires_bases "${_b}")
     list(APPEND ASSETS_RETIRES "materials/${_b}_c.png")
+endforeach()
+# Les images RENOMMEES laissent les memes gravats que les images retirees, et
+# c'est le meme oubli qui les livrerait : le fichier de scene part sous son
+# nouveau nom, mais les cartes derivees de l'ancien restent dans `${GEN}` d'un
+# build a l'autre et entrent dans le paquet. Mesure sur ce lot-ci : apres avoir
+# renomme `tetris_font.jpg`, `materials/tetris_font_n.nstex` et son `_orm`
+# etaient toujours la — c'est-a-dire le mot qu'on venait de retirer, toujours
+# livre, sous une extension que personne ne regarde.
+foreach(_r IN LISTS TEXTURES_RENOMMEES)
+    get_filename_component(_rb "${_r}" NAME_WE)
+    list(APPEND _retires_bases "${_rb}")
+    list(APPEND ASSETS_RETIRES "scene/textures/${_r}" "materials/${_rb}_c.png")
 endforeach()
 foreach(_base poster_1 poster_2 poster_3 poster_4 poster_5 poster_6 poster_7 poster_8
               flappy_easy_font flappy_hard_font

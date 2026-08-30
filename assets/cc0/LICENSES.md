@@ -14,7 +14,7 @@ droit de faire :
    images de 2020 : ce qui n'est PAS établi ». **C'est la section à lire avant
    de vendre.** Les vingt et une identifiées comme appartenant à des tiers
    — huit affiches et treize planches, **le tapis du hall compris** — **ne sont
-   plus copiées dans le paquet** ; il en reste **28** dans le décor livré dont
+   plus copiées dans le paquet** ; il en reste **27** dans le décor livré dont
    personne ne peut dire d'où elles viennent.
 
 ## Les textures rapportées
@@ -306,16 +306,16 @@ paquet porte **75 images** dans `bin/assets/scene/textures/` :
 
 | | |
 |---|---|
-| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **28** |
+| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **27** |
 | viennent d'ici — Poly Haven, CC0, listées plus haut | **19** |
-| **générées au build** (affiches de `posterart`, enseignes, écrans de jeu, flanc de borne, néon, tapis, crépi) | **28** |
+| **générées au build** (affiches de `posterart`, enseignes, écrans de jeu, flanc de borne, néon, tapis, crépi) | **29** |
 | **orphelines** : aucune source dans l'arbre, aucun matériau qui les référence | **0** |
 
 Sur le paquet entier — planches de jeu comprises — cela fait **104 images** :
-**39** de 2020, **19** Poly Haven, **46** générées au build.
+**38** de 2020, **19** Poly Haven, **47** générées au build.
 
 Le chiffre à retenir est le premier, et il a **bougé de moitié** : les images de
-2020 encore livrées passent de **58 à 28** dans le décor, parce que les huit
+2020 encore livrées passent de **58 à 27** dans le décor, parce que les huit
 affiches, les treize planches empruntées et les dix-neuf `retiredTextures` ne
 sont plus copiées. Les **deux orphelines** ont disparu avec elles.
 
@@ -329,19 +329,25 @@ retrait n'était pas la licence mais la mesure : sa tache dominante fait 12 à
 licence est venu en prime, et c'est ce qui rend cette liste réductible : chaque
 image de 2020 qu'on remplace pour une raison de RENDU sort aussi du risque.
 
-**Chacune des 28 restantes est employée par un matériau** — vérifié fichier par
+**Chacune des 27 restantes est employée par un matériau** — vérifié fichier par
 fichier contre les 125 matériaux de `salle.room.json`. Aucune n'est du poids
 mort qu'il suffirait de ne plus copier ; les retirer demande de les remplacer.
 
-Reste, et ce n'est pas éteint : `tetris_font.jpg` porte une marque déposée DANS
-SON NOM DE FICHIER. Son contenu, lui, a été ouvert et regardé — c'est l'écran
-d'aide du jeu d'empilement de 2020, l'art du projet, et le mot n'y figure pas.
-Ce qui subsiste est donc un nom de fichier et le nom de matériau qu'il porte
-dans `salle.gltf` : aucune revendication, aucun affichage, mais un mot qu'on
-préférerait ne pas livrer. Le renommer à la copie est une ligne de CMake ; c'est
-écrit ici plutôt que fait dans le même lot, parce que ça déplace le compte de
-`--expect-textures` et que ce compte est un invariant qui mérite son propre
-passage.
+La vingt-huitième est partie au lot suivant, et pour une autre raison :
+`tetris_font.jpg` portait une marque déposée DANS SON NOM DE FICHIER. Son
+contenu, lui, a été ouvert et regardé — c'est l'écran d'aide du jeu
+d'empilement de 2020, l'art du projet, et le mot n'y figure pas. Ce qui restait
+était un nom de fichier et le nom de matériau qu'il entraînait dans
+`salle.gltf`. Elle est recopiée sous `ecran_aplomb_repos.jpg`, **à l'octet
+près** — `cmp` le vérifie —, donc le rendu ne bouge pas d'un texel et seule
+l'arborescence change. Elle passe du glob de 2020 aux planches générées : le
+total ne bouge pas, les deux termes de l'addition si.
+
+**Mesuré sur l'archive : plus aucun nom de fichier du paquet ne contient
+TETRIS, PAC-MAN, FLAPPY ni PONG, et `salle.gltf` n'en contient aucune
+occurrence.** Les seuls endroits où ces mots subsistent sont ce document et
+`JOUER.md`, qui les emploient pour DIRE que les jeux ont été débaptisés — c'est
+un usage nominatif, et le taire rendrait le débaptême incompréhensible.
 
 Le reste — affiches, enseignes, écrans de jeu, flanc de borne, néon, tapis du
 hall — est **généré au build** et ne pose aucune question de licence : c'est de
