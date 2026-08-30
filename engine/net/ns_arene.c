@@ -298,24 +298,32 @@ size_t ns_arene_ecrire_verdict(uint8_t *out, size_t cap, uint8_t sortie,
     return NS_ARENE_VERDICT_OCTETS;
 }
 
-bool ns_arene_lire_verdict(const uint8_t *charge, size_t len, uint8_t *sortie,
-                           uint8_t *vainqueur, uint8_t *numero,
+bool ns_arene_lire_verdict(const uint8_t *charge, size_t len, uint8_t *emetteur,
+                           uint8_t *sortie, uint8_t *vainqueur, uint8_t *numero,
                            uint32_t *horloge_ms)
 {
     if (!charge || len < (size_t)1 + NS_ARENE_VERDICT_OCTETS) return false;
     /*
-     * LE CONTRÔLE QUI JUSTIFIE L'OCTET D'IDENTITÉ. La place 0 arbitre ; un
-     * verdict venu d'ailleurs n'est pas un verdict, c'est une place qui essaie
-     * de sortir un rival. Le relais écrit lui-même cet octet, donc personne ne
-     * peut le contrefaire, et c'est le seul endroit du dépôt en position de
-     * faire ce refus.
+     * On ne juge ici que la FORME. L'octet d'identité est rendu tel quel :
+     * savoir s'il désigne l'arbitre demande le tableau des places, que ce
+     * décodeur pur n'a pas. Le refus vit dans `traiter`, avec
+     * `ns_arene_arbitre_de` — une seule description de qui arbitre.
      */
-    if (charge[0] != 0) return false;
+    if (charge[0] >= NS_ARENE_MAX_PLACES) return false;
+    if (emetteur)   *emetteur   = charge[0];
     if (numero)     *numero     = charge[1];
     if (sortie)     *sortie     = charge[2];
     if (vainqueur)  *vainqueur  = charge[3];
     if (horloge_ms) *horloge_ms = get_u32(charge + 4);
     return true;
+}
+
+uint8_t ns_arene_arbitre_de(uint8_t presentes)
+{
+    for (uint8_t i = 0; i < NS_ARENE_MAX_PLACES; ++i) {
+        if (presentes & (uint8_t)(1u << i)) return i;
+    }
+    return NS_ARENE_AUCUNE_PLACE;
 }
 
 size_t ns_arene_ecrire_effet(uint8_t *out, size_t cap, uint8_t auteur,
@@ -329,16 +337,21 @@ size_t ns_arene_ecrire_effet(uint8_t *out, size_t cap, uint8_t auteur,
     return NS_ARENE_EFFET_OCTETS;
 }
 
-bool ns_arene_lire_effet(const uint8_t *charge, size_t len, uint8_t *auteur,
-                         uint8_t *cible, uint8_t *action, ns_arene_issue *issue)
+bool ns_arene_lire_effet(const uint8_t *charge, size_t len, uint8_t *emetteur,
+                         uint8_t *auteur, uint8_t *cible, uint8_t *action,
+                         ns_arene_issue *issue)
 {
     if (!charge || len < (size_t)1 + NS_ARENE_EFFET_OCTETS) return false;
-    if (charge[0] != 0) return false;      /* l'arbitre seul, comme le verdict */
+    if (charge[0] >= NS_ARENE_MAX_PLACES) return false;
+    /* Une issue hors de l'énumération deviendrait un `switch` sans branche chez
+     * celui qui affiche. On la refuse ici, une fois, plutôt que de demander à
+     * chaque lecteur d'y penser. */
     if (charge[4] > (uint8_t)NS_ARENE_REFUSEE) return false;
-    if (auteur) *auteur = charge[1];
-    if (cible)  *cible  = charge[2];
-    if (action) *action = charge[3];
-    if (issue)  *issue  = (ns_arene_issue)charge[4];
+    if (emetteur) *emetteur = charge[0];
+    if (auteur)   *auteur   = charge[1];
+    if (cible)    *cible    = charge[2];
+    if (action)   *action   = charge[3];
+    if (issue)    *issue    = (ns_arene_issue)charge[4];
     return true;
 }
 
@@ -421,6 +434,29 @@ static void poser_erreur(ns_arene *a, const char *fmt, ...)
         va_end(ap);
     }
     SDL_UnlockMutex(a->verrou);
+}
+
+/* Le masque des places présentes. LE VERROU DOIT ÊTRE TENU. */
+static uint8_t masque_present(const ns_arene *a)
+{
+    uint8_t m = 0;
+    for (uint8_t i = 0; i < NS_ARENE_MAX_PLACES; ++i) {
+        if (a->place[i].presente) m = (uint8_t)(m | (1u << i));
+    }
+    return m;
+}
+
+/*
+ * La place dont on accepte un verdict, à cet instant.
+ *
+ * Tant que le tableau n'est pas arrivé, c'est la place 0 : c'est la règle nue,
+ * et le seul verdict qui puisse arriver avant le premier tableau viendrait d'un
+ * salon dont on ne sait rien. LE VERROU DOIT ÊTRE TENU.
+ */
+static uint8_t arbitre_attendu(const ns_arene *a)
+{
+    if (!a->tableau_vu) return 0u;
+    return ns_arene_arbitre_de(masque_present(a));
 }
 
 /* Pousse un événement. LE VERROU DOIT ÊTRE TENU. */
@@ -658,6 +694,15 @@ static void appliquer_tableau(ns_arene *a, const uint8_t *p, uint16_t len)
     SDL_UnlockMutex(a->verrou);
 }
 
+/* Vrai si `emetteur` a le droit d'arbitrer, d'après le tableau qu'on connaît. */
+static bool accepter_arbitre(ns_arene *a, uint8_t emetteur)
+{
+    SDL_LockMutex(a->verrou);
+    const bool ok = (emetteur == arbitre_attendu(a));
+    SDL_UnlockMutex(a->verrou);
+    return ok;
+}
+
 static void traiter(ns_arene *a, uint8_t type, const uint8_t *p, uint16_t len)
 {
     SDL_LockMutex(a->verrou);
@@ -726,14 +771,22 @@ static void traiter(ns_arene *a, uint8_t type, const uint8_t *p, uint16_t len)
         }
 
         case NS_ARENE_T_VERDICT: {
-            uint8_t sortie = 0, vainqueur = 0, numero = 0;
+            uint8_t emetteur = 0, sortie = 0, vainqueur = 0, numero = 0;
             uint32_t horloge = 0;
-            /* Le refus d'un verdict venu d'ailleurs que de la place 0 est DANS
-             * le décodeur : voir `ns_arene_lire_verdict`. */
-            if (!ns_arene_lire_verdict(p, len, &sortie, &vainqueur, &numero,
-                                       &horloge)) {
-                NS_WARN("arene : verdict rejete (place emettrice %u, %u octets)",
-                        (unsigned)(len ? p[0] : 0u), (unsigned)len);
+            if (!ns_arene_lire_verdict(p, len, &emetteur, &sortie, &vainqueur,
+                                       &numero, &horloge)) {
+                return;
+            }
+            /*
+             * LE CONTRÔLE QUE L'OCTET D'IDENTITÉ REND POSSIBLE. Un verdict qui
+             * ne vient pas de l'arbitre n'est pas un verdict, c'est une place
+             * qui essaie de sortir un rival. Le relais écrit lui-même cet
+             * octet, donc personne ne peut le contrefaire, et ce module est le
+             * seul en position de faire le refus : il a le tableau des places.
+             */
+            if (!accepter_arbitre(a, emetteur)) {
+                NS_WARN("arene : verdict de la place %u rejete — elle n'arbitre "
+                        "pas", (unsigned)emetteur);
                 return;
             }
             ev.type = NS_ARENE_EVT_VERDICT;
@@ -745,9 +798,13 @@ static void traiter(ns_arene *a, uint8_t type, const uint8_t *p, uint16_t len)
         }
 
         case NS_ARENE_T_EFFET: {
-            uint8_t auteur = 0, cible = 0, quoi = 0;
+            uint8_t emetteur = 0, auteur = 0, cible = 0, quoi = 0;
             ns_arene_issue issue = NS_ARENE_PASSEE;
-            if (!ns_arene_lire_effet(p, len, &auteur, &cible, &quoi, &issue)) return;
+            if (!ns_arene_lire_effet(p, len, &emetteur, &auteur, &cible, &quoi,
+                                     &issue)) {
+                return;
+            }
+            if (!accepter_arbitre(a, emetteur)) return;   /* comme le verdict */
             ev.type = NS_ARENE_EVT_EFFET;
             ev.a = auteur;
             ev.b = cible;
@@ -1024,15 +1081,39 @@ bool ns_arene_arbitre(ns_arene *a)
     if (!a) return true;                      /* hors ligne : le même chemin */
     const ns_arene_liaison e = ns_arene_etat(a);
     /*
-     * LA REPRISE DE LA LAME. Une liaison morte veut dire que l'arbitre ne
-     * parlera plus. Continuer à l'attendre figerait la manche à jamais, ce qui
-     * est le seul comportement interdit de ce fichier : on reprend la lame,
-     * quelle que soit la place occupée, et on finit avec les rivaux locaux.
+     * LA REPRISE DE LA LAME, PREMIER CAS. Une liaison morte veut dire que
+     * l'arbitre ne parlera plus. Continuer à l'attendre figerait la manche à
+     * jamais, ce qui est le seul comportement interdit de ce fichier : on
+     * reprend la lame, quelle que soit la place occupée, et on finit avec les
+     * rivaux locaux.
      */
     if (e == NS_ARENE_OFF || e == NS_ARENE_TERMINEE || e == NS_ARENE_ERREUR) {
         return true;
     }
-    return a->ma_place == 0u;
+
+    bool oui;
+    SDL_LockMutex(a->verrou);
+    if (!a->tableau_vu) {
+        /* Le tableau n'est pas encore arrivé : on ne sait rien de personne, et
+         * la seule réponse possible est la règle nue. */
+        oui = (a->ma_place == 0u);
+    } else {
+        /*
+         * LA REPRISE DE LA LAME, SECOND CAS — et c'est celui qui arrive
+         * vraiment. La place 0 raccroche au milieu d'une manche : le relais
+         * nous laisse notre socket, la liaison est parfaitement vivante, et
+         * plus personne n'avance le couperet. Un salon de sept joueurs
+         * attendrait alors pour l'éternité un verdict que personne n'envoie.
+         *
+         * L'arbitre est donc LA PLUS PETITE PLACE PRÉSENTE, et non la place 0.
+         * Tout le monde en décide sur le MÊME tableau — le relais le diffuse
+         * identique à toutes les places — donc tout le monde tombe d'accord
+         * sans qu'aucune négociation soit nécessaire.
+         */
+        oui = (ns_arene_arbitre_de(masque_present(a)) == a->ma_place);
+    }
+    SDL_UnlockMutex(a->verrou);
+    return oui;
 }
 
 /* ==========================================================================
@@ -1066,7 +1147,13 @@ void ns_arene_agir(ns_arene *a, uint8_t cible, uint8_t action)
 void ns_arene_verdict(ns_arene *a, uint8_t sortie, uint8_t vainqueur,
                       uint8_t numero, uint32_t horloge_ms)
 {
-    if (!a || a->ma_place != 0u) return;      /* l'arbitre seul */
+    /*
+     * DEUX REFUS ET NON UN. `a == NULL` d'abord : hors ligne on EST l'arbitre —
+     * `ns_arene_arbitre(NULL)` rend vrai, c'est toute la promesse du chemin de
+     * code unique — mais il n'y a personne à qui diffuser. Ne garder que le
+     * second test faisait passer le nul jusqu'à la file de sortie.
+     */
+    if (!a || !ns_arene_arbitre(a)) return;
     uint8_t charge[NS_ARENE_VERDICT_OCTETS];
     if (!ns_arene_ecrire_verdict(charge, sizeof charge, sortie, vainqueur,
                                  numero, horloge_ms)) {
@@ -1078,7 +1165,7 @@ void ns_arene_verdict(ns_arene *a, uint8_t sortie, uint8_t vainqueur,
 void ns_arene_effet(ns_arene *a, uint8_t auteur, uint8_t cible,
                     uint8_t action, ns_arene_issue issue)
 {
-    if (!a || a->ma_place != 0u) return;
+    if (!a || !ns_arene_arbitre(a)) return;   /* hors ligne : personne à qui parler */
     uint8_t charge[NS_ARENE_EFFET_OCTETS];
     if (!ns_arene_ecrire_effet(charge, sizeof charge, auteur, cible, action,
                                issue)) {

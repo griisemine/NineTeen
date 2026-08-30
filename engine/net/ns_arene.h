@@ -517,16 +517,33 @@ uint8_t ns_arene_ma_place(const ns_arene *a);
 
 /*
  * VRAI si c'est à nous d'arbitrer — c'est-à-dire de faire tourner
- * `room_cp_avancer` et de diffuser le verdict.
+ * `room_cp_avancer`, de résoudre les actions et de diffuser le verdict.
  *
- * Trois cas, et les trois rendent vrai pour la même raison de fond : il n'y a
- * personne d'autre pour le faire.
- *   - `a == NULL` : on joue hors ligne, le même chemin de code que place 0 ;
- *   - notre place est 0 : c'est la règle du mode ;
- *   - la liaison est MORTE (`NS_ARENE_TERMINEE`, `NS_ARENE_ERREUR`) : l'arbitre
- *     ne parle plus, et une manche qui attendrait son verdict s'arrêterait pour
- *     toujours. On reprend la lame et on finit la manche avec les rivaux
- *     locaux.
+ * LA RÈGLE EXACTE : l'arbitre est LA PLUS PETITE PLACE PRÉSENTE. En salon
+ * plein c'est la place 0, ce qui est la règle du mode telle qu'elle est écrite
+ * partout ailleurs. Trois cas la rendent vraie ailleurs, et les trois pour la
+ * même raison de fond — il n'y a personne d'autre pour le faire :
+ *
+ *   - `a == NULL` : on joue hors ligne. Seul dans un salon d'une place, on est
+ *     la plus petite place présente, et le chemin de code ne change pas ;
+ *   - LA LIAISON EST MORTE (`NS_ARENE_TERMINEE`, `NS_ARENE_ERREUR`) : plus
+ *     aucun verdict n'arrivera jamais. On reprend la lame et on finit avec les
+ *     rivaux locaux ;
+ *   - LA PLACE 0 A RACCROCHÉ pendant que notre socket, elle, tient toujours.
+ *     C'est le cas qui arrive vraiment : le relais laisse sa socket au dernier
+ *     joueur d'un salon, et un salon de sept dont l'arbitre est parti
+ *     attendrait pour l'éternité un couperet que personne n'envoie.
+ *
+ * TOUT LE MONDE EN DÉCIDE SUR LE MÊME TABLEAU. Le relais le diffuse identique à
+ * toutes les places, à chaque arrivée et à chaque départ : personne n'a besoin
+ * de négocier quoi que ce soit pour tomber d'accord.
+ *
+ * CE QUE ÇA LAISSE OUVERT, et il vaut mieux l'écrire : le temps qu'un tableau
+ * vole, deux places peuvent se croire arbitres toutes les deux, et deux
+ * verdicts portant le MÊME numéro peuvent arriver. C'est borné par le temps de
+ * vol d'une trame, et la salle s'en protège en une ligne — un verdict dont le
+ * numéro est déjà appliqué se jette. Sans ce numéro dans la trame, il aurait
+ * fallu deviner ; c'est aussi pour ça qu'il y est.
  */
 bool ns_arene_arbitre(ns_arene *a);
 
@@ -557,14 +574,16 @@ void ns_arene_publier(ns_arene *a, bool vivante, uint8_t camp,
 void ns_arene_agir(ns_arene *a, uint8_t cible, uint8_t action);
 
 /*
- * Diffuse le verdict du couperet. SANS EFFET si l'on n'est pas la place 0 —
+ * Diffuse le verdict du couperet. SANS EFFET si `ns_arene_arbitre` est faux —
  * refusé ici plutôt qu'ignoré à l'autre bout, pour que le refus se voie du côté
- * qui a tort.
+ * qui a tort. Le décodeur d'en face refuse de toute façon un verdict qui ne
+ * vient pas de la place 0 : les deux moitiés du contrôle existent, et c'est
+ * volontaire.
  */
 void ns_arene_verdict(ns_arene *a, uint8_t sortie, uint8_t vainqueur,
                       uint8_t numero, uint32_t horloge_ms);
 
-/* Diffuse le sort d'une action. SANS EFFET si l'on n'est pas la place 0. */
+/* Diffuse le sort d'une action. SANS EFFET si `ns_arene_arbitre` est faux. */
 void ns_arene_effet(ns_arene *a, uint8_t auteur, uint8_t cible,
                     uint8_t action, ns_arene_issue issue);
 
@@ -695,20 +714,41 @@ size_t ns_arene_ecrire_verdict(uint8_t *out, size_t cap, uint8_t sortie,
                                uint8_t vainqueur, uint8_t numero,
                                uint32_t horloge_ms);
 /*
- * Lit un VERDICT REÇU. Rend FAUX si la place émettrice n'est pas 0 : un verdict
- * qui ne vient pas de l'arbitre n'est pas un verdict. C'est le contrôle que
- * l'octet d'identité du relais rend possible, et le seul endroit du dépôt qui
- * puisse le faire.
+ * Lit un VERDICT REÇU. Rend la place ÉMETTRICE dans `emetteur` — c'est le seul
+ * octet que le relais garantisse, et c'est à l'appelant de décider s'il vient
+ * de l'arbitre : voir `ns_arene_arbitre_de`. Le décodeur ne juge que la FORME.
+ *
+ * Il l'a d'abord jugée lui-même, en refusant tout ce qui ne venait pas de la
+ * place 0, et c'était faux : quand la place 0 raccroche, la place 1 arbitre, et
+ * ses verdicts étaient alors jetés par tout le monde. Le contrôle n'a pas
+ * disparu, il est REMONTÉ là où le tableau des places est connu.
  */
-bool ns_arene_lire_verdict(const uint8_t *charge, size_t len, uint8_t *sortie,
-                           uint8_t *vainqueur, uint8_t *numero,
+bool ns_arene_lire_verdict(const uint8_t *charge, size_t len, uint8_t *emetteur,
+                           uint8_t *sortie, uint8_t *vainqueur, uint8_t *numero,
                            uint32_t *horloge_ms);
 
 size_t ns_arene_ecrire_effet(uint8_t *out, size_t cap, uint8_t auteur,
                              uint8_t cible, uint8_t action, ns_arene_issue issue);
-/* Rend FAUX si la place émettrice n'est pas 0, pour la même raison. */
-bool   ns_arene_lire_effet(const uint8_t *charge, size_t len, uint8_t *auteur,
-                           uint8_t *cible, uint8_t *action,
+/* Rend la place émettrice dans `emetteur`, pour la même raison que le verdict.
+ * Rend faux si l'issue annoncée ne fait pas partie de `ns_arene_issue` : une
+ * valeur inconnue deviendrait un `switch` sans branche chez celui qui affiche. */
+bool   ns_arene_lire_effet(const uint8_t *charge, size_t len, uint8_t *emetteur,
+                           uint8_t *auteur, uint8_t *cible, uint8_t *action,
                            ns_arene_issue *issue);
+
+/*
+ * QUI ARBITRE, en une fonction PURE : LA PLUS PETITE PLACE PRÉSENTE.
+ *
+ * `presentes` est un masque de bits — le bit i vaut 1 si la place i est au
+ * tableau. Rend `NS_ARENE_AUCUNE_PLACE` pour un tableau vide.
+ *
+ * Elle existe parce que la règle sert DEUX FOIS et qu'il ne doit y en avoir
+ * qu'une description : `ns_arene_arbitre` s'en sert pour dire si c'est à nous
+ * de faire tourner le couperet, et le chemin de réception s'en sert pour
+ * décider si le verdict qui arrive vient de quelqu'un qui avait le droit de
+ * l'envoyer. Deux copies de cette règle-là finiraient par diverger le jour où
+ * la place 0 raccroche, c'est-à-dire au pire moment.
+ */
+uint8_t ns_arene_arbitre_de(uint8_t presentes);
 
 #endif /* NS_ARENE_H */

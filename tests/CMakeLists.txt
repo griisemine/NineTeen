@@ -629,3 +629,65 @@ target_link_libraries(ns_test_couperet PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_couperet)
 nineteen_apply_sanitizers(ns_test_couperet)
 add_test(NAME couperet COMMAND ns_test_couperet)
+
+# --------------------------------------------------------------------------
+# Les rivaux — les places du Couperet que personne n'occupe
+# --------------------------------------------------------------------------
+#
+# Il lie `nineteen::games` pour la raison qui fait exister le module : un rival
+# NE SIMULE PAS une partie, il la JOUE. Il alloue un etat de jeu, appelle
+# l'autopilote et le tick du jeu a chaque pas fixe, et encaisse par
+# `room_cp_partie_fin` comme l'humain. Sans les huit jeux, il n'y aurait rien a
+# tester — et le module n'aurait pas de raison d'etre.
+#
+# Il emporte `room_couperet.c` et `room_economie.c` pour la meme raison que
+# `ns_test_couperet` : les points sont ceux du bareme multiplies par le
+# coefficient d'engagement, et aucune des deux tables n'est recopiee ici.
+#
+# Ce test MESURE, et c'est ce qui explique sa duree : la courbe de niveau, le
+# cout par image et le nombre de coupures qu'un humain subit par manche ne se
+# relisent pas, ils se comptent sur des centaines de manches completes.
+add_executable(ns_test_rivaux test_rivaux.c
+    "${CMAKE_SOURCE_DIR}/room/room_rivaux.c"
+    "${CMAKE_SOURCE_DIR}/room/room_couperet.c"
+    "${CMAKE_SOURCE_DIR}/room/room_economie.c")
+target_include_directories(ns_test_rivaux PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_rivaux PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_rivaux)
+nineteen_apply_sanitizers(ns_test_rivaux)
+add_test(NAME rivaux COMMAND ns_test_rivaux)
+
+# --------------------------------------------------------------------------
+# L'ARENE — le client C du relais a huit places
+# --------------------------------------------------------------------------
+#
+# Deux regimes, comme `ns_test_lockstep`, et pour la meme raison.
+#
+# SANS ARGUMENT — ce que fait la CI — il ne touche a rien : il verifie LE
+# VERROU (sans URL de serveur configuree, aucune socket n'est ouverte) en
+# MESURANT `ns_arene_sockets()` avant et apres une tentative, puis tout le
+# codec — chaque trame aller-retour, le pseudo de 23 octets, le tableau de
+# huit, la charge de 511, la trame tronquee, celle qui annonce 513 octets, le
+# tableau qui annonce plus de places qu'il n'en porte, et le decoupage d'un
+# flux TCP arrivant octet par octet.
+#
+# AVEC UNE ADRESSE il fait entrer deux clients dans un salon de deux contre le
+# vrai relais Go :
+#
+#   cd server && go run ./cmd/duelrelay -addr 127.0.0.1:8081 &
+#   ns_test_arene 127.0.0.1 8081
+#
+# C'est la seule facon de verifier la couture entre les deux moities du
+# protocole, ecrites une fois en C et une fois en Go. Un faux relais ecrit en C
+# ne prouverait que la coherence du C avec lui-meme, ce qui est precisement
+# l'erreur qui a coute trois defauts au classement en ligne.
+#
+# Il ne lie que le moteur : le module d'arene ne connait pas la salle. C'est
+# voulu et c'est verifie ici par la seule absence de `room/` dans ces lignes —
+# `engine/` ne depend pas de `room/`, et l'inverse seulement.
+add_executable(ns_test_arene test_arene.c)
+target_link_libraries(ns_test_arene PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_arene)
+nineteen_apply_sanitizers(ns_test_arene)
+add_test(NAME arene COMMAND ns_test_arene)
+set_tests_properties(arene PROPERTIES TIMEOUT 60)
