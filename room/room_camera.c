@@ -158,6 +158,22 @@ void room_camera_init(room_camera *c, ns_v3 start, float yaw)
     c->speed_crouch = ns_env_float("personnage.vitesseAccroupi",  0.75f);
     c->mouse_sensitivity = ns_env_float("vue.sensibiliteSouris",  0.0022f);
     c->fov_y = ns_env_float("vue.champVertical", 62.0f);
+    /*
+     * LA SECOUSSE D'UN COUP, en degrés de tangage.
+     *
+     * 1,6 par défaut, et c'est le SEUL chiffre de tout le geste qui ne se
+     * mesure pas — comme `penche_buste` pour l'accroupi, et pour la même
+     * raison : il arbitre entre deux défauts opposés dont aucun n'a de seuil
+     * objectif. À 0,5 degré on ne voit rien et le coup n'a pas de poids ; à
+     * 5 degrés la vue se met à sauter et on le paie en confort.
+     *
+     * Ce qu'on PEUT dire de 1,6 : le champ vertical vaut 62 degrés, donc une
+     * demi-ouverture de 31 ; l'image saute de 5 % de la demi-hauteur de
+     * l'écran. C'est du même ordre que ce que l'oscillation de course fait
+     * déjà, mais en une seule fois — ce qui est exactement la différence entre
+     * marcher et encaisser.
+     */
+    c->hit_pitch = ns_env_float("vue.secousseFrappe", 1.6f) * NS_DEG2RAD;
 
     c->grounded = false;
     c->ground_normal = ns_v3_make(0.0f, 1.0f, 0.0f);
@@ -522,6 +538,12 @@ static void bob_tick(room_camera *c, float travelled, float dt, bool just_landed
     }
     c->bob.land = ns_damp(c->bob.land, 0.0f, 9.0f, dt);
 
+    /* Le contrecoup du poing. 11 par seconde : il ne reste 5 % qu'au bout de
+     * 270 ms, donc la vue s'est calmée avant que le bras soit revenu, qui met
+     * 390 ms. Plus lent, la secousse survivrait au geste et se lirait comme une
+     * panne ; plus rapide, elle passerait sous le seuil de ce qu'on perçoit. */
+    c->bob.frappe = ns_damp(c->bob.frappe, 0.0f, 11.0f, dt);
+
     /* Roulis en virage : piloté par l'entrée latérale, pas par la vitesse —
      * l'intention se lit avant que le corps ne bouge. */
     const float roll_target = -c->input_strafe * 0.9f * NS_DEG2RAD * (c->running ? 1.6f : 1.0f);
@@ -556,6 +578,7 @@ static room_view_bob bob_lerp(const room_view_bob *a, const room_view_bob *b, fl
     o.land     = ns_lerpf(a->land, b->land, t);
     o.roll     = ns_lerpf(a->roll, b->roll, t);
     o.breath   = ns_lerpf(a->breath, b->breath, t);
+    o.frappe   = ns_lerpf(a->frappe, b->frappe, t);
     return o;
 }
 
@@ -744,7 +767,30 @@ ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alp
     while (dyaw >  NS_PI) dyaw -= NS_TAU;
     while (dyaw < -NS_PI) dyaw += NS_TAU;
     const float yaw = c->prev_yaw + dyaw * alpha;
-    const float pitch = ns_lerpf(c->prev_pitch, c->pitch, alpha);
+    float pitch = ns_lerpf(c->prev_pitch, c->pitch, alpha);
+
+    /*
+     * L'ÉTAT D'OSCILLATION, résolu ICI et non plus dans le seul bloc joueur :
+     * le contrecoup de frappe agit sur le TANGAGE, donc avant que la direction
+     * du regard soit construite. Le recalculer plus bas obligerait à refaire
+     * `forward_from_angles`, et deux directions de regard dans la même image
+     * sont exactement le genre de chose qui finit par diverger.
+     */
+    const room_view_bob b = bob_lerp(&c->prev_bob, &c->bob, alpha);
+
+    /*
+     * LE CONTRECOUP, et pourquoi il n'entre PAS dans le lacet ni dans la
+     * position simulée.
+     *
+     * C'est un effet de RENDU, comme l'oscillation de marche et comme `land` :
+     * il ne touche ni `c->pitch`, ni la capsule, ni la portée des bras. Un
+     * joueur qui frappe ne se met pas à viser ailleurs — sa tête bouge, sa
+     * visée non. Écrit dans l'état simulé, le coup ferait dériver l'orientation
+     * à chaque fois, et cinquante coups la mettraient au plafond.
+     */
+    if (c->mode == ROOM_CAM_PLAYER && b.frappe > 0.0f) {
+        pitch = ns_clampf(pitch + b.frappe * c->hit_pitch, -PITCH_LIMIT, PITCH_LIMIT);
+    }
 
     cam.forward = forward_from_angles(yaw, pitch);
     cam.up = ns_v3_make(0.0f, 1.0f, 0.0f);
@@ -758,7 +804,6 @@ ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alp
          * aplatit les sommets de la sinusoïde. Appliquée après, elle est exacte
          * à la fréquence d'affichage.
          */
-        const room_view_bob b = bob_lerp(&c->prev_bob, &c->bob, alpha);
         const float eye = ns_lerpf(c->prev_eye_height, c->eye_height, alpha);
         const ns_v3 flat_forward = ns_v3_norm(ns_v3_make(cam.forward.x, 0.0f, cam.forward.z));
         const ns_v3 right = ns_v3_norm(ns_v3_cross(flat_forward, ns_v3_make(0, 1, 0)));
@@ -818,4 +863,14 @@ ns_camera room_camera_resolve(const room_camera *c, const ns_bvh *bvh, float alp
 room_view_bob room_camera_bob(const room_camera *c, float alpha)
 {
     return bob_lerp(&c->prev_bob, &c->bob, alpha);
+}
+
+void room_camera_frappe(room_camera *c)
+{
+    if (!c) return;
+    /* On POSE à 1 plutôt que d'ajouter : deux coups coup sur coup ne doivent
+     * pas empiler deux secousses, ce qui doublerait l'amplitude et sortirait du
+     * réglage. C'est la même règle que `land`, qui garde le plus fort des deux
+     * plutôt que leur somme. */
+    c->bob.frappe = 1.0f;
 }

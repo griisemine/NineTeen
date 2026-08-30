@@ -123,6 +123,57 @@ void room_viewmodel_read_env(void)
 #define VM_T_PRESS   0.34f
 #define VM_T_RETURN  0.45f
 
+/*
+ * LE COUP : 90 ms à l'aller, 300 ms au retour.
+ *
+ * Le raisonnement complet et la mesure sont dans `room_viewmodel.h` ; en une
+ * ligne : 49,3 cm de trajet en 90 ms font 5,5 m/s, ce qui est la vitesse d'un
+ * vrai coup de poing, et un retour trois fois et demie plus lent est ce qui
+ * distingue un bras d'un ressort.
+ */
+#define VM_T_HIT_OUT   0.090f
+#define VM_T_HIT_BACK  0.300f
+#define VM_T_HIT       (VM_T_HIT_OUT + VM_T_HIT_BACK)
+
+/*
+ * L'ARMÉ et le COUP PORTÉ, en espace caméra.
+ *
+ * L'armé est le poing ramené près des côtes, décalé vers la droite et bas :
+ * c'est de là qu'un coup part. Le coup porté ramène la main vers l'AXE du
+ * regard — on frappe ce qu'on regarde, pas ce qui est à côté — et la relève de
+ * onze centimètres, ce qui l'amène à six sous l'œil : la hauteur d'une dalle de
+ * borne quand on est planté devant.
+ *
+ * 55 cm devant, et le chiffre a une limite dure : `VM_REACH` vaut 59 cm depuis
+ * l'épaule, laquelle est 7,5 cm DERRIÈRE l'œil. Viser plus loin ferait tendre
+ * la chaîne à fond et donnerait le tube rectiligne que `rest_wrist` explique
+ * déjà comment éviter.
+ */
+#define VM_HIT_ARME    ns_v3_make( 0.300f, -0.170f, 0.100f)
+#define VM_HIT_PORTE   ns_v3_make( 0.130f, -0.060f, 0.550f)
+
+/*
+ * Les deux vitesses de rattrapage du poignet PENDANT le coup, et pourquoi elles
+ * ne peuvent pas être `VM_DAMP`.
+ *
+ * `ns_damp` laisse un reliquat de `exp(-k t)`. À 16 par seconde — le rattrapage
+ * ordinaire — il reste 24 % du chemin au bout des 90 ms de l'aller : le poing
+ * s'arrêterait à trois quarts de course, c'est-à-dire douze centimètres avant
+ * la machine, et le coup ne toucherait rien.
+ *
+ * 34 par seconde laisse 5 % à 90 ms, ce qui est la définition d'« arrivé ». Au
+ * retour on veut l'inverse : 10 par seconde laisse 5 % à 300 ms, soit
+ * exactement la durée du retour.
+ */
+#define VM_DAMP_HIT_OUT   34.0f
+#define VM_DAMP_HIT_BACK  10.0f
+
+/* Décroissance du choc. 9 par seconde : 5 % au bout de 330 ms, donc l'écran
+ * s'est calmé peu après que le bras est revenu. L'ordre compte — un écran qui
+ * tremble encore quand le bras est au repos se lit comme une panne, pas comme
+ * un coup. */
+#define VM_CHOC_DAMP  9.0f
+
 /* Vitesse de rattrapage des poignets. Assez haute pour que le bras suive la
  * cible, assez basse pour que le départ et l'arrivée soient ronds. */
 #define VM_DAMP  16.0f
@@ -166,6 +217,7 @@ static float state_duration(room_vm_state s)
          * tomber dans la branche « pas d'avancement » de `tick`, ce qui est
          * exactement le comportement voulu. */
         case ROOM_VM_RETURN: return VM_T_RETURN;
+        case ROOM_VM_HIT:    return VM_T_HIT;
         default:             return 0.0f;
     }
 }
@@ -307,6 +359,89 @@ void room_viewmodel_tap(room_viewmodel *vm)
     if (vm && vm->state == ROOM_VM_PLAY) vm->tap = 1.0f;
 }
 
+bool room_viewmodel_frappe(room_viewmodel *vm, const ns_cabinet *cab)
+{
+    if (!vm) return false;
+    /*
+     * DEUX états seulement autorisent le coup, et la liste est courte exprès :
+     * les mains vides, ou en pleine partie. Frapper au milieu de la séquence du
+     * jeton demanderait au même poignet de viser la fente et la tôle, et le
+     * lissage ferait la moyenne des deux — une main qui part en diagonale vers
+     * un point qui n'existe pas.
+     */
+    if (vm->state != ROOM_VM_IDLE && vm->state != ROOM_VM_PLAY) return false;
+
+    vm->hit_from_play = (vm->state == ROOM_VM_PLAY);
+    vm->hit_impact    = false;
+    vm->hit_material  = cab ? cab->screen_material : -1;
+    vm->hit_point     = cab ? cab->screen_center : ns_v3_zero();
+    vm->state         = ROOM_VM_HIT;
+    vm->elapsed       = 0.0f;
+    /* Le jeton disparaît : on ne cogne pas une machine une pièce à la main. En
+     * pratique il n'est jamais visible ici — les deux états qui l'affichent
+     * sont justement ceux qu'on vient de refuser — mais laisser l'état
+     * dépendre de ce raisonnement-là serait le laisser dépendre d'un autre
+     * fichier. */
+    vm->token_visible = false;
+    return true;
+}
+
+bool room_viewmodel_is_hitting(const room_viewmodel *vm)
+{
+    return vm && vm->state == ROOM_VM_HIT;
+}
+
+bool room_viewmodel_take_impact(room_viewmodel *vm, ns_v3 *point, int32_t *material)
+{
+    if (!vm || !vm->hit_impact) return false;
+    vm->hit_impact = false;
+    if (point)    *point = vm->hit_point;
+    if (material) *material = vm->hit_material;
+    return true;
+}
+
+float room_viewmodel_choc(const room_viewmodel *vm, float alpha)
+{
+    if (!vm) return 0.0f;
+    return ns_clampf(ns_lerpf(vm->prev_choc, vm->choc, alpha), 0.0f, 1.0f);
+}
+
+/*
+ * L'avancement du coup, en une seule expression parce qu'il n'a pas d'état à
+ * lui : il se relit entièrement depuis `elapsed`.
+ *
+ * L'aller est en `k * k` et non linéaire : un poing ACCÉLÈRE et s'arrête net
+ * sur la tôle. Sa vitesse est donc maximale à l'impact, ce qui est la seule
+ * façon qu'un coup se lise comme un coup. Le retour, lui, est en cosinus
+ * adouci : rien ne le porte, il retombe.
+ */
+static float hit_amount(const room_viewmodel *vm, float elapsed)
+{
+    if (!vm || vm->state != ROOM_VM_HIT) return 0.0f;
+    if (elapsed < VM_T_HIT_OUT) {
+        const float k = ns_clampf(elapsed / VM_T_HIT_OUT, 0.0f, 1.0f);
+        return k * k;
+    }
+    const float k = ns_clampf((elapsed - VM_T_HIT_OUT) / VM_T_HIT_BACK, 0.0f, 1.0f);
+    return 1.0f - smoothstep01(k);
+}
+
+float room_viewmodel_frappe_amount(const room_viewmodel *vm, float alpha)
+{
+    if (!vm || vm->state != ROOM_VM_HIT) return 0.0f;
+    /*
+     * L'INTERPOLATION SE FAIT SUR LE TEMPS, pas sur la valeur.
+     *
+     * Interpoler entre `hit_amount(elapsed - dt)` et `hit_amount(elapsed)`
+     * donnerait la corde de la courbe au lieu de la courbe, ce qui rabote
+     * précisément le sommet — c'est-à-dire l'instant de l'impact, le seul qui
+     * compte. C'est le même argument que celui qui a fait sortir l'oscillation
+     * de la vue du pas de simulation ; voir `room_camera_resolve`.
+     */
+    return hit_amount(vm, ns_lerpf(vm->prev_elapsed, vm->elapsed,
+                                   ns_clampf(alpha, 0.0f, 1.0f)));
+}
+
 bool room_viewmodel_is_playing(const room_viewmodel *vm)
 {
     return vm && vm->state == ROOM_VM_PLAY;
@@ -446,7 +581,14 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     vm->prev_press_depth = vm->press_depth;
     vm->prev_tap = vm->tap;
     vm->prev_insert_push = vm->insert_push;
+    vm->prev_choc = vm->choc;
+    vm->prev_elapsed = vm->elapsed;
     vm->clock += dt;
+
+    /* Le choc retombe tout seul, qu'on soit encore en train de frapper ou non :
+     * il survit au geste, et c'est voulu — la dalle continue de dérailler une
+     * fraction de seconde après que le poing est reparti. */
+    vm->choc = ns_damp(vm->choc, 0.0f, VM_CHOC_DAMP, dt);
 
     if (vm->forced_pose != VM_FORCE_NONE) {
         /*
@@ -479,6 +621,21 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
          * lui être soumis avec une durée nulle.
          */
         vm->elapsed += dt;
+
+        /*
+         * L'IMPACT : le pas de simulation qui FRANCHIT la fin de l'aller.
+         *
+         * Un front et non un seuil, et la différence n'est pas théorique : à
+         * 120 Hz un pas fait 8,3 ms, l'aller en fait 90, donc onze pas
+         * remplissent la condition « elapsed >= 90 ms ». Testé comme un seuil,
+         * le son partirait onze fois.
+         */
+        if (vm->state == ROOM_VM_HIT
+            && vm->prev_elapsed < VM_T_HIT_OUT && vm->elapsed >= VM_T_HIT_OUT) {
+            vm->hit_impact = true;
+            vm->choc = 1.0f;
+        }
+
         const float dur = state_duration(vm->state);
         if (vm->elapsed >= dur) {
             vm->elapsed -= dur;
@@ -487,6 +644,24 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
                 case ROOM_VM_INSERT: vm->state = ROOM_VM_PRESS;
                                      vm->token_visible = false;  break;
                 case ROOM_VM_PRESS:  vm->state = ROOM_VM_RETURN; break;
+                /*
+                 * Le coup rend les mains AUX COMMANDES s'il les y a prises.
+                 * Retomber sur `ROOM_VM_IDLE` laisserait la partie tourner
+                 * devant des bras le long du corps — le défaut que
+                 * `ROOM_VM_PLAY` avait justement été ajouté pour corriger, et
+                 * qu'un état de plus rouvrirait par la bande.
+                 */
+                case ROOM_VM_HIT:
+                    if (vm->hit_from_play && vm->has_target) {
+                        vm->state = ROOM_VM_PLAY;
+                        vm->reach_checked = true;   /* déjà contrôlé à l'entrée */
+                    } else {
+                        vm->state = ROOM_VM_IDLE;
+                        vm->has_target = false;
+                    }
+                    vm->hit_from_play = false;
+                    vm->elapsed = 0.0f;
+                    break;
                 default:             vm->state = ROOM_VM_IDLE;
                                      vm->has_target = false;
                                      vm->elapsed = 0.0f;         break;
@@ -625,6 +800,29 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
         want_l = ns_v3_add(want_l, ns_v3_make(-0.03f, -0.02f, -0.05f));
     }
 
+    /*
+     * LE COUP, qui écrase tout ce qui précède pour la main droite.
+     *
+     * Il est écrit APRÈS les autres cibles et non dans leur chaîne de `else`,
+     * et c'est délibéré : la main GAUCHE doit garder ce que l'état précédent
+     * lui donnait. On cogne d'une main ; l'autre reste sur le manche si elle y
+     * était, et le long du corps sinon. Une machine à états qui rendrait les
+     * deux mains à chaque geste ferait lâcher le manche pour taper sur la
+     * vitre, ce qui n'est pas ce qu'on fait quand on rage.
+     */
+    float damp_r = VM_DAMP;
+    if (vm->state == ROOM_VM_HIT) {
+        const float k = ns_clampf(hit_amount(vm, vm->elapsed), 0.0f, 1.0f);
+        want_r = ns_v3_lerp(VM_HIT_ARME, VM_HIT_PORTE, k);
+        damp_r = (vm->elapsed < VM_T_HIT_OUT) ? VM_DAMP_HIT_OUT : VM_DAMP_HIT_BACK;
+
+        /* L'épaule part avec le poing. Sans elle, seul l'avant-bras se déplie
+         * et le coup se lit comme une gifle : le corps entier doit entrer
+         * dedans, c'est ce qui fait la différence entre frapper et montrer. */
+        const ns_v3 pousse = ns_v3_scale(ns_v3_make(-0.02f, 0.010f, 0.075f), k);
+        vm->lean = ns_v3_add(vm->lean, pousse);
+    }
+
     if (!vm->primed) {
         vm->wrist_l = vm->prev_wrist_l = want_l;
         vm->wrist_r = vm->prev_wrist_r = want_r;
@@ -635,9 +833,9 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     vm->wrist_l = ns_v3_make(ns_damp(vm->wrist_l.x, want_l.x, VM_DAMP, dt),
                              ns_damp(vm->wrist_l.y, want_l.y, VM_DAMP, dt),
                              ns_damp(vm->wrist_l.z, want_l.z, VM_DAMP, dt));
-    vm->wrist_r = ns_v3_make(ns_damp(vm->wrist_r.x, want_r.x, VM_DAMP, dt),
-                             ns_damp(vm->wrist_r.y, want_r.y, VM_DAMP, dt),
-                             ns_damp(vm->wrist_r.z, want_r.z, VM_DAMP, dt));
+    vm->wrist_r = ns_v3_make(ns_damp(vm->wrist_r.x, want_r.x, damp_r, dt),
+                             ns_damp(vm->wrist_r.y, want_r.y, damp_r, dt),
+                             ns_damp(vm->wrist_r.z, want_r.z, damp_r, dt));
 }
 
 /* --------------------------------------------------------------------------
