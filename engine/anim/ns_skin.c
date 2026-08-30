@@ -97,6 +97,25 @@ struct ns_skin {
     float           accroupi_angle; /* l'angle de cuisse à plein accroupi, en radians */
     float           accroupi_buste; /* l'inclinaison du dos, en fraction de cet angle */
 
+    /*
+     * LA FRAPPE — un seul bras, repéré exactement comme les jambes le sont.
+     *
+     * `frappe_epaule` et `frappe_coude` sont des indices d'ARTICULATION, pas de
+     * nœud : ce sont eux qu'on fait tourner dans `frapper`, et c'est le tableau
+     * des matrices monde qui est indexé par articulation.
+     *
+     * Deux masques plutôt qu'un tableau d'étages comme la jambe, et c'est plus
+     * simple pour une raison : un bras qui frappe ne demande que DEUX rotations
+     * — l'épaule emporte tout le bras, le coude emporte l'avant-bras et la
+     * main — là où l'accroupi en demande trois pour rendre au pied son
+     * horizontale. Un poing n'a pas d'horizontale à rendre.
+     */
+    int             frappe_epaule, frappe_coude;
+    bool            frappe_suit_epaule[NS_SKIN_MAX_JOINTS];
+    bool            frappe_suit_coude[NS_SKIN_MAX_JOINTS];
+    float           frappe_angle;   /* angle d'épaule au coup porté, radians */
+    bool            frappe_pret;
+
 
     /* L'image reste CONST : elle appartient au tampon de cgltf, qu'on garde
      * vivant pour ça. La copier serait un demi-mégaoctet de plus pour rien. */
@@ -215,9 +234,17 @@ static ns_quat track_quat(const skin_track *tr, float time, ns_quat fallback)
 
 /* ------------------------------------------------------------------ chargement */
 
-/* Déclarée ici : la mesure de chargement pose déjà des matrices monde, et la
- * définition vit plus bas avec le reste de la pose. */
-static void poser_mondes(const ns_skin *s, float t, ns_m4 *world, int count);
+/* Déclarées ici : la mesure de chargement pose déjà des matrices monde, repère
+ * des articulations et cale la frappe ; les définitions vivent plus bas avec le
+ * reste de la pose. */
+static void  poser_mondes(const ns_skin *s, float t, ns_m4 *world, int count);
+static ns_v3 origine(const ns_m4 *m);
+static float angle_de_visee(const ns_skin *s, const ns_m4 *world);
+
+/* Combien d'articulations le coup emporte. Pour le journal seulement : c'est le
+ * chiffre qui dit d'un coup d'œil si l'on a attrapé un bras (quatre ou cinq os)
+ * ou la moitié du personnage. */
+static int compte_frappe(const ns_skin *s);
 
 static int node_index(const cgltf_data *d, const cgltf_node *n)
 {
@@ -798,6 +825,178 @@ ns_skin *ns_skin_load(const char *logical)
     }
 
     /*
+     * LE BRAS QUI FRAPPE, repéré par la TOPOLOGIE et la GÉOMÉTRIE.
+     *
+     * Même règle que pour les jambes, et pour la même raison : pas un seul nom
+     * d'os n'entre ici. Un exportateur qui écrit « mixamorig:RightForeArm » et
+     * un autre qui écrit « bras.R.002 » décrivent le même coude, et le dépôt
+     * refuse de dépendre de celui qu'on a sous la main.
+     *
+     * Le chemin, en quatre pas dont chacun se justifie seul :
+     *
+     *   - LES DEUX MAINS sont les articulations du buste les plus ÉCARTÉES de
+     *     son axe, une de chaque côté. Le côté se lit sur le signe de la
+     *     projection sur `axe_lateral`, qui est déjà mesuré. La tête, le cou et
+     *     la colonne sont centrés : ils ne peuvent pas gagner ;
+     *   - LA POITRINE est le premier ancêtre COMMUN aux deux mains — le même
+     *     raisonnement que le bassin pour les deux pieds, à un étage près ;
+     *   - LE COUDE est l'articulation de la chaîne poitrine -> main la plus
+     *     proche du MILIEU de sa longueur cumulée. C'est ce qui rend le
+     *     repérage insensible à la présence d'une CLAVICULE : avec elle la
+     *     chaîne fait quatre os et sans elle trois, mais dans les deux cas
+     *     l'os à mi-longueur est l'avant-bras ;
+     *   - L'ÉPAULE est le PARENT du coude dans cette chaîne, c'est-à-dire le
+     *     haut du bras. Prendre le sommet de la chaîne à la place ferait
+     *     pivoter la clavicule quand il y en a une, ce qui hausse l'épaule au
+     *     lieu de lancer le bras.
+     *
+     * QUEL bras, et pourquoi la question n'a pas de réponse mesurable : le
+     * SIGNE de `axe_lateral` est arbitraire — le commentaire de son calcul le
+     * dit, « on n'en prend que des valeurs absolues ». Rien dans un cycle de
+     * marche ne distingue la droite de la gauche sans supposer une convention
+     * d'orientation que glTF ne garantit pas. On retient donc celui du côté
+     * positif de cet axe : le choix est ARBITRAIRE mais DÉTERMINISTE — même
+     * fichier, même bras à chaque chargement — et il est sans conséquence,
+     * puisqu'on ne voit jamais la première et la troisième personne ensemble.
+     */
+    s->frappe_epaule = s->frappe_coude = -1;
+    s->frappe_angle = 0.0f;
+    s->frappe_pret = false;
+    for (int j = 0; j < NS_SKIN_MAX_JOINTS; ++j) {
+        s->frappe_suit_epaule[j] = false;
+        s->frappe_suit_coude[j] = false;
+    }
+
+    if (s->buste_noeud >= 0) {
+        ns_m4 pose[NS_SKIN_MAX_JOINTS];
+        poser_mondes(s, s->stand_time, pose, s->joint_count);
+
+        /* L'origine des écarts : le premier os du buste. Mesurer depuis le
+         * monde donnerait la position du personnage dans la scène, pas sa
+         * largeur. */
+        int racine = -1;
+        for (int j = 0; j < s->joint_count && racine < 0; ++j) {
+            if (s->joint_node[j] == s->buste_noeud) racine = j;
+        }
+
+        int main_j[2] = { -1, -1 };
+        if (racine >= 0) {
+            float best[2] = { 0.0f, 0.0f };
+            const ns_v3 o = origine(&pose[racine]);
+            for (int j = 0; j < s->joint_count; ++j) {
+                if (!s->suit_buste[j]) continue;
+                const float lat = ns_v3_dot(ns_v3_sub(origine(&pose[j]), o), s->axe_lateral);
+                const int   cote = (lat >= 0.0f) ? 0 : 1;
+                const float ecart_lat = (lat >= 0.0f) ? lat : -lat;
+                if (ecart_lat > best[cote]) { best[cote] = ecart_lat; main_j[cote] = j; }
+            }
+        }
+
+        if (main_j[0] >= 0 && main_j[1] >= 0 && main_j[0] != main_j[1]) {
+            /* La poitrine : premier ancêtre commun aux deux mains. */
+            int poitrine = -1;
+            {
+                int chaine[64], profond = 0;
+                for (int i = s->joint_node[main_j[0]];
+                     i >= 0 && i < s->node_count && profond < 64; i = s->node[i].parent) {
+                    chaine[profond++] = i;
+                }
+                for (int i = s->joint_node[main_j[1]];
+                     i >= 0 && i < s->node_count && poitrine < 0; i = s->node[i].parent) {
+                    for (int k = 0; k < profond; ++k) if (chaine[k] == i) { poitrine = i; break; }
+                }
+            }
+
+            /* La chaîne poitrine -> main, du haut vers le bas, en ARTICULATIONS :
+             * seules celles-ci portent une matrice monde, et un nœud sans
+             * articulation ne se fait pas tourner. */
+            int chaine[64], n_chaine = 0;
+            if (poitrine >= 0) {
+                int noeuds[64], nn = 0;
+                for (int i = s->joint_node[main_j[0]];
+                     i >= 0 && i < s->node_count && i != poitrine && nn < 64;
+                     i = s->node[i].parent) {
+                    noeuds[nn++] = i;
+                }
+                for (int k = nn - 1; k >= 0; --k) {
+                    for (int j = 0; j < s->joint_count; ++j) {
+                        if (s->joint_node[j] == noeuds[k]) { chaine[n_chaine++] = j; break; }
+                    }
+                }
+            }
+
+            /* Le coude, à mi-longueur CUMULÉE. Trois articulations au moins :
+             * il faut un parent au coude pour que l'épaule existe. */
+            if (n_chaine >= 3) {
+                float parcours[64];
+                parcours[0] = 0.0f;
+                for (int k = 1; k < n_chaine; ++k) {
+                    parcours[k] = parcours[k - 1]
+                                + ns_v3_len(ns_v3_sub(origine(&pose[chaine[k]]),
+                                                      origine(&pose[chaine[k - 1]])));
+                }
+                const float mi = parcours[n_chaine - 1] * 0.5f;
+                int coude = -1;
+                float ecart = FLT_MAX;
+                /* Ni le premier — il n'aurait pas de parent — ni le dernier,
+                 * qui est la main. */
+                for (int k = 1; k < n_chaine - 1; ++k) {
+                    const float e = (parcours[k] > mi) ? (parcours[k] - mi) : (mi - parcours[k]);
+                    if (e < ecart) { ecart = e; coude = k; }
+                }
+                if (coude > 0) {
+                    s->frappe_coude  = chaine[coude];
+                    s->frappe_epaule = chaine[coude - 1];
+                }
+            }
+
+            if (s->frappe_epaule >= 0 && s->frappe_coude >= 0) {
+                /* Les deux masques : ce que chaque rotation emporte. */
+                for (int j = 0; j < s->joint_count; ++j) {
+                    for (int i = s->joint_node[j]; i >= 0 && i < s->node_count;
+                         i = s->node[i].parent) {
+                        if (i == s->joint_node[s->frappe_epaule]) {
+                            s->frappe_suit_epaule[j] = true;
+                        }
+                        if (i == s->joint_node[s->frappe_coude]) {
+                            s->frappe_suit_coude[j] = true;
+                        }
+                    }
+                }
+
+                /*
+                 * L'ANGLE DU COUP N'EST PAS CALIBRÉ, et c'est la différence
+                 * avec l'accroupi.
+                 *
+                 * L'accroupi vise une HAUTEUR, qui dépend de la longueur des
+                 * segments : il faut balayer pour la trouver. Le coup vise une
+                 * ORIENTATION — le bras tendu à l'horizontale, devant — et une
+                 * orientation se calcule en une soustraction d'angles. Il n'y a
+                 * rien à balayer, et rien à régler.
+                 *
+                 * Pourquoi l'horizontale : le centre des écrans de la salle est
+                 * à 1,26 m et l'épaule d'un personnage de 1,82 m à 1,49 m, soit
+                 * treize degrés sous l'horizontale à un mètre. L'écart ne se
+                 * voit pas de dos, et le rattraper demanderait d'apprendre à
+                 * `ns_skin` la géométrie d'un meuble qu'il n'a aucune raison de
+                 * connaître.
+                 *
+                 * L'angle relevé ici, à la pose de passage, ne sert qu'au
+                 * journal : le vrai est remesuré à chaque image, puisqu'il
+                 * dépend de la phase et de la posture.
+                 */
+                s->frappe_angle = angle_de_visee(s, pose);
+                if (s->frappe_angle < 0.0f) s->frappe_angle = -s->frappe_angle;
+                s->frappe_pret = true;
+            }
+        }
+    }
+    if (!s->frappe_pret) {
+        NS_WARN("personnage : aucun bras repérable dans le squelette — "
+                "la frappe restera inerte");
+    }
+
+    /*
      * LES DEUX RAYONS, mesurés sur TOUT LE CYCLE et non sur la seule pose de
      * liaison.
      *
@@ -868,6 +1067,16 @@ ns_skin *ns_skin_load(const char *logical)
             (double)s->stand_time, (double)s->sweep_radius,
             (double)s->half_width, (double)s->stride_length,
             (double)(s->forward_angle / NS_DEG2RAD));
+    /* Le bras, comme l'accroupi : un repérage qui part de travers se voit dans
+     * le texte avant de se voir à l'écran. Les deux indices sont donnés parce
+     * qu'ils sont la seule façon de vérifier, sur un modèle nouveau, que c'est
+     * bien un coude et une épaule qu'on a trouvés. */
+    if (s->frappe_pret) {
+        NS_INFO("personnage : frappe calée à %.1f degrés d'épaule "
+                "(épaule os %d, coude os %d, %d os emportés)",
+                (double)(s->frappe_angle / NS_DEG2RAD),
+                s->frappe_epaule, s->frappe_coude, compte_frappe(s));
+    }
     return s;
 }
 
@@ -1081,6 +1290,114 @@ static float plier_jambes(const ns_skin *s, float a, ns_m4 *world, int count)
     return (bas_avant < FLT_MAX && bas_apres < FLT_MAX) ? (bas_apres - bas_avant) : 0.0f;
 }
 
+static int compte_frappe(const ns_skin *s)
+{
+    int n = 0;
+    for (int j = 0; j < s->joint_count; ++j) if (s->frappe_suit_epaule[j]) ++n;
+    return n;
+}
+
+/*
+ * L'ANGLE QUI RESTE À FAIRE pour amener le bras À L'HORIZONTALE, DEVANT, dans
+ * l'état où le squelette se trouve. Signé, autour de l'axe des épaules.
+ *
+ * C'est une VISÉE et non un ajout, et c'est toute la différence — elle a coûté
+ * deux contrôles rouges avant d'être écrite comme ça. Un angle constant ajouté
+ * à la pose courante suppose que le bras part toujours du même endroit ; il
+ * n'en part jamais. Il pend d'un buste que l'accroupi incline de trente-trois
+ * degrés, et il balance déjà de vingt avec la foulée. Ajouter un quart de tour
+ * à un bras déjà penché en avant l'envoie DERRIÈRE l'épaule, poing en l'air :
+ * mesuré, le point le plus avancé du personnage accroupi RECULAIT de dix-huit
+ * centièmes d'unité au moment du coup.
+ *
+ * Une visée, elle, atterrit au même endroit quelle que soit la phase et quelle
+ * que soit la posture — ce qui est exactement ce qu'on veut d'un poing qui vise
+ * une dalle qui, elle, ne bouge pas.
+ *
+ * Elle rend aussi `sens_avant` inutile ici : le signe SORT du calcul au lieu
+ * d'y entrer, puisqu'on demande « de combien tourner pour aller LÀ » et non
+ * « de combien tourner dans le bon sens ».
+ */
+static float angle_de_visee(const ns_skin *s, const ns_m4 *world)
+{
+    const ns_v3 axe = s->axe_lateral;
+
+    /* Le bras, ramené dans le plan SAGITTAL : un coup de poing tourne dans le
+     * plan où l'on avance, et la composante latérale du bras — l'écartement —
+     * n'a rien à y faire. La garder ferait viser à côté d'autant que le bras
+     * s'écarte du corps. */
+    ns_v3 d = ns_v3_sub(origine(&world[s->frappe_coude]), origine(&world[s->frappe_epaule]));
+    d = ns_v3_sub(d, ns_v3_scale(axe, ns_v3_dot(d, axe)));
+    if (ns_v3_len(d) < 1e-5f) return 0.0f;
+    d = ns_v3_norm(d);
+
+    const ns_v3 avant = ns_v3_make(SDL_cosf(s->forward_angle), 0.0f,
+                                   SDL_sinf(s->forward_angle));
+    /*
+     * L'angle signé qui amène `d` sur `avant` en tournant autour de `axe` : la
+     * composante du produit vectoriel sur l'axe, sur le produit scalaire.
+     *
+     * L'ORDRE DU PRODUIT VECTORIEL est `avant x d` et non l'inverse, et il a
+     * fallu une mesure pour le fixer plutôt qu'un raisonnement : la convention
+     * de signe de `ns_m4_rotate_axis` est celle de `ns_math`, pas celle du
+     * manuel qu'on a en tête. Écrit dans l'autre sens, le personnage lançait le
+     * poing EN ARRIÈRE et AU-DESSUS de sa tête — ce que le contrôle « le poing
+     * part devant » a dit tout de suite, et qu'une capture de dos n'aurait
+     * pas montré.
+     */
+    return SDL_atan2f(ns_v3_dot(ns_v3_cross(d, avant), axe), ns_v3_dot(d, avant));
+}
+
+/*
+ * LE COUP DE POING, dans l'espace MONDE.
+ *
+ * Même espace et même axe que `plier_jambes`, et pour la même raison : le
+ * repère local d'un os appartient à l'exportateur, l'axe des ÉPAULES est mesuré.
+ * Un coup de poing est d'ailleurs le geste qui tourne le plus exactement autour
+ * de cet axe-là — c'est le plan sagittal, celui dans lequel on avance.
+ *
+ * DEUX rotations, et pas trois :
+ *
+ *   1. l'ÉPAULE amène le bras de `f` fois le chemin qui le sépare de
+ *      l'horizontale. À `f = 1` le bras est tendu devant, quelle que soit la
+ *      phase du cycle et quelle que soit l'inclinaison du buste ;
+ *   2. le COUDE plie de `sin(pi * f)` fois ce même chemin, à quatre-vingt-dix
+ *      pour cent. Le sinus est le point : il vaut ZÉRO aux deux bouts et son
+ *      maximum au milieu. Le bras part donc plié — c'est l'armé, le poing près
+ *      des côtes — et arrive TENDU sur la cible. Un coude qui plierait
+ *      proportionnellement à `f` donnerait un bras replié au moment de
+ *      l'impact, c'est-à-dire un coup de coude.
+ *
+ * Le coude plie à l'OPPOSÉ de l'épaule : c'est le seul sens où un coude va.
+ * Son signe n'est pas deviné, il est celui de la visée changé — les deux
+ * viennent donc du même calcul et ne peuvent pas se contredire.
+ *
+ * Aucune correction de hauteur, contrairement à l'accroupi : un bras qui se
+ * lève ne soulève pas les pieds. La semelle ne bouge pas d'un flottant, et le
+ * test le vérifie.
+ */
+static void frapper(const ns_skin *s, float f, ns_m4 *world, int count)
+{
+    if (f <= 1e-5f || s->frappe_epaule < 0 || s->frappe_coude < 0) return;
+    if (s->frappe_epaule >= count || s->frappe_coude >= count) return;
+
+    const ns_v3 axe = s->axe_lateral;
+    const float vise = angle_de_visee(s, world);
+    if (vise > -1e-5f && vise < 1e-5f) return;
+
+    const ns_m4 A = rotation_autour(origine(&world[s->frappe_epaule]), axe, vise * f);
+
+    const ns_m4 apres_a = ns_m4_mul(A, world[s->frappe_coude]);
+    const float pli = SDL_sinf(NS_PI * f) * vise * 0.9f;
+    const ns_m4 B = ns_m4_mul(rotation_autour(origine(&apres_a), axe, -pli), A);
+
+    for (int j = 0; j < count; ++j) {
+        if (!s->frappe_suit_epaule[j]) continue;
+        const ns_m4 *m = s->frappe_suit_coude[j] ? &B : &A;
+        world[j] = ns_m4_mul(*m, world[j]);
+    }
+}
+
 void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max)
 {
     ns_skin_pose_allure(s, time, NULL, out, max);
@@ -1108,6 +1425,20 @@ void ns_skin_pose_allure(const ns_skin *s, float time, const ns_skin_allure *al,
         const float haut = plier_jambes(s, c * s->accroupi_angle, world, count);
         monde = ns_m4_translate(ns_v3_make(0.0f, -haut, 0.0f));
         pose_monde = true;
+    }
+
+    /*
+     * LA FRAPPE, posée APRÈS l'accroupi et avant le balancement.
+     *
+     * Après, parce que les deux se composent vraiment : on frappe aussi bien
+     * accroupi que debout, et l'ordre inverse ferait tourner l'épaule autour
+     * d'un point qu'elle n'occupe plus. Avant le balancement, parce que
+     * celui-ci est une rotation du corps ENTIER autour du sol — il doit
+     * emporter le bras tendu comme le reste.
+     */
+    if (al && s->frappe_pret && al->frappe > 0.0f) {
+        const float f = (al->frappe > 1.0f) ? 1.0f : al->frappe;
+        frapper(s, f, world, count);
     }
 
     /*
@@ -1246,4 +1577,10 @@ bool  ns_skin_can_crouch(const ns_skin *s) { return s && s->accroupi_pret; }
 float ns_skin_crouch_angle(const ns_skin *s)
 {
     return s ? (s->accroupi_angle / NS_DEG2RAD) : 0.0f;
+}
+
+bool  ns_skin_can_hit(const ns_skin *s) { return s && s->frappe_pret; }
+float ns_skin_hit_angle(const ns_skin *s)
+{
+    return s ? (s->frappe_angle / NS_DEG2RAD) : 0.0f;
 }

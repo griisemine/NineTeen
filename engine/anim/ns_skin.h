@@ -205,11 +205,14 @@ void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max);
  *   - L'ARRÊT. Une image de marche figée est une STATUE : rien ne bouge, et
  *     l'œil le voit tout de suite. Un corps debout oscille — c'est le
  *     balancement postural, involontaire et permanent.
+ *   - LA FRAPPE. On peut cogner une borne, et en troisième personne le
+ *     personnage restait les bras ballants pendant que la machine encaissait.
  *
- * Les deux sont DÉRIVÉS du cycle unique plutôt que téléchargés, et aucun des
- * deux n'ajoute d'état d'animation : ce sont des transformations posées PAR
+ * Les trois sont DÉRIVÉS du cycle unique plutôt que téléchargés, et aucun des
+ * trois n'ajoute d'état d'animation : ce sont des transformations posées PAR
  * DESSUS l'échantillon, quel qu'il soit. L'accroupi marche donc aussi en
- * marchant, sans qu'il existe un « cycle de marche accroupie ».
+ * marchant, sans qu'il existe un « cycle de marche accroupie », et l'on frappe
+ * en marchant sans qu'il existe un « cycle de frappe en marchant ».
  */
 typedef struct ns_skin_allure {
     /*
@@ -225,6 +228,17 @@ typedef struct ns_skin_allure {
      */
     float souffle;
     float souffle_force;
+    /*
+     * 0 bras au repos, 1 coup porté — le poing à hauteur d'épaule, bras tendu.
+     * Les valeurs intermédiaires sont le coup en cours : le coude y est PLIÉ,
+     * au maximum à mi-course, ce qui donne l'armé sans qu'il y ait un second
+     * réglage à tenir. C'est l'appelant qui décide de la courbe du temps, et
+     * c'est lui qui sait qu'un coup n'est pas symétrique.
+     *
+     * Inerte si `ns_skin_can_hit` est faux : un squelette où le bras n'a pas
+     * été repéré reste immobile plutôt que de plier au hasard.
+     */
+    float frappe;
 } ns_skin_allure;
 
 /* `allure` à NULL rend exactement `ns_skin_pose`. */
@@ -279,5 +293,30 @@ float ns_skin_crouch_angle(const ns_skin *s);
  * dépendre de la convention de nommage d'un exportateur.
  */
 float ns_skin_stand_time(const ns_skin *s);
+
+/*
+ * LA FRAPPE : le bras est-il repérable, et de combien tourne son épaule.
+ *
+ * Il n'y a pas de `ns_skin_hit_calibrate` à appeler, et c'est la différence
+ * avec l'accroupi : celui-ci vise une cote qui vient du JEU — la hauteur de la
+ * capsule de collision, réglée dans `nineteen.env` — donc il faut la lui
+ * donner. Le coup, lui, vise le poing à hauteur d'épaule, ce qui est une cote
+ * du MODÈLE et de lui seul. Elle se cale donc au chargement, sans rien
+ * demander à personne.
+ *
+ * Le repérage n'emploie AUCUN nom d'os : les deux mains sont les articulations
+ * du buste les plus écartées de son axe, la poitrine est leur premier ancêtre
+ * commun, le coude est l'articulation à mi-longueur de la chaîne, et l'épaule
+ * est son parent. Voir `ns_skin.c` pour le détail, et notamment pour ce que
+ * cette mesure à mi-longueur rend possible : marcher aussi bien sur un
+ * squelette qui a une clavicule que sur un qui n'en a pas.
+ *
+ * `ns_skin_can_hit` faux veut dire « ce squelette ne s'y prête pas » : le
+ * champ `frappe` de l'allure est alors sans effet, ce qui vaut mieux qu'un bras
+ * plié au hasard. L'angle sert au journal, comme celui de l'accroupi : une
+ * valeur aberrante se voit dans le texte avant de se voir à l'écran.
+ */
+bool  ns_skin_can_hit(const ns_skin *s);
+float ns_skin_hit_angle(const ns_skin *s);
 
 #endif /* NS_SKIN_H */
