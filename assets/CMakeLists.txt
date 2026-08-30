@@ -1233,9 +1233,18 @@ add_custom_command(
 file(GLOB ROOM_SOUNDS "${SRC_ROOM}/sounds/*.wav" "${SRC_LEGACY}/assets/*.wav")
 
 # `stepgen` écrit dans le MÊME répertoire, juste après la copie : la banque de
-# pas par matériau, les trois nappes d'ambiance, la chasse d'eau, le coup sur
-# une borne et les trois bruits de jeton — vingt-six fichiers — sont synthétisés
-# à chaque build plutôt que commités. Elles sortent ici et pas dans un répertoire à part
+# pas par matériau (5 x 4), les trois nappes d'ambiance, la chasse d'eau, le
+# coup sur une borne, les trois bruits de jeton et les cinq bruits du Couperet —
+# TRENTE-TROIS fichiers — sont synthétisés à chaque build plutôt que commités.
+#
+# Ce compte était faux, et il l'était de deux avant même le Couperet : il disait
+# « vingt-six » quand la banque en produisait vingt-huit. Un nombre écrit à la
+# main dans un commentaire dérive dès qu'on ajoute une ligne ailleurs, ce qui
+# est exactement ce qui vient de se passer deux fois. Celui-ci est désormais
+# celui que `stepgen --help` calcule et affiche, et c'est là qu'il faut aller le
+# relire plutôt que de le croire ici.
+#
+# Elles sortent ici et pas dans un répertoire à part
 # — contrairement à `sideart` — parce qu'aucun outil ne vérifie l'exhaustivité de
 # `sounds/` comme `roomgen` le fait pour les textures : il n'y a donc rien à
 # fausser en mélangeant les deux origines, et le moteur n'a qu'un chemin à
@@ -1247,7 +1256,7 @@ add_custom_command(
     COMMAND stepgen "${GEN}/sounds"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/sounds/.stamp"
     DEPENDS ${ROOM_SOUNDS} stepgen
-    COMMENT "Copie des sons, puis synthèse des pas, des nappes et des jetons"
+    COMMENT "Copie des sons, puis synthèse des pas, des nappes, des jetons et du Couperet"
     VERBATIM
 )
 

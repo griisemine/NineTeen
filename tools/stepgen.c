@@ -1137,6 +1137,759 @@ static size_t sg_render_coin(const sg_coin *c, float *out, size_t cap)
 }
 
 /* ==========================================================================
+ * LE COUPERET — les cinq bruits d'une manche
+ * ==========================================================================
+ * Le mode competitif de `room/room_couperet.h` etait entierement MUET, et c'est
+ * le defaut le plus couteux qu'il restait : sa regle tient dans une minuterie de
+ * quarante-cinq secondes, et une minuterie qu'on ne peut pas ENTENDRE n'arbitre
+ * rien. Le joueur a les yeux sur la dalle d'une borne — c'est meme tout le mode,
+ * puisqu'il faut jouer pour marquer — donc il ne regarde pas le compte a
+ * rebours. Ce qui doit lui dire l'heure ne peut etre qu'un son.
+ *
+ * LE VOCABULAIRE EST ELECTRIQUE, ET CE N'EST PAS UNE DECORATION
+ * -------------------------------------------------------------
+ * « Couperet » nomme aussi le geste d'un disjoncteur, et les six actions du mode
+ * sont toutes des gestes d'electricien : brouiller une image, inverser un
+ * cablage, couper le courant, blinder un tableau, renvoyer une surtension. La
+ * salle, elle, a des neons, des tubes et un compteur — `sg_render_room_tone`
+ * plus haut est deja batie sur le ronflement du secteur a 50 Hz et ses
+ * harmoniques, et ces cinq bruits en reprennent le 100 Hz des ballasts. Ils
+ * sortent donc du meme vocabulaire : des contacts, des armatures, de la tole de
+ * tableau, une alimentation qui tombe. Aucun n'est une lame de guillotine, et
+ * aucun n'est une nappe de science-fiction — les deux diraient un autre jeu.
+ *
+ * POURQUOI CINQ, ET PAS SIX NI TROIS
+ * ----------------------------------
+ * Un son de plus qu'on ne joue jamais est un son de trop. Chacun des cinq repond
+ * donc a UN evenement de `room_cp_evt`, et il n'y en a pas d'autre :
+ *
+ *   couperet_tic       les dix dernieres secondes de `couperet.prochain`
+ *   couperet_lame      ROOM_CP_EVT_COUPERET — la manche vient de sortir quelqu'un
+ *   couperet_coupure   ROOM_CP_EVT_ACTION / ROOM_CP_COUPURE — une borne s'eteint
+ *   couperet_blindage  ROOM_CP_EVT_ABSORBE — la plaque a tenu
+ *   couperet_renvoi    ROOM_CP_EVT_RENVOYE — le leurre a retourne la surtension
+ *
+ * ABSORBE et RENVOYE sont DEUX evenements distincts dans l'enumeration, et c'est
+ * pour ca qu'ils ont deux sons : « ca a tenu » et « c'est reparti chez toi » ne
+ * sont pas la meme nouvelle, et l'attaquant qui les confondrait n'apprendrait
+ * jamais ce que coute un leurre. Faire jouer le blindage sur un renvoi serait la
+ * faute exacte que `room_sound.h` reproche au jeton de 2020 : un son emprunte
+ * qui dit faux.
+ *
+ * ROOM_CP_EVT_ACTION, lui, couvre les SIX actions. Lui donner un son unique
+ * dirait la meme chose six fois et la dirait fausse cinq fois ; seule la coupure
+ * en recoit un, parce que c'est la seule qui DETRUISE quelque chose chez la
+ * cible. ARRIVEE, DEPART, DEBUT, PARTIE et FIN restent muets : ce sont des
+ * changements d'etat que le bandeau affiche, et aucun n'arrive pendant que le
+ * joueur a les yeux ailleurs — ce qui est le seul argument qui justifie un son.
+ *
+ * CE QU'ON VERIFIE, ET AVEC QUOI
+ * ------------------------------
+ * Trois instruments, et pas un de plus, pour que les chiffres se comparent d'un
+ * son a l'autre — c'est l'argument que `sg_brillance` porte deja dans son
+ * en-tete :
+ *
+ *   BRILLANCE  `sg_brillance`, la meme que pour le coup de poing (0,45) et les
+ *              trois jetons (3,08 a 15,14). Elle dit ou se trouve l'energie.
+ *   DUREE UTILE `sg_t95`, l'instant ou 95 % de l'energie du fichier est passee.
+ *              La longueur d'un fichier ne dit rien — un tic de 40 ms peut
+ *              n'etre qu'un clic de 5 ms suivi de silence, et c'est justement ce
+ *              qu'on veut de lui.
+ *   GLISSE     `sg_glisse`, le rapport de puissance entre 1 200 et 300 Hz sur
+ *              une fenetre. Mesure sur deux fenetres, il dit si la hauteur
+ *              MONTE ou DESCEND — c'est le meme instrument que celui qui verifie
+ *              le remplissage de la chasse d'eau, ici applique a deux sons dont
+ *              c'est toute la definition.
+ *
+ * ET UN QUATRIEME QU'ON N'EMPLOIE PAS, ce qu'il faut dire plutot que le laisser
+ * deviner. `sg_attaques` compte les rebonds des jetons et rend ici des nombres
+ * qui ne veulent rien dire : 107 pour la lame, 69 pour la coupure, 112 pour le
+ * renvoi. Ce n'est pas un defaut de ces fichiers, c'est le DOMAINE de
+ * l'instrument, et son propre en-tete le donne : son detecteur d'enveloppe est
+ * un passe-bas a 120 Hz, cale sur des jetons dont le mode le plus grave est a
+ * 1 550 Hz. Ces trois sons-la sont batis sur 58, 85 et 110 Hz — leur porteuse
+ * redressee tombe DANS la bande du detecteur, qui compte alors une attaque par
+ * periode. Le blindage, lui, en annonce 3, toutes les trois dans ses six
+ * premieres millisecondes : c'est un seul impact que le battement des modes
+ * jumeaux fait franchir trois fois le seuil.
+ *
+ * Seul le tic est dans le domaine de cet instrument — il n'a rien sous 520 Hz —
+ * et lui seul porte donc une borne d'attaques. Elle y vaut son prix : un tic qui
+ * en compterait deux serait un DOUBLE declic, et joue dix fois de suite un
+ * double declic ne se lit plus comme une seconde qui passe. Pour les quatre
+ * autres, nommer la limite de la mesure vaut mieux qu'inventer un seuil qui
+ * verifierait le bruit du detecteur.
+ */
+
+/* ---- le tic ---------------------------------------------------------------
+ * LE BATTEMENT DES DIX DERNIERES SECONDES, joue une fois par seconde entiere.
+ *
+ * C'est un CONTACT DE RELAIS et rien d'autre : une armature qui claque sur son
+ * noyau, dans un boitier de la taille d'une boite d'allumettes. Deux resonances
+ * — l'armature a 3 250 Hz, le boitier a 1 480 — excitees par une salve de bruit
+ * de 0,15 ms. C'est le contact le plus DUR de toute la banque : le poing dure
+ * 3,5 ms, le jeton 0,5, celui-ci treize fois moins que le poing, parce que du
+ * metal sur du metal sans rien entre les deux ne s'amortit pas.
+ *
+ * LA DUREE, ET POURQUOI ELLE EST CE QU'ELLE EST
+ * ---------------------------------------------
+ * Le fichier fait 40 ms ; sa DUREE UTILE mesuree — l'instant ou 95 % de son
+ * energie est passee, voir `sg_t95` — est de 4,6 ms. C'est la contrainte
+ * principale de ce son et non une economie : il est joue DIX FOIS de suite, a
+ * une seconde d'intervalle, dans le moment ou le joueur est deja sous pression.
+ * Deux defauts le rendraient alors insupportable :
+ *
+ *   - une queue longue. Au-dela d'une centaine de millisecondes, le tic cesse
+ *     d'etre un instant et devient une TEXTURE qui occupe un dixieme de chaque
+ *     seconde. A 4,6 ms il en occupe un deux-centieme.
+ *   - une hauteur tenue. Un resonateur trop resonant donne une NOTE, et dix
+ *     notes identiques font une melodie qu'on suit au lieu d'un compte qu'on
+ *     subit. Un `sg_svf` s'eteint a 1/e en Q / (pi f), soit ici 2,7 ms a
+ *     3 250 Hz et 4,3 ms a 1 480 : neuf cycles et six cycles. C'est assez pour
+ *     TIMBRER — sans quoi le tic serait un clic quelconque — et beaucoup trop
+ *     peu pour chanter.
+ *
+ * RIEN SOUS 520 Hz, et il faut dire exactement ce que ce passe-haut fait, parce
+ * que ce n'est pas ce que la premiere version de ce commentaire affirmait.
+ *
+ * Il ne faconne RIEN aujourd'hui : le retirer fait passer la brillance de 9,46 a
+ * 8,71, c'est-a-dire presque rien, puisqu'il n'y a rien de grave a retirer dans
+ * un son bati sur 1 480 et 3 250 Hz. Ce qu'il fait, c'est empecher qu'il y en
+ * ait un jour. Mesure : en ajoutant au tic une tole a 205 Hz — celle de la
+ * lame, au gain 2,0 —, la brillance tombe a 2,95 sans le passe-haut et reste a
+ * 8,60 avec. Il est donc une GARDE contre un reglage futur, et pas une etape de
+ * mise en forme ; c'est le plancher de brillance a 5,00 qui refuse le fichier
+ * dans le cas ou les deux sautent ensemble, et il le fait (2,95 < 5,00).
+ *
+ * A 9,46 fois un bruit blanc, le tic n'est d'ailleurs pas le son le plus clair
+ * de la banque — les deux jetons qui tombent le depassent, a 13,09 et 15,14 —
+ * mais il est 345 fois plus clair que la lame, et c'est ce chiffre-la qui
+ * compte. Voir la verification croisee en fin de fichier : les deux sons disent
+ * le meme evenement a deux instants, donc ils doivent etre aux deux bouts de
+ * l'instrument qui les mesure.
+ */
+#define SG_CP_TIC_LEN 0.040f
+
+static size_t sg_render_cp_tic(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_CP_TIC_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour le tic du couperet");
+
+    sg_rng r; sg_seed(&r, 0x71C0ull);
+
+    sg_svf armature, boitier;
+    sg_svf_set(&armature, 3250.0f, 28.0f);
+    sg_svf_set(&boitier,  1480.0f, 20.0f);
+
+    /* Deux poles en cascade : un seul laisse remonter un grave qui, a dix
+     * repetitions, s'entend comme un battement de coeur. Ce n'est pas ce qu'on
+     * raconte — le couperet n'est pas un organe, c'est une horloge. */
+    sg_pole hp1, hp2;
+    sg_pole_set(&hp1, 520.0f);
+    sg_pole_set(&hp2, 520.0f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        /* 0,15 ms : sept echantillons. Le contact d'un petit relais. */
+        const float choc = n * sg_decay(t, 0.00015f);
+
+        float v = 0.0f;
+        /* AUCUNE enveloppe de decroissance sur ces deux lignes, et c'est une
+         * correction : la premiere version en posait une, a 3,2 et 6,0 ms, et
+         * elle ne servait a rien. Un `sg_svf` s'eteint tout seul en Q / (pi f) —
+         * a Q 6 et 3 250 Hz, en 0,6 ms — donc c'etait le FILTRE qui decidait, et
+         * le commentaire annoncait une duree que le fichier n'avait pas. Les Q
+         * portent maintenant ce qu'ils annoncent : 28 a 3 250 Hz font 2,7 ms,
+         * 20 a 1 480 Hz en font 4,3. */
+        v += sg_svf_band(&armature, choc) * 1.00f * sg_attack(t, 0.00015f);
+        v += sg_svf_band(&boitier,  choc) * 0.50f * sg_attack(t, 0.00025f);
+        /* Le contact NU, non filtre : c'est lui qui fait le « t » de « tic ».
+         * Sans lui on entend deux resonances s'allumer, ce qui est un carillon
+         * miniature et non un declic. Il pesait 0,60 et emportait a lui seul
+         * 95 % de l'energie du fichier — mesure : la duree utile tombait a 1 ms,
+         * et le relais n'avait plus de timbre du tout. */
+        v += choc * 0.28f;
+
+        out[i] = sg_highpass(&hp2, sg_highpass(&hp1, v));
+    }
+
+    /* Fondu de sortie, meme raison que partout ailleurs. Court, parce que le son
+     * est fini depuis longtemps quand il arrive. */
+    const size_t fade = (size_t)(0.003f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ---- la lame --------------------------------------------------------------
+ * LA MANCHE VIENT DE SORTIR QUELQU'UN. Le seul son du mode qui ait le droit
+ * d'etre gros, et il l'est parce que c'est le seul qui concerne TOUT LE MONDE :
+ * huit joueurs apprennent en meme temps qu'il y en a un de moins.
+ *
+ * Ce qui tombe, c'est un CONTACTEUR DE PUISSANCE dans une armoire, et il fait
+ * quatre choses a la fois — meme construction que le coup de poing sur une
+ * borne, et pour la meme raison : c'est leur superposition qui rend un objet
+ * reconnaissable.
+ *
+ *   L'ARMATURE   une masse mobile de quelques centaines de grammes qui claque
+ *                sur son noyau. DEUX chocs et non un, a 34 ms d'intervalle : un
+ *                contacteur qui colle rebondit, et ses contacts auxiliaires
+ *                suivent le principal. Un choc unique donne un interrupteur ;
+ *                deux donnent une machine. Chaque choc a son propre banc de
+ *                resonateurs, exactement pour la raison ecrite au-dessus des
+ *                jetons — une enveloppe ancree a t = 0 eteindrait le second.
+ *   LE TABLEAU   la tole de l'armoire, sur deux modes (205 et 455 Hz). Elle est
+ *                NUE, contrairement au panneau laque de la borne : les Q sont
+ *                donc plus hauts (7,0 et 9,0 contre 3,2 et 4,0) et elle sonne
+ *                deux fois plus longtemps. C'est ce qui fait entendre une
+ *                armoire electrique plutot qu'un meuble.
+ *   LA SALLE     58 Hz, presque une demi-seconde. C'est « la salle qui accuse le
+ *                coup » : le meme role que la caisse a 82 Hz du coup de poing,
+ *                une octave plus bas parce que ce n'est plus un meuble qu'on
+ *                frappe mais un batiment qui encaisse.
+ *   LES BALLASTS le ronflement du secteur a 100 Hz et ses deux harmoniques, qui
+ *                ENFLENT puis retombent en un tiers de seconde. C'est la seule
+ *                composante qui ne soit pas un choc, et c'est elle qui dit que
+ *                l'evenement est electrique : quand la puissance bascule, tous
+ *                les tubes de la salle le repercutent avant de se rasseoir.
+ *                Elle est a 100 Hz et non a 50 parce qu'un ballast ronfle au
+ *                DOUBLE du secteur — c'est deja ce qu'ecrit `sg_render_room_tone`
+ *                et ce que reprend l'extracteur.
+ */
+#define SG_CP_LAME_LEN   1.15f
+#define SG_CP_LAME_CHOCS 2
+
+static size_t sg_render_cp_lame(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_CP_LAME_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour la lame du couperet");
+
+    sg_rng r; sg_seed(&r, 0x1AA3ull);
+
+    /* Le principal, puis le rebond des auxiliaires. */
+    const float at[SG_CP_LAME_CHOCS]  = { 0.000f, 0.034f };
+    const float amp[SG_CP_LAME_CHOCS] = { 1.000f, 0.38f };
+
+    sg_svf coeur[SG_CP_LAME_CHOCS], pastille[SG_CP_LAME_CHOCS];
+    sg_svf tole1[SG_CP_LAME_CHOCS], tole2[SG_CP_LAME_CHOCS];
+    sg_svf salle[SG_CP_LAME_CHOCS];
+    for (int k = 0; k < SG_CP_LAME_CHOCS; ++k) {
+        sg_svf_set(&coeur[k],     340.0f, 4.0f);   /* la masse mobile */
+        sg_svf_set(&pastille[k], 1150.0f, 8.0f);   /* les pastilles de contact */
+        sg_svf_set(&tole1[k],     205.0f, 7.0f);
+        sg_svf_set(&tole2[k],     455.0f, 9.0f);
+        sg_svf_set(&salle[k],      58.0f, 5.0f);
+    }
+
+    /* Le retrait du continu, meme raison que pour le coup et les jetons. Pose a
+     * 18 Hz et non 22 : la salle descend a 58 Hz ici, et un passe-haut trop haut
+     * mangerait precisement ce qu'on cherche a produire. */
+    sg_pole dc; sg_pole_set(&dc, 18.0f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float w = 6.28318530717959f * t;
+        const float n = sg_noise(&r);
+
+        float v = 0.0f;
+
+        for (int k = 0; k < SG_CP_LAME_CHOCS; ++k) {
+            const float d = t - at[k];
+            if (d < 0.0f) continue;
+
+            /* 1,8 ms : plus long que le relais (0,15) parce que la masse est
+             * mille fois plus grande, plus court que le poing (3,5) parce que
+             * rien n'amortit du fer contre du fer. */
+            const float choc = n * amp[k] * sg_decay(d, 0.0018f);
+
+            v += sg_svf_band(&coeur[k],    choc) * 0.95f * sg_decay(d, 0.060f)
+               * sg_attack(d, 0.0008f);
+            v += sg_svf_band(&pastille[k], choc) * 0.30f * sg_decay(d, 0.012f)
+               * sg_attack(d, 0.0003f);
+            v += sg_svf_band(&tole1[k],    choc) * 0.70f * sg_decay(d, 0.300f)
+               * sg_attack(d, 0.0020f);
+            v += sg_svf_band(&tole2[k],    choc) * 0.40f * sg_decay(d, 0.190f)
+               * sg_attack(d, 0.0012f);
+            /* La salle met le plus longtemps a repondre — un grand volume ne
+             * demarre pas dans la milliseconde — et le plus longtemps a se
+             * taire. Meme raisonnement que la caisse du coup de poing, avec le
+             * double de constante. */
+            v += sg_svf_band(&salle[k],    choc) * 1.15f * sg_decay(d, 0.450f)
+               * sg_attack(d, 0.0060f);
+        }
+
+        /* Les ballasts. Ils enflent en 12 ms — le temps que la puissance
+         * bascule — et retombent en 0,30 s. Phase nulle a l'origine, donc pas de
+         * discontinuite au premier echantillon. */
+        {
+            const float e = sg_attack(t, 0.012f) * sg_decay(t, 0.300f);
+            v += 0.150f * sinf(w * 100.0f) * e;
+            v += 0.065f * sinf(w * 200.0f) * e;
+            v += 0.030f * sinf(w * 300.0f) * e;
+        }
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    const size_t fade = (size_t)(0.030f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ---- la coupure -----------------------------------------------------------
+ * ON VIENT D'ETEINDRE VOTRE BORNE. Ce n'est PAS la lame, et le fichier existe
+ * pour qu'on ne puisse pas les confondre : la lame est la manche qui tranche,
+ * la coupure est un adversaire qui a depense quatre fusibles contre vous. Elle
+ * est donc plus proche, deux fois plus breve, et surtout elle raconte autre
+ * chose.
+ *
+ * CE QU'ON ENTEND EST UNE PANNE, PAS UNE EXPLOSION
+ * ------------------------------------------------
+ * Une explosion est du bruit large qui part fort et decroit. Une alimentation
+ * qui tombe fait l'inverse d'un evenement : elle DESCEND. Le transformateur et
+ * le balayage de la borne perdent leur frequence a mesure que la tension chute,
+ * et c'est cette GLISSADE VERS LE BAS qui est le son d'une panne — tout le monde
+ * l'a entendue sur un appareil qu'on debranche. Elle est ici de 640 a 85 Hz en
+ * une constante de 0,10 s, et le plancher de bruit de la borne se referme avec
+ * elle : un passe-bande promene de 3 000 a 300 Hz par `sg_svf_tune`, qui existe
+ * exactement pour ca et dont l'en-tete explique pourquoi on ne peut pas utiliser
+ * `sg_svf_set` a la place.
+ *
+ * Le contact du relais qui a lache est LA, mais mixe bas et sans aigu (900 et
+ * 2 200 Hz, pas 3 250) : ce n'est pas un declic qu'on veut entendre, c'est ce
+ * qui vient apres. Un contact trop present ferait de ce fichier un deuxieme tic.
+ *
+ * Aucun grave de salle, aucune tole d'armoire : la coupure ne concerne qu'une
+ * borne. C'est la difference que `room_sound.c` traduit en portee, et le fichier
+ * doit la porter aussi — un fichier qui gronde s'entend gros meme joue bas.
+ */
+#define SG_CP_COUPURE_LEN 0.50f
+
+static size_t sg_render_cp_coupure(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_CP_COUPURE_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour la coupure");
+
+    sg_rng r; sg_seed(&r, 0xC0FFull);
+
+    sg_svf contact1, contact2;
+    sg_svf_set(&contact1,  900.0f, 5.0f);
+    sg_svf_set(&contact2, 2200.0f, 6.0f);
+
+    /* Le plancher de bruit de la borne, qui se referme. */
+    sg_svf souffle; sg_svf_set(&souffle, 3000.0f, 1.6f);
+
+    sg_pole dc; sg_pole_set(&dc, 30.0f);
+
+    float ph = 0.0f;
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        float v = 0.0f;
+
+        /* Le relais qui lache : 0,8 ms, discret. */
+        {
+            const float choc = n * sg_decay(t, 0.0008f);
+            v += sg_svf_band(&contact1, choc) * 0.42f * sg_decay(t, 0.010f)
+               * sg_attack(t, 0.0004f);
+            v += sg_svf_band(&contact2, choc) * 0.20f * sg_decay(t, 0.005f)
+               * sg_attack(t, 0.0002f);
+        }
+
+        /* L'alimentation qui tombe. La frequence suit une exponentielle, donc
+         * la glissade est rapide au debut et tenue a la fin — c'est ce que fait
+         * un condensateur qui se vide, et c'est ce qui distingue une panne d'un
+         * simple fondu. */
+        {
+            const float hz = 85.0f + (640.0f - 85.0f) * sg_decay(t, 0.100f);
+            ph += 6.28318530717959f * hz / (float)SG_RATE;
+            const float e = sg_attack(t, 0.004f);
+            v += 0.62f * sinf(ph)        * e * sg_decay(t, 0.140f);
+            v += 0.20f * sinf(ph * 2.0f) * e * sg_decay(t, 0.095f);
+        }
+
+        /* Le souffle qui se referme : meme glissade, sur le bruit. */
+        {
+            const float hz = 300.0f + (3000.0f - 300.0f) * sg_decay(t, 0.085f);
+            sg_svf_tune(&souffle, hz);
+            v += sg_svf_band(&souffle, n) * 0.55f * sg_decay(t, 0.180f)
+               * sg_attack(t, 0.0025f);
+        }
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    const size_t fade = (size_t)(0.020f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ---- le blindage ----------------------------------------------------------
+ * UNE ATTAQUE ENCAISSEE. C'est la SEULE bonne nouvelle des cinq, et il faut
+ * qu'elle s'entende comme telle — ce qui, en pratique, veut dire trois choses
+ * mesurables et non un adjectif :
+ *
+ *   COURT      0,30 s de fichier. Une bonne nouvelle qui traine devient une
+ *              annonce ; ce qu'on veut, c'est un accuse de reception.
+ *   METALLIQUE une plaque d'acier boulonnee sur un tableau, sur trois modes
+ *              INHARMONIQUES (1 : 1,51 : 2,14). Le raisonnement est celui du
+ *              jeton : une corde donne une note, une plaque tinte. Les rapports
+ *              ne sont pas ceux du disque (1 : 1,72 : 2,31) parce que ce n'est
+ *              pas un disque — c'est une plaque rectangulaire tenue par ses
+ *              bords, et ses modes sont plus resserres.
+ *   SONNANT    et c'est la difference d'avec le tic, qui est l'autre son court
+ *              et clair du lot. Le tic est un contact MORT : il claque et il n'y
+ *              a plus rien — 4,6 ms de duree utile. Le blindage SONNE : 97,1 ms,
+ *              soit vingt et une fois plus, parce qu'une plaque qui encaisse
+ *              rend l'energie au lieu de l'absorber. C'est exactement ce que
+ *              `sg_t95` mesure, et c'est la seule chose qui separe ces deux-la —
+ *              en brillance ils sont du meme cote de l'echelle.
+ *
+ * Sous le tintement, un seul grave : la fixation de la plaque a 320 Hz, tres
+ * court (14 ms). C'est le POIDS de l'objet — sans lui la plaque sonne comme une
+ * feuille de tole et non comme un blindage — mais il ne tient pas, parce que le
+ * blindage n'est pas un evenement de salle. Il pesait 0,30 pour 20 ms dans une
+ * premiere version : il emportait alors assez d'energie basse pour ramener la
+ * brillance a 0,94, c'est-a-dire au niveau d'un coup de poing sur du bois.
+ */
+#define SG_CP_BLINDAGE_LEN   0.30f
+#define SG_CP_BLINDAGE_MODES 3
+
+static size_t sg_render_cp_blindage(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_CP_BLINDAGE_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour le blindage");
+
+    sg_rng r; sg_seed(&r, 0xB11Dull);
+
+    /*
+     * LES MODES SONT DES SINUSOIDES ET NON DES `sg_svf`, et c'est la seule fois
+     * dans ce fichier — donc il faut dire pourquoi.
+     *
+     * Un `sg_svf` excite par une impulsion s'eteint en Q / (pi f). Pour tenir
+     * les cent millisecondes qu'on veut ici a 1 180 Hz il faudrait un Q de 370,
+     * ce que ce filtre ne tient pas proprement — c'est deja l'argument ecrit
+     * au-dessus des jetons, qui s'en sortent en RE-EXCITANT le banc a chaque
+     * rebond. Une plaque qu'on frappe une fois n'a pas de rebond a offrir : elle
+     * est frappee une fois et elle sonne. Mesure de la version precedente, qui
+     * empilait des Q de 30 sous une enveloppe de 130 ms : 13 ms de duree utile,
+     * soit un blindage aussi mort que le tic — exactement ce que ce son ne doit
+     * pas etre.
+     *
+     * Une somme de sinusoides amorties EST la solution exacte pour une plaque :
+     * c'est ce que ses modes font, et la duree devient celle qu'on ecrit.
+     *
+     * LE JUMEAU DESACCORDE (1 191 contre 1 180 Hz) n'est pas un quatrieme mode :
+     * c'est le meme. Les modes d'une plaque rectangulaire viennent par paires
+     * degenerees que la moindre asymetrie — un boulon, une soudure — separe de
+     * quelques hertz. Ce qu'on entend alors est un BATTEMENT, ici a 11 Hz, et
+     * c'est ce qui distingue une plaque reelle d'un carillon de synthese.
+     */
+    static const float mhz[SG_CP_BLINDAGE_MODES] = { 1320.0f, 1993.0f, 2825.0f };
+    static const float mg[SG_CP_BLINDAGE_MODES]  = {   1.00f,   0.62f,   0.34f };
+    static const float mt[SG_CP_BLINDAGE_MODES]  = {  0.075f,  0.050f,  0.032f };
+
+    /* Le contact de l'attaque sur l'acier, et le poids de la fixation. */
+    sg_svf contact;  sg_svf_set(&contact, 3400.0f, 8.0f);
+    sg_svf fixation; sg_svf_set(&fixation, 320.0f, 3.0f);
+
+    sg_pole dc; sg_pole_set(&dc, 60.0f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float w = 6.28318530717959f * t;
+        const float n = sg_noise(&r);
+
+        /* 0,30 ms : l'attaque arrive sur de l'acier, pas sur de la chair. */
+        const float choc = n * sg_decay(t, 0.00030f);
+
+        float v = 0.0f;
+        for (int m = 0; m < SG_CP_BLINDAGE_MODES; ++m) {
+            v += mg[m] * sinf(w * mhz[m]) * sg_decay(t, mt[m])
+               * sg_attack(t, 0.0008f);
+        }
+        v += 0.55f * sinf(w * 1332.0f) * sg_decay(t, mt[0]) * sg_attack(t, 0.0008f);
+
+        v += sg_svf_band(&contact,  choc) * 0.60f * sg_decay(t, 0.004f)
+           * sg_attack(t, 0.00025f);
+        /* Le poids, et rien de plus : 20 ms. Une plaque sans grave sonne comme
+         * une feuille de tole, une plaque dont le grave TIENT devient un
+         * evenement de salle — et le blindage n'en est pas un. */
+        v += sg_svf_band(&fixation, choc) * 0.18f * sg_decay(t, 0.014f)
+           * sg_attack(t, 0.0015f);
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    const size_t fade = (size_t)(0.012f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ---- le renvoi ------------------------------------------------------------
+ * LE LEURRE A RETOURNE LA SURTENSION. C'est l'exact MIROIR de la coupure, et
+ * c'est comme ca qu'il est construit : la coupure descend, le renvoi monte.
+ *
+ * Ce n'est pas une coquetterie de symetrie. Ces deux sons arrivent au meme
+ * joueur — celui qui vient d'attaquer — a une seconde d'intervalle selon que sa
+ * cible etait nue ou couverte, et ce sont les deux verdicts opposes du meme
+ * geste. Une hauteur qui monte contre une hauteur qui descend est la seule
+ * difference qu'une oreille classe SANS apprendre : personne n'a jamais eu
+ * besoin qu'on lui explique lequel des deux est une mauvaise nouvelle.
+ *
+ * La montee est EXPONENTIELLE et non lineaire — de 110 Hz vers 1 500 en une
+ * constante de 76 ms — parce qu'une surtension qui repart s'emballe. Une rampe
+ * lineaire s'entend comme un effet ; une exponentielle s'entend comme une
+ * cause.
+ *
+ * L'ARC. Huit craquements a des instants poses a la main, dont l'ECART SE
+ * RESSERRE : 27, 33, 28, 22, 18, 14 puis 11 ms. C'est le troisieme emploi du
+ * meme argument dans ce fichier — les glouglous de la chasse, les tripes du
+ * coup, les rebonds du jeton — et il vaut ici a l'envers : un intervalle qui se
+ * resserre pendant qu'une hauteur monte est ce qui s'entend comme « ca
+ * s'emballe » plutot que « ca dure ». Ils passent par un passe-bande fixe a
+ * 2 600 Hz : un arc electrique crepite dans l'aigu quelle que soit la tension.
+ *
+ * Et la fin : le retour ARRIVE. Un choc dur a 195 ms, la ou la glissade est en
+ * haut — sans lui la montee se dissoudrait, et un renvoi qui ne touche pas ne
+ * dit pas qu'il a touche.
+ */
+#define SG_CP_RENVOI_LEN 0.42f
+#define SG_CP_RENVOI_ARCS 8
+
+static size_t sg_render_cp_renvoi(float *out, size_t cap)
+{
+    const size_t frames = (size_t)(SG_CP_RENVOI_LEN * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour le renvoi");
+
+    sg_rng r; sg_seed(&r, 0x5E7Aull);
+
+    static const float arc_at[SG_CP_RENVOI_ARCS] = {
+        0.012f, 0.039f, 0.072f, 0.100f, 0.122f, 0.140f, 0.154f, 0.165f
+    };
+    sg_svf arc; sg_svf_set(&arc, 2600.0f, 7.0f);
+
+    /* L'impact du retour, a 195 ms. */
+    const float coup_at = 0.195f;
+    sg_svf impact1, impact2;
+    sg_svf_set(&impact1, 1450.0f, 9.0f);
+    sg_svf_set(&impact2,  520.0f, 5.0f);
+
+    sg_pole dc; sg_pole_set(&dc, 40.0f);
+
+    float ph = 0.0f;
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        float v = 0.0f;
+
+        /* La surtension qui remonte le cable. Bornee a 4 kHz : au-dela on
+         * replierait le spectre, et un repliement s'entend comme une descente —
+         * l'exact contraire de ce que ce fichier existe pour dire. */
+        {
+            float hz = 110.0f * expf(t / 0.076f);
+            if (hz > 4000.0f) hz = 4000.0f;
+            ph += 6.28318530717959f * hz / (float)SG_RATE;
+            /* L'amplitude ENFLE jusqu'a l'impact puis lache : c'est ce qui fait
+             * que la montee a une destination. */
+            const float e = sg_attack(t, 0.020f)
+                          * ((t < coup_at) ? (0.35f + 0.65f * t / coup_at)
+                                           : sg_decay(t - coup_at, 0.050f));
+            v += 0.55f * sinf(ph)        * e;
+            v += 0.16f * sinf(ph * 2.0f) * e;
+        }
+
+        /* L'arc. */
+        for (int k = 0; k < SG_CP_RENVOI_ARCS; ++k) {
+            const float d = t - arc_at[k];
+            if (d < 0.0f || d > 0.030f) { (void)sg_svf_band(&arc, 0.0f); continue; }
+            const float drive = (d < 0.0008f) ? n : 0.0f;
+            /* Les derniers craquent plus fort : la tension monte avec la
+             * frequence, et un arc suit la tension. */
+            const float g = 0.16f + 0.22f * (float)k / (float)(SG_CP_RENVOI_ARCS - 1);
+            v += g * sg_svf_band(&arc, drive) * sg_decay(d, 0.0045f);
+        }
+
+        /* L'arrivee. */
+        {
+            const float d = t - coup_at;
+            if (d >= 0.0f) {
+                const float choc = n * sg_decay(d, 0.0006f);
+                v += sg_svf_band(&impact1, choc) * 0.85f * sg_decay(d, 0.045f)
+                   * sg_attack(d, 0.0004f);
+                v += sg_svf_band(&impact2, choc) * 0.45f * sg_decay(d, 0.090f)
+                   * sg_attack(d, 0.0015f);
+            } else {
+                (void)sg_svf_band(&impact1, 0.0f);
+                (void)sg_svf_band(&impact2, 0.0f);
+            }
+        }
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    const size_t fade = (size_t)(0.015f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/*
+ * LA TABLE DES CINQ, et ce que chacun doit prouver.
+ *
+ * Les bornes sont posees APRES avoir mesure ce que le rendu produit vraiment —
+ * les valeurs mesurees sont dans chaque ligne — et avec la marge qu'il faut pour
+ * qu'un reglage de timbre ne casse pas le build sans raison, mais pas plus :
+ * au-dela elles ne refuseraient plus rien. C'est la meme discipline que la table
+ * des jetons juste au-dessus.
+ *
+ * Une borne a 0 veut dire « pas de plancher » ; une borne haute a 0 veut dire
+ * « pas de plafond ». Toutes les lignes n'ont pas les memes proprietes
+ * DEFINISSANTES, et remplir une colonne sans raison serait exactement le genre
+ * de verification decorative qui donne l'illusion d'un test.
+ */
+typedef struct sg_cp {
+    const char *file;
+    const char *quoi;
+    size_t (*render)(float *, size_t);
+    float  length;
+    float  peak;
+
+    double brillance_min, brillance_max;   /* 0 = pas de borne de ce cote */
+    double t95_min_ms, t95_max_ms;
+    int    attaques_min, attaques_max;
+} sg_cp;
+
+static const sg_cp g_cps[] = {
+    /*
+     * MESURE : brillance 9,46 fois un bruit blanc, duree utile 4,6 ms pour un
+     * fichier de 40, une attaque a 0 ms.
+     *
+     * Le plafond de duree utile a 12 ms est la borne la plus serree du lot, et
+     * c'est voulu : c'est elle qui garantit que le tic reste jouable dix fois de
+     * suite. Le plancher de brillance a 5,00 le tient loin de la lame (0,03), et
+     * la borne d'attaques a exactement 1 interdit le double declic.
+     */
+    { "couperet_tic.wav", "le battement des dix dernieres secondes",
+      sg_render_cp_tic, SG_CP_TIC_LEN, 0.80f,
+      5.00, 0.0,   0.0, 12.0,   1, 1 },
+
+    /*
+     * MESURE : brillance 0,03 — quinze fois plus sombre que le coup de poing,
+     * qui est deja le son mat de reference a 0,45 — et 451,3 ms de duree utile.
+     *
+     * Le plafond de brillance a 0,15 est ce qui interdit a la lame de devenir
+     * claquante, donc de se rapprocher du tic. Le plancher de duree utile a
+     * 300 ms est ce qui interdit qu'elle redevienne un simple choc : ce qu'on
+     * veut entendre, c'est la salle qui accuse le coup, et une salle met du
+     * temps. Pas de borne d'attaques : voir l'en-tete de section, l'instrument
+     * ne s'applique pas a un son bati sur 58 Hz.
+     */
+    { "couperet_lame.wav", "le contacteur qui tombe",
+      sg_render_cp_lame, SG_CP_LAME_LEN, 0.95f,
+      0.0, 0.15,   300.0, 0.0,   0, 0 },
+
+    /*
+     * MESURE : 201,0 ms de duree utile pour 500 de fichier. La glissade est
+     * verifiee a part, plus bas : c'est sa propriete definissante et elle ne
+     * tient pas dans une colonne de cette table.
+     *
+     * Le plafond de duree utile a 300 ms la tient a l'ecart de la lame (451,3) —
+     * une coupure qui durerait comme elle serait un second couperet, et le
+     * joueur apprendrait le contraire de ce qui vient de se passer. Aucune borne
+     * de brillance : ce fichier n'a pas de couleur a tenir, il a une hauteur a
+     * perdre.
+     */
+    { "couperet_coupure.wav", "l'alimentation d'une borne qui tombe",
+      sg_render_cp_coupure, SG_CP_COUPURE_LEN, 0.90f,
+      0.0, 0.0,   0.0, 300.0,   0, 0 },
+
+    /*
+     * MESURE : brillance 1,71 — quatre fois celle du coup de poing (0,45) et
+     * au-dessous du jeton refuse (3,08), qui est deja decrit comme « du metal,
+     * mais etouffe ». C'est la place qu'on lui cherchait : une plaque d'acier
+     * epaisse est plus sombre qu'une piece de deux centimetres et demi. Duree
+     * utile 97,1 ms.
+     *
+     * Les deux bornes disent les deux mots. METALLIQUE par le plancher de
+     * brillance a 1,00, qui le tient au-dessus de la lame (0,03), de la coupure
+     * (0,02) et du renvoi (0,17). SONNANT par le plancher de duree utile a
+     * 50 ms : c'est lui qui compte, parce que sans lui le blindage pourrait
+     * redevenir ce qu'il etait dans une premiere version — 13 ms, c'est-a-dire
+     * un second tic. Le plafond a 180 ms l'empeche de trainer : une bonne
+     * nouvelle est un accuse de reception, pas une annonce.
+     */
+    { "couperet_blindage.wav", "la plaque qui encaisse",
+      sg_render_cp_blindage, SG_CP_BLINDAGE_LEN, 0.88f,
+      1.00, 0.0,   50.0, 180.0,   0, 0 },
+
+    /*
+     * MESURE : 230,1 ms de duree utile. Comme pour la coupure, c'est la glissade
+     * qui le definit et elle est verifiee a part. Les bornes de duree n'ont
+     * qu'un role : le tenir entre la coupure (201,0) et la lame (451,3), ou il
+     * doit rester.
+     */
+    { "couperet_renvoi.wav", "la surtension qui repart",
+      sg_render_cp_renvoi, SG_CP_RENVOI_LEN, 0.88f,
+      0.0, 0.0,   120.0, 320.0,   0, 0 },
+};
+
+#define SG_CP_COUNT ((int)(sizeof g_cps / sizeof g_cps[0]))
+
+/*
+ * Les rangs dans la table, pour les trois verifications qui ne sont pas des
+ * colonnes. Des indices et non des comparaisons de nom de fichier : une chaine
+ * qu'on retape est une occasion de divergence de plus, et celle-ci se
+ * tromperait en silence.
+ */
+enum {
+    SG_CP_I_TIC = 0,
+    SG_CP_I_LAME,
+    SG_CP_I_COUPURE,
+    SG_CP_I_BLINDAGE,
+    SG_CP_I_RENVOI
+};
+_Static_assert(SG_CP_I_RENVOI + 1 == SG_CP_COUNT,
+               "les rangs du couperet ne suivent plus la table");
+
+/*
+ * LES QUATRE SEUILS QUI SEPARENT LES SONS LES UNS DES AUTRES.
+ *
+ * Ils sont ici et pas dans la table parce qu'ils ne portent sur AUCUN fichier
+ * en particulier : ce sont des rapports entre deux mesures, et les ecrire dans
+ * une ligne reviendrait a dire qu'ils appartiennent a l'un des deux sons.
+ *
+ * Poses, comme partout dans ce fichier, apres avoir mesure — les valeurs
+ * reelles sont dans le journal de `stepgen` et dans les commentaires de la
+ * table — et sous les valeurs obtenues, avec la marge qu'il faut pour qu'un
+ * reglage de timbre ne casse pas le build sans raison, mais pas plus.
+ */
+/* Le tic contre la lame, en brillance. MESURE x345 (9,46 contre 0,03). */
+#define SG_CP_ECART_SPECTRE 120.0
+/* La lame contre le tic, en duree utile. MESURE x98 (451,3 contre 4,6 ms). Les
+ * deux bornes de la table imposent deja x25 a elles seules ; ce seuil-ci en
+ * demande davantage, sans quoi il ne dirait rien de plus qu'elles. */
+#define SG_CP_ECART_DUREE    40.0
+/* Les deux glissades. MESURE x645,65 pour le renvoi (0,037 puis 23,589) et
+ * x0,08 pour la coupure (0,883 puis 0,071). Les deux seuils sont loin de 1 de
+ * part et d'autre : un facteur voisin de 1 voudrait dire que la hauteur ne bouge
+ * pas, donc que le fichier ne dit plus ce pour quoi il existe. */
+#define SG_CP_MONTEE_MIN     10.00
+#define SG_CP_CHUTE_MAX       0.30
+
+/* ==========================================================================
  * Programme
  * ========================================================================== */
 
@@ -1262,6 +2015,76 @@ static int sg_attaques(const float *v, size_t n, float *quand, int cap)
     return count;
 }
 
+/*
+ * LA DUREE UTILE : l'instant ou 95 % de l'energie du fichier est passee.
+ *
+ * La longueur d'un fichier ne dit RIEN de la longueur d'un son. Le tic du
+ * couperet fait 40 ms de fichier et se tait au bout de six ; la lame fait
+ * 1,15 s et sonne presque jusqu'au bout. Ecrire « le tic est court » en
+ * verifiant sa duree de fichier reviendrait a verifier ce qu'on a soi-meme
+ * ecrit dans une constante, ce qui n'est pas une mesure.
+ *
+ * 95 % et non 99 : la queue d'une exponentielle n'a pas de fin, et le dernier
+ * pour cent d'energie d'un resonateur bien amorti tombe la ou le fondu de
+ * sortie l'attrape. Ce qu'on cherche a chiffrer est le moment ou le son est
+ * FINI pour l'oreille, pas le moment ou l'echantillon atteint zero.
+ */
+static double sg_t95(const float *v, size_t n)
+{
+    double total = 0.0;
+    for (size_t i = 0; i < n; ++i) total += (double)v[i] * (double)v[i];
+    if (total <= 1e-12) return 0.0;
+
+    double acc = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        acc += (double)v[i] * (double)v[i];
+        if (acc >= 0.95 * total) return (double)i / (double)SG_RATE;
+    }
+    return (double)n / (double)SG_RATE;
+}
+
+/*
+ * LA GLISSE : le rapport de puissance entre 1 200 et 300 Hz, sur une FENETRE.
+ *
+ * C'est le meme instrument que celui qui verifie le remplissage de la chasse
+ * d'eau — deux bandes, leur puissance, deux fenetres — et il sert ici pour la
+ * meme raison : mesuree en deux endroits du fichier, cette grandeur dit si la
+ * hauteur MONTE ou DESCEND. C'est toute la definition de la coupure (une
+ * alimentation qui tombe) et du renvoi (une surtension qui repart), et ces deux
+ * fichiers n'ont aucune autre propriete qui les distingue aussi surement.
+ *
+ * Les bandes ne sont pas celles de `sg_brillance` (450 et 2 200 Hz) et il faut
+ * le dire : elles sont posees de part et d'autre des glissades reelles — de 640
+ * a 85 Hz pour la coupure, de 110 a 1 500 pour le renvoi. Un instrument de
+ * mesure se choisit pour ce qu'on mesure ; celui de la brillance sert a
+ * comparer des sons entre eux, celui-ci a comparer un son a lui-meme plus tard.
+ *
+ * Le filtre est REARME a chaque fenetre : le laisser courir depuis le debut du
+ * fichier ferait porter a la seconde fenetre l'energie de la premiere, ce qui
+ * est exactement l'ecart qu'on cherche a mesurer.
+ */
+#define SG_GLISSE_BAS   300.0f
+#define SG_GLISSE_HAUT 1200.0f
+
+static double sg_glisse(const float *v, size_t n, double t0, double t1)
+{
+    size_t a = (size_t)(t0 * (double)SG_RATE);
+    size_t b = (size_t)(t1 * (double)SG_RATE);
+    if (b > n) b = n;
+    if (a >= b) return 0.0;
+
+    sg_svf bas, haut;
+    sg_svf_set(&bas,  SG_GLISSE_BAS,  2.0f);
+    sg_svf_set(&haut, SG_GLISSE_HAUT, 2.0f);
+    double ebas = 0.0, ehaut = 0.0;
+    for (size_t i = a; i < b; ++i) {
+        const double x = sg_svf_band(&bas,  v[i]);
+        const double y = sg_svf_band(&haut, v[i]);
+        ebas += x * x; ehaut += y * y;
+    }
+    return (ebas > 1e-12) ? ehaut / ebas : 1e9;
+}
+
 int main(int argc, char **argv)
 {
     const char *out_dir = NULL;
@@ -1279,11 +2102,13 @@ int main(int argc, char **argv)
             "\n"
             "Produit %d x %d pas (`pas_<materiau>_<n>.wav`), trois boucles\n"
             "d'ambiance (`amb_neon.wav`, `amb_ventilo.wav`, `amb_rue.wav`),\n"
-            "la chasse d'eau, le coup sur une borne (`coup_borne.wav`) et les\n"
-            "%d bruits de jeton (`jeton_insere`, `jeton_refuse`, `jeton_bac`),\n"
+            "la chasse d'eau, le coup sur une borne (`coup_borne.wav`), les\n"
+            "%d bruits de jeton (`jeton_insere`, `jeton_refuse`, `jeton_bac`)\n"
+            "et les %d bruits du Couperet (`couperet_tic`, `couperet_lame`,\n"
+            "`couperet_coupure`, `couperet_blindage`, `couperet_renvoi`),\n"
             "soit %d fichiers en tout.\n",
-            argv[0], SG_MATERIAL_COUNT, SG_VARIANTS, SG_COIN_COUNT,
-            SG_MATERIAL_COUNT * SG_VARIANTS + 3 + 1 + 1 + SG_COIN_COUNT);
+            argv[0], SG_MATERIAL_COUNT, SG_VARIANTS, SG_COIN_COUNT, SG_CP_COUNT,
+            SG_MATERIAL_COUNT * SG_VARIANTS + 3 + 1 + 1 + SG_COIN_COUNT + SG_CP_COUNT);
         return 2;
     }
     if (peak_target <= 0.05f || peak_target > 1.0f) {
@@ -1553,6 +2378,163 @@ int main(int argc, char **argv)
                             "les rebonds ne sont pas ceux qu'il annonce",
                             c->file, n, c->attaques_min, c->attaques_max);
             }
+        }
+    }
+
+    /* ---- les cinq bruits du couperet ---------------------------------------
+     * Normalises CHACUN POUR SOI, comme les nappes et les jetons : ils ne
+     * sonnent jamais ensemble, ils ne sortent pas du meme endroit de la salle,
+     * et c'est `room_sound.c` qui decide de leurs niveaux relatifs en sachant ou
+     * chacun est place — dont deux qui ne sont pas places du tout.
+     *
+     * Ce qu'on verifie sort de la table : les bornes de brillance, de duree
+     * utile et d'attaques y sont ecrites ligne par ligne, avec la valeur mesuree
+     * qui les a fait poser. Restent DEUX verifications qui ne tiennent pas dans
+     * une colonne, et ce sont les deux qui comptent le plus.
+     */
+    {
+        static float cp[SG_MAX_FRAMES];
+        double brillance[SG_CP_COUNT], utile[SG_CP_COUNT];
+
+        for (int i = 0; i < SG_CP_COUNT; ++i) {
+            const sg_cp *c = &g_cps[i];
+            const size_t frames = c->render(cp, SG_MAX_FRAMES);
+            const float p = peak_of(cp, frames);
+            if (p < 1e-6f) tool_fatalf("« %s » est silencieux", c->file);
+            const float scale = c->peak / p;
+
+            snprintf(path, sizeof path, "%s/%s", out_dir, c->file);
+            sg_write_wav(path, cp, frames, scale);
+
+            brillance[i] = sg_brillance(cp, frames);
+            utile[i]     = sg_t95(cp, frames) * 1000.0;
+
+            float quand[8];
+            const int n = sg_attaques(cp, frames, quand, 8);
+            char liste[128]; size_t used = 0; liste[0] = 0;
+            for (int k = 0; k < n && k < 8 && used + 8 < sizeof liste; ++k) {
+                used += (size_t)snprintf(liste + used, sizeof liste - used,
+                                         "%s%.0f", k ? " " : "", (double)quand[k] * 1000.0);
+            }
+
+            tool_infof("couperet « %-22s » : %.0f ms de fichier, %.1f ms utiles, "
+                       "aigu %.2f fois celui d'un bruit blanc, %d attaque(s) a %s ms "
+                       "— %s",
+                       c->file, (double)c->length * 1000.0, utile[i],
+                       brillance[i], n, liste, c->quoi);
+
+            if (c->brillance_min > 0.0 && brillance[i] < c->brillance_min) {
+                tool_fatalf("« %s » n'est pas assez brillant (%.2f fois un bruit "
+                            "blanc, plancher %.2f)", c->file, brillance[i],
+                            c->brillance_min);
+            }
+            if (c->brillance_max > 0.0 && brillance[i] > c->brillance_max) {
+                tool_fatalf("« %s » est trop brillant (%.2f fois un bruit blanc, "
+                            "plafond %.2f)", c->file, brillance[i], c->brillance_max);
+            }
+            if (c->t95_min_ms > 0.0 && utile[i] < c->t95_min_ms) {
+                tool_fatalf("« %s » ne dure que %.0f ms utiles, plancher %.0f : "
+                            "il ne raconte plus rien", c->file, utile[i], c->t95_min_ms);
+            }
+            if (c->t95_max_ms > 0.0 && utile[i] > c->t95_max_ms) {
+                tool_fatalf("« %s » traine %.0f ms utiles, plafond %.0f", c->file,
+                            utile[i], c->t95_max_ms);
+            }
+            /* Un plafond a 0 veut dire « pas de borne », et une seule ligne
+             * s'en sert : voir la lame dans la table. */
+            if (c->attaques_max > 0 && (n < c->attaques_min || n > c->attaques_max)) {
+                tool_fatalf("« %s » compte %d attaque(s), attendu %d a %d", c->file,
+                            n, c->attaques_min, c->attaques_max);
+            }
+
+            /*
+             * LA GLISSADE, pour les deux fichiers dont c'est TOUTE la
+             * definition. Deux fenetres, prises dans la partie ou la hauteur
+             * bouge encore, et le rapport de l'une a l'autre.
+             *
+             * La coupure DESCEND : c'est ce qui fait entendre une panne plutot
+             * qu'une explosion. Le renvoi MONTE : c'est ce qui le separe de la
+             * coupure sans que personne n'ait a l'apprendre, puisque les deux
+             * arrivent au meme joueur pour le meme geste et disent le verdict
+             * contraire.
+             */
+            if (i == SG_CP_I_COUPURE || i == SG_CP_I_RENVOI) {
+                const bool monte = (i == SG_CP_I_RENVOI);
+                const double t0a = monte ? 0.010 : 0.004;
+                const double t1a = monte ? 0.060 : 0.050;
+                const double t0b = monte ? 0.140 : 0.100;
+                const double t1b = monte ? 0.200 : 0.160;
+                const double ga = sg_glisse(cp, frames, t0a, t1a);
+                const double gb = sg_glisse(cp, frames, t0b, t1b);
+                const double f = (ga > 1e-9) ? gb / ga : 0.0;
+
+                /* Le sens annonce est celui qu'on MESURE, pas celui qu'on
+                 * attend : la premiere version imprimait l'intention, et un
+                 * journal qui affichait « elle DESCEND » sous un facteur de 5,39
+                 * disait le contraire de son propre chiffre. */
+                tool_infof("couperet « %-22s » : glisse 1200/300 Hz %.3f -> %.3f "
+                           "(x%.2f), elle %s — attendu : elle %s",
+                           c->file, ga, gb, f,
+                           (f > 1.0) ? "MONTE" : "DESCEND",
+                           monte ? "MONTE" : "DESCEND");
+
+                /* Les facteurs exiges sont poses sous les valeurs mesurees, et
+                 * loin de 1 des deux cotes : un facteur voisin de 1 voudrait
+                 * dire que la hauteur ne bouge pas, donc que le fichier ne dit
+                 * plus ce pour quoi il existe. */
+                if (monte  && f < SG_CP_MONTEE_MIN) {
+                    tool_fatalf("« %s » ne monte pas (x%.2f, plancher x%.2f) : "
+                                "une surtension qui repart ne descend pas",
+                                c->file, f, SG_CP_MONTEE_MIN);
+                }
+                if (!monte && f > SG_CP_CHUTE_MAX) {
+                    tool_fatalf("« %s » ne descend pas (x%.2f, plafond x%.2f) : "
+                                "c'est une explosion, pas une panne",
+                                c->file, f, SG_CP_CHUTE_MAX);
+                }
+            }
+        }
+
+        /*
+         * LE TIC ET LA LAME NE DOIVENT PAS SE CONFONDRE, et c'est la
+         * verification la plus importante des cinq fichiers.
+         *
+         * Ce sont les DEUX SONS DU MEME EVENEMENT a deux instants : le compte a
+         * rebours, puis sa fin. S'ils se ressemblent, le joueur n'apprendra
+         * jamais lequel veut dire quoi — et il l'apprendra a un moment ou il
+         * regarde ailleurs, ce qui est justement la raison d'etre de ces deux
+         * fichiers. Une ressemblance ici ne coute pas du confort, elle coute la
+         * regle du mode.
+         *
+         * La mesure imposee est le RAPPORT DE BRILLANCE, mesuree par le meme
+         * `sg_brillance` que le coup de poing et les jetons — donc comparable a
+         * eux, ce qui est tout l'argument de son en-tete. Les deux sons sont aux
+         * deux bouts de l'echelle de la banque : le tic est le plus clair de
+         * tous, la lame la plus sombre.
+         *
+         * La duree utile est verifiee en second, et elle n'est pas redondante :
+         * la brillance dit OU est l'energie, `sg_t95` dit COMBIEN DE TEMPS elle
+         * dure. Deux sons peuvent partager un spectre et differer par la duree,
+         * et c'est meme le cas du tic et du blindage — dont la table s'occupe.
+         */
+        const double ecart_spectre = (brillance[SG_CP_I_LAME] > 1e-9)
+            ? brillance[SG_CP_I_TIC] / brillance[SG_CP_I_LAME] : 1e9;
+        const double ecart_duree = (utile[SG_CP_I_TIC] > 1e-9)
+            ? utile[SG_CP_I_LAME] / utile[SG_CP_I_TIC] : 1e9;
+
+        tool_infof("couperet : le tic est x%.0f plus brillant que la lame "
+                   "(%.2f contre %.2f) et x%.0f plus court (%.1f contre %.0f ms)",
+                   ecart_spectre, brillance[SG_CP_I_TIC], brillance[SG_CP_I_LAME],
+                   ecart_duree, utile[SG_CP_I_TIC], utile[SG_CP_I_LAME]);
+
+        if (ecart_spectre < SG_CP_ECART_SPECTRE) {
+            tool_fatalf("le tic et la lame se ressemblent : x%.0f de brillance "
+                        "seulement, plancher x%.0f. Le joueur ne saura pas "
+                        "lequel dit quoi", ecart_spectre, SG_CP_ECART_SPECTRE);
+        }
+        if (ecart_duree < SG_CP_ECART_DUREE) {
+            tool_fatalf("le tic et la lame durent presque autant : x%.1f, "
+                        "plancher x%.1f", ecart_duree, SG_CP_ECART_DUREE);
         }
     }
 
