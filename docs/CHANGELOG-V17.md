@@ -347,6 +347,92 @@ constats ne dit plus comment on y est arrivé.
 
 ### Ce qui demande une DÉCISION ou un ACHAT du propriétaire
 
+## Ce qui a été ajouté APRÈS cette recette
+
+Cette section est datée, et elle le dit : la recette ci-dessus a été faite, puis
+le travail a continué. Ce qui suit n'a donc pas traversé la même recette
+paragraphe par paragraphe — mais l'**archive a été reconstruite et revérifiée**
+en entier (déballée ailleurs, lancée depuis ailleurs, zéro message au démarrage,
+les huit jeux marquent), et chaque chiffre cité ici est mesuré.
+
+### La salle a une économie
+
+**JETON → PARTIE → TICKETS → LOT.** Le monnayeur complète gratuitement jusqu'à
+cinq jetons, une partie en coûte un, une partie finie rend des tickets, et la
+vitrine les échange contre quatre lots. Le barème est mesuré : 24 parties par
+jeu **et par régime**, les seize médianes rendant 9 ou 10 tickets.
+
+**Il n'existe pas de coefficient unique pour le mode difficile** — le rapport
+dur/normal va de 0,011 pour aplomb à 45,7 pour snake, dont le régime dur
+*inverse* la règle de score. Seize lignes, donc, pas huit.
+
+Le test a chiffré un défaut de conception avant qu'il ne sorte : le monnayeur
+changeait d'abord les tickets en jetons, ce qui faisait du sur-place exact —
+vingt parties médianes rendaient 57 tickets au lieu de 200, pour un premier lot
+à 60. **La vitrine était inatteignable pour toujours, en silence.**
+
+Aucune monnaie réelle, aucune voie d'achat, aucun coffre aléatoire. Le
+quitte-ou-double annonce le **risque** avant le gain, et ne rien faire vaut
+refus.
+
+### Les autres joueurs ont un corps
+
+Ils n'étaient qu'une étiquette flottante à 3,40 m du sol, sous un plafond à
+2,92. Ils marchent : maillage articulé, cap publié ou déduit du déplacement,
+**phase de marche tirée de la distance parcourue et non du temps** — c'est ce
+qui empêche les pieds de patiner. Seize corps coûtent **0,65 ms sur une image de
+24,3**, soit 41 µs par corps.
+
+Le retard d'interpolation vaut **250 ms**, une période de publication, soit
+35 cm à 1,4 m/s : c'est ce chiffre qui décide qu'un pair n'est pas un obstacle.
+
+### Quatre défauts visuels, mesurés
+
+| | |
+|---|---|
+| **Les murs** — 197 m², la plus grande surface verticale | la photo de 2020 avait une tache dominante de 12 à 14 mm là où un crépi en fait 1 à 3, et un écart-type de luminance de 32,3 sur 255, c'est-à-dire une **ombre peinte dans l'albédo**. Redessinée par `tools/murart` : spectre borné à quatre texels, écart-type 7,2, **réflectance identique sur les trois canaux à la quatrième décimale** |
+| **Les ombres** | la cible d'ombres par lumière est entière, donc non interpolable, donc lue au plus proche : chaque bord sortait en escalier de trois pixels **au palier que `--help` annonce « superbe en capture »**. Filtrées par indice apparié, **20,5 ms avant, 20,5 ms après** |
+| **Le dos des bornes** | les deux rangées de l'îlot sont dos à dos à 32 cm et on longe cet intervalle en entrant : 0,72 × 1,60 m de peinture sans un accident. Trappe de service, aération, serrures, embase de cordon |
+| **L'écran du bar** | un panneau nu flottant à **32,7 cm du parement**, dont le bord haut passait devant la tablette de l'enseigne. C'est un meuble : patte, caisson, cadre, dalle |
+
+### Le site montre le jeu
+
+Vidéos d'accueil et de chacun des huit jeux, dix-neuf photos de bornes, huit
+vues de salle — **64 fichiers, 7,66 Mio, 223 s de moteur**, tout produit par
+`tools/site-media.py` et rien d'importé. Le serveur annonçait `15.0.0` contre un
+projet en 17.0.0 : il **fabriquait des liens vers des paquets qui n'ont jamais
+existé**.
+
+Et il en fabriquait encore. Mesuré contre l'API GitHub : le dépôt répond 200,
+`releases/tags/v17.0.0` répond 404, la liste des releases est vide. **Les trois
+boutons « Télécharger » étaient trois 404.** Ils disent « Bientôt » tant que
+`NINETEEN_RELEASE_PUBLIEE` n'est pas posé, avec la raison — la signature.
+
+### Ce qui portait encore une marque
+
+`tetris_font.jpg` : contenu propre — c'est l'écran d'aide du jeu de 2020, le mot
+n'y figure pas — mais **la marque était dans le nom du fichier** et dans le nom
+de matériau que `salle.gltf` en tirait. Recopiée sous `ecran_aplomb_repos.jpg`,
+à l'octet près. Le piège était ailleurs : après le renommage,
+`materials/tetris_font_n.nstex` restait dans le paquet — la purge ne connaissait
+que les images *retirées*, pas les *renommées*.
+
+Le mode démonstration nommait aussi les jeux à la main : « TETRIS », « PONG ».
+Il lit le registre maintenant, qui ne peut contenir que ce que la salle porte.
+
+**Mesuré sur l'archive : plus aucun nom de fichier ne contient TETRIS, PAC-MAN,
+FLAPPY ni PONG, et `salle.gltf` n'en a aucune occurrence.**
+
+### Trois défauts de réglage, tous de la même famille
+
+Un **état de session confondu avec une préférence**. `--width=` était pris pour
+une absence d'option parce qu'on le comparait à son défaut ; corrigé, il
+**écrivait** ensuite dans `settings.cfg`, si bien qu'une seule capture lancée en
+1920×900 remplaçait la définition du joueur. Et `--autoplay`, qui n'a pas le
+droit de se classer, **ouvrait quand même un dossier sur le serveur**.
+
+---
+
 1. **Acheter les certificats** Developer ID (Apple) et Authenticode (Windows),
    et brancher la signature dans CPack — sans quoi les deux systèmes avertissent
    au premier lancement. **C'est le seul point qui bloque une vente au grand
@@ -354,7 +440,7 @@ constats ne dit plus comment on y est arrivé.
 2. **Trancher `ASTEROID`** : renommer, ou assumer le risque par écrit.
 3. **Décider du sort de `legacy/`** avant d'ouvrir le dépôt : le purger, ou
    garder le dépôt privé.
-4. **Décider quoi faire des 29 images sans origine** : les remplacer par du
+4. **Décider quoi faire des 27 images sans origine** : les remplacer par du
    dessin ou du CC0 comme les 21 autres, ou assumer le risque par écrit.
 5. **Décider si le relais chiffre** (TLS) avant d'ouvrir les duels au public.
 
