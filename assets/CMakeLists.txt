@@ -321,11 +321,11 @@ set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
 # couleur ne se lirait pas. Elle prend le blanc bleuté du vaisseau et des
 # étoiles de son propre écran. SNAKE est décalé vers le jaune-vert pour ne pas
 # se confondre, dans la même rangée, avec le vert de FLAPPY.
-set(MARQUEE_flappy   "FLAPPY"   "0.22,0.88,0.40")
+set(MARQUEE_envol    "ENVOL"    "0.22,0.88,0.40")
 set(MARQUEE_aplomb   "APLOMB"   "0.34,0.52,1.0")
 set(MARQUEE_asteroid "ASTEROID" "0.72,0.80,1.0")
 set(MARQUEE_snake    "SNAKE"    "0.66,0.94,0.26")
-foreach(jeu shooter demineur dedale piano flappy aplomb asteroid snake)
+foreach(jeu shooter demineur dedale piano envol aplomb asteroid snake)
     list(GET MARQUEE_${jeu} 0 _titre)
     list(GET MARQUEE_${jeu} 1 _teinte)
     set(_png "${GEN}/sideart/marquee_${jeu}.png")
@@ -399,9 +399,9 @@ endforeach()
 # ainsi que la salle distingue une paire — par la couleur, jamais par le mot.
 set(ECRAN_dedale        "DEDALE" "1.0,0.84,0.16")
 set(ECRAN_piano         "PIANO"  "0.72,0.45,1.0")
-set(ECRAN_flappy_facile "FLAPPY" "0.22,0.88,0.40")
-set(ECRAN_flappy_dur    "FLAPPY" "1.0,0.52,0.20")
-foreach(jeu dedale piano flappy_facile flappy_dur)
+set(ECRAN_envol_facile "ENVOL" "0.22,0.88,0.40")
+set(ECRAN_envol_dur    "ENVOL" "1.0,0.52,0.20")
+foreach(jeu dedale piano envol_facile envol_dur)
     list(GET ECRAN_${jeu} 0 _titre)
     list(GET ECRAN_${jeu} 1 _teinte)
     set(_png "${GEN}/sideart/ecran_${jeu}.png")
@@ -507,6 +507,61 @@ foreach(motif IN LISTS POSTER_MOTIFS)
                             "${GEN}/materials/affiche_${motif}${_map_orm}")
 endforeach()
 
+# ---------------------------------------------------------------------------
+# LE TAPIS DU HALL — l'endroit où personne n'avait regardé
+# ---------------------------------------------------------------------------
+#
+# `floor.jpg` est la plus grande surface de la salle. Ouverte et agrandie, elle
+# porte AU NÉON : un PAC-MAN (le disque et sa part de camembert), un de ses
+# FANTÔMES (le dôme à jupe ondulée), les CERISES de bonus du même jeu, et la
+# silhouette d'une MANETTE de console. Trois personnages de Bandai Namco et un
+# matériel de Sony, allumés sous les pieds du joueur dans chaque image de la
+# salle — pendant qu'on retirait les mêmes personnages du jeu de labyrinthe.
+#
+# Ce que `salle.room.json` documente du tapis reste ENTIÈREMENT vrai et est
+# tenu : un tissage sombre, des motifs fluo, l'émissif à 0,10 qui ne fait luire
+# que les motifs parce que `gbuffer.frag` multiplie l'émissif par l'albédo texel
+# par texel. C'est « l'objet le plus reconnaissable de la salle » et il le
+# reste ; ce sont les FIGURES qui changent — un manche, un jeton, une étoile, un
+# éclair, un dé, une note, une cible, une planète.
+#
+# `moquetteart` la dessine DÉJÀ DÉ-CUITE, et c'est pour cela qu'elle passe par
+# le chemin des affiches et non par la table `ALBEDO_*` : `floor_c.png` sort à
+# 0,1061 de réflectance linéaire moyenne, la planche dessinée à 0,1145 — 8 %
+# d'écart, mesurés des deux côtés. Il n'y a donc rien à corriger, et une
+# dé-cuisson de plus ne ferait que déplacer un chiffre déjà juste.
+set(_moquette "${GEN}/sideart/moquette_neon.png")
+add_custom_command(
+    OUTPUT  "${_moquette}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND moquetteart "${_moquette}"
+    DEPENDS moquetteart
+    COMMENT "Tapis du hall : moquette_neon.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/scene/textures/moquette_neon.png"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_moquette}"
+                               "${GEN}/scene/textures/moquette_neon.png"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${_moquette}"
+    VERBATIM
+)
+# Pas de `--strength` réduit ici, contrairement aux enseignes et aux affiches :
+# une moquette bouclée a un VRAI relief, et c'est la seule texture de ce lot
+# dont on veuille que le grain se voie en lumière rasante.
+add_custom_command(
+    OUTPUT  "${GEN}/materials/moquette_neon${_map_n}"
+            "${GEN}/materials/moquette_neon${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} "${_moquette}" "${GEN}/materials"
+    DEPENDS texgen "${_moquette}"
+    COMMENT "Materiau PBR : moquette_neon"
+    VERBATIM
+)
+list(APPEND MARQUEE_ART "${_moquette}" "${GEN}/scene/textures/moquette_neon.png"
+                        "${GEN}/materials/moquette_neon${_map_n}"
+                        "${GEN}/materials/moquette_neon${_map_orm}")
+
 # Les images de tiers, retirées de TOUTES les listes : compte, dé-cuisson et
 # copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une image n'est
 # plus employée, il n'empêche pas de la livrer.
@@ -519,7 +574,8 @@ endforeach()
 # 2020, et elles restent. Ouvertes une par une pour le vérifier.
 set(TEXTURES_TIERS poster_1.png poster_2.png poster_3.jpg poster_4.jpg
                    poster_5.jpg poster_6.jpg poster_7.jpg poster_8.jpg
-                   flappy_easy_font.jpg flappy_hard_font.jpg)
+                   flappy_easy_font.jpg flappy_hard_font.jpg
+                   floor.jpg)
 
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
 foreach(_p IN LISTS TEXTURES_TIERS)
@@ -549,12 +605,13 @@ list(LENGTH _cc0_textures  _n_cc0)
 # présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
 # c'est le comportement voulu — une texture générée que la salle n'emploie pas,
 # ou une texture employée qui n'est pas générée, sont deux pannes muettes.
-# +24 : les huit affiches murales dessinees s'ajoutent aux quatorze planches
-# deja generees, puis les DEUX ECRANS D'ATTRACT DE FLAPPY. Les dix images
-# qu'elles remplacent — huit affiches, deux captures — sortent du compte en meme
-# temps, retirees de `_room_textures` : le total ne bouge pas. Deux planches en
-# plus, deux fichiers en moins, la salle en emploie toujours autant.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 24")
+# +25 : les huit affiches murales dessinees s'ajoutent aux quatorze planches
+# deja generees, puis les DEUX ECRANS D'ATTRACT et le TAPIS DU HALL. Les onze
+# images qu'elles remplacent — huit affiches, deux captures, une moquette —
+# sortent du compte en meme temps, retirees de `_room_textures` : le total ne
+# bouge pas. Trois planches en plus, trois fichiers en moins, la salle en
+# emploie toujours autant.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 25")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -709,7 +766,11 @@ set(ROOM_TEXTURES ${LEGACY_TEXTURES} ${CC0_TEXTURES})
 set(ALBEDO_plafond            0.42)   # 0,002 — la plus grande surface de la salle
 set(ALBEDO_moquette           0.10)   # 0,029
 set(ALBEDO_moquette_noire     0.055)  # 0,002 — le plus sombre qu'une moquette puisse être
-set(ALBEDO_floor              0.11)   # 0,039
+# `floor` n'y est plus : le tapis du hall est desormais DESSINE par
+# `tools/moquetteart` et sort deja de-cuit, a 0,1145 contre les 0,1061 que la
+# de-cuisson produisait. La cible reste ecrite ici parce qu'elle documente ce
+# qu'une moquette d'arcade doit reflechir, et c'est elle que l'outil vise.
+#   ALBEDO_floor            0.11    # 0,039 avant de-cuisson
 set(ALBEDO_gris_foncer        0.09)   # 0,015 — le cadre des dix-neuf bornes
 set(ALBEDO_bois_noir          0.075)  # 0,016
 set(ALBEDO_bois_moins_noir    0.12)   # 0,011
@@ -894,19 +955,19 @@ add_custom_command(
 # emportait `medals.png`, `scoreBoard.png` et `high_score.png` — trois images
 # que le portage n'affiche même pas, dont une porte encore le filigrane d'une
 # banque d'images. Un glob livre ce qu'on n'a pas regardé.
-set(FLAPPY_ART "${SRC_LEGACY}/games/3_flappy_bird/Textures/chiffre.png")
-file(GLOB FLAPPY_SOUND "${SRC_LEGACY}/games/3_flappy_bird/Sounds/*.wav")
+set(ENVOL_ART "${SRC_LEGACY}/games/3_flappy_bird/Textures/chiffre.png")
+file(GLOB ENVOL_SOUND "${SRC_LEGACY}/games/3_flappy_bird/Sounds/*.wav")
 
 add_custom_command(
-    OUTPUT "${GEN}/games/flappy/.stamp"
+    OUTPUT "${GEN}/games/envol/.stamp"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/flappy"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLAPPY_ART} "${GEN}/games/flappy/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLAPPY_SOUND} "${GEN}/games/flappy/"
-    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/flappy/.stamp"
-    DEPENDS ${FLAPPY_ART} ${FLAPPY_SOUND}
-            "${GEN}/games/flappy/oiseau.png" "${GEN}/games/flappy/tuyaux.png"
-            "${GEN}/games/flappy/passerelle.png" "${GEN}/games/flappy/fonds.png"
-    COMMENT "Copie des sons de Flappy et de son atlas de chiffres"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ENVOL_ART} "${GEN}/games/envol/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ENVOL_SOUND} "${GEN}/games/envol/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/envol/.stamp"
+    DEPENDS ${ENVOL_ART} ${ENVOL_SOUND}
+            "${GEN}/games/envol/cerf.png" "${GEN}/games/envol/pylones.png"
+            "${GEN}/games/envol/passerelle.png" "${GEN}/games/envol/ciels.png"
+    COMMENT "Copie des sons d'Envol et de son atlas de chiffres"
     VERBATIM
 )
 
@@ -1034,7 +1095,7 @@ add_custom_command(
 # distribuee. Ce qui change ici, c'est ce que le build COPIE.
 set(SPRITE_ART "")
 foreach(spec "dedale:heros" "dedale:creatures"
-             "flappy:oiseau" "flappy:tuyaux" "flappy:passerelle" "flappy:fonds")
+             "envol:cerf" "envol:pylones" "envol:passerelle" "envol:ciels")
     string(REPLACE ":" ";" _p "${spec}")
     list(GET _p 0 _jeu)
     list(GET _p 1 _nom)
@@ -1126,18 +1187,20 @@ set(ASSETS_RETIRES
     "games/pacman"
     # L'ancien identifiant du jeu d'empilement.
     "games/tetris"
-    # Les planches de Flappy Bird, dont trois que le portage n'affichait meme
-    # pas et que seul le glob emportait.
-    "games/flappy/birds.png" "games/flappy/pipes.png"
-    "games/flappy/backgrounds.png" "games/flappy/sol.png"
-    "games/flappy/medals.png" "games/flappy/scoreBoard.png"
-    "games/flappy/high_score.png"
-    # Les deux captures d'attract qui montrent l'oiseau et les tuyaux.
+    # Les planches de Flappy Bird, et l'ancien identifiant du jeu qui les
+    # employait. Le repertoire entier part : le jeu s'appelle « envol », et rien
+    # de ce que `games/flappy/` contenait n'est encore lu.
+    "games/flappy"
+    # Les enseignes, ecrans et captures d'attract des TROIS jeux debaptises.
     "scene/textures/flappy_easy_font.jpg" "scene/textures/flappy_hard_font.jpg"
-    # Les enseignes et l'ecran des deux jeux debaptises.
-    "sideart/marquee_pacman.png" "sideart/marquee_tetris.png" "sideart/ecran_pacman.png"
+    "sideart/marquee_pacman.png" "sideart/marquee_tetris.png" "sideart/marquee_flappy.png"
+    "sideart/ecran_pacman.png"
+    # Le tapis du hall, et la carte de-cuite qu'il avait produite.
+    "scene/textures/floor.jpg" "materials/floor_c.png"
     "scene/textures/marquee_pacman.png" "scene/textures/marquee_tetris.png"
-    "scene/textures/ecran_pacman.png"
+    "scene/textures/marquee_flappy.png" "scene/textures/ecran_pacman.png"
+    "sideart/ecran_flappy_facile.png" "sideart/ecran_flappy_dur.png"
+    "scene/textures/ecran_flappy_facile.png" "scene/textures/ecran_flappy_dur.png"
 )
 # Les cartes DERIVEES. Une normale deduite d'une affiche sous droit reste une
 # oeuvre derivee de cette affiche : elle sort avec elle. Les quatre suffixes
@@ -1145,7 +1208,8 @@ set(ASSETS_RETIRES
 # les a produites — on efface les deux formes, pas seulement celle du jour.
 foreach(_base poster_1 poster_2 poster_3 poster_4 poster_5 poster_6 poster_7 poster_8
               flappy_easy_font flappy_hard_font
-              marquee_pacman marquee_tetris ecran_pacman)
+              marquee_pacman marquee_tetris marquee_flappy ecran_pacman
+              ecran_flappy_facile ecran_flappy_dur floor)
     list(APPEND ASSETS_RETIRES "materials/${_base}_n.nstex" "materials/${_base}_orm.nstex"
                                "materials/${_base}_n.png"   "materials/${_base}_orm.png")
 endforeach()
@@ -1174,7 +1238,7 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/scene/salle.lights.json"
         "${GEN}/scene/salle.scene.json"
         "${GEN}/sounds/.stamp"
-        "${GEN}/games/flappy/.stamp"
+        "${GEN}/games/envol/.stamp"
         "${GEN}/games/snake/.stamp"
         "${GEN}/games/demineur/.stamp"
         "${GEN}/games/aplomb/.stamp"

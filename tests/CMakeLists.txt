@@ -172,11 +172,11 @@ add_test(NAME audio COMMAND ns_test_audio "${CMAKE_BINARY_DIR}")
 # la hauteur de saut, un recyclage qui empile les tuyaux, un barème qui compte
 # deux fois. Aucun de ces défauts ne se voit sur une capture fixe, et tous
 # rendent le jeu sans intérêt.
-add_executable(ns_test_flappy test_flappy.c)
-target_link_libraries(ns_test_flappy PRIVATE nineteen::games)
-nineteen_set_warnings(ns_test_flappy)
-nineteen_apply_sanitizers(ns_test_flappy)
-add_test(NAME flappy COMMAND ns_test_flappy)
+add_executable(ns_test_envol test_envol.c)
+target_link_libraries(ns_test_envol PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_envol)
+nineteen_apply_sanitizers(ns_test_envol)
+add_test(NAME envol COMMAND ns_test_envol)
 
 # Snake. Le portage convertit tout un jeu écrit en IMAGES à 30 Hz vers un pas
 # fixe en secondes ; une conversion ratée donne un jeu qui a l'air juste et se

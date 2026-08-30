@@ -1,5 +1,5 @@
-/* flappy.c — voir flappy.h pour ce qui est repris de 2020 et ce qui ne l'est pas. */
-#include "flappy.h"
+/* envol.c — voir envol.h pour ce qui est repris de 2020 et ce qui ne l'est pas. */
+#include "envol.h"
 
 #include "ns_core.h"
 
@@ -12,7 +12,7 @@
 /* ==========================================================================
  * Les cotes de 2020
  * ==========================================================================
- * Chaque constante porte le nom qu'elle avait dans `flappy_bird.c`, et son
+ * Chaque constante porte le nom qu'elle avait dans `envol_bird.c`, et son
  * facteur d'échelle. `SCALE_TO_FIT` valait 4 : la planche est dessinée en basse
  * définition et affichée quatre fois plus grande, ce qui donne le gros pixel
  * d'arcade.
@@ -37,7 +37,7 @@
 #define GROUND_H (SPR_GROUND_H * SCALE)  /* 220 px */
 
 /* L'oiseau ne bouge pas en x : c'est le décor qui défile. WINDOW_L/2 de 2020. */
-#define BIRD_X (FLAPPY_W * 0.5f)
+#define BIRD_X (ENV_W * 0.5f)
 
 /* DISTANCE_BETWEEN_OBSTACLE = 49, l'écart VERTICAL du passage. Le nom est
  * trompeur dans l'original — il désigne bien la hauteur de la porte, pas un
@@ -86,7 +86,7 @@
  * fait monter de 123 px (800² / (2 x 2600)), et une chute qui traverse l'écart
  * de 196 px en 0,39 s depuis l'apogée. À 240 px/s et 400 px entre deux tuyaux,
  * il s'écoule 1,67 s d'un tuyau au suivant : il faut donc battre des ailes
- * quatre fois environ par tuyau, ce qui est le rythme de Flappy Bird.
+ * quatre fois environ par tuyau, ce qui est le rythme de Envol.
  */
 #define GRAVITY   2600.0f       /* px/s² */
 #define FLAP_IMPULSE (-800.0f)  /* px/s, vers le haut */
@@ -147,7 +147,7 @@ static bool load_black_keyed(ns_rhi *r, ns_texture *out, const char *logical)
     return ok;
 }
 
-bool flappy_art_load(ns_rhi *r, flappy_art *a)
+bool envol_art_load(ns_rhi *r, envol_art *a)
 {
     memset(a, 0, sizeof *a);
     /* `srgb = true` : ce sont des images destinées à être vues, pas des données.
@@ -157,7 +157,7 @@ bool flappy_art_load(ns_rhi *r, flappy_art *a)
      * QUATRE PLANCHES SUR CINQ SONT DESSINÉES, et pas reprises de 2020.
      *
      * `birds.png`, `pipes.png`, `backgrounds.png` et `sol.png` étaient les
-     * planches de Flappy Bird : l'oiseau, ses tuyaux, son ciel, son sol. Elles
+     * planches de Envol : l'oiseau, ses tuyaux, son ciel, son sol. Elles
      * ne sont plus copiées dans le paquet — voir le bloc « LES PLANCHES DES
      * MINI-JEUX » d'`assets/CMakeLists.txt` — et `tools/spriteart` les
      * remplace par un cerf-volant, des pylônes, un ciel à collines et une
@@ -173,24 +173,24 @@ bool flappy_art_load(ns_rhi *r, flappy_art *a)
      * ni personnage. Il n'y avait aucune raison de le redessiner.
      */
     const bool ok =
-        ns_texture_load(r, &a->background, "games/flappy/fonds.png",  true, false) &&
-        ns_texture_load(r, &a->birds,      "games/flappy/oiseau.png", true, false) &&
-        ns_texture_load(r, &a->pipes,      "games/flappy/tuyaux.png", true, false) &&
-        ns_texture_load(r, &a->ground,     "games/flappy/passerelle.png", true, false) &&
-        load_black_keyed(r, &a->digits,    "games/flappy/chiffre.png");
+        ns_texture_load(r, &a->ciel, "games/envol/ciels.png",  true, false) &&
+        ns_texture_load(r, &a->cerf,      "games/envol/cerf.png", true, false) &&
+        ns_texture_load(r, &a->pylones,      "games/envol/pylones.png", true, false) &&
+        ns_texture_load(r, &a->sol,     "games/envol/passerelle.png", true, false) &&
+        load_black_keyed(r, &a->chiffre,    "games/envol/chiffre.png");
     a->ready = ok;
-    if (!ok) NS_WARN("flappy : planches introuvables, le jeu tournera sans images");
+    if (!ok) NS_WARN("envol : planches introuvables, le jeu tournera sans images");
     return ok;
 }
 
-void flappy_art_free(ns_rhi *r, flappy_art *a)
+void envol_art_free(ns_rhi *r, envol_art *a)
 {
     if (!a->ready) return;
-    ns_texture_destroy(r, &a->background);
-    ns_texture_destroy(r, &a->birds);
-    ns_texture_destroy(r, &a->pipes);
-    ns_texture_destroy(r, &a->ground);
-    ns_texture_destroy(r, &a->digits);
+    ns_texture_destroy(r, &a->ciel);
+    ns_texture_destroy(r, &a->cerf);
+    ns_texture_destroy(r, &a->pylones);
+    ns_texture_destroy(r, &a->sol);
+    ns_texture_destroy(r, &a->chiffre);
     memset(a, 0, sizeof *a);
 }
 
@@ -204,7 +204,7 @@ static float gap_top(int slot)
     return -SLOT_SPAN + (SLOT_SPAN / (float)SLOT_COUNT) * (float)slot + PIPE_H;
 }
 
-static float gap_height(const flappy *g) { (void)g; return GAP_HEIGHT; }
+static float gap_height(const envol *g) { (void)g; return GAP_HEIGHT; }
 
 /*
  * L'ÉCART QUI SE RESSERRE — la courbe que ce jeu n'avait pas.
@@ -239,7 +239,7 @@ static float gap_height(const flappy *g) { (void)g; return GAP_HEIGHT; }
 #define RAMP_PIPES 35.0f     /* tuyaux pour aller d'un bout à l'autre de la rampe */
 #define SPACING_FLOOR (76.0f * SCALE)   /* 304 px : le plancher de la borne dure */
 
-static float pipe_spacing(const flappy *g)
+static float pipe_spacing(const envol *g)
 {
     const float from = g->hard ? SPACING_HARD : SPACING_EASY;
     const float to   = g->hard ? SPACING_FLOOR : SPACING_HARD;
@@ -248,27 +248,27 @@ static float pipe_spacing(const flappy *g)
     return from + (to - from) * t;
 }
 
-void flappy_reset(flappy *g, uint64_t seed, bool hard)
+void envol_reset(envol *g, uint64_t seed, bool hard)
 {
     memset(g, 0, sizeof *g);
-    g->phase = FLAPPY_READY;
+    g->phase = ENV_READY;
     g->hard = hard;
-    g->bird_y = FLAPPY_H * 0.42f;
+    g->bird_y = ENV_H * 0.42f;
     ns_rng_seed(&g->rng, seed, 0x9E3779B97F4A7C15ull);
 
     /* Les huit tuyaux du tampon, alignés à partir du bord droit. Le premier est
      * volontairement loin : on doit avoir le temps de comprendre qu'on joue. */
-    for (int i = 0; i < FLAPPY_PIPES; ++i) {
-        g->pipes[i].position = FLAPPY_W + 200.0f + (float)i * pipe_spacing(g);
+    for (int i = 0; i < ENV_PIPES; ++i) {
+        g->pipes[i].position = ENV_W + 200.0f + (float)i * pipe_spacing(g);
         g->pipes[i].slot = (int)ns_rng_below(&g->rng, SLOT_COUNT);
         g->pipes[i].scored = false;
     }
 }
 
-void flappy_flap(flappy *g)
+void envol_flap(envol *g)
 {
-    if (g->phase == FLAPPY_DEAD) return;
-    if (g->phase == FLAPPY_READY) g->phase = FLAPPY_PLAYING;
+    if (g->phase == ENV_DEAD) return;
+    if (g->phase == ENV_READY) g->phase = ENV_PLAYING;
     g->bird_vy = FLAP_IMPULSE;
     g->flapped = true;
 }
@@ -278,18 +278,18 @@ void flappy_flap(flappy *g)
  * ajoutait quatre tests de distance aux coins pour les cas rasants ; un
  * rectangle contre rectangle les couvre tous, et sans les faux positifs que
  * produisaient ces cercles de rayon `PERSO.h/2` centrés sur les coins. */
-static bool hits_anything(const flappy *g)
+static bool hits_anything(const envol *g)
 {
     const float bx0 = BIRD_X - BIRD_W * 0.5f, bx1 = BIRD_X + BIRD_W * 0.5f;
     const float by0 = g->bird_y - BIRD_H * 0.5f, by1 = g->bird_y + BIRD_H * 0.5f;
 
-    if (by1 > FLAPPY_H - GROUND_H) return true;    /* le sol */
+    if (by1 > ENV_H - GROUND_H) return true;    /* le sol */
     if (by0 < 0.0f) return true;                   /* le plafond : 2020 laissait
                                                     * sortir par le haut, ce qui
                                                     * permettait de survoler tout
                                                     * le niveau. */
 
-    for (int i = 0; i < FLAPPY_PIPES; ++i) {
+    for (int i = 0; i < ENV_PIPES; ++i) {
         const float px0 = g->pipes[i].position, px1 = px0 + PIPE_W;
         if (bx1 <= px0 || bx0 >= px1) continue;
 
@@ -300,37 +300,37 @@ static bool hits_anything(const flappy *g)
     return false;
 }
 
-void flappy_tick(flappy *g, float dt)
+void envol_tick(envol *g, float dt)
 {
     /*
      * `flapped` n'est PAS remis à zéro ici, et c'est une correction.
      *
-     * Il l'était, en tête de `tick` — or `flappy_flap` est appelée depuis le
+     * Il l'était, en tête de `tick` — or `envol_flap` est appelée depuis le
      * gestionnaire d'événements, donc AVANT la boucle de pas fixe de l'image.
      * Le drapeau était donc effacé avant que quiconque puisse le lire : le son
      * du battement n'a jamais été joué, l'index droit n'a jamais tapé sur le
      * bouton, et l'événement « flap » n'est jamais entré dans le journal de
-     * partie. C'est `flappy_events` qui consomme désormais les trois drapeaux,
+     * partie. C'est `envol_events` qui consomme désormais les trois drapeaux,
      * ce qui les rend indépendants du moment où ils ont été levés.
      */
     g->scored_now = g->died_now = false;
     g->wing_time += dt;
 
-    if (g->phase == FLAPPY_READY) {
+    if (g->phase == ENV_READY) {
         /* Sursis : l'oiseau flotte, rien ne défile. C'est l'écran « appuyez pour
          * jouer » de l'original, sans le texte clignotant. */
-        g->bird_y = FLAPPY_H * 0.42f + sinf(g->wing_time * 4.0f) * 14.0f;
+        g->bird_y = ENV_H * 0.42f + sinf(g->wing_time * 4.0f) * 14.0f;
         g->bird_angle = 0.0f;
         return;
     }
 
-    if (g->phase == FLAPPY_DEAD) {
+    if (g->phase == ENV_DEAD) {
         /* On tombe encore, mais plus rien ne défile : la chute finale fait partie
          * du jeu, c'est elle qui laisse le temps de voir où l'on s'est raté. */
         g->dead_time += dt;
         g->bird_vy = ns_minf(g->bird_vy + GRAVITY * dt, FALL_MAX);
         g->bird_y += g->bird_vy * dt;
-        const float floor_y = FLAPPY_H - GROUND_H - BIRD_H * 0.5f;
+        const float floor_y = ENV_H - GROUND_H - BIRD_H * 0.5f;
         if (g->bird_y > floor_y) { g->bird_y = floor_y; g->bird_vy = 0.0f; }
         g->bird_angle = ns_minf(g->bird_angle + 420.0f * dt, ANGLE_DOWN);
         return;
@@ -351,8 +351,8 @@ void flappy_tick(flappy *g, float dt)
     const float dx = SCROLL_SPEED * dt;
     g->ground_scroll += dx;
 
-    for (int i = 0; i < FLAPPY_PIPES; ++i) {
-        flappy_pipe *p = &g->pipes[i];
+    for (int i = 0; i < ENV_PIPES; ++i) {
+        envol_pipe *p = &g->pipes[i];
         p->position -= dx;
 
         if (!p->scored && p->position + PIPE_W < BIRD_X - BIRD_W * 0.5f) {
@@ -367,7 +367,7 @@ void flappy_tick(flappy *g, float dt)
          * tout le tableau à chaque fois. */
         if (p->position + PIPE_W < -PIPE_W) {
             float furthest = p->position;
-            for (int k = 0; k < FLAPPY_PIPES; ++k) {
+            for (int k = 0; k < ENV_PIPES; ++k) {
                 if (g->pipes[k].position > furthest) furthest = g->pipes[k].position;
             }
             p->position = furthest + pipe_spacing(g);
@@ -377,7 +377,7 @@ void flappy_tick(flappy *g, float dt)
     }
 
     if (hits_anything(g)) {
-        g->phase = FLAPPY_DEAD;
+        g->phase = ENV_DEAD;
         g->died_now = true;
         g->bird_vy = ns_maxf(g->bird_vy, 0.0f);
     }
@@ -387,10 +387,10 @@ void flappy_tick(flappy *g, float dt)
  * Joueur automatique
  * ========================================================================== */
 
-bool flappy_autopilot(flappy *g)
+bool envol_autopilot(envol *g)
 {
-    if (g->phase == FLAPPY_DEAD) return false;
-    if (g->phase == FLAPPY_READY) { flappy_flap(g); return true; }
+    if (g->phase == ENV_DEAD) return false;
+    if (g->phase == ENV_READY) { envol_flap(g); return true; }
 
     /*
      * Le prochain tuyau — mais seulement s'il est PROCHE.
@@ -400,9 +400,9 @@ bool flappy_autopilot(flappy *g)
      * mourait avant d'avoir vu un seul tuyau. On ne se met en ligne qu'à partir
      * du moment où il y a quelque chose à viser.
      */
-    const flappy_pipe *next = NULL;
+    const envol_pipe *next = NULL;
     float best = 1e9f;
-    for (int i = 0; i < FLAPPY_PIPES; ++i) {
+    for (int i = 0; i < ENV_PIPES; ++i) {
         const float p = g->pipes[i].position;
         if (p + PIPE_W < BIRD_X - BIRD_W * 0.5f) continue;   /* déjà franchi */
         if (p > BIRD_X + 620.0f) continue;                   /* trop loin pour viser */
@@ -419,7 +419,7 @@ bool flappy_autopilot(flappy *g)
      * test ne le dise. On bat donc 40 px sous le bas du passage moins la
      * compensation, et l'apogée tombe juste sous le haut.
      */
-    float target = FLAPPY_H * 0.55f;
+    float target = ENV_H * 0.55f;
     if (next) target = gap_top(next->slot) + gap_height(g) - 40.0f;
 
     /*
@@ -441,7 +441,7 @@ bool flappy_autopilot(flappy *g)
      * finissait dans le plafond. `target` étant déjà le point de battement, il
      * n'y a rien à anticiper.
      */
-    if (g->bird_y > target) { flappy_flap(g); return true; }
+    if (g->bird_y > target) { envol_flap(g); return true; }
     return false;
 }
 
@@ -471,7 +471,7 @@ static void blit(const blit_ctx *c, const ns_texture *tex,
                    rgba);
 }
 
-static void draw_number(const blit_ctx *c, const flappy_art *a,
+static void draw_number(const blit_ctx *c, const envol_art *a,
                         uint32_t value, float cx, float y, float scale)
 {
     char buf[16];
@@ -481,21 +481,21 @@ static void draw_number(const blit_ctx *c, const flappy_art *a,
     float x = cx - (float)n * dw * 0.5f;
     for (size_t i = 0; i < n; ++i) {
         const int d = buf[i] - '0';
-        blit(c, &a->digits, x, y, dw, dh,
+        blit(c, &a->chiffre, x, y, dw, dh,
              (float)d * SPR_DIGIT_W, 0.0f, SPR_DIGIT_W, SPR_DIGIT_H,
              SPR_DIGIT_W * 10.0f, SPR_DIGIT_H, NULL);
         x += dw;
     }
 }
 
-void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
+void envol_draw(ns_sprite *s, const envol *g, const envol_art *a,
                  float logical_w, float logical_h)
 {
     blit_ctx c;
     c.s = s;
-    c.scale = ns_minf(logical_w / FLAPPY_W, logical_h / FLAPPY_H);
-    c.ox = (logical_w - FLAPPY_W * c.scale) * 0.5f;
-    c.oy = (logical_h - FLAPPY_H * c.scale) * 0.5f;
+    c.scale = ns_minf(logical_w / ENV_W, logical_h / ENV_H);
+    c.ox = (logical_w - ENV_W * c.scale) * 0.5f;
+    c.oy = (logical_h - ENV_H * c.scale) * 0.5f;
 
     /* Bandes noires : le terrain est en 16/9 et la cible ne l'est pas forcément.
      * Les peindre plutôt que de laisser voir ce qu'il y avait dessous. */
@@ -505,10 +505,10 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
     if (!a->ready) return;
 
     /* --- fond : la planche fait 288 de large pour deux ciels de 144 ------ */
-    const float bg_w = SPR_BG_W * SCALE * (FLAPPY_H / (SPR_BG_H * SCALE));
-    const float bg_h = FLAPPY_H;
-    for (float x = 0.0f; x < FLAPPY_W; x += bg_w) {
-        blit(&c, &a->background, x, 0.0f, bg_w, bg_h,
+    const float bg_w = SPR_BG_W * SCALE * (ENV_H / (SPR_BG_H * SCALE));
+    const float bg_h = ENV_H;
+    for (float x = 0.0f; x < ENV_W; x += bg_w) {
+        blit(&c, &a->ciel, x, 0.0f, bg_w, bg_h,
              0.0f, 0.0f, SPR_BG_W, SPR_BG_H, SPR_BG_W * 2.0f, SPR_BG_H, NULL);
     }
 
@@ -517,9 +517,9 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
      * `hard` prend l'orange, comme la borne du même nom.
      */
     const float pipe_u = g->hard ? 0.0f : 52.0f;
-    for (int i = 0; i < FLAPPY_PIPES; ++i) {
+    for (int i = 0; i < ENV_PIPES; ++i) {
         const float px = g->pipes[i].position;
-        if (px > FLAPPY_W || px + PIPE_W < 0.0f) continue;
+        if (px > ENV_W || px + PIPE_W < 0.0f) continue;
 
         const float top = gap_top(g->pipes[i].slot);
         const float bottom = top + gap_height(g);
@@ -530,10 +530,10 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
          * même raison : sa première ligne est celle qui borde l'ouverture. Le
          * commentaire d'origine disait « en bas » ; la planche de 2020 le
          * contredisait déjà, et celle de `spriteart` suit la planche. */
-        blit(&c, &a->pipes, px, top - PIPE_H, PIPE_W, PIPE_H,
+        blit(&c, &a->pylones, px, top - PIPE_H, PIPE_W, PIPE_H,
              pipe_u, SPR_PIPE_H, SPR_PIPE_W, -SPR_PIPE_H,
              SPR_PIPE_W * 4.0f, SPR_PIPE_H, NULL);
-        blit(&c, &a->pipes, px, bottom, PIPE_W, PIPE_H,
+        blit(&c, &a->pylones, px, bottom, PIPE_W, PIPE_H,
              pipe_u, 0.0f, SPR_PIPE_W, SPR_PIPE_H,
              SPR_PIPE_W * 4.0f, SPR_PIPE_H, NULL);
     }
@@ -541,8 +541,8 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
     /* --- sol : il défile, donc il se répète ------------------------------ */
     const float gw = SPR_GROUND_W * SCALE;
     const float goff = -fmodf(g->ground_scroll, gw);
-    for (float x = goff; x < FLAPPY_W; x += gw) {
-        blit(&c, &a->ground, x, FLAPPY_H - GROUND_H, gw, GROUND_H,
+    for (float x = goff; x < ENV_W; x += gw) {
+        blit(&c, &a->sol, x, ENV_H - GROUND_H, gw, GROUND_H,
              0.0f, 0.0f, SPR_GROUND_W, SPR_GROUND_H,
              SPR_GROUND_W, SPR_GROUND_H, NULL);
     }
@@ -553,42 +553,42 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
      * compteur d'animation après un saut.
      */
     const int frame = (int)(g->wing_time * (g->bird_vy < 0.0f ? 18.0f : 9.0f)) % 3;
-    blit(&c, &a->birds,
+    blit(&c, &a->cerf,
          BIRD_X - BIRD_W * 0.5f, g->bird_y - BIRD_H * 0.5f, BIRD_W, BIRD_H,
          (float)frame * SPR_BIRD_W, 0.0f, SPR_BIRD_W, SPR_BIRD_H,
          SPR_BIRD_W * 3.0f, SPR_BIRD_H * 3.0f, NULL);
 
     /* --- score ---------------------------------------------------------- */
-    draw_number(&c, a, g->score, FLAPPY_W * 0.5f, 90.0f, SCALE * 1.6f);
+    draw_number(&c, a, g->score, ENV_W * 0.5f, 90.0f, SCALE * 1.6f);
 
     static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     static const float amber[4] = { 1.0f, 0.82f, 0.30f, 1.0f };
 
-    if (g->phase == FLAPPY_READY) {
+    if (g->phase == ENV_READY) {
         const float sc = c.scale * 7.0f;
         const char *msg = "APPUYEZ POUR VOLER";
         const float w = ns_sprite_text_width(msg, sc);
-        ns_sprite_text(s, c.ox + (FLAPPY_W * c.scale - w) * 0.5f,
-                       c.oy + FLAPPY_H * c.scale * 0.62f, sc, white, msg);
-    } else if (g->phase == FLAPPY_DEAD) {
+        ns_sprite_text(s, c.ox + (ENV_W * c.scale - w) * 0.5f,
+                       c.oy + ENV_H * c.scale * 0.62f, sc, white, msg);
+    } else if (g->phase == ENV_DEAD) {
         const float sc = c.scale * 9.0f;
         const char *msg = "PERDU";
         float w = ns_sprite_text_width(msg, sc);
-        ns_sprite_text(s, c.ox + (FLAPPY_W * c.scale - w) * 0.5f,
-                       c.oy + FLAPPY_H * c.scale * 0.34f, sc, amber, msg);
+        ns_sprite_text(s, c.ox + (ENV_W * c.scale - w) * 0.5f,
+                       c.oy + ENV_H * c.scale * 0.34f, sc, amber, msg);
 
         char best[48];
         SDL_snprintf(best, sizeof best, "MEILLEUR %u", g->best);
         const float sc2 = c.scale * 5.0f;
         w = ns_sprite_text_width(best, sc2);
-        ns_sprite_text(s, c.ox + (FLAPPY_W * c.scale - w) * 0.5f,
-                       c.oy + FLAPPY_H * c.scale * 0.46f, sc2, white, best);
+        ns_sprite_text(s, c.ox + (ENV_W * c.scale - w) * 0.5f,
+                       c.oy + ENV_H * c.scale * 0.46f, sc2, white, best);
 
         if (g->dead_time > 0.8f) {
             const char *again = "ESPACE POUR REJOUER";
             w = ns_sprite_text_width(again, sc2);
-            ns_sprite_text(s, c.ox + (FLAPPY_W * c.scale - w) * 0.5f,
-                           c.oy + FLAPPY_H * c.scale * 0.56f, sc2, white, again);
+            ns_sprite_text(s, c.ox + (ENV_W * c.scale - w) * 0.5f,
+                           c.oy + ENV_H * c.scale * 0.56f, sc2, white, again);
         }
     }
 }
@@ -596,54 +596,54 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
 /* ==========================================================================
  * L'adaptation à `ns_game_api`
  * ==========================================================================
- * Des enveloppes, pas une réécriture. Flappy garde son API typée — c'est elle
- * que `tests/test_flappy.c` interroge, et un test qui passe par un pointeur de
+ * Des enveloppes, pas une réécriture. Envol garde son API typée — c'est elle
+ * que `tests/test_envol.c` interroge, et un test qui passe par un pointeur de
  * fonction ne vérifie plus les types.
  * ========================================================================== */
 
-static void fl_reset(void *g, uint64_t seed, bool hard) { flappy_reset((flappy *)g, seed, hard); }
+static void en_reset(void *g, uint64_t seed, bool hard) { envol_reset((envol *)g, seed, hard); }
 
-static void fl_press(void *g, ns_game_button b)
+static void en_press(void *g, ns_game_button b)
 {
     /* Toutes les touches battent des ailes. Sur une borne il n'y a qu'un bouton
      * qui compte, et chercher lequel n'apprend rien à personne. */
     (void)b;
-    flappy_flap((flappy *)g);
+    envol_flap((envol *)g);
 }
 
-static void fl_tick(void *g, float dt) { flappy_tick((flappy *)g, dt); }
+static void en_tick(void *g, float dt) { envol_tick((envol *)g, dt); }
 
-static void fl_draw(ns_sprite *s, const void *g, const void *a, float w, float h)
+static void en_draw(ns_sprite *s, const void *g, const void *a, float w, float h)
 {
-    flappy_draw(s, (const flappy *)g, (const flappy_art *)a, w, h);
+    envol_draw(s, (const envol *)g, (const envol_art *)a, w, h);
 }
 
-static bool fl_art_load(ns_rhi *r, void *a) { return flappy_art_load(r, (flappy_art *)a); }
-static void fl_art_free(ns_rhi *r, void *a) { flappy_art_free(r, (flappy_art *)a); }
-static bool fl_autopilot(void *g)           { return flappy_autopilot((flappy *)g); }
+static bool en_art_load(ns_rhi *r, void *a) { return envol_art_load(r, (envol_art *)a); }
+static void en_art_free(ns_rhi *r, void *a) { envol_art_free(r, (envol_art *)a); }
+static bool en_autopilot(void *g)           { return envol_autopilot((envol *)g); }
 
-static uint32_t fl_score(const void *g)    { return ((const flappy *)g)->score; }
-static uint32_t fl_best(const void *g)     { return ((const flappy *)g)->best; }
-static void     fl_set_best(void *g, uint32_t b) { ((flappy *)g)->best = b; }
+static uint32_t en_score(const void *g)    { return ((const envol *)g)->score; }
+static uint32_t en_best(const void *g)     { return ((const envol *)g)->best; }
+static void     en_set_best(void *g, uint32_t b) { ((envol *)g)->best = b; }
 
-static bool fl_dead(const void *g, float *dead_time)
+static bool en_dead(const void *g, float *dead_time)
 {
-    const flappy *f = (const flappy *)g;
+    const envol *f = (const envol *)g;
     if (dead_time) *dead_time = f->dead_time;
-    return f->phase == FLAPPY_DEAD;
+    return f->phase == ENV_DEAD;
 }
 
 /*
- * Le vocabulaire du serveur pour Flappy : un tuyau franchi vaut un point
+ * Le vocabulaire du serveur pour Envol : un tuyau franchi vaut un point
  * (« pipe »), le battement d'aile ne vaut rien mais il est limité en fréquence,
- * la mort clôt la partie. Ce sont les noms de `rulesTable["flappy"]`, pas des
+ * la mort clôt la partie. Ce sont les noms de `rulesTable["envol"]`, pas des
  * noms choisis ici.
  */
-static const char *const fl_kinds[] = { "pipe", "flap", "death", NULL };
+static const char *const en_kinds[] = { "pipe", "flap", "death", NULL };
 
-static void fl_events(void *g, ns_game_events *out)
+static void en_events(void *g, ns_game_events *out)
 {
-    flappy *f = (flappy *)g;
+    envol *f = (envol *)g;
     out->blip        = f->flapped;
     out->blip_kind   = "flap";
     out->score       = f->scored_now;
@@ -656,16 +656,16 @@ static void fl_events(void *g, ns_game_events *out)
     f->flapped = f->scored_now = f->died_now = false;
 }
 
-const ns_game_api g_flappy_api = {
-    .id = "flappy", .title = "FLAPPY BIRD", .label = "FLAPPY",
-    .state_size = sizeof(flappy), .art_size = sizeof(flappy_art),
-    .sound_blip = "games/flappy/flap.wav",
-    .sound_score = "games/flappy/score.wav",
-    .sound_die = "games/flappy/hurt.wav",
-    .art_load = fl_art_load, .art_free = fl_art_free,
-    .reset = fl_reset, .press = fl_press, .hold = NULL,
-    .tick = fl_tick, .draw = fl_draw, .autopilot = fl_autopilot,
-    .event_kinds = fl_kinds,
-    .score = fl_score, .best = fl_best, .set_best = fl_set_best,
-    .dead = fl_dead, .events = fl_events,
+const ns_game_api g_envol_api = {
+    .id = "envol", .title = "ENVOL", .label = "ENVOL",
+    .state_size = sizeof(envol), .art_size = sizeof(envol_art),
+    .sound_blip = "games/envol/flap.wav",
+    .sound_score = "games/envol/score.wav",
+    .sound_die = "games/envol/hurt.wav",
+    .art_load = en_art_load, .art_free = en_art_free,
+    .reset = en_reset, .press = en_press, .hold = NULL,
+    .tick = en_tick, .draw = en_draw, .autopilot = en_autopilot,
+    .event_kinds = en_kinds,
+    .score = en_score, .best = en_best, .set_best = en_set_best,
+    .dead = en_dead, .events = en_events,
 };

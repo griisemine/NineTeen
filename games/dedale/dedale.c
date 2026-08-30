@@ -131,6 +131,35 @@ static float wrap_x(float x)
  * Cycle de vie
  * ========================================================================== */
 
+/*
+ * LA GRAINE ENTRE ICI, et elle n'entrait nulle part avant.
+ *
+ * Mesuré par la recette de jeu : cinq graines, cinq parties IDENTIQUES au point
+ * près, et la même mort à 39,64 s. Le diagnostic tient en une ligne : la seule
+ * consommation de `g->rng` était le choix d'intersection de l'hélice n° 3, la
+ * seule des quatre à ne pas avoir de cible — et elle ne sort de l'enclos qu'à
+ * douze secondes, quand les trois autres, elles, sont parfaitement
+ * déterministes. Le joueur automatique l'étant aussi, la poursuite se rejouait
+ * à la case près.
+ *
+ * Ce qui est tiré maintenant, et pourquoi CES trois-là :
+ *
+ *   - le comportement affecté à chaque PLACE de l'enclos. Les quatre
+ *     comportements restent les quatre ; c'est l'ordre dans lequel ils sortent
+ *     qui change, donc la géométrie de la poursuite dès la dixième seconde ;
+ *   - la direction de départ de chacun, qui décide de quel côté de l'enclos il
+ *     s'échappe ;
+ *   - un décalage de sortie de zéro à une seconde et demie, qui suffit à ce que
+ *     deux hélices ne se croisent pas au même carrefour d'une partie à l'autre.
+ *
+ * Ce qui n'est PAS tiré : les vitesses, le barème, le labyrinthe. Une partie
+ * doit rester la MÊME partie — c'est la rencontre qui varie, pas les règles.
+ *
+ * Rien de tout cela ne casse le rejeu : `ns_rng` est semé par `dedale_reset`
+ * avec la graine de la partie, et deux exécutions de la même graine tirent la
+ * même suite. `tests/test_dedale.c` le vérifie dans les deux sens — même graine,
+ * même partie ; graines différentes, parties différentes.
+ */
 static void place_rotors(dedale *g)
 {
     /* Les quatre emplacements de l'enclos : les trois cases intérieures et la
@@ -138,17 +167,46 @@ static void place_rotors(dedale *g)
      * mur — il y restait bloqué toute la partie, et rien ne le signalait. */
     static const int SPOT_DX[DD_ROTORS] = { -1, 0, +1, 0 };
     static const int SPOT_DY[DD_ROTORS] = { 0, 0, 0, -1 };
+
+    /* Une permutation des quatre comportements, tirée par mélange de Fisher et
+     * Yates. Un simple « kind = rng % 4 » donnerait des doublons, donc parfois
+     * deux poursuivants directs et aucune embuscade : ce ne serait plus le même
+     * jeu d'une partie à l'autre, alors qu'on veut seulement un autre ordre. */
+    int kinds[DD_ROTORS] = { 0, 1, 2, 3 };
+    for (int i = DD_ROTORS - 1; i > 0; --i) {
+        const int j = (int)ns_rng_below(&g->rng, (uint32_t)(i + 1));
+        const int t = kinds[i]; kinds[i] = kinds[j]; kinds[j] = t;
+    }
+
     for (int i = 0; i < DD_ROTORS; ++i) {
         centre_of(DD_HOME_COL + SPOT_DX[i], DD_HOME_ROW + SPOT_DY[i],
                   &g->rotor[i].x, &g->rotor[i].y);
-        g->rotor[i].dir = (i & 1) ? DD_LEFT : DD_UP;
-        g->rotor[i].kind = i;
+        g->rotor[i].dir = (ns_rng_below(&g->rng, 2u) != 0u) ? DD_LEFT : DD_UP;
+        g->rotor[i].kind = kinds[i];
         g->rotor[i].frightened = 0.0f;
         g->rotor[i].eaten = false;
         /* Ils sortent l'un après l'autre : quatre hélices lâchées ensemble sur
-         * un joueur qui démarre, c'est une mort et pas une partie. */
-        g->rotor[i].respawn = (float)i * 4.0f;
+         * un joueur qui démarre, c'est une mort et pas une partie. Le décalage
+         * de base reste quatre secondes ; le tirage n'ajoute qu'un retard, il
+         * n'avance jamais une sortie. */
+        g->rotor[i].respawn = (float)i * 4.0f
+                            + (float)ns_rng_below(&g->rng, 16u) * 0.1f;
     }
+}
+
+/* Le joueur retourne à son 'P', les hélices à l'enclos : c'est le début d'une
+ * MANCHE, pas d'une partie. Le labyrinthe entamé, le score et le niveau
+ * restent — sinon perdre une vie reviendrait à tout perdre. */
+static void restart_round(dedale *g)
+{
+    for (int r = 0; r < DD_ROWS; ++r)
+        for (int c = 0; c < DD_COLS; ++c)
+            if (DD_MAZE[r][c] == 'P') centre_of(c, r, &g->x, &g->y);
+    g->dir = g->want = DD_LEFT;
+    g->chain = 0;
+    g->scattering = true;
+    g->scatter_timer = DD_SCATTER_ON;
+    place_rotors(g);
 }
 
 static void load_maze(dedale *g)
@@ -174,18 +232,12 @@ void dedale_reset(dedale *g, uint64_t seed, bool hard)
     g->hard = hard;
     g->phase = DD_READY;
     g->level = 1;
+    g->lives = DD_LIVES;
 
     load_maze(g);
     /* Le 'P' du plan donne le départ, pour que la position soit LUE et non
      * recopiée à côté du labyrinthe qu'elle doit suivre. */
-    for (int r = 0; r < DD_ROWS; ++r)
-        for (int c = 0; c < DD_COLS; ++c)
-            if (DD_MAZE[r][c] == 'P') centre_of(c, r, &g->x, &g->y);
-
-    g->dir = g->want = DD_LEFT;
-    g->scattering = true;
-    g->scatter_timer = DD_SCATTER_ON;
-    place_rotors(g);
+    restart_round(g);
 }
 
 static void next_level(dedale *g)
@@ -194,16 +246,12 @@ static void next_level(dedale *g)
     g->score += PTS_LEVEL;
     g->pend_level++;
     load_maze(g);
-    for (int r = 0; r < DD_ROWS; ++r)
-        for (int c = 0; c < DD_COLS; ++c)
-            if (DD_MAZE[r][c] == 'P') centre_of(c, r, &g->x, &g->y);
-    g->dir = g->want = DD_LEFT;
-    place_rotors(g);
+    restart_round(g);
 }
 
 void dedale_press(dedale *g, ns_game_button b)
 {
-    if (g->phase == DD_DEAD) return;
+    if (g->phase == DD_DEAD || g->phase == DD_CAUGHT) return;
     if (g->phase == DD_READY) g->phase = DD_PLAYING;
     switch (b) {
         case NS_GAME_RIGHT: g->want = DD_RIGHT; g->turned = true; break;
@@ -382,6 +430,19 @@ void dedale_tick(dedale *g, float dt)
     g->time += dt;
     if (g->phase == DD_READY) return;
 
+    /* La pause après une prise. Le temps de jeu continue de courir — c'est lui
+     * qui anime le clignotement — mais rien ne se déplace : le joueur regarde
+     * ce qui vient de se passer, puis la manche repart. */
+    if (g->phase == DD_CAUGHT) {
+        g->caught_time -= dt;
+        if (g->caught_time <= 0.0f) {
+            g->caught_time = 0.0f;
+            restart_round(g);
+            g->phase = DD_PLAYING;
+        }
+        return;
+    }
+
     g->eclat += dt * 9.0f;
 
     /* L'alternance dispersion / poursuite. */
@@ -433,7 +494,19 @@ void dedale_tick(dedale *g, float dt)
             g->pend_rotor += times;
             rt->eaten = true;
             rt->frightened = 0.0f;
+        } else if (g->lives > 1) {
+            /* Une vie de moins, et la manche recommence. Le labyrinthe entamé,
+             * le score et le niveau RESTENT : perdre une vie ne doit pas
+             * annuler ce qu'on a joué, sinon les trois vies ne servent à rien.
+             *
+             * Aucun événement n'est émis : `death` clôt une PARTIE côté
+             * serveur, et une manche perdue n'en est pas une. */
+            g->lives--;
+            g->phase = DD_CAUGHT;
+            g->caught_time = DD_CAUGHT_TIME;
+            return;
         } else {
+            g->lives = 0;
             g->phase = DD_DEAD;
             g->dead_time = 0.0f;
             g->died = true;
@@ -453,6 +526,10 @@ void dedale_tick(dedale *g, float dt)
 bool dedale_autopilot(dedale *g)
 {
     if (g->phase == DD_DEAD) return false;
+    /* Pendant la pause, il n'y a rien à décider : on rend « vivant » pour que
+     * l'appelant continue d'avancer le pas fixe, sans quoi la manche ne
+     * repartirait jamais. */
+    if (g->phase == DD_CAUGHT) return true;
     if (g->phase == DD_READY) g->phase = DD_PLAYING;
 
     int sc, sr;
@@ -694,19 +771,25 @@ void dedale_draw(ns_sprite *s, const dedale *g, const dedale_art *a,
      * d'être affichée : c'est le joueur qui la donne, et il la connaît. Ce sont
      * les quatre poursuivants qu'il doit regarder, pas lui-même.
      */
+    static const float RUBIS[4] = { 1.00f, 0.86f, 0.30f, 1.0f };
     if (g->phase != DD_DEAD) {
-        static const float RUBIS[4] = { 1.00f, 0.86f, 0.30f, 1.0f };
         const float sz = 32.0f;
         const float px = ox + (g->x - sz * 0.5f) * scale;
         const float py = oy + (g->y - sz * 0.5f) * scale;
-        if (a && a->ready) {
-            const int frame = ((int)(g->eclat * 2.2f)) & 3;
-            ns_sprite_texture(s, &a->heros);
-            ns_sprite_quad(s, px, py, sz * scale, sz * scale,
-                           (float)frame * CASE_U, 0.0f, (float)(frame + 1) * CASE_U, 1.0f,
-                           RUBIS);
-        } else {
-            ns_sprite_rect(s, px, py, sz * scale, sz * scale, RUBIS);
+        /* PRIS : la pierre clignote sur place le temps de la pause. C'est le
+         * seul moment où elle change d'aspect, donc il se remarque. */
+        const bool eteinte = (g->phase == DD_CAUGHT)
+                          && (((int)(g->caught_time * 9.0f)) & 1);
+        if (!eteinte) {
+            if (a && a->ready) {
+                const int frame = ((int)(g->eclat * 2.2f)) & 3;
+                ns_sprite_texture(s, &a->heros);
+                ns_sprite_quad(s, px, py, sz * scale, sz * scale,
+                               (float)frame * CASE_U, 0.0f, (float)(frame + 1) * CASE_U, 1.0f,
+                               RUBIS);
+            } else {
+                ns_sprite_rect(s, px, py, sz * scale, sz * scale, RUBIS);
+            }
         }
     }
 
@@ -718,11 +801,39 @@ void dedale_draw(ns_sprite *s, const dedale *g, const dedale_art *a,
     SDL_snprintf(line, sizeof line, "NIVEAU %u", g->level);
     ns_sprite_text(s, 30.0f * base, 104.0f * base, base * 5.0f, amber, line);
 
+    /*
+     * LES VIES RESTANTES, dessinées et pas écrites.
+     *
+     * « VIES 3 » demanderait de lire pendant qu'on fuit ; deux petites pierres
+     * alignées se comptent d'un coup d'oeil, et ce sont exactement les pierres
+     * qu'on joue. On n'affiche que les vies EN RÉSERVE — celle en cours est
+     * dans le labyrinthe, la compter deux fois serait un mensonge.
+     */
+    if (a && a->ready) ns_sprite_texture(s, &a->heros);
+    for (uint32_t v = 1; v < g->lives; ++v) {
+        const float vs = 26.0f * base;
+        const float vx = 30.0f * base + (float)(v - 1) * (vs + 8.0f * base);
+        const float vy = 158.0f * base;
+        if (a && a->ready) {
+            ns_sprite_quad(s, vx, vy, vs, vs, 0.0f, 0.0f, CASE_U, 1.0f, RUBIS);
+        } else {
+            ns_sprite_rect(s, vx, vy, vs, vs, RUBIS);
+        }
+    }
+
     if (g->phase == DD_READY) {
         const char *msg = "MANCHE POUR SE DIRIGER";
         const float sc = base * 3.6f;
         ns_sprite_text(s, (logical_w - ns_sprite_text_width(msg, sc)) * 0.5f,
                        logical_h * 0.94f, sc, white, msg);
+    } else if (g->phase == DD_CAUGHT) {
+        /* Pas de voile : la pause dure une seconde et demie, et on veut que le
+         * joueur VOIE quelle hélice l'a eu et par où elle est arrivée. Un voile
+         * lui cacherait exactement ce qu'il a besoin de comprendre. */
+        SDL_snprintf(line, sizeof line, "%u VIE%s", g->lives, g->lives > 1 ? "S" : "");
+        const float sc = base * 5.0f;
+        ns_sprite_text(s, (logical_w - ns_sprite_text_width(line, sc)) * 0.5f,
+                       logical_h * 0.20f, sc, amber, line);
     } else if (g->phase == DD_DEAD) {
         static const float veil[4] = { 0.03f, 0.03f, 0.05f, 0.78f };
         ns_sprite_rect(s, 0.0f, logical_h * 0.33f, logical_w, logical_h * 0.34f, veil);
@@ -842,7 +953,7 @@ const ns_game_api g_dedale_api = {
     .id = "dedale", .title = "DEDALE", .label = "DEDALE",
     .state_size = sizeof(dedale), .art_size = sizeof(dedale_art),
     .sound_blip = NULL,
-    .sound_score = "games/flappy/score.wav",
+    .sound_score = "games/envol/score.wav",
     .sound_die = "games/snake/gameover.wav",
     .art_load = dd_art_load, .art_free = dd_art_free,
     .reset = dd_reset, .press = dd_press, .hold = dd_hold,

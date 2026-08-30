@@ -1757,9 +1757,12 @@ int main(int argc, char **argv)
         oc.token = ns_config_get_str(NS_CFG_SERVER_TOKEN, "");
         oc.locked = opt.offline;
         if (ns_online_init(&oc)) {
-            /* On demande le classement de Flappy dès le départ : c'est celui que
-             * la borne de classement affiche en premier. */
-            ns_online_request_board("flappy", "normal");
+            /* On demande le classement d'ENVOL dès le départ : c'est celui que
+             * la borne de classement affiche en premier. Le jeu s'appelait
+             * `flappy` ; l'identifiant demandé ici ne suivait pas le renommage,
+             * et le serveur répondait sur un jeu qui n'existe plus — le panneau
+             * mondial restait vide, sans erreur. */
+            ns_online_request_board("envol", "normal");
         }
     }
 

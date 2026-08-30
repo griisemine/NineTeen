@@ -58,6 +58,26 @@ target_include_directories(posterart PRIVATE
 # figures sont redessinées ici — aux MÊMES cotes, pour que le code de découpe
 # des jeux reste valable au pixel près.
 nineteen_add_tool(spriteart spriteart.c)
+# La TEXTURE DU PERSONNAGE. Meme geste que les trois precedents, sur le sujet le
+# plus visible du jeu : le joueur qu'on voit a la troisieme personne portait le
+# LOGOTYPE de Cesium — des rubans bleus et verts sur fond blanc — parce que le
+# modele importe est le mannequin d'exemple de Khronos. Le modele est bon ; sa
+# livree disait « fichier de test ». `skinart` rasterise le maillage DANS
+# l'espace UV, ce qui lui donne le point du corps que porte chaque texel, et
+# peint ensuite en coordonnees de corps. Il n'est PAS joue au build : il modifie
+# une source versionnee, et une source ne se modifie pas pendant un build.
+nineteen_add_tool(skinart skinart.c glb_image.c)
+target_include_directories(skinart PRIVATE
+    "${CMAKE_SOURCE_DIR}/third_party/jsmn"      # deux entiers a recoudre dans le JSON du GLB
+    "${CMAKE_SOURCE_DIR}/third_party/cgltf")
+
+# Le TAPIS DU HALL. Meme geste, au dernier endroit ou personne n'avait regarde :
+# le SOL. `legacy/room/textures/floor.jpg` porte au neon un PAC-MAN, un de ses
+# FANTOMES, ses CERISES de bonus (Bandai Namco) et la silhouette d'une MANETTE
+# de console (Sony) — sur la plus grande surface de la salle, dans chaque image.
+# `moquetteart` redessine le meme tapis avec des icones qui n'appartiennent a
+# personne, et sort DEJA DE-CUIT a la reflectance visee.
+nineteen_add_tool(moquetteart moquetteart.c)
 
 nineteen_add_tool(bvhbake  bvhbake.c)
 # Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de

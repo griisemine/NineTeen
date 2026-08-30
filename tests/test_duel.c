@@ -534,7 +534,7 @@ static void test_duel_complet(const char *url, const char *token)
     /*
      * Pac-Man : une suite d'entrées prise au hasard y marque réellement des
      * points — 19 pastilles en trente secondes — là où elle meurt en trois
-     * secondes à Flappy. Un duel dont les deux scores valent zéro ne prouve
+     * secondes à Envol. Un duel dont les deux scores valent zéro ne prouve
      * rien.
      */
     const ns_game_api *api = ns_game_find("dedale");

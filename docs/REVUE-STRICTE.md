@@ -171,14 +171,14 @@ contribution directe sur les faces non testées.
 **Où** :
 ```sh
 ./build/macos-universal/bin/nineteen --headless --frames=2 --width=320 --height=180 \
-    --game=flappy --autoplay --warmup=20
+    --game=envol --autoplay --warmup=20
 ```
 
 **Ce qu'on voit** : le processus imprime « 20.0 s avancées (2399 pas), 1 partie(s),
 score 9 » à t = 1,76 s, puis **continue à jouer indéfiniment**, une ligne de journal toutes
 les 1,67 s. Tué à 300 s, le score en était à 188. `--frames=2` n'a aucun effet.
 
-**La preuve** : la même commande avec `--view=allee` à la place de `--game=flappy` sort
+**La preuve** : la même commande avec `--view=allee` à la place de `--game=envol` sort
 normalement (code 0) en moins de deux secondes. Avec `--game=`, seul l'ajout de
 `--screenshot=` provoque la sortie. Vérifié trois fois avec un chien de garde à 30 s :
 `--view=allee` sort, les deux variantes `--game=` sont tuées.
@@ -261,7 +261,7 @@ différemment.
 **Où** :
 ```sh
 ./build/macos-universal/bin/nineteen --headless --screenshot=flappy.png --frames=4 \
-    --game=flappy --autoplay --warmup=25 --width=1280 --height=720
+    --game=envol --autoplay --warmup=25 --width=1280 --height=720
 ```
 
 **Ce qu'on voit** : cinq paires de tuyaux à l'écran en même temps, et un oiseau grand comme
@@ -788,7 +788,7 @@ que `salle.room.json:105` documente pour le plafond de 2020 (`Ke 1 1 1`).
 ### R-24 — Pac-Man est un carré jaune
 
 **Gravité** : gênant
-**Où** : `--game=pacman --autoplay --warmup=25`
+**Où** : `--game=dedale --autoplay --warmup=25`
 
 **Ce qu'on voit** : le héros est un carré jaune plein. Les fantômes sont des carrés :
 **deux bleus identiques**, un blanc plus petit, deux orange. Il n'y a **aucune
@@ -812,7 +812,7 @@ sprite chacun ; les super-pastilles sont un rayon différent.
 ### R-25 — Tetris : quatre blocs posés rendus trente pour cent plus sombres
 
 **Gravité** : gênant
-**Où** : `--game=tetris --autoplay --warmup=25`
+**Où** : `--game=aplomb --autoplay --warmup=25`
 
 **Ce qu'on voit** : dans la colonne de droite du puits, une pile de quatre blocs
 **rouge bordeaux très sombre** repose sur un bloc violet. Tous les autres blocs posés de

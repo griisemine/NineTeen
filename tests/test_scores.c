@@ -188,7 +188,7 @@ static void test_canonical_empty(void)
      * côtés, elle aussi — c'est le cas d'une partie perdue immédiatement. */
     ns_runlog *r = ns_runlog_create(8);
     if (!r) { CHECK(false, "création"); return; }
-    ns_runlog_begin(r, "flappy", "normal", 7, (const uint8_t *)"k", 1);
+    ns_runlog_begin(r, "envol", "normal", 7, (const uint8_t *)"k", 1);
     ns_runlog_end(r, 0, 0);
 
     char payload[64], seal[64];
@@ -210,7 +210,7 @@ static void test_unauthenticated_is_not_queued(void)
      */
     ns_runlog *r = ns_runlog_create(8);
     if (!r) { CHECK(false, "création"); return; }
-    ns_runlog_begin(r, "flappy", "normal", 42, NULL, 0);
+    ns_runlog_begin(r, "envol", "normal", 42, NULL, 0);
     ns_runlog_event(r, 100, "score", 1);
     ns_runlog_end(r, 5000, 1);
 
@@ -237,7 +237,7 @@ static void test_sealed_without_id_is_not_queued(void)
 
     ns_runlog *r = ns_runlog_create(8);
     if (!r) { CHECK(false, "création"); return; }
-    ns_runlog_begin(r, "flappy", "hard", 99, (const uint8_t *)"secret", 6);
+    ns_runlog_begin(r, "envol", "hard", 99, (const uint8_t *)"secret", 6);
     ns_runlog_event(r, 1200, "score", 1);
     ns_runlog_end(r, 4000, 1);
 
@@ -254,7 +254,7 @@ static void test_queue_writes_one_file(void)
 
     ns_runlog *r = ns_runlog_create(16);
     if (!r) { CHECK(false, "création"); return; }
-    ns_runlog_begin(r, "flappy", "hard", 99, (const uint8_t *)"secret", 6);
+    ns_runlog_begin(r, "envol", "hard", 99, (const uint8_t *)"secret", 6);
     ns_runlog_set_run_id(r, "run-abcdef0123456789");
     CHECK(strcmp(ns_runlog_run_id(r), "run-abcdef0123456789") == 0,
           "l'identifiant est retenu : %s", ns_runlog_run_id(r));
@@ -314,7 +314,7 @@ static void test_event_overflow(void)
      * `ns_runlog_end` remet le compte d'aplomb après le message d'alerte. */
     ns_runlog *r = ns_runlog_create(4);
     if (!r) { CHECK(false, "création"); return; }
-    ns_runlog_begin(r, "flappy", "normal", 1, (const uint8_t *)"k", 1);
+    ns_runlog_begin(r, "envol", "normal", 1, (const uint8_t *)"k", 1);
     for (int i = 0; i < 100; ++i) ns_runlog_event(r, i * 10, "flap", 0);
     ns_runlog_end(r, 1000, 0);
     CHECK(ns_runlog_event_count(r) == 4, "le journal s'arrête à sa capacité (%u)",
@@ -335,29 +335,29 @@ static void test_scores_basics(void)
     ns_scores_set_path(g_tmp_scores);
     ns_scores_load();
 
-    CHECK(ns_scores_best("flappy", "hard") == 0, "un classement vierge n'a pas de record");
+    CHECK(ns_scores_best("envol", "hard") == 0, "un classement vierge n'a pas de record");
 
-    CHECK(ns_scores_record("flappy", "hard", 12, 30000, "Nine") == 1, "premier : rang 1");
-    CHECK(ns_scores_record("flappy", "hard", 40, 90000, "Nine") == 1, "meilleur : rang 1");
-    CHECK(ns_scores_record("flappy", "hard", 25, 60000, NULL)   == 2, "entre les deux : rang 2");
-    CHECK(ns_scores_best("flappy", "hard") == 40, "le record suit");
+    CHECK(ns_scores_record("envol", "hard", 12, 30000, "Nine") == 1, "premier : rang 1");
+    CHECK(ns_scores_record("envol", "hard", 40, 90000, "Nine") == 1, "meilleur : rang 1");
+    CHECK(ns_scores_record("envol", "hard", 25, 60000, NULL)   == 2, "entre les deux : rang 2");
+    CHECK(ns_scores_best("envol", "hard") == 40, "le record suit");
 
     /*
      * À score égal, l'ancien reste devant. Un tri naïf ferait remonter la
      * nouvelle entrée et déclasserait un record que le joueur n'a pas battu.
      */
-    CHECK(ns_scores_record("flappy", "hard", 40, 88000, "Autre") == 2,
+    CHECK(ns_scores_record("envol", "hard", 40, 88000, "Autre") == 2,
           "à score égal, le nouveau passe DERRIÈRE");
 
     /* Les difficultés sont deux classements distincts. */
-    CHECK(ns_scores_record("flappy", "normal", 5, 10000, NULL) == 1, "autre difficulté");
-    CHECK(ns_scores_best("flappy", "normal") == 5, "et son propre record");
-    CHECK(ns_scores_best("flappy", "hard") == 40, "sans toucher à l'autre");
+    CHECK(ns_scores_record("envol", "normal", 5, 10000, NULL) == 1, "autre difficulté");
+    CHECK(ns_scores_best("envol", "normal") == 5, "et son propre record");
+    CHECK(ns_scores_best("envol", "hard") == 40, "sans toucher à l'autre");
 
     /* Une difficulté absente vaut « normal » : sinon la même borne écrirait dans
      * deux tableaux selon que le champ est renseigné. */
-    CHECK(ns_scores_best("flappy", NULL) == 5, "difficulté absente = normal");
-    CHECK(ns_scores_best("flappy", "") == 5, "difficulté vide aussi");
+    CHECK(ns_scores_best("envol", NULL) == 5, "difficulté absente = normal");
+    CHECK(ns_scores_best("envol", "") == 5, "difficulté vide aussi");
 }
 
 static void test_scores_full_board(void)
@@ -417,16 +417,16 @@ static void test_scores_survives_corruption(void)
     if (!io) return;
     static const char *junk =
         "v1\n"
-        "flappy/hard|500|1000|0|Ok\n"
+        "envol/hard|500|1000|0|Ok\n"
         "ligne completement cassee sans separateurs\n"
-        "flappy/hard|300|abc|0|Aussi\n"
-        "flappy/hard|200|1000|0|Bien\n";
+        "envol/hard|300|abc|0|Aussi\n"
+        "envol/hard|200|1000|0|Bien\n";
     SDL_WriteIO(io, junk, strlen(junk));
     SDL_CloseIO(io);
 
     ns_scores_clear();
     ns_scores_load();
-    const ns_score_board *b = ns_scores_board("flappy", "hard");
+    const ns_score_board *b = ns_scores_board("envol", "hard");
     CHECK(b != NULL, "le tableau est relu malgré les lignes cassées");
     if (!b) return;
     CHECK(b->count >= 2, "les lignes valides survivent (%u)", b->count);
@@ -440,7 +440,7 @@ static void test_scores_survives_corruption(void)
  *
  * `server/internal/runs/runs.go` refuse SÈCHEMENT un événement dont le nom
  * n'est pas dans sa table — « événement inconnu ». Le client émettait « flap »,
- * « score » et « death » pour Flappy, là où le serveur n'attend que « pipe »
+ * « score » et « death » pour Envol, là où le serveur n'attend que « pipe »
  * (un point), « flap » et « death ». Toute partie soumise était donc rejetée en
  * bloc, et rien côté client ne pouvait le prévoir : il ne voyait qu'un envoi
  * refusé, et l'envoi étant « au mieux, jamais bloquant », personne ne le voyait
@@ -456,7 +456,7 @@ static const struct {
     const char *game;
     const char *kinds[8];    /* points + scaled + silent, terminé par NULL */
 } g_server_vocab[] = {
-    { "flappy",   { "pipe", "flap", "death", NULL } },
+    { "envol",   { "pipe", "flap", "death", NULL } },
     { "snake",    { "fruit", "bonus", "turn", "death", NULL } },
     { "aplomb",   { "lines", "drop", "rotate", "death", NULL } },
     { "asteroid", { "rock", "bonus", "wave", "shot", "death", NULL } },

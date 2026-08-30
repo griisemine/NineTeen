@@ -85,8 +85,21 @@
 
 #define DD_ROTORS 4
 
+/* TROIS VIES, comme tout jeu de labyrinthe depuis 1980 — et le portage n'en
+ * donnait qu'UNE. Ce n'est pas un détail d'équilibrage : avec une seule vie, la
+ * première erreur termine la partie, on n'apprend jamais le plan, et le score
+ * ne dépasse pas ce qu'on ramasse avant la première rencontre. Mesuré par la
+ * recette : mort à trente-neuf secondes, à chaque partie. */
+#define DD_LIVES 3
+
+/* La pause après une prise : le joueur DOIT voir ce qui l'a eu. Sans elle, la
+ * partie reprend au centre du labyrinthe sans qu'on ait compris. */
+#define DD_CAUGHT_TIME 1.4f
+
 typedef enum dd_tile { DD_WALL = 0, DD_EMPTY, DD_PELLET, DD_POWER } dd_tile;
-typedef enum dd_phase { DD_READY = 0, DD_PLAYING, DD_DEAD } dd_phase;
+/* `DD_CAUGHT` : pris, mais il reste une vie. Le temps s'arrête, les hélices
+ * regagnent l'enclos et la manche repart. */
+typedef enum dd_phase { DD_READY = 0, DD_PLAYING, DD_CAUGHT, DD_DEAD } dd_phase;
 
 /* `enum direction {DROIT, HAUT, GAUCHE, BAS}` de 2020, dans cet ordre : c'est
  * lui qui indexe les colonnes de `dedale.png`. */
@@ -117,11 +130,13 @@ typedef struct dedale {
     uint32_t chain;          /* hélices mangées d'affilée : 200, 400, 800, 1600 */
 
     uint32_t level;
+    uint32_t lives;          /* il en reste combien, celle en cours comprise */
     int64_t  score;
     uint32_t best;
     bool     hard;
 
     float time;
+    float caught_time;       /* secondes restantes de la pause après une prise */
     float dead_time;
     bool  held[NS_GAME_BUTTON_COUNT];
 

@@ -141,10 +141,11 @@ Huit d'entre elles ont été ouvertes et regardées :
 | `poster_1.jpg` | affiche de festival « Arcade Armageddon », graphisme d'auteur | inconnu |
 | `poster_4.jpg` | illustration de « gaming room » retitrée NINE 19 TEEN | inconnu |
 
-Elles sont **accrochées aux murs de la salle et visibles en jeu**. Le même
-examen sur les jeux donne le même résultat : les lutins de `games/pacman/`
-reprennent la forme et les couleurs des personnages de Namco, et
-`games/flappy/birds.png` est la planche d'oiseaux de *Flappy Bird*.
+Elles étaient **accrochées aux murs de la salle et visibles en jeu** ; elles ne
+sont plus copiées. Le même examen, poussé jusqu'aux planches des jeux et au sol,
+a donné treize images de plus — les personnages de Namco dans `games/pacman/`,
+la planche d'oiseaux de *Flappy Bird*, et le tapis du hall. Toutes retirées,
+toutes remplacées par du dessin.
 
 **Une attribution ne rattrape pas ces fichiers.** Ce ne sont pas des œuvres sous
 licence libre mal créditées ; ce sont des œuvres sous droit exclusif employées
@@ -222,17 +223,30 @@ début — « je refuse de livrer une salle que je ne peux pas regarder ».
 
 Dans l'ordre de ce qui empêche la vente.
 
-### 1. Huit affiches et deux planches de lutins appartiennent à des tiers
+### 1. ~~Huit affiches et deux planches de lutins appartiennent à des tiers~~ — TENU
 
-Le point bloquant, et il n'est pas technique. Nintendo, Bandai Namco, Atari,
-Netflix, Riot Games. Aucune rédaction de `LICENSES.md` ne rend `poster_8.jpg`
-distribuable. **Le jeu ne peut pas être mis en vente en l'état.**
+Les huit affiches sont dessinées par `tools/posterart`. **Treize autres images**
+ont été trouvées ensuite, dans le même examen mené jusqu'au bout : les deux
+planches de Pac-Man, les sept planches de *Flappy Bird* — dont une image de
+banque d'images **avec le filigrane « ©123RF » encore dessus** —, les deux
+captures d'attract qui les montrent, et **le tapis du hall**, qui portait au
+néon un Pac-Man, un de ses fantômes, ses cerises et une manette de console. Les
+treize sortent du paquet ; `tools/spriteart` et `tools/moquetteart` dessinent
+les remplaçantes. Le détail, image par image, est dans `assets/cc0/LICENSES.md`.
 
-### 2. Les noms « PACMAN » et « TETRIS » sont des marques déposées
+### 2. ~~Les noms « PACMAN » et « TETRIS » sont des marques déposées~~ — TENU, et il y en avait TROIS
 
-Bandai Namco pour l'une, Tetris Holding pour l'autre — qui a obtenu en justice
-que sa protection porte aussi sur l'apparence du jeu, pas seulement sur le nom.
-Ce sont deux des dix-neuf bornes, et deux des huit jeux.
+**PAC-MAN → DÉDALE**, **TETRIS → APLOMB**, et **FLAPPY BIRD → ENVOL**, qui
+manquait à la liste : c'est le nom d'une œuvre précise de 2013, exactement le
+même motif. Les cinq autres titres ont été examinés et gardés — SNAKE et SHOOTER
+sont des noms de genre, DEMINEUR et PIANO des noms communs. ASTEROID est signalé
+comme risque **résiduel** : c'est un nom commun, mais il est à une lettre de la
+marque *Asteroids* d'Atari, et cette décision-là n'est pas technique.
+
+Une mécanique ne s'approprie pas ; un nom et un personnage, si. Les règles de
+`games/` n'ont pas bougé d'une ligne — ni le barème, ni les vitesses, ni le
+vocabulaire d'événements du serveur, qui aurait invalidé tout journal déjà
+scellé.
 
 ### 3. Le paquet n'est pas signé
 

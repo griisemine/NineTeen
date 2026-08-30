@@ -222,7 +222,7 @@ static void test_partie_en_ligne(const char *url, const char *token)
     ns_online_ticket t;
     bool got = false;
     for (int i = 0; i < 120 && !got; ++i) {
-        got = ns_online_take_ticket("flappy", "normal", &t);
+        got = ns_online_take_ticket("envol", "normal", &t);
         if (!got) SDL_Delay(50);
     }
     CHECK(got, "le serveur délivre un billet (statut : %s)", ns_online_status());
@@ -241,11 +241,11 @@ static void test_partie_en_ligne(const char *url, const char *token)
     CHECK((t.seed & 0xFFFFFFull) != 0 || t.seed < (1LL << 40),
           "et qui a gardé ses bits de poids faible (%lld)", (long long)t.seed);
 
-    /* Une partie qu'un serveur acceptera : le barème de Flappy compte 1 par
+    /* Une partie qu'un serveur acceptera : le barème d'Envol compte 1 par
      * tuyau, donc quatre passages valent 4. */
     ns_runlog *r = ns_runlog_create(32);
     if (!r) { CHECK(false, "journal"); ns_online_shutdown(); return; }
-    ns_runlog_begin(r, "flappy", "normal", t.seed, t.secret, t.secret_len);
+    ns_runlog_begin(r, "envol", "normal", t.seed, t.secret, t.secret_len);
     ns_runlog_set_run_id(r, t.run_id);
     for (int i = 0; i < 4; ++i) ns_runlog_event(r, 2000 + i * 1500, "pipe", 0);
     ns_runlog_event(r, 8000, "death", 0);
@@ -267,12 +267,12 @@ static void test_partie_en_ligne(const char *url, const char *token)
     CHECK(ns_runlog_pending() == 0, "et la file est vide (%u)", ns_runlog_pending());
 
     /* Et le score ressort par la porte d'à côté : le classement mondial. */
-    ns_online_request_board("flappy", "normal");
+    ns_online_request_board("envol", "normal");
     ns_online_board board;
     bool seen = false;
     for (int i = 0; i < 100 && !seen; ++i) {
         SDL_Delay(50);
-        seen = ns_online_board_get("flappy", "normal", &board);
+        seen = ns_online_board_get("envol", "normal", &board);
     }
     CHECK(seen && board.count >= 1, "le score reparaît au classement mondial");
     if (seen && board.count >= 1) {

@@ -283,14 +283,76 @@ et voici ce qu'elles sont.
 | `poster_1.jpg` | une affiche de festival **« Arcade Armageddon »**, graphisme d'auteur | inconnu |
 | `poster_4.jpg` | une illustration de « gaming room », retitrée **NINE 19 TEEN** | inconnu |
 
-Ces huit images sont **accrochées aux murs de la salle** et visibles en jeu.
+Ces huit images étaient **accrochées aux murs de la salle**. Elles ne sont plus
+copiées par le build : `tools/posterart` en dessine huit autres.
 
-Le même examen sur les jeux donne le même genre de résultat : les lutins de
-`games/pacman/` reprennent la forme et les couleurs des personnages de Namco, et
-`games/flappy/birds.png` est la planche d'oiseaux de *Flappy Bird*. Les titres
-« PACMAN » et « TETRIS » sont par ailleurs des **marques déposées** — Bandai
-Namco pour l'une, Tetris Holding pour l'autre, qui a obtenu en justice que la
-protection porte aussi sur l'apparence du jeu et pas seulement sur le nom.
+## Ce qui a été retiré ensuite, et pourquoi — les PERSONNAGES
+
+Le même examen, mené sur **toutes** les images de `legacy/games/` et de
+`legacy/room/textures/` que le build copiait, donne le même genre de résultat.
+Chacune a été ouverte, agrandie au plus proche et regardée sur un damier pour
+voir la couche alpha.
+
+| Fichier | Ce que c'est, en le regardant | Ayant droit apparent |
+|---|---|---|
+| `1_pacman/pacman.png` | quatre **PAC-MAN** : le disque jaune, la part de camembert retirée, quatre ouvertures de bouche | Bandai Namco |
+| `1_pacman/enemy.png` | huit **FANTÔMES** de Pac-Man : le dôme arrondi, la jupe à trois vagues, les yeux à pupille décalée | Bandai Namco |
+| `1_pacman/items.png` | les **CERISES** et la **FRAISE** de bonus du même jeu (elle n'était pas copiée, elle était là) | Bandai Namco |
+| `3_flappy_bird/birds.png` | l'**OISEAU** de *Flappy Bird*, ses trois teintes et ses trois battements d'aile | Dong Nguyen / .Gears |
+| `3_flappy_bird/pipes.png` | ses **TUYAUX** à embouchure, eux-mêmes dérivés d'ailleurs | idem |
+| `3_flappy_bird/backgrounds.png` | son **CIEL** jour et nuit, sa ligne d'immeubles, sa haie | idem |
+| `3_flappy_bird/sol.png` | son **SOL** rayé | idem |
+| `3_flappy_bird/medals.png` | ses **MÉDAILLES**, l'oiseau gravé dessus | idem |
+| `3_flappy_bird/scoreBoard.png` | son **TABLEAU** de fin de partie | idem |
+| `3_flappy_bird/high_score.png` | une image de banque d'images, **avec le filigrane « ©123RF » encore dessus** | 123RF et son illustrateur |
+| `flappy_easy_font.jpg`, `flappy_hard_font.jpg` | deux captures du jeu de 2020, qui montrent en grand l'oiseau et les tuyaux ci-dessus, employées comme écrans d'attract sur deux bornes | idem |
+| `floor.jpg` | **le tapis du hall** — la plus grande surface de la salle : un **PAC-MAN** au néon jaune, un de ses **FANTÔMES** au néon rose, les **CERISES**, et la silhouette d'une **MANETTE** de console | Bandai Namco ; Sony |
+
+`high_score.png` mérite une ligne à part : ce n'est pas une œuvre libre mal
+créditée, c'est **l'aperçu non payé d'une œuvre payante**, et le filigrane le
+dit lui-même. Elle n'était même pas affichée par le jeu — le `file(GLOB *.png)`
+de `assets/CMakeLists.txt` l'emportait, avec `medals.png` et `scoreBoard.png`.
+Ce n'est pas ce que le jeu montre qui compte, c'est ce que le build **copie**.
+
+**Les treize sortent du paquet.** Elles restent dans `legacy/`, qui est
+l'archive de 2020 et n'est pas distribuée ; ce qui change, c'est la liste que le
+build copie — et le `GLOB` qui les emportait est devenu une liste nommée.
+
+Deux outils dessinent les remplaçantes, pour la même raison que `posterart` :
+une planche produite par arithmétique n'a **aucune licence à démêler**, se
+régénère à l'identique sur les trois plateformes et appartient au dépôt.
+
+* `tools/spriteart.c` — le héros et les poursuivants du labyrinthe (en niveaux
+  de gris, le jeu les teinte), le mobile, les obstacles, le ciel et le sol du
+  jeu d'envol. **Aux mêmes cotes au pixel près** que les planches remplacées :
+  `games/envol/envol.c` découpe ses atlas en dur, et n'a pas eu une ligne à
+  changer.
+* `tools/moquetteart.c` — le tapis du hall, avec des icônes qui n'appartiennent
+  à personne : un manche, un jeton, une étoile, un éclair, un dé, une note, une
+  cible, une planète.
+
+## Les NOMS : trois marques déposées
+
+Un examen des huit `.title` a été mené, et il n'a pas donné le même verdict
+partout.
+
+| Nom de 2020 | Verdict | Devenu |
+|---|---|---|
+| **PAC-MAN** | marque déposée de Bandai Namco | **DÉDALE** |
+| **TETRIS** | marque déposée de Tetris Holding, qui a obtenu en justice que la protection porte aussi sur l'apparence du jeu | **APLOMB** |
+| **FLAPPY BIRD** | nom distinctif attaché à une œuvre précise (Dong Nguyen, 2013) | **ENVOL** |
+| ASTEROID | nom commun (corps céleste), descriptif de ce qu'on tire — **proche** de la marque *Asteroids* (Atari) à une lettre près : risque résiduel, signalé | inchangé |
+| SNAKE | nom commun et nom de **genre** — personne ne le détient | inchangé |
+| SHOOTER | nom de **genre**, purement descriptif | inchangé |
+| DEMINEUR | nom commun français de l'activité | inchangé |
+| PIANO | nom d'un instrument de musique | inchangé |
+
+Une **mécanique** ne s'approprie pas : manger des pastilles dans un labyrinthe
+en fuyant quatre poursuivants, empiler des pièces de quatre cases, franchir des
+ouvertures en battant des ailes — ce sont des systèmes de règles, et un système
+de règles n'est pas protégeable. Un **nom** et un **personnage**, si. C'est
+exactement la ligne qui a été tracée : les règles de `games/` n'ont pas bougé,
+les noms et les figures ont changé.
 
 ## Ce que ça veut dire, et ce que ça ne veut pas dire
 
@@ -303,10 +365,19 @@ attribution ne les rattrape pas — ce ne sont pas des œuvres sous licence libr
 mal créditées, ce sont des œuvres sous droit exclusif employées sans droit. Il
 n'existe pas de rédaction de ce document qui rende `poster_8.jpg` distribuable.
 
-**Rien n'a été retiré ni modifié ici** : `salle.room.json` appartient à la
-direction artistique, et remplacer huit affiches est une décision de contenu,
-pas une correction de licence. Le travail est chiffré dans
-`docs/CHANGELOG-V17.md`, section « ce qui n'est pas tenu ».
+**Tout a été retiré, et remplacé.** Les huit affiches d'abord, puis les treize
+planches et textures ci-dessus. Ce qui a été fait dans les deux cas est le même
+geste : sortir le fichier de la liste que le build **copie** — un
+`retiredTextures` ne suffirait pas, il déclare qu'une image n'est plus employée,
+il n'empêche pas de la livrer — et dessiner la remplaçante.
+
+Un arbre de build incrémental garde pourtant ce qu'on lui retire :
+`copy_if_different` copie, il n'efface pas, et `room/CMakeLists.txt` installe
+`games/`, `materials/` et `scene/` **en bloc**. Vérifié sur un arbre réel : il
+contenait encore les seize cartes dérivées des huit affiches retirées deux
+versions plus tôt. Une purge nommée tourne donc au build
+(`assets/CMakeLists.txt`, bloc « LES GRAVATS ») et efface les retirés de l'arbre
+généré. Sans elle, le contrôle qu'on croit avoir passé, on ne l'a pas passé.
 
 ## Trois autres points ouverts, plus petits
 
@@ -326,8 +397,14 @@ pas une correction de licence. Le travail est chiffré dans
   existe pour empêcher. Une reconstruction depuis un répertoire de build neuf
   les fait disparaître.
 * **`legacy/`** n'est pas installé par CPack, mais il est dans le dépôt. Si le
-  dépôt devient public, il publie les 60 images de 2020, les huit affiches
-  comprises.
+  dépôt devient public, il publie les 60 images de 2020 et les planches des
+  jeux — les huit affiches, les personnages de Namco et l'oiseau de *Flappy
+  Bird* compris.
+* **`docs/render-*.png`** non plus n'est pas installé, et pose la même question
+  en plus petit : une douzaine de captures de recette montrent l'état d'avant,
+  donc les affiches, l'oiseau, le tapis et les personnages. Elles servent de
+  preuve « avant / après » et c'est leur seule raison d'être ; elles sortiraient
+  avec `legacy/` le jour où l'on ouvrirait le dépôt.
 
 ---
 

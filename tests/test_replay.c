@@ -30,7 +30,7 @@
  *
  * La différence avec les `test_determinisme` de chaque jeu : ceux-là rejouent le
  * PILOTE AUTOMATIQUE deux fois, et le pilote appelle les fonctions internes du
- * jeu directement (`flappy_flap`, par exemple), sans passer par `press`/`hold`.
+ * jeu directement (`envol_flap`, par exemple), sans passer par `press`/`hold`.
  * Ils prouvent que le jeu est déterministe ; ils ne prouvent pas que le CHEMIN
  * DES BOUTONS suffit à le piloter. C'est pourtant le seul chemin dont un duel
  * disposerait.
@@ -227,7 +227,7 @@ int main(void)
          * LE TRACK A-T-IL FAIT QUELQUE CHOSE ?
          *
          * Quatre jeux finissent la suite d'entrées à zéro point — c'est normal,
-         * un joueur qui tape au hasard meurt vite à Flappy — mais un score nul
+         * un joueur qui tape au hasard meurt vite à Envol — mais un score nul
          * peut aussi vouloir dire que le jeu n'a rien reçu du tout. Et une
          * partie qui n'a pas bougé se « rejoue à l'identique » trivialement :
          * le test passerait en ne mesurant rien.

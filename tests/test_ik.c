@@ -357,7 +357,7 @@ static void test_sequence(void)
     ns_cabinet cab;
     memset(&cab, 0, sizeof cab);
     SDL_strlcpy(cab.name, "borne_test", sizeof cab.name);
-    SDL_strlcpy(cab.game, "flappy", sizeof cab.game);
+    SDL_strlcpy(cab.game, "envol", sizeof cab.game);
     cab.screen_normal = ns_v3_make(-1.0f, 0.0f, 0.0f);
     cab.coin_slot    = ns_v3_make(1.01f - 0.452f,  0.650f, 0.0f);
     cab.panel_centre = ns_v3_make(1.01f - 0.5225f, 0.968f, 0.0575f);
@@ -455,7 +455,7 @@ static void test_play_hands_on_controls(void)
     ns_cabinet cab;
     memset(&cab, 0, sizeof cab);
     SDL_strlcpy(cab.name, "borne_test", sizeof cab.name);
-    SDL_strlcpy(cab.game, "flappy", sizeof cab.game);
+    SDL_strlcpy(cab.game, "envol", sizeof cab.game);
     cab.screen_normal = ns_v3_make(-1.0f, 0.0f, 0.0f);
     cab.coin_slot    = ns_v3_make(1.01f - 0.452f,  0.650f,  0.0f);
     cab.panel_centre = ns_v3_make(1.01f - 0.5225f, 0.996f,  0.0575f);

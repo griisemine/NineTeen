@@ -201,25 +201,72 @@ static void test_la_super_pastille(void)
           (long long)(g.score - s1));
 }
 
-/* Une hélice non apeurée tue. */
+/* Une hélice non apeurée coûte une vie, et la TROISIÈME termine la partie.
+ *
+ * Le portage n'en donnait qu'UNE, ce qui n'était pas un réglage mais un oubli :
+ * la première rencontre finissait la partie, la recette mesurait trente-neuf
+ * secondes à chaque essai, et le score ne dépassait jamais ce qu'on ramasse
+ * avant de croiser quelqu'un. */
+static void percute(dedale *g)
+{
+    for (int i = 1; i < DD_ROTORS; ++i) g->rotor[i].respawn = 1e6f;
+    g->rotor[0].respawn = 0.0f;
+    g->rotor[0].frightened = 0.0f;
+    g->rotor[0].eaten = false;
+    g->rotor[0].x = g->x;
+    g->rotor[0].y = g->y;
+    dedale_tick(g, STEP);
+}
+
 static void test_l_helice_tue(void)
 {
     dedale g;
     dedale_reset(&g, 1, false);
     g.phase = DD_PLAYING;
-    for (int i = 1; i < DD_ROTORS; ++i) g.rotor[i].respawn = 1e6f;
-    g.rotor[0].respawn = 0.0f;
-    g.rotor[0].frightened = 0.0f;
-    g.rotor[0].x = g.x;
-    g.rotor[0].y = g.y;
+    CHECK(g.lives == DD_LIVES, "on démarre avec %d vies (%u)", DD_LIVES, g.lives);
 
-    dedale_tick(&g, STEP);
-    CHECK(g.phase == DD_DEAD, "une hélice non apeurée tue");
+    /* On joue d'abord six secondes, hélices garées : il faut du score et un
+     * labyrinthe entamé pour pouvoir vérifier qu'ils SURVIVENT à la prise. */
+    for (int i = 0; i < DD_ROTORS; ++i) g.rotor[i].respawn = 1e6f;
+    for (int i = 0; i < 120 * 6; ++i) dedale_tick(&g, STEP);
+    const int64_t score_avant = g.score;
+    const int pastilles_avant = dedale_count_pellets(&g);
+    CHECK(score_avant > 0 && pastilles_avant < 189,
+          "il a joué avant d'être pris (%lld pts, %d pastilles restantes)",
+          (long long)score_avant, pastilles_avant);
+
+    /* Les deux premières prises coûtent une vie et rendent la main. */
+    for (uint32_t v = 1; v < DD_LIVES; ++v) {
+        percute(&g);
+        CHECK(g.phase == DD_CAUGHT, "prise %u : la manche s'arrête, pas la partie", v);
+        CHECK(g.lives == DD_LIVES - v, "il reste %u vie(s) (%u)", DD_LIVES - v, g.lives);
+
+        /* La pause s'écoule, puis la manche repart au départ du plan. */
+        for (int i = 0; i < 400 && g.phase == DD_CAUGHT; ++i) dedale_tick(&g, STEP);
+        CHECK(g.phase == DD_PLAYING, "la manche repart d'elle-même");
+        /* Et elle repart AU DÉPART, pas là où on s'est fait prendre. */
+        const int col = (int)(g.x / DD_CELL), row = (int)(g.y / DD_CELL);
+        CHECK(dedale_walkable(&g, col, row), "elle repart sur une case libre");
+    }
+
+    /* LE POINT QUI FAIT QUE TROIS VIES VALENT MIEUX QU'UNE : le score et le
+     * labyrinthe entamé survivent. Un `load_maze` dans la reprise de manche les
+     * effacerait, et perdre une vie reviendrait à tout perdre. */
+    CHECK(g.score >= score_avant, "le score survit à la prise (%lld -> %lld)",
+          (long long)score_avant, (long long)g.score);
+    CHECK(dedale_count_pellets(&g) <= pastilles_avant,
+          "et le labyrinthe reste entamé (%d -> %d)",
+          pastilles_avant, dedale_count_pellets(&g));
+
+    percute(&g);
+    CHECK(g.phase == DD_DEAD, "la dernière prise termine la partie");
+    CHECK(g.lives == 0, "et il ne reste plus de vie (%u)", g.lives);
 
     const int64_t s = g.score;
     dedale_tick(&g, STEP);
     CHECK(g.score == s, "et une partie finie ne se joue plus");
 }
+
 
 /* Vider le labyrinthe fait passer au niveau suivant, et le remplit à nouveau. */
 static void test_le_niveau_suivant(void)
@@ -331,6 +378,47 @@ static void test_determinisme(void)
 /* Le joueur automatique doit JOUER : manger, et survivre plus que quelques
  * secondes. C'est ce chiffre qui a montré que les hélices étaient trop
  * rapides — six parties en soixante secondes pour quarante points. */
+/*
+ * LA GRAINE DOIT SE VOIR. Deux graines différentes doivent donner deux parties
+ * différentes — c'est la propriété qui manquait : la recette a mesuré cinq
+ * graines, cinq parties identiques, et la même mort à 39,64 s.
+ *
+ * Le critère est volontairement faible — deux issues distinctes sur cinq
+ * suffisent — parce qu'un joueur automatique déterministe dans un labyrinthe
+ * fixe PEUT retomber sur le même résultat de temps en temps. Ce qu'on refuse,
+ * c'est que les cinq soient identiques, ce qui prouverait que la graine n'entre
+ * nulle part.
+ */
+static void test_la_graine_change_la_partie(void)
+{
+    int64_t scores[5];
+    float   vies[5];
+    for (int i = 0; i < 5; ++i) {
+        dedale g;
+        ledger l;
+        float sec = 0.0f;
+        play(&g, 9000u + (uint64_t)i, &l, &sec);
+        scores[i] = g.score;
+        vies[i] = sec;
+    }
+    int distincts = 1;
+    for (int i = 1; i < 5; ++i) {
+        bool neuf = true;
+        for (int j = 0; j < i; ++j)
+            if (scores[j] == scores[i] && vies[j] == vies[i]) neuf = false;
+        if (neuf) distincts++;
+    }
+    /* Imprimé même quand ça passe : c'est la MESURE qui a motivé le correctif,
+     * et un chiffre qu'on ne voit plus est un chiffre qui redevient faux sans
+     * qu'on le sache. */
+    for (int i = 0; i < 5; ++i)
+        printf("  graine %d : %lld pts en %.2f s\n", 9000 + i,
+               (long long)scores[i], (double)vies[i]);
+    CHECK(distincts >= 2,
+          "cinq graines donnent %d issue(s) distincte(s) — la graine entre "
+          "dans le déroulement", distincts);
+}
+
 static void test_le_robot_joue(void)
 {
     uint32_t eaten = 0;
@@ -393,6 +481,7 @@ int main(void)
     test_le_journal_vaut_le_score();
     test_la_fin_est_annoncee();
     test_determinisme();
+    test_la_graine_change_la_partie();
     test_le_robot_joue();
     test_le_vocabulaire();
 

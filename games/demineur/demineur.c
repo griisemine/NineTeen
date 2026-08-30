@@ -723,7 +723,7 @@ const ns_game_api g_demineur_api = {
      * déplacement du curseur muet : un clic à chaque case traversée serait
      * insupportable au bout de vingt-cinq colonnes. */
     .sound_blip = NULL,
-    .sound_score = "games/flappy/score.wav",
+    .sound_score = "games/envol/score.wav",
     .sound_die = "games/snake/gameover.wav",
     .art_load = dm_art_load, .art_free = dm_art_free,
     .reset = dm_reset, .press = dm_press, .hold = dm_hold,

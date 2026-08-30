@@ -71,7 +71,7 @@ static void test_refus(void)
 
     /* Un port sur lequel personne n'écoute. Le refus doit être NET et porter un
      * motif : une fonction qui rend NULL sans rien dire oblige à deviner. */
-    ns_lockstep *ls = ns_lockstep_connect("127.0.0.1", 1, 1, 0, "flappy", "normal",
+    ns_lockstep *ls = ns_lockstep_connect("127.0.0.1", 1, 1, 0, "envol", "normal",
                                           400, err, sizeof err);
     CHECK(ls == NULL, "une connexion vers un port fermé a été acceptée");
     CHECK(err[0] != '\0', "un échec de connexion n'a produit aucun motif");
@@ -79,17 +79,17 @@ static void test_refus(void)
 
     /* Un hôte qui ne se résout pas. */
     err[0] = '\0';
-    ls = ns_lockstep_connect("hote.invalide.nineteen", 8081, 1, 0, "flappy", "normal",
+    ls = ns_lockstep_connect("hote.invalide.nineteen", 8081, 1, 0, "envol", "normal",
                              400, err, sizeof err);
     CHECK(ls == NULL, "un hôte introuvable a été accepté");
     if (ls) ns_lockstep_close(ls);
 
     /* Des paramètres invalides ne doivent pas même toucher au réseau. */
     err[0] = '\0';
-    ls = ns_lockstep_connect(NULL, 8081, 1, 0, "flappy", "normal", 400, err, sizeof err);
+    ls = ns_lockstep_connect(NULL, 8081, 1, 0, "envol", "normal", 400, err, sizeof err);
     CHECK(ls == NULL, "un hôte NULL a été accepté");
     err[0] = '\0';
-    ls = ns_lockstep_connect("127.0.0.1", 8081, 1, 7, "flappy", "normal", 400, err, sizeof err);
+    ls = ns_lockstep_connect("127.0.0.1", 8081, 1, 7, "envol", "normal", 400, err, sizeof err);
     CHECK(ls == NULL, "une place autre que 0 ou 1 a été acceptée");
 
     /* L'état d'une liaison inexistante doit être lisible sans planter : le code
@@ -192,9 +192,9 @@ static void test_duel(const char *host, uint16_t port, bool provoquer)
     char ea[160] = {0}, eb[160] = {0};
     const uint64_t duel = (uint64_t)SDL_GetTicks() * 1000u + (provoquer ? 7u : 3u);
 
-    ns_lockstep *a = ns_lockstep_connect(host, port, duel, 0, "flappy", "normal",
+    ns_lockstep *a = ns_lockstep_connect(host, port, duel, 0, "envol", "normal",
                                          2000, ea, sizeof ea);
-    ns_lockstep *b = ns_lockstep_connect(host, port, duel, 1, "flappy", "normal",
+    ns_lockstep *b = ns_lockstep_connect(host, port, duel, 1, "envol", "normal",
                                          2000, eb, sizeof eb);
     CHECK(a != NULL, "client A : %s", ea);
     CHECK(b != NULL, "client B : %s", eb);
@@ -216,7 +216,7 @@ static void test_duel(const char *host, uint16_t port, bool provoquer)
      * sinon un tiers pourrait s'inviter dans un duel en cours. */
     if (!provoquer) {
         char ec[160] = {0};
-        ns_lockstep *c = ns_lockstep_connect(host, port, duel, 0, "flappy", "normal",
+        ns_lockstep *c = ns_lockstep_connect(host, port, duel, 0, "envol", "normal",
                                              600, ec, sizeof ec);
         if (c) {
             ns_lockstep_poll(c);
@@ -228,8 +228,8 @@ static void test_duel(const char *host, uint16_t port, bool provoquer)
         }
     }
 
-    const ns_game_api *api = ns_game_find("flappy");
-    CHECK(api != NULL, "le jeu « flappy » est introuvable");
+    const ns_game_api *api = ns_game_find("envol");
+    CHECK(api != NULL, "le jeu « envol » est introuvable");
     if (!api) { ns_lockstep_close(a); ns_lockstep_close(b); return; }
 
     void *sa = SDL_calloc(1, api->state_size);

@@ -78,7 +78,7 @@
  * apeuré et un état mangé ne demandent alors qu'UNE planche — et les quatre
  * couleurs de 1980 peuvent rester, une couleur n'appartient à personne.
  *
- * Les planches de Flappy, elles, sont dessinées EN COULEUR : `flappy.c` les
+ * Les planches d'Envol, elles, sont dessinées EN COULEUR : `envol.c` les
  * affiche sans teinte, et ses découpes sont écrites au pixel près
  * (`SPR_BIRD_W 17`, `SPR_PIPE_W 26`, `SPR_BG_W 144`…). Les remplaçantes ont
  * donc EXACTEMENT les mêmes dimensions et la même grille de cases : le jeu n'a
@@ -402,7 +402,7 @@ static const teinte PAL_CERF[] = {
  * Trois images : seule la queue change — elle fouette vers le bas, à plat, puis
  * vers le haut. La voile, elle, ne se déforme pas : c'est une toile tendue.
  */
-static const char *const FL_CERF[3][12] = {
+static const char *const EN_CERF[3][12] = {
     {
         "...........o.....",
         "..........oro....",
@@ -447,7 +447,7 @@ static const char *const FL_CERF[3][12] = {
     },
 };
 
-static void planche_flappy_oiseau(toile *t)
+static void planche_envol_cerf(toile *t)
 {
     /* La planche fait 51 x 36 : trois colonnes de 17 sur trois rangées de 12.
      * Le jeu n'emploie que la première rangée ; les deux autres existaient
@@ -467,7 +467,7 @@ static void planche_flappy_oiseau(toile *t)
         memcpy(pal[2].rgba, VOILE[rang][1], 4);   /* 'j' */
         memcpy(pal[4].rgba, VOILE[rang][0], 4);   /* 'q' : la queue suit la voile */
         for (int f = 0; f < 3; ++f)
-            pose(t, FL_CERF[f], 17, 12, pal, N_CERF, f * 17, rang * 12, 1, false);
+            pose(t, EN_CERF[f], 17, 12, pal, N_CERF, f * 17, rang * 12, 1, false);
     }
 }
 
@@ -480,7 +480,7 @@ static void planche_flappy_oiseau(toile *t)
  * marque l'ouverture — sans ressembler à quoi que ce soit d'existant, et son
  * treillis donne une texture verticale que le défilement rend lisible.
  *
- * 104 x 160 : quatre colonnes de 26. `flappy.c` prend la colonne 0 en mode
+ * 104 x 160 : quatre colonnes de 26. `envol.c` prend la colonne 0 en mode
  * difficile et la colonne 52 (donc la troisième) en mode normal ; les deux
  * autres restent des variantes, comme dans la planche d'origine.
  *
@@ -538,7 +538,7 @@ static void pylone(toile *t, int x0, const float corps[3], const float about[3])
     pave(t, x0 + 19, 2, 4, FL_ABOUT_H - 4, OMBRE);
 }
 
-static void planche_flappy_tuyaux(toile *t)
+static void planche_envol_pylones(toile *t)
 {
     static const float ORANGE[3] = { 0.86f, 0.42f, 0.16f };
     static const float OR_ABOUT[3] = { 0.96f, 0.58f, 0.22f };
@@ -576,7 +576,7 @@ static void pave_cyclique(toile *t, int x, int y, int w, int h, const unsigned c
     }
 }
 
-static void planche_flappy_sol(toile *t)
+static void planche_envol_passerelle(toile *t)
 {
     static const unsigned char HAUT[4]   = { 206, 196, 150, 255 };
     static const unsigned char BORD[4]   = {  92,  84,  62, 255 };
@@ -679,7 +679,7 @@ static void ciel(toile *t, int x0, const float haut[3], const float bas[3],
     }
 }
 
-static void planche_flappy_fonds(toile *t)
+static void planche_envol_ciels(toile *t)
 {
     static const float J_HAUT[3] = { 0.30f, 0.62f, 0.78f };
     static const float J_BAS[3]  = { 0.72f, 0.86f, 0.86f };
@@ -710,10 +710,10 @@ static const planche G_PLANCHES[] = {
       "le rubis, quatre eclats" },
     { "dedale_creatures", 4 * DD_CASE, 2 * DD_CASE, planche_dedale_creatures,
       "les helices, quatre phases + le moyeu mange" },
-    { "flappy_oiseau",   51,  36, planche_flappy_oiseau, "le cerf-volant, 3 x 3 cases de 17 x 12" },
-    { "flappy_tuyaux",  104, 160, planche_flappy_tuyaux, "quatre pylones de 26 x 160" },
-    { "flappy_passerelle", 168, 55, planche_flappy_sol, "la passerelle, cyclique sur 168" },
-    { "flappy_fonds",   288, 256, planche_flappy_fonds,  "deux ciels de 144 x 256, jour et nuit" },
+    { "envol_cerf",   51,  36, planche_envol_cerf, "le cerf-volant, 3 x 3 cases de 17 x 12" },
+    { "envol_pylones",  104, 160, planche_envol_pylones, "quatre pylones de 26 x 160" },
+    { "envol_passerelle", 168, 55, planche_envol_passerelle, "la passerelle, cyclique sur 168" },
+    { "envol_ciels",   288, 256, planche_envol_ciels,  "deux ciels de 144 x 256, jour et nuit" },
 };
 #define N_PLANCHES ((int)(sizeof G_PLANCHES / sizeof G_PLANCHES[0]))
 

@@ -1216,13 +1216,18 @@ void ns_scene_unload(ns_rhi *r, ns_scene *s)
 typedef struct game_tint { const char *game; float rgb[3]; } game_tint;
 
 static const game_tint g_game_tints[] = {
-    { "flappy",      { 0.32f, 1.00f, 0.52f } },   /* vert du tuyau */
-    { "tetris",      { 0.35f, 0.58f, 1.00f } },   /* bleu de la grille */
+    /* Les trois premiers noms ont change avec les jeux qu'ils teintent — deux
+     * marques deposees et un titre d'auteur. Cette table est cle sur `id` et
+     * ne dit rien quand elle ne trouve pas : cinq bornes projetaient donc un
+     * gris froid au lieu de leur couleur, sans erreur ni journal. Une table de
+     * correspondance muette est le pire endroit ou oublier un renommage. */
+    { "envol",       { 0.32f, 1.00f, 0.52f } },   /* vert du tuyau */
+    { "aplomb",      { 0.35f, 0.58f, 1.00f } },   /* bleu de la grille */
     { "asteroid",    { 0.70f, 0.84f, 1.00f } },   /* blanc-bleu spatial */
     { "snake",       { 0.45f, 1.00f, 0.38f } },
     { "shooter",     { 1.00f, 0.46f, 0.24f } },   /* orange des explosions */
     { "demineur",    { 1.00f, 0.86f, 0.38f } },
-    { "pacman",      { 1.00f, 0.90f, 0.22f } },
+    { "dedale",      { 1.00f, 0.90f, 0.22f } },
     { "piano",       { 0.88f, 0.42f, 1.00f } },
     { "leaderboard", { 0.40f, 0.92f, 1.00f } },
 };

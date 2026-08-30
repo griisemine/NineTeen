@@ -115,7 +115,7 @@ s'accroupir : ce mode n'a ni gravité ni collision, c'est un outil de cadrage.
 
 **Jouer sur une borne** : approchez-vous, `E` insère un jeton et la partie démarre **dans la
 dalle** — on reste en 3D, la tête reste libre, on voit l'écran à travers son verre bombé. **Les
-huit jeux sont portés** : Flappy (`Espace`), Snake, Tetris, Démineur, Asteroid, Pacman, Piano et
+huit jeux sont portés** : Envol (`Espace`), Snake, Aplomb, Démineur, Asteroid, Dédale, Piano et
 le shooter, tous au manche — les flèches — et au bouton — `Espace`. Snake se joue aux flèches
 **maintenues** : le serpent tourne tant qu'on tient. `Échap` sort de la partie, pas du jeu.
 
@@ -135,14 +135,39 @@ Le **Piano** se joue au manche : les quatre directions sont les quatre voies, et
 voie vide termine la partie** — c'est la règle de 2020, et c'est elle qui empêche de marteler.
 Laisser passer une note ne fait que casser le combo.
 
-Le **Tetris** de 2020 ne compte pas comme les autres, et c'est voulu : chaque ligne
+**Aplomb** — l'empilement — ne compte pas comme les autres, et c'est voulu : chaque ligne
 simultanée vaut le **double** de la précédente — un quadruple fait donc 1 500 et non 400 — et une
 ligne d'**une seule couleur** vaut **dix fois** son total. Viser la couleur rapporte plus que viser
 le quadruple.
 
-Pour voir un jeu sans traverser la salle : `--game=flappy`, `--game=snake`, `--game=demineur`,
-`--game=tetris`, `--game=asteroid`, `--game=pacman`, `--game=piano` ou `--game=shooter` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
+Pour voir un jeu sans traverser la salle : `--game=envol`, `--game=snake`, `--game=demineur`,
+`--game=aplomb`, `--game=asteroid`, `--game=dedale`, `--game=piano` ou `--game=shooter` démarre directement en plein écran. Sans écran (`--headless`), la graine est fixe :
 la même commande rend exactement la même image.
+
+**Dédale** — le labyrinthe — donne **trois vies**, et la partie ne s'arrête qu'à la troisième
+prise : les deux premières coûtent une manche, pas la partie, et le score comme le labyrinthe
+entamé sont conservés. Les quatre poursuivants sont **les hélices**, un rotor à quatre pales, et
+le héros est **le rubis**, une pierre taillée : deux silhouettes qu'on ne confond pas, l'une
+pleine, l'autre ajourée. La graine change la partie — c'est elle qui décide quel comportement
+sort de quel côté de l'enclos, et dans quel ordre.
+
+**Trois jeux ont changé de nom**, et pas par goût : « PAC-MAN », « TETRIS » et « FLAPPY BIRD »
+sont des marques déposées, et le paquet ne pouvait pas être vendu tant qu'elles y étaient. Une
+mécanique ne s'approprie pas, un nom et un personnage si. Les règles n'ont pas bougé d'une ligne.
+
+| Avant | Maintenant | `--game=` |
+|---|---|---|
+| PAC-MAN | **DÉDALE** | `dedale` |
+| TETRIS | **APLOMB** | `aplomb` |
+| FLAPPY BIRD | **ENVOL** | `envol` |
+
+Un score enregistré sous l'ancien nom **n'est pas perdu, il devient invisible** : le classement
+local (`ns_scores`) est indexé par `jeu/difficulté`, et une ligne `pacman/normal` reste dans le
+fichier sans qu'aucune borne ne la demande. Elle se récupère à la main en renommant la clé dans
+le fichier de scores. Côté serveur, rien n'est perdu : la migration
+`0003_debaptise.sql` **renomme le créneau** au lieu d'en créer un neuf, et les parties pointent
+vers l'identifiant du jeu, pas vers son nom. Un classement mondial change d'étiquette, pas de
+contenu.
 
 Le son suit la pièce : les pas changent selon ce qu'on a sous les pieds, et les **toilettes, le
 sas d'entrée et le coin billard** ont chacun leur écho — déclaré dans `assets/scene/salle.room.json`,
@@ -380,7 +405,7 @@ en lecture seule, et les parties restent locales.
 
 Deux détails que cette vérification a mis au jour, et qu'aucun test unitaire
 n'aurait attrapés parce qu'ils vivent *entre* les deux moitiés du projet : le
-serveur nomme ses tableaux `flappy-easy` / `flappy-hard` là où le moteur porte un
+serveur nomme ses tableaux `envol-easy` / `envol-hard` là où le moteur porte un
 jeu et une difficulté séparés (la traduction se fait maintenant contre la liste
 que le serveur renvoie), et la graine de partie fait 63 bits, donc la relire dans
 un `float` la détruisait silencieusement.

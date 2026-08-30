@@ -465,7 +465,7 @@ const ns_game_api g_piano_api = {
     .id = "piano", .title = "PIANO", .label = "PIANO",
     .state_size = sizeof(piano), .art_size = sizeof(piano_art),
     .sound_blip = NULL,
-    .sound_score = "games/flappy/score.wav",
+    .sound_score = "games/envol/score.wav",
     .sound_die = "games/snake/gameover.wav",
     .art_load = pn_art_load, .art_free = pn_art_free,
     .reset = pn_reset, .press = pn_press, .hold = pn_hold,

@@ -33,11 +33,11 @@
     {
       "_atmo": "SPEC-ATMOSPHERE poste 5. Une moquette n'emet pas de lumiere. A 0,25 elle en emettait assez pour delaver les bas de bornes, et son motif bouclait tous les 60 cm au lieu des 40 d'une vraie moquette d'arcade. L'emissif reste NON NUL a 0,10, parce que les motifs fluo d'une moquette d'arcade sont bel et bien phosphorescents sous la lumiere noire : c'est de l'ADN de 2020, et on ne l'eteint pas.",
       "name": "sol",
-      "texture": "floor.jpg",
+      "texture": "moquette_neon.png",
       "roughness": 0.94,
       "metallic": 0.0,
       "uvMetres": 1.6,
-      "_albedo": "Le tapis NÉON de 2020, remis. La raison invoquée pour l'avoir abandonné était arithmétiquement fausse : elle comparait des moyennes d'OCTETS sRGB (30 pour floor.jpg contre 47 pour moquette.jpg), c'est-à-dire une échelle perceptuelle, alors qu'une réflectance est une grandeur LINÉAIRE — l'erreur exacte contre laquelle texgen.c met en garde. Mesuré en linéaire : floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292. Le tapis néon est donc 34 % PLUS CLAIR que la boucle bordeaux qui l'a remplacé, et la salle a perdu son objet le plus reconnaissable pour rien. Les deux passent d'ailleurs par la dé-cuisson (ALBEDO_floor 0,11) et ressortent à moins de 1 % l'un de l'autre.",
+      "_albedo": "Le tapis néon de 2020 est DESSINÉ depuis `tools/moquetteart`, et « floor.jpg » ne part plus dans le paquet : ouverte et agrandie, elle portait au néon un PAC-MAN, un de ses FANTÔMES et ses CERISES de bonus (Bandai Namco) plus la silhouette d'une MANETTE de console (Sony) — sur la plus grande surface de la salle. Les figures changent, le tapis reste : tissage sombre, motifs fluo, et un manche, un jeton, une étoile, un éclair, un dé, une note, une cible, une planète, qui n'appartiennent à personne. La planche sort DÉJÀ dé-cuite à 0,1145 de réflectance linéaire moyenne, contre 0,1061 pour le « floor_c.png » qu'elle remplace : 8 % d'écart, mesurés des deux côtés, donc rien à re-régler. Ce qui suit reste vrai de l'image d'origine et explique pourquoi ce tapis-là. Le tapis NÉON de 2020, remis. La raison invoquée pour l'avoir abandonné était arithmétiquement fausse : elle comparait des moyennes d'OCTETS sRGB (30 pour floor.jpg contre 47 pour moquette.jpg), c'est-à-dire une échelle perceptuelle, alors qu'une réflectance est une grandeur LINÉAIRE — l'erreur exacte contre laquelle texgen.c met en garde. Mesuré en linéaire : floor.jpg réfléchit 0,0392 et moquette.jpg 0,0292. Le tapis néon est donc 34 % PLUS CLAIR que la boucle bordeaux qui l'a remplacé, et la salle a perdu son objet le plus reconnaissable pour rien. Les deux passent d'ailleurs par la dé-cuisson (ALBEDO_floor 0,11) et ressortent à moins de 1 % l'un de l'autre.",
       "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
       "footstep": "moquette",
       "emissive": [
@@ -238,7 +238,7 @@
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
       "_atmo": "SPEC-ATMOSPHERE poste 6. Le flanc et le caisson avaient leurs ROLES INVERSES, mesure sur les neuf paires : le flanc etait 1,7 fois plus clair et 1,8 fois MOINS colore que le corps qu'il habille. Une serigraphie de flanc est la piece la plus coloree d'une borne — c'est elle qu'on voit de trois quarts dans une allee — et elle etait devenue un pastel. Regle : le flanc porte la couleur du caisson, un cran plus clair, et non une autre couleur plus pale. baseColor = celle du caisson x 1,8, le facteur venant du rapport mesure entre flanc_borne.png (0,303) et painted_panel.jpg (0,401). flanc_asteroid reste sombre et peu sature : c'est VOULU, un caisson d'Asteroids est noir, et une rangee a besoin d'un silence.",
-      "name": "flanc_flappy",
+      "name": "flanc_envol",
       "texture": "flanc_borne.png",
       "uvMetres": 1.0,
       "roughness": 0.46,
@@ -363,7 +363,7 @@
       ]
     },
     {
-      "name": "caisson_flappy",
+      "name": "caisson_envol",
       "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
@@ -745,8 +745,8 @@
       "uvMetres": 0.15
     },
     {
-      "name": "ecran_flappy_facile",
-      "texture": "ecran_flappy_facile.png",
+      "name": "ecran_envol_facile",
+      "texture": "ecran_envol_facile.png",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -757,8 +757,8 @@
       "fit": true
     },
     {
-      "name": "ecran_flappy_dur",
-      "texture": "ecran_flappy_dur.png",
+      "name": "ecran_envol_dur",
+      "texture": "ecran_envol_dur.png",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -881,8 +881,8 @@
     },
     {
       "_": "RECETTE VISUELLE. Elle portait « flappy.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre deux oiseaux coupes en deux et un aplat vert, jamais le mot « FLAPPY ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
-      "name": "marquee_flappy",
-      "texture": "marquee_flappy.png",
+      "name": "marquee_envol",
+      "texture": "marquee_envol.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -1121,7 +1121,7 @@
     },
     {
       "name": "sol_technique",
-      "texture": "floor.jpg",
+      "texture": "moquette_neon.png",
       "roughness": 0.92,
       "uvMetres": 1.2,
       "_": "La moquette bouclée noire d'origine, gardée pour le couloir de service : c'est elle que le jeton « sol ciré » d'obj2gltf vernissait à 0,24."
@@ -3210,7 +3210,7 @@
       "_": "L'ILOT DE 2020, aux cotes mesurees sur salle.obj. Entraxe 0,942 m dans une rangee (c'etait 0,80), entraxe dos a dos 1,201 m (c'etait 0,88), allee centrale de 1,725 m, emprise 7,27 x 2,38 m centree sur z = +0,69.\nET LA REGLE DE DIFFICULTE EST SPATIALE, ce qui n'existait plus du tout : les six bornes HARD sont toutes a x < 0, les six autres a x > 0, et un panneau suspendu au-dessus de l'allee le dit — moitie rouge cote HARD, moitie bleue cote EASY. Les dix-neuf bornes portaient bien un champ `difficulty`, mais AUCUNE geometrie ne le disait au joueur.",
       "name": "borne_arcade_1",
       "slot": 1,
-      "game": "flappy",
+      "game": "envol",
       "difficulty": "hard",
       "at": [
         -3.186,
@@ -3218,12 +3218,12 @@
         1.293
       ],
       "yaw": 0.0,
-      "materialBody": "caisson_flappy",
-      "materialSide": "flanc_flappy",
+      "materialBody": "caisson_envol",
+      "materialSide": "flanc_envol",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_dur",
-      "marquee": "marquee_flappy"
+      "screen": "ecran_envol_dur",
+      "marquee": "marquee_envol"
     },
     {
       "name": "borne_arcade_2",
@@ -3413,7 +3413,7 @@
     {
       "name": "borne_arcade_12",
       "slot": 12,
-      "game": "flappy",
+      "game": "envol",
       "difficulty": "easy",
       "at": [
         3.2,
@@ -3421,12 +3421,12 @@
         0.092
       ],
       "yaw": 180.0,
-      "materialBody": "caisson_flappy",
-      "materialSide": "flanc_flappy",
+      "materialBody": "caisson_envol",
+      "materialSide": "flanc_envol",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_flappy_facile",
-      "marquee": "marquee_flappy"
+      "screen": "ecran_envol_facile",
+      "marquee": "marquee_envol"
     },
     {
       "_": "Le mur ouest. En 2020 il en portait DEUX, a z = +0,422 et +1,362, d'entraxe 0,942. On garde cet alignement et cet entraxe, et on en met six : le jeu s'appelle Nineteen et compte dix-neuf bornes depuis toujours. C'est le seul endroit ou l'on s'ecarte du decompte de 2020 — quinze caissons — et c'est dit plutot que masque. Le PLAN est repris ; le nombre de bornes appartient au jeu, pas au plan.",

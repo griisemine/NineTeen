@@ -389,7 +389,9 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
      * tourner seul.
      */
     ns_online_board world;
-    if (ns_online_board_get("flappy", "normal", &world) && world.count > 0) {
+    /* `envol` et non `flappy` : le jeu a été rebaptisé, et un identifiant resté
+     * en arrière ne rend pas d'erreur — il rend un tableau vide. */
+    if (ns_online_board_get("envol", "normal", &world) && world.count > 0) {
         /*
          * UNE ligne, pas un second tableau : sous le trait il reste 42 points de
          * haut, et un bloc de quatre lignes en débordait — les scores mondiaux
@@ -398,7 +400,7 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
          */
         static const float gold[4] = { 1.00f, 0.84f, 0.38f, 1.0f };
         char line[64];
-        SDL_snprintf(line, sizeof line, "MONDIAL FLAPPY  %-3.3s %u",
+        SDL_snprintf(line, sizeof line, "MONDIAL ENVOL  %-3.3s %u",
                      world.row[0].name, world.row[0].score);
         centred(s, w * 0.5f, 256.0f * u, 1.7f * u, gold, line);
         centred(s, w * 0.5f, 274.0f * u, 1.3f * u, dim, "SCORES LOCAUX CI-DESSUS");

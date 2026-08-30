@@ -200,7 +200,7 @@ type gameRules struct {
 	//
 	// Ils manquaient, et la table se contredisait : `flap` était limité en
 	// fréquence — donc attendu — alors qu'un événement absent de `points` et de
-	// `scaled` provoque un refus sec. Résultat, TOUTE partie de Flappy soumise
+	// `scaled` provoque un refus sec. Résultat, TOUTE partie d'Envol soumise
 	// par le client était rejetée avec « événement inconnu « flap » », et rien
 	// côté client ne pouvait le prévoir : il ne voyait qu'un envoi refusé.
 	//
@@ -307,7 +307,7 @@ func sanitizeKind(k string) string {
 // Table des règles. Les barèmes reprennent ceux du code d'origine, de sorte que
 // les scores de la V15 restent comparables à ceux de la V1.
 var rulesTable = map[string]gameRules{
-	"flappy": {
+	"envol": {
 		points:           map[string]int64{"pipe": 1},
 		silent:           map[string]bool{"flap": true, "death": true},
 		maxRatePerSecond: map[string]float64{"pipe": 3, "flap": 12},
@@ -427,7 +427,7 @@ var rulesTable = map[string]gameRules{
 }
 
 // rulesFor accepte les identifiants de jeu suffixés par la difficulté
-// ("flappy-hard" utilise les règles de "flappy").
+// ("envol-hard" utilise les règles de "envol").
 func rulesFor(slug string) (gameRules, bool) {
 	if r, ok := rulesTable[slug]; ok {
 		return r, true

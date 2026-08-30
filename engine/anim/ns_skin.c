@@ -10,6 +10,11 @@
 #include <float.h>
 #include <string.h>
 
+/* Le nombre de crans où la remontée du bassin est mesurée. Neuf suffisent :
+ * la courbe est un cosinus, et l'interpolation linéaire entre deux crans
+ * distants d'un huitième s'écarte de moins d'un millimètre. */
+#define NS_SKIN_ACCROUPI_CRANS 9
+
 /* Un canal d'animation : la piste d'un nœud pour une propriété. */
 typedef struct skin_track {
     const float *times;     /* `count` instants, croissants */
@@ -58,6 +63,26 @@ struct ns_skin {
     float           stride_length;
     float           forward_angle;
     float           stand_time;
+
+    /*
+     * DE QUOI DÉRIVER LES ALLURES QUE LE FICHIER N'A PAS. Tout est MESURÉ au
+     * chargement : aucun nom d'os, aucune convention d'exportateur.
+     */
+    ns_v3           axe_lateral;    /* l'axe des épaules, perpendiculaire à la marche */
+    int             pied[2];        /* les deux pieds, un par jambe */
+    int             hanche[2];      /* NŒUD de la hanche de chaque jambe */
+    int             buste_noeud;    /* NŒUD du premier os du buste, au-dessus du bassin */
+    int8_t          etage[NS_SKIN_MAX_JOINTS];  /* -1 hors jambe, 0 cuisse, 1 mollet, 2 pied */
+    int8_t          jambe[NS_SKIN_MAX_JOINTS];  /* -1, 0 ou 1 */
+    bool            suit_buste[NS_SKIN_MAX_JOINTS];
+    float           sens_avant;     /* +1 ou -1 : le signe qui envoie le genou DEVANT */
+    bool            accroupi_pret;
+    float           accroupi_angle; /* l'angle de cuisse à plein accroupi, en radians */
+    /* La REMONTÉE du point le plus bas, par cran d'accroupi. C'est elle qu'on
+     * retranche pour reposer les pieds au sol : plier les jambes SOULÈVE les
+     * pieds sous un bassin qui, lui, ne bouge pas. Mesurée et non calculée —
+     * elle dépend de la longueur des segments du modèle. */
+    float           accroupi_remontee[NS_SKIN_ACCROUPI_CRANS];
 
     /* L'image reste CONST : elle appartient au tampon de cgltf, qu'on garde
      * vivant pour ça. La copier serait un demi-mégaoctet de plus pour rien. */

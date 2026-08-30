@@ -10,7 +10,7 @@
 
 add_library(nineteen_games STATIC
     games.c
-    flappy/flappy.c
+    envol/envol.c
     snake/snake.c
     demineur/demineur.c
     aplomb/aplomb.c

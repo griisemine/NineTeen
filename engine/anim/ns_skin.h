@@ -193,6 +193,71 @@ float ns_skin_forward_angle(const ns_skin *s);
 void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max);
 
 /*
+ * LES ALLURES QUE LE FICHIER N'A PAS.
+ *
+ * Le cycle livré est une MARCHE, et c'est tout ce qu'il y a. La marche et la
+ * course s'en tirent sans rien ajouter — la phase suit la distance parcourue,
+ * donc la cadence suit l'allure — mais deux choses manquaient vraiment :
+ *
+ *   - ACCROUPI. La caméra descendait de 39 cm et le personnage restait
+ *     DEBOUT. C'était le défaut le plus grossier de la troisième personne, et
+ *     le jeu le disait lui-même au démarrage sans le corriger.
+ *   - L'ARRÊT. Une image de marche figée est une STATUE : rien ne bouge, et
+ *     l'œil le voit tout de suite. Un corps debout oscille — c'est le
+ *     balancement postural, involontaire et permanent.
+ *
+ * Les deux sont DÉRIVÉS du cycle unique plutôt que téléchargés, et aucun des
+ * deux n'ajoute d'état d'animation : ce sont des transformations posées PAR
+ * DESSUS l'échantillon, quel qu'il soit. L'accroupi marche donc aussi en
+ * marchant, sans qu'il existe un « cycle de marche accroupie ».
+ */
+typedef struct ns_skin_allure {
+    /*
+     * 0 debout, 1 accroupi à la cote calée par `ns_skin_crouch_calibrate`.
+     * Les valeurs intermédiaires sont la descente en cours, et elles sont
+     * continues : il n'y a pas de transition à écrire.
+     */
+    float accroupi;
+    /*
+     * Le TEMPS, en secondes, qui fait avancer le balancement postural, et son
+     * amplitude relative dans `souffle_force` (0 l'éteint). On passe le temps
+     * plutôt qu'une phase pour que l'appelant n'ait rien à mémoriser.
+     */
+    float souffle;
+    float souffle_force;
+} ns_skin_allure;
+
+/* `allure` à NULL rend exactement `ns_skin_pose`. */
+void ns_skin_pose_allure(const ns_skin *s, float time, const ns_skin_allure *allure,
+                         ns_m4 *out, int max);
+
+/*
+ * CALE l'accroupi sur une cote réelle : `rapport` est la hauteur accroupie
+ * voulue rapportée à la hauteur debout — 1,42 / 1,82 sur le personnage livré,
+ * soit les deux valeurs que `nineteen.env` donne déjà à la COLLISION.
+ *
+ * Pourquoi une calibration et pas un angle écrit en dur : un angle de genou ne
+ * dit rien de la hauteur obtenue, qui dépend de la longueur des segments du
+ * modèle. On BALAIE donc l'angle et on retient celui qui donne la cote
+ * demandée, en posant et en pesant vraiment les sommets. Le personnage
+ * accroupi fait alors exactement la taille que sa capsule de collision
+ * annonce — et changer de modèle ne demande rien.
+ *
+ * Rend false si le squelette ne s'y prête pas (pas deux jambes repérables) :
+ * l'appelant doit alors laisser l'accroupi à zéro plutôt que de plier au
+ * hasard.
+ */
+bool ns_skin_crouch_calibrate(ns_skin *s, float rapport);
+
+/* Vrai une fois la calibration réussie. */
+bool ns_skin_can_crouch(const ns_skin *s);
+
+/* L'angle de cuisse retenu à plein accroupi, en degrés. Sert au journal : une
+ * calibration qui sort un angle aberrant se voit dans le texte avant de se
+ * voir à l'écran. */
+float ns_skin_crouch_angle(const ns_skin *s);
+
+/*
  * L'instant du cycle où le personnage est le plus proche de DEBOUT, en secondes.
  *
  * Un cycle de marche n'a pas de pose de repos : il n'a que des poses de marche.

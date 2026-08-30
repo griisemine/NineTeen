@@ -1,5 +1,5 @@
 /*
- * flappy.h — Flappy Bird, porté depuis les 1 402 lignes de 2020.
+ * envol.h — Envol, porté depuis les 1 402 lignes de 2020.
  *
  * Ce qui est repris tel quel, et ce qui ne l'est pas
  * -------------------------------------------------
@@ -28,8 +28,8 @@
  * structure qu'on avance d'un pas. C'est ce qui la rend rejouable à l'identique
  * — donc scriptable pour les captures, et vérifiable sans écran.
  */
-#ifndef NS_FLAPPY_H
-#define NS_FLAPPY_H
+#ifndef NS_ENVOL_H
+#define NS_ENVOL_H
 
 #include "games.h"
 #include "ns_math.h"
@@ -43,31 +43,31 @@
  * logique vit dans ce repère ; l'affichage le met à l'échelle de la cible, quelle
  * qu'elle soit — l'écran d'une borne ou le plein écran.
  */
-#define FLAPPY_W 1920.0f
-#define FLAPPY_H 1080.0f
+#define ENV_W 1920.0f
+#define ENV_H 1080.0f
 
-#define FLAPPY_PIPES 8          /* PRELOAD_POS_OBSTACLE de 2020 */
+#define ENV_PIPES 8          /* PRELOAD_POS_OBSTACLE de 2020 */
 
-typedef enum flappy_phase {
-    FLAPPY_READY = 0,   /* en attente du premier battement */
-    FLAPPY_PLAYING,
-    FLAPPY_DEAD
-} flappy_phase;
+typedef enum envol_phase {
+    ENV_READY = 0,   /* en attente du premier battement */
+    ENV_PLAYING,
+    ENV_DEAD
+} envol_phase;
 
-typedef struct flappy_pipe {
+typedef struct envol_pipe {
     float position;     /* x du bord gauche */
     int   slot;         /* 0..4, la hauteur de passage */
     bool  scored;
-} flappy_pipe;
+} envol_pipe;
 
-typedef struct flappy {
-    flappy_phase phase;
+typedef struct envol {
+    envol_phase phase;
 
     float bird_y;
     float bird_vy;
     float bird_angle;       /* degrés, −30 en montée, +90 en piqué */
 
-    flappy_pipe pipes[FLAPPY_PIPES];
+    envol_pipe pipes[ENV_PIPES];
     float ground_scroll;
     float wing_time;        /* anime les trois images de l'oiseau */
     float dead_time;
@@ -81,31 +81,31 @@ typedef struct flappy {
     /* Événements de l'image : l'appelant les lit pour jouer un son, puis ils
      * sont remis à zéro au pas suivant. Le jeu ne connaît pas le mixeur. */
     bool flapped, scored_now, died_now;
-} flappy;
+} envol;
 
 /* Les planches de 2020, chargées une fois. */
-typedef struct flappy_art {
-    ns_texture background, birds, pipes, ground, digits;
+typedef struct envol_art {
+    ns_texture ciel, cerf, pylones, sol, chiffre;
     bool ready;
-} flappy_art;
+} envol_art;
 
-bool flappy_art_load(ns_rhi *r, flappy_art *a);
-void flappy_art_free(ns_rhi *r, flappy_art *a);
+bool envol_art_load(ns_rhi *r, envol_art *a);
+void envol_art_free(ns_rhi *r, envol_art *a);
 
-void flappy_reset(flappy *g, uint64_t seed, bool hard);
+void envol_reset(envol *g, uint64_t seed, bool hard);
 
 /* Un battement d'aile. Sans effet après la mort — c'est ce qui empêche de
  * « rejouer » en maintenant la touche pendant l'écran de fin. */
-void flappy_flap(flappy *g);
+void envol_flap(envol *g);
 
 /* Avance d'un pas FIXE. `dt` doit être constant d'un appel à l'autre : c'est ce
  * qui rend la partie reproductible à la graine près. */
-void flappy_tick(flappy *g, float dt);
+void envol_tick(envol *g, float dt);
 
 /* Dessine dans le repère logique courant de `s`, en s'y adaptant : le terrain de
  * 1920 x 1080 est mis à l'échelle et centré, donc la même fonction remplit
  * l'écran d'une borne et le plein écran. */
-void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
+void envol_draw(ns_sprite *s, const envol *g, const envol_art *a,
                  float logical_w, float logical_h);
 
 /*
@@ -117,11 +117,11 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
  * prouve qu'on peut franchir un tuyau, que le score monte, que le recyclage des
  * tuyaux ne finit pas par les empiler, et qu'aucun NaN ne s'installe.
  *
- * À appeler juste avant `flappy_tick`. Renvoie true s'il a battu des ailes.
+ * À appeler juste avant `envol_tick`. Renvoie true s'il a battu des ailes.
  */
-bool flappy_autopilot(flappy *g);
+bool envol_autopilot(envol *g);
 
 /* La même chose, vue par `room/` : voir `games/games.h`. */
-extern const ns_game_api g_flappy_api;
+extern const ns_game_api g_envol_api;
 
-#endif /* NS_FLAPPY_H */
+#endif /* NS_ENVOL_H */

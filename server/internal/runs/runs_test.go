@@ -282,7 +282,7 @@ func TestJournalTropVolumineuxRejete(t *testing.T) {
 
 // Les règles doivent se résoudre pour les deux difficultés d'un même jeu.
 func TestReglesParDifficulte(t *testing.T) {
-	for _, slug := range []string{"aplomb", "aplomb-easy", "aplomb-hard", "flappy-easy", "dedale"} {
+	for _, slug := range []string{"aplomb", "aplomb-easy", "aplomb-hard", "envol-easy", "dedale"} {
 		if _, ok := rulesFor(slug); !ok {
 			t.Errorf("règles introuvables pour %q", slug)
 		}
@@ -308,7 +308,7 @@ func TestPayloadCanoniqueStable(t *testing.T) {
 // C'est le test qui manquait des deux côtés. Le client émettait « flap » pour
 // chaque battement d'aile et « death » à la fin ; la table ne connaissait ni
 // l'un ni l'autre dans `points`, et un événement absent de `points` et de
-// `scaled` est refusé SÈCHEMENT. Toute partie de Flappy soumise était donc
+// `scaled` est refusé SÈCHEMENT. Toute partie d'Envol soumise était donc
 // rejetée en bloc — sans que personne le voie, l'envoi côté client étant « au
 // mieux, jamais bloquant ».
 //
@@ -317,7 +317,7 @@ func TestPayloadCanoniqueStable(t *testing.T) {
 // d'accord.
 func TestVocabulaireDuClientAccepte(t *testing.T) {
 	ctx := testContext()
-	ctx.GameSlug = "flappy"
+	ctx.GameSlug = "envol"
 
 	// Une minute de jeu, trois tuyaux franchis, des battements entre les deux.
 	sub := Submission{
@@ -349,7 +349,7 @@ func TestVocabulaireDuClientAccepte(t *testing.T) {
 // ouvrir une voie pour gonfler un score en battant des ailes.
 func TestEvenementsMuetsNeRapportentRien(t *testing.T) {
 	ctx := testContext()
-	ctx.GameSlug = "flappy"
+	ctx.GameSlug = "envol"
 
 	sub := Submission{
 		DurationMs: 10_000,
@@ -375,7 +375,7 @@ func TestEvenementsMuetsNeRapportentRien(t *testing.T) {
 // tout ce à quoi il sert.
 func TestEvenementMuetResteLimiteEnFrequence(t *testing.T) {
 	ctx := testContext()
-	ctx.GameSlug = "flappy"
+	ctx.GameSlug = "envol"
 
 	// 12 battements par seconde au maximum : on en met 200 en 10 s.
 	sub := Submission{DurationMs: 10_000, ClaimedScore: 0}

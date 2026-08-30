@@ -1,6 +1,6 @@
 #include "games.h"
 
-#include "flappy/flappy.h"
+#include "envol/envol.h"
 #include "demineur/demineur.h"
 #include "asteroid/asteroid.h"
 #include "dedale/dedale.h"
@@ -23,7 +23,7 @@
  * d'une borne dont le jeu n'est pas encore là.
  */
 static const ns_game_api *const g_games[] = {
-    &g_flappy_api,
+    &g_envol_api,
     &g_snake_api,
     &g_demineur_api, &g_aplomb_api, &g_asteroid_api, &g_dedale_api, &g_piano_api, &g_shooter_api,
 };
