@@ -98,7 +98,10 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `F5` | basculer caméra joueur / caméra libre |
 | `F6` | caméra orbite |
 | `F7` / `F8` | palier de qualité / échelle de rendu |
+| `F9` | ouvrir ou abandonner une manche du **Couperet**, le mode compétitif |
 | `F10` | première ou troisième personne |
+| `Tab` | pendant une manche : changer de **cible** |
+| `1` à `6` | pendant une manche : acheter une action — brouillage, inversion, coupure, blindage, relais, leurre |
 
 **La manette est branchée**, depuis 17.0.0. `SDL_InitSubSystem(SDL_INIT_GAMEPAD)` est appelé
 (`room/main.c:1328`), les branchements et débranchements à chaud sont suivis
@@ -299,6 +302,60 @@ Le barème complet, ses mesures, les lots et ce qui a été écarté : **`docs/E
 taux sont aussi affichés dans la salle — l'affiche `jetons` porte la grille des huit, le
 `reglement` les six règles, et les deux sont dessinées à la construction depuis la même table que
 le jeu, de sorte qu'elles ne *peuvent* pas le contredire.
+
+## Le Couperet — le mode compétitif
+
+**Une phrase suffit à le décrire, et tout le reste en découle :** tes points ne comptent
+qu'*une fois la partie finie*, et toutes les quarante-cinq secondes le couperet sort le dernier.
+
+`F9` ouvre une manche. On y joue à deux à huit places, chacun sur les bornes de la salle.
+
+**Le choix qu'il crée.** Les dix-neuf bornes ne durent pas le même temps, et l'écart est énorme :
+mesuré sur ce dépôt, la durée médiane d'une partie va de **5,9 s** (démineur en régime difficile)
+à **180 s** (aplomb, dedale, snake difficile). Enchaîner du court met en banque deux fois entre
+deux lames — on n'est jamais pris les mains vides. S'engager sur du long traverse **quatre lames
+sans avoir rien encaissé**, et si l'on est dernier quand l'une tombe, les trois minutes partent
+avec. En échange, les bornes longues paient beaucoup plus : le multiplicateur est peint sur leur
+fronton, il va de `x0,04` à `x4,20`, et il se lit **avant** d'insérer le jeton.
+
+**La partie en cours défend.** Elle ne compte pas au classement tant qu'elle n'est pas finie,
+mais le couperet, lui, la voit : au train où l'on marque, elle vaut ce qu'elle vaut, et cela suffit
+à tenir la lame à distance. C'est ce qui rend l'engagement jouable — sans cette règle, mesuré, il
+perdait **200 manches sur 200**.
+
+**Les fusibles.** Un par tranche de trente secondes de jeu, un de plus à chaque lame. Ils
+s'achètent six actions, toutes électriques :
+
+| | Prix | Effet |
+|---|---|---|
+| `1` **Brouillage** | 1 | la dalle de la cible se brouille, 4 s |
+| `2` **Inversion** | 2 | son manche part à l'envers, 5 s |
+| `3` **Coupure** | 4 | sa borne s'éteint : partie annulée, durée perdue |
+| `4` **Blindage** | 2 | encaisse la prochaine attaque, et attend |
+| `5` **Relais** | 1 | donne un fusible |
+| `6` **Leurre** | 3 | renvoie la prochaine attaque à son auteur |
+
+`Tab` choisit la cible ; une action défensive sans cible se pose sur soi. On ne frappe ni son
+propre camp, ni un spectre, ni une borne déjà éteinte.
+
+**Être sorti ne met pas à la porte.** Un éliminé devient **spectre** : il ne joue plus, mais il
+garde ses fusibles, en reçoit un à chaque lame, et continue d'agir. Sortir vous change de métier.
+
+**Les équipes.** Le couperet classe les **camps** et ne descend au joueur qu'à l'intérieur du camp
+condamné. C'est ce qui rend le rôle de soutien survivable : celui qui dépense tout en blindages
+sur son porteur ne marque rien et n'est pourtant pas condamné pour ça.
+
+**L'équilibre est mesuré, pas affirmé.** `tests/test_couperet.c` ne simule pas les parties, il les
+**joue** : les huit autopilotes du dépôt constituent un vivier de durées et de scores réels, et le
+test fait tourner deux cents manches de huit places. Résultat livré : **55 %** de victoires pour
+l'engagé contre le pressé, et 51 / 49 / 56 % sur trois graines indépendantes. Les six actions
+déplacent l'issue de **38 points de pourcentage** — sans elles, l'engagé gagne 94 % des manches —
+et le test *exige* cet écart, pour qu'une action affaiblie ne passe pas inaperçue.
+
+**Ce que ce mode n'est pas.** Il n'a ni saison, ni laissez-passer, ni rien qui s'achète. Ses
+fusibles naissent au coup d'envoi et meurent au verdict ; le portefeuille de la salle n'est pas
+touché. La minuterie n'y punit pas l'absence — elle arbitre une manche qu'on a choisi de
+commencer, et sortir du mode ne coûte rien.
 
 ## Ce qui manque encore, dit franchement
 

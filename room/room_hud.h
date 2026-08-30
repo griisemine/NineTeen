@@ -112,6 +112,20 @@ typedef struct room_hud_state {
      * rien à dire. Le minuteur sert au fondu, comme pour les réglages. */
     const char *eco_message;
     float       eco_message_timer;
+
+    /*
+     * LE MULTIPLICATEUR DE LA BORNE QU'ON APPROCHE, pendant une manche du
+     * Couperet. Zéro hors manche, et alors rien n'est affiché.
+     *
+     * C'est la moitié qui manquait au mode. Attacher le multiplicateur à la
+     * BORNE plutôt qu'à la durée jouée avait été justifié par « il est
+     * affichable » — or il ne l'était nulle part, et le choix qui fait tout le
+     * mode se prenait donc à l'aveugle. Il est ici, dans l'invite, c'est-à-dire
+     * au seul endroit et au seul instant où il sert : devant la fente, avant le
+     * jeton.
+     */
+    float cp_multiplicateur;
+    float cp_duree;              /* la durée médiane mesurée, en secondes */
 } room_hud_state;
 
 /*

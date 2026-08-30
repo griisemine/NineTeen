@@ -5283,6 +5283,24 @@ play_at_done: ;
                 hud.eco_message = room_eco_salle_message();
                 hud.eco_message_timer = room_eco_salle_message_reste();
 
+                /*
+                 * LE PRIX DE LA BORNE QU'ON APPROCHE, pendant une manche.
+                 *
+                 * Le régime vient de la BORNE et non de `game_hard` : on n'est
+                 * pas encore en train de jouer, et `game_hard` porte celui de la
+                 * partie précédente. Annoncer le multiplicateur du mauvais
+                 * régime devant la fente serait pire que ne rien annoncer — les
+                 * deux régimes d'une même borne ne durent pas du tout la même
+                 * chose (7,1 s contre 25,4 s pour le démineur).
+                 */
+                hud.cp_multiplicateur = 0.0f;
+                hud.cp_duree = 0.0f;
+                if (cp_actif && hud.near && hud.near->game[0]) {
+                    const bool dur = (SDL_strcasecmp(hud.near->difficulty, "hard") == 0);
+                    hud.cp_multiplicateur = room_cp_multiplicateur(hud.near->game, dur);
+                    hud.cp_duree = room_cp_duree_mediane(hud.near->game, dur);
+                }
+
                 ns_sprite_begin(sprites, ROOM_HUD_W, ROOM_HUD_H);
                 room_hud_draw(sprites, &hud);
                 if (cp_actif) {

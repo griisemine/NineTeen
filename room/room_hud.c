@@ -60,17 +60,38 @@ static void draw_prompt(ns_sprite *s, const room_hud_state *st)
     for (char *p = game; *p; ++p) *p = (char)SDL_toupper((unsigned char)*p);
     SDL_snprintf(line, sizeof line, "JOUER A %s%s", game, hard ? " (HARD)" : "");
 
+    /*
+     * LE PRIX DE LA BORNE, pendant une manche seulement.
+     *
+     * « x3,5 EN 157 S » : ce que cette borne paie, et ce qu'elle coûte en
+     * exposition. Les deux nombres ensemble, jamais l'un sans l'autre — un
+     * multiplicateur sans durée ferait choisir toujours le plus gros, et c'est
+     * exactement le choix que le mode existe pour rendre difficile.
+     */
+    char prix[48];
+    prix[0] = '\0';
+    if (st->cp_multiplicateur > 0.0f) {
+        SDL_snprintf(prix, sizeof prix, "x%.2f  EN %.0f S",
+                     (double)st->cp_multiplicateur, (double)st->cp_duree);
+    }
+
     const float scale = 3.0f;
     const float key_w = ns_sprite_text_width("E", scale);
     const float txt_w = ns_sprite_text_width(line, scale);
     const float gap   = 14.0f;
     const float total = key_w + gap * 2.0f + txt_w;
 
-    const float h = ns_sprite_text_height(scale) + 22.0f;
+    const float prix_scale = 2.4f;
+    const float h = ns_sprite_text_height(scale) + 22.0f
+                  + (prix[0] ? ns_sprite_text_height(prix_scale) + 8.0f : 0.0f);
     const float y = ROOM_HUD_H * 0.70f;
     const float x = (ROOM_HUD_W - total) * 0.5f;
 
     panel(s, x - 22.0f, y - 11.0f, total + 44.0f, h);
+    if (prix[0]) {
+        centred(s, ROOM_HUD_W * 0.5f,
+                y + ns_sprite_text_height(scale) + 10.0f, prix_scale, C_GOLD, prix);
+    }
 
     /* La touche dans un carré : c'est ce qui la distingue du mot qui suit, et
      * c'est la convention que tout le monde lit sans l'avoir apprise. */

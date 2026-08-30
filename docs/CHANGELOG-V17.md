@@ -576,6 +576,125 @@ l'impact), retour 300 ms. Le coup coûte ce qu'il doit coûter : pendant 500 ms 
 main est sur la machine et non sur les boutons, les commandes sont perdues et la
 partie continue.
 
+## Un troisième lot : LE COUPERET, le mode compétitif
+
+### La règle, en une phrase
+
+**Tes points ne comptent qu'une fois la partie finie, et toutes les
+quarante-cinq secondes le couperet sort le dernier.**
+
+Tout le mode découle de cette phrase, parce que les dix-neuf bornes **ne durent
+pas le même temps**. Mesure du 2026-08-30 sur ce dépôt — vingt-quatre parties
+d'autopilote par jeu et par régime, pas fixe à 120 Hz, plafond à 180 s :
+
+| | normal | difficile | | | normal | difficile |
+|---|---|---|---|---|---|---|
+| envol | 74,2 s | 21,7 s | | asteroid | 61,9 s | 62,5 s |
+| snake | 45,4 s | **180,0 s** | | dedale | **180,0 s** | 157,3 s |
+| demineur | 25,4 s | **5,9 s** | | piano | 106,8 s | 75,7 s |
+| aplomb | **180,0 s** | 9,1 s | | shooter | 54,9 s | 48,0 s |
+
+Vingt-cinq fois d'écart. Enchaîner du court met en banque deux fois entre deux
+lames ; s'engager sur du long en traverse **quatre sans avoir rien encaissé**.
+Quatre lignes en gras touchent le plafond de mesure et non la mort — c'est
+exactement là qu'est posé le plafond du multiplicateur : au-delà, la table ne
+dit plus rien.
+
+### Quatre réglages corrigés PAR LA MESURE, et les quatre échecs restent écrits
+
+Le test ne simule pas les parties, il les **joue** : les huit autopilotes
+constituent au lancement un vivier de durées et de scores réels, et le tournoi
+tire dedans — deux cents manches de huit places, en 6,7 s.
+
+| Ce qui a été essayé | Ce que la mesure a rendu |
+|---|---|
+| Ne compter que les points **encaissés** | l'engagé gagne **0 manche sur 200**. Il meurt avant d'encaisser : sur 157 s il traverse trois lames à zéro, et dès qu'un adversaire a un point l'égalité disparaît, donc le départage aussi |
+| Le multiplicateur sur la durée **réellement jouée** | il récompensait la **variance**, pas la durée. Envol difficile (20 s) rendait 0,354 pt/s contre 0,247 à dedale (157 s) : la borne courte payait mieux que la longue, et les deux stratégies convergeaient sur la même |
+| Un jeton **par partie terminée** | la borne la plus courte descend à **0,1 s** dans le vivier : mourir exprès rapportait plus de 150 jetons par manche, de quoi couper toutes les bornes en boucle |
+| Un blindage **à durée** (2 pour 30 s) | il coûtait **exactement** le revenu du temps. Personne n'atteignait jamais les 4 d'une coupure, et la manche avec sabotage rendait le même résultat que sans, **au joueur près** : six actions, pas une jouée |
+
+Ce qui est livré : le multiplicateur est attaché à la **borne** (donc affichable
+avant d'insérer le jeton, `x0,04` à `x4,20`), la partie en cours **défend** du
+couperet sans compter au classement, et le fusible se gagne au **temps passé à
+jouer**.
+
+### L'équilibre, chiffré
+
+| | |
+|---|---|
+| Victoires de l'engagé sur 200 manches | **55 %** |
+| Sur trois graines indépendantes | 51 / 49 / 56 % (**étendue 7 points**) |
+| Ce que les six actions déplacent | **38 points de pourcentage** — sans elles l'engagé gagne 94 % |
+
+Le test **exige** ce dernier écart. C'est lui qui a attrapé le blindage à durée,
+là où le seuil d'équilibre, lui, restait vert par accident.
+
+### Ce que le mode a demandé à la salle : rien
+
+Aucun écran nouveau. Le **téléviseur du bar** — 1,78 × 0,89 m, derrière le
+comptoir, visible de toute la salle — porte le classement de la manche pendant
+qu'elle court, à la place de ses quatre volets ordinaires. Sa raison d'être
+écrite était déjà qu'on lève les yeux pour voir qui est en train de battre quoi.
+
+Par-dessus la vue, deux bandes seulement, et le milieu reste **libre** : c'est
+là qu'est la dalle qu'on joue, que le poste de jeu met à 31 % de l'aire du
+cadre. Les six actions sont **toujours affichées**, jamais dans un menu — un
+menu demande de quitter la dalle des yeux, c'est-à-dire de perdre la partie
+qu'on est en train de protéger.
+
+### Trois défauts trouvés sur capture
+
+**« JETONS » désignait deux monnaies sur le même écran.** Le solde de la salle,
+en haut à gauche, affichait 0 pendant que la bande du mode affichait 3. La
+monnaie de la manche s'appelle **fusible**, ce qui dit en plus ce que les six
+actions font : brouiller une image, inverser un câblage, couper le courant,
+blinder un tableau, renvoyer une surtension.
+
+La bande du bas se superposait **exactement** au bandeau d'aide de la salle —
+deux textes ambrés l'un sur l'autre, illisibles tous les deux. Remontée de 46
+points. Et le tiret cadratin du titre du tableau sortait en trois glyphes : la
+police 5×7 est ASCII.
+
+### Le relais passe de deux places à huit
+
+`server/internal/duel/relay.go` appariait deux clients ; il en apparie
+maintenant deux à huit, diffuse au lieu de recopier, et **insère l'identité de
+l'émetteur** dans chaque trame de jeu — ce qui ferme une usurpation qui se
+fabriquait en changeant un octet chez soi, pour un octet sur le fil. Il ne
+simule toujours rien : la règle du couperet vit en C, **une seule fois**, et
+c'est la place 0 qui l'arbitre. La conséquence est assumée et écrite, comme
+l'était déjà « deux clients complices peuvent se mentir pendant un duel ».
+
+Il n'avait **aucun test Go**, y compris pour la course qui l'a déjà tué une
+fois. Il en a douze, dont un qui raccroche 120 connexions au même signal sous
+`-race`. Le plafond passe de « 256 duels » à deux verrous distincts — 256
+sessions pour la table, 512 places pour la mémoire — parce que 256 salons de
+huit auraient coûté 269 Mio là où 256 duels en coûtaient 67.
+
+### Le jeton s'entend enfin
+
+Trois sons **synthétisés** par `tools/stepgen`, comme les pas et le coup de
+poing : la pièce qui entre, celle que le mécanisme recrache, celle qui tombe
+dans le godet. Brillance mesurée — le rapport aigu/grave rapporté à celui d'un
+bruit blanc — **13,1 et 15,1** pour les deux qui tombent contre **0,45** pour le
+coup de poing, qui est mat. Les rebonds sont comptés et leurs intervalles
+**raccourcissent** : 61 puis 38 ms.
+
+Le son tombe sur un **front** posé à l'instant où la pièce bascule dans le
+mécanisme, consommé une fois — le même motif que l'impact du coup de poing, et
+pour la même raison : un bruit qui arrive huit millisecondes après l'image ne se
+lit plus comme un choc. La relance rejoue un geste **court** de la seule main
+droite, 408 ms au lieu des 1 317 ms de la séquence complète, parce qu'imposer la
+séquence entière à chaque relance ferait attendre le joueur.
+
+### Ce que ce mode n'est pas
+
+Ni saison, ni laissez-passer, ni rien qui s'achète. Les fusibles naissent au
+coup d'envoi et meurent au verdict ; le portefeuille de la salle n'est pas
+touché. La minuterie ne punit pas **l'absence** — elle arbitre une manche qu'on
+a choisi de commencer, et en sortir ne coûte rien. La promesse de
+`room_bareme.h` tient telle quelle.
+
 
 ---
 
