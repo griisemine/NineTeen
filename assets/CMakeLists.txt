@@ -562,6 +562,69 @@ list(APPEND MARQUEE_ART "${_moquette}" "${GEN}/scene/textures/moquette_neon.png"
                         "${GEN}/materials/moquette_neon${_map_n}"
                         "${GEN}/materials/moquette_neon${_map_orm}")
 
+# ---------------------------------------------------------------------------
+# LE CREPI DES MURS
+# ---------------------------------------------------------------------------
+#
+# Meme geste que la moquette, sur l'autre plan. `mur_gris.jpg` habillait 197 m2
+# — la plus grande surface VERTICALE de la salle — et deux mesures disent
+# qu'elle ne pouvait pas se lire comme un mur.
+#
+# LE GRAIN. 600 px pour 0,70 m, donc 1,17 mm par texel. `salle.room.json`
+# justifiait ce 0,70 en affirmant un « grain visible de trois a quatre texels »,
+# soit 3,5 mm. Ouverte et agrandie, la tache dominante de cette photo fait dix a
+# douze texels : 12 a 14 mm. Ce n'est pas un crepi ecrase, c'est du tyrolien
+# projete. La capture du couloir le montre sans mesure : a un metre, les murs
+# sont en pop-corn.
+#
+# LE CONTRASTE. Ecart-type de luminance 32,3 sur 255. Une peinture mate ne varie
+# pas comme ca en ALBEDO — ce qu'on voit sur un mur est du RELIEF, donc de
+# l'ombre, et l'ombre vient des lampes de la piece. Un albedo a 32 rejoue la
+# meme ombre partout, a une frequence que l'ecran ne resout pas : a trois
+# metres, une tache de 12 mm tombe sous deux pixels et devient du grésil.
+#
+# Le mip n'y est pour rien et fonctionne — la capture du couloir montre le grain
+# grossir correctement quand on s'approche. Ce qui manquait n'est pas un filtre
+# mais une texture dont le spectre s'arrete AVANT Nyquist, et c'est ce que
+# `murart` dessine : maille la plus fine a quatre texels, spectre en U (la dent
+# du crepi, un creux, la moucheture du rouleau), reflectance identique a la
+# quatrieme decimale sur les trois canaux.
+set(_crepi "${GEN}/sideart/mur_crepi.png")
+add_custom_command(
+    OUTPUT  "${_crepi}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND murart "${_crepi}"
+    DEPENDS murart
+    COMMENT "Crepi des murs : mur_crepi.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${GEN}/scene/textures/mur_crepi.png"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_crepi}"
+                               "${GEN}/scene/textures/mur_crepi.png"
+    DEPENDS "${GEN}/scene/textures/.stamp" "${_crepi}"
+    VERBATIM
+)
+# `--strength` RELEVE, et c'est la consequence directe du reglage precedent :
+# `texgen` derive la normale du contraste local de l'albedo, et on vient de
+# ramener ce contraste de 32,3 a 7,2 d'ecart-type. A force egale, la normale
+# serait quatre fois plus plate que celle de la photo — on aurait remplace un
+# mur en gravier par un mur en plastique. Le relief passe donc dans la NORMALE,
+# ou il a toujours du etre, et l'albedo reste ce qu'il doit etre : presque uni.
+add_custom_command(
+    OUTPUT  "${GEN}/materials/mur_crepi${_map_n}"
+            "${GEN}/materials/mur_crepi${_map_orm}"
+    COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=2.2
+                   "${_crepi}" "${GEN}/materials"
+    DEPENDS texgen "${_crepi}"
+    COMMENT "Materiau PBR : mur_crepi"
+    VERBATIM
+)
+list(APPEND MARQUEE_ART "${_crepi}" "${GEN}/scene/textures/mur_crepi.png"
+                        "${GEN}/materials/mur_crepi${_map_n}"
+                        "${GEN}/materials/mur_crepi${_map_orm}")
+
 # Les images de tiers, retirées de TOUTES les listes : compte, dé-cuisson et
 # copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une image n'est
 # plus employée, il n'empêche pas de la livrer.
@@ -611,7 +674,12 @@ list(LENGTH _cc0_textures  _n_cc0)
 # sortent du compte en meme temps, retirees de `_room_textures` : le total ne
 # bouge pas. Trois planches en plus, trois fichiers en moins, la salle en
 # emploie toujours autant.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 25")
+# +26 : le crepi des murs s'ajoute. Il ne compense PAS `mur_gris.jpg` dans ce
+# compte-ci, et c'est la difference entre les deux controles : `roomgen` compte
+# ce que la salle DECLARE — employe ou retire — donc l'image remplacee reste au
+# total en passant dans `retiredTextures`, et la planche dessinee s'ajoute. Le
+# controle de COPIE, lui, cesse de l'emporter dans le paquet.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 26")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"

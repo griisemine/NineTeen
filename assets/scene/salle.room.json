@@ -74,11 +74,11 @@
     },
     {
       "name": "mur",
-      "texture": "mur_gris.jpg",
+      "texture": "mur_crepi.png",
       "roughness": 0.88,
       "metallic": 0.0,
-      "uvMetres": 0.7,
-      "_grain": "0,7 m et non 2,5. `mur_gris.jpg` fait 600 px : a 2,5 m le texel vaut 4,17 mm, et le grain visible de trois a quatre texels donne des grumeaux de 1,5 a 2 cm. Un crepi ecrase a un grain de 1 a 3 mm — la plus grande surface verticale de la salle ne se lisait donc pas comme un mur mais comme du gravier. A 0,7 m : 1,17 mm par texel, grain de 3,5 mm, et le pavage reste invisible sur le grand mur du sas, ou il occupe un tiers de l'image.",
+      "uvMetres": 0.8,
+      "_grain": "0,80 m pour une planche de 1024 px, soit 0,781 mm par texel.\nLA VERSION PRECEDENTE ETAIT FONDEE SUR UNE PREMISSE FAUSSE, et il faut le dire parce que le raisonnement etait juste : elle affirmait que `mur_gris.jpg` avait « un grain visible de trois a quatre texels » et en deduisait 3,5 mm a 0,70 m, la cote d'un crepi ecrase. Ouverte et agrandie, la tache dominante de cette photo fait DIX A DOUZE texels : 12 a 14 mm. Le mur restait donc du gravier, simplement plus fin qu'a 2,50 m. La capture du couloir le montrait sans qu'on ait a mesurer.\nSecond defaut, independant du premier : son ecart-type de luminance valait 32,3 sur 255. Une peinture mate ne varie pas comme ca en ALBEDO. Ce qu'on voit sur un mur est du RELIEF, donc de l'ombre, et l'ombre est produite par les lampes de la piece. Un albedo a 32 rejoue la meme ombre partout, y compris la ou aucune lampe ne la justifie, et il la rejoue a une frequence que l'ecran ne resout pas : a trois metres une tache de 12 mm tombe sous deux pixels et devient du gresil. C'est ce que la vue « travee » montrait.\nLE MIP N'Y ETAIT POUR RIEN. Verifie sur la capture du couloir : le grain grossit correctement quand on s'approche, donc la chaine de mips fonctionne. Ce qui manquait n'etait pas un filtre mais une texture dont le spectre s'arrete AVANT Nyquist. `tools/murart` la dessine : maille la plus fine a quatre texels — l'energie culmine une octave sous la limite — et spectre en U, la dent du crepi a 3-6 mm, un creux entre 2 et 10 cm ou un mur n'a rien, la moucheture du rouleau a 20-40 cm. Une photo a le spectre inverse, et c'est pour cela qu'elle gresille de pres et s'aplatit de loin.\nCE QUI NE BOUGE PAS : la reflectance. 0,3427 / 0,3338 / 0,2970 en lineaire, les trois canaux mesures sur l'image remplacee, reproduits a la quatrieme decimale. L'eclairage de la salle a ete regle contre ces chiffres. L'ecart-type, lui, passe de 32,3 a 7,2, et le relief passe dans la normale derivee par `texgen`, ou il a toujours du etre.",
       "baseColor": [
         0.52,
         0.44,
@@ -1602,6 +1602,10 @@
     {
       "file": "snake.jpg",
       "why": "l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat : trois verts, des fruits, un serpent et un bandeau « Snake » dans le coin droit. Employe en `fit` comme ENSEIGNE, il ecrasait tout cela sur une plaque de 0,62 x 0,155 m, et huit bornes sur dix-neuf portaient donc une enseigne illisible ; a 40 cm de l'oeil sous `--play-at=`, elle tient le haut du cadre pendant toute la partie. Le caisson et le flanc ne l'employaient deja plus : ils sont en « painted_panel.jpg » teinte et en « flanc_borne.png ». Remplace par une planche dessinee par `tools/marqueeart` avec la fonte du jeu (recette visuelle). Le fichier reste dans `legacy/`, et la salle `--room=legacy` continue de l'employer par `assets/scene/cabinets.json`."
+    },
+    {
+      "file": "mur_gris.jpg",
+      "why": "la photo d'enduit de 2020, sur les 197 m2 de mur du hall. Sa tache dominante fait 12 a 14 mm — du tyrolien projete, pas le crepi ecrase que la description annoncait — et son ecart-type de luminance vaut 32,3 sur 255, c'est-a-dire une ombre PEINTE dans l'albedo que la lumiere de la salle ne justifie nulle part. De pres le mur etait en pop-corn, de loin il gresillait. Remplacee par `mur_crepi.png`, dessinee par `tools/murart` a spectre borne et a reflectance identique sur les trois canaux. Le fichier reste dans `legacy/` ; aucune autre salle ne l'emploie — verifie, `salle-legacy.gltf` ne la reference pas."
     }
   ],
   "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources. Ici quatre plafonniers faibles balisent la circulation, des néons colorés rasent les murs, et l'essentiel de la lumière vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines qui éclairent.",

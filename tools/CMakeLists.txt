@@ -79,6 +79,18 @@ target_include_directories(skinart PRIVATE
 # personne, et sort DEJA DE-CUIT a la reflectance visee.
 nineteen_add_tool(moquetteart moquetteart.c)
 
+# Meme raison, sur la surface VERTICALE la plus grande de la salle : 197 m2 de
+# mur portaient `mur_gris.jpg`, une photo de 2020 dont la tache dominante fait
+# 12 mm — un enduit tyrolien projete, pas le crepi ecrase que la description
+# annonce — et dont l'ecart-type de luminance vaut 32,3 sur 255, c'est-a-dire
+# une ombre PEINTE que la lumiere de la salle ne justifie nulle part. De pres
+# le mur est en pop-corn, de loin il gresille. `murart` le redessine avec un
+# spectre borne : la maille la plus fine fait quatre texels, donc l'energie
+# s'arrete une octave sous Nyquist et le scintillement disparait par
+# construction. La reflectance des trois canaux est celle de l'image remplacee,
+# a la quatrieme decimale.
+nineteen_add_tool(murart murart.c)
+
 nineteen_add_tool(bvhbake  bvhbake.c)
 # Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de
 # pas et les nappes d'ambiance sont SYNTHÉTISÉES au lieu d'être enregistrées. Un
