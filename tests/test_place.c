@@ -123,6 +123,7 @@ static const char *const ZONE_CENTRE =
  * même quand le cas éprouvé n'en demande pas. */
 static const char *const PROP_NEUTRE =
     "{ \"name\": \"caisse\", \"at\": [-2.0, 0, -1.0], \"yaw\": 0,"
+    "  \"pose\": \"sol\","
     "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
     "                 \"at\": [0,0,0], \"size\": [0.3,0.3,0.3] } ] }";
 
@@ -238,6 +239,7 @@ static const char *affiche(double x, double y, double z, double yaw, double pitc
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"affiche\", \"at\": [%.4f, %.4f, %.4f], \"yaw\": %.2f,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"panel\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.5,0.4],"
              "                 \"pitch\": %.2f } ] }",
@@ -440,6 +442,7 @@ static void test_panel_visible(void)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"plaque\", \"at\": [-2.0, 0.15, -0.848], \"yaw\": 180,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"panel\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.2,0.2] } ] }",
              PROP_NEUTRE);
@@ -457,6 +460,7 @@ static void test_panel_visible(void)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"borne\", \"at\": [-2.0, 0, 1.2], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.5,1.0,0.4] },"
              "               { \"type\": \"panel\", \"material\": \"bleu\","
@@ -477,6 +481,7 @@ static void test_panel_visible(void)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"vitrine\", \"at\": [-2.0, 0, 1.2], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.5,1.0,0.4] },"
              "               { \"type\": \"panel\", \"material\": \"bleu\","
@@ -496,11 +501,13 @@ static void test_panel_visible(void)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"vitrine\", \"at\": [-2.0, 0, 1.2], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.5,1.0,0.4] },"
              "               { \"type\": \"panel\", \"material\": \"bleu\","
              "                 \"at\": [0,0.5,0.202], \"size\": [0.3,0.3] } ] },"
              "{ \"name\": \"glace\", \"at\": [-2.0, 0.35, 1.405], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.32,0.32,0.004],"
              "                 \"chamfer\": 0.001 } ] }",
@@ -519,6 +526,7 @@ static void test_panel_visible(void)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"borne\", \"at\": [-2.0, 0, 1.2], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.5,1.0,0.4] },"
              "               { \"type\": \"panel\", \"material\": \"bleu\","
@@ -608,6 +616,7 @@ static void test_hanging(void)
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.3,0.3,0.3] } ] },"
              "{ \"name\": \"cable\", \"at\": [2.0, 1.90, 1.0], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"cylinder\", \"material\": \"gris\","
              "                 \"radius\": 0.015, \"height\": %.4f, \"sides\": 8 } ] }",
              PROP_NEUTRE, SOUS_FACE - 1.90);
@@ -625,6 +634,7 @@ static void test_hanging(void)
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.3,0.3,0.3] } ] },"
              "{ \"name\": \"cable\", \"at\": [2.0, 1.90, 1.0], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"cylinder\", \"material\": \"gris\","
              "                 \"radius\": 0.015, \"height\": %.4f, \"sides\": 8 } ] }",
              PROP_NEUTRE, SOUS_FACE - 1.90 - 0.15);
@@ -673,6 +683,7 @@ static const char *lampe(double base)
     snprintf(g_props, sizeof g_props,
              "%s,"
              "{ \"name\": \"applique\", \"at\": [1.0, %.4f, 1.0], \"yaw\": 0,"
+             "  \"pose\": \"libre\","
              "  \"parts\": [ { \"type\": \"box\", \"material\": \"gris\","
              "                 \"at\": [0,0,0], \"size\": [0.2,0.2,0.2] } ] }",
              PROP_NEUTRE, base);

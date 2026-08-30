@@ -1548,10 +1548,17 @@ static void check_grounded(const rg_builder *b)
 {
     const gltf_vertex *verts = (const gltf_vertex *)b->verts.data;
     size_t declared = 0, missing = 0, hanging = 0, free_form = 0;
+    /* Le premier fautif, pour que le message nomme quelqu'un : « 3 solides sans
+     * pose » envoie chercher, « dont « poubelle_sud » » envoie corriger. */
+    const char *first_missing = NULL;
 
     for (size_t i = 0; i < b->solid_count; ++i) {
         const rg_solid *s = &b->solids[i];
-        if (!s->pose[0]) { missing++; continue; }
+        if (!s->pose[0]) {
+            if (!first_missing) first_missing = s->name;
+            missing++;
+            continue;
+        }
         declared++;
 
         const float cx = (s->bounds.min.x + s->bounds.max.x) * 0.5f;
@@ -1703,10 +1710,34 @@ static void check_grounded(const rg_builder *b)
      * clé et sur rien d'autre. Tant que le compte n'est pas zéro, ils ne
      * regardent qu'une partie de la salle, et cette ligne dit laquelle.
      */
+    /*
+     * LA CLÉ EST OBLIGATOIRE, depuis que le compte est tombé à zéro.
+     *
+     * Elle ne l'était pas : `check_grounded` l'avait rendue facultative parce
+     * qu'AUCUN objet ne la portait, et trois contrôles — C-03 ici, la branche
+     * « mur » de C-04, C-06 pour ce qui pend — sont restés inertes pendant tout
+     * ce temps. Quand les 146 solides l'ont enfin déclarée, ces trois-là ont
+     * trouvé onze défauts dans l'heure : un bloc SORTIE qui pendait à 57 cm de
+     * son mur au-dessus de la seule porte de la salle, un boombox à 1,45 m du
+     * comptoir et en l'air, et trois façades tournées vers le mur à 180 degrés.
+     *
+     * Rouvrir la porte serait la refermer : un objet ajouté demain sans la clé
+     * échapperait aux trois, en silence, et le compte remonterait de zéro à un
+     * sans que personne le lise. Le mot « libre » existe pour dire « cet objet
+     * ne tient à rien, et c'est voulu » — quarante objets l'emploient, chacun
+     * avec son motif écrit. Ce qu'on n'accepte plus, c'est le SILENCE.
+     */
     if (missing) {
-        printf("      (ces %zu objets ne sont vus ni par C-03, ni par la branche "
-               "« mur » de C-04, ni par C-06 : la clé « pose » est ce qui les y "
-               "ferait entrer)\n", missing);
+        tool_fatalf("%zu solide(s) ne déclarent pas \"pose\", dont « %s ».\n"
+                    "  Trois contrôles ne se déclenchent que sur cette clé — C-03 "
+                    "(ce qui est posé touche son support), la branche « mur » de "
+                    "C-04 (une façade adossée regarde la salle) et C-06 (ce qui "
+                    "pend est accroché). Un objet sans elle leur échappe en "
+                    "silence.\n"
+                    "  Les valeurs sont : sol, meuble, mur, suspendu, libre. "
+                    "« libre » est une réponse valable — elle dit que l'objet ne "
+                    "tient à rien et que c'est voulu ; quarante l'emploient.",
+                    missing, first_missing ? first_missing : "?");
     }
 }
 
