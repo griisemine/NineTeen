@@ -490,7 +490,23 @@ def main():
         info(f"{len(images)} images rendues, {total} après aller-retour")
         mp4, webm = encoder_video(motif, os.path.join(dossier_media, "salle"), 30, 1280, 720,
                                   crf_h264=33, crf_vp9=48, debit_vp9="1000k")
-        avif, jpg = encoder_affiche(images[0], os.path.join(dossier_media, "salle-affiche"),
+        # L'AFFICHE N'EST PAS LA PREMIÈRE IMAGE, et c'est une mesure qui l'a dit.
+        #
+        # Elle l'était. Or le moteur ne redessine que QUATRE dalles de borne par
+        # image — c'est écrit dans `room/main.c`, et c'est ce qui garde le coût
+        # de dix-huit écrans vivants à un demi-pas de temps. Dix-neuf bornes
+        # demandent donc cinq images pour être toutes passées une fois, et
+        # avant ça une dalle montre sa cible de rendu telle qu'elle a été créée.
+        # Sur l'affiche du site — la toute première image que voit un visiteur —
+        # ça donnait SIX ÉCRANS MAGENTA sur les dix bornes visibles. Vérifié en
+        # extrayant les images 0 et 120 du mp4 : à 120, plus une seule.
+        #
+        # 60 images, soit 2 s : bien au-delà des cinq nécessaires, et assez pour
+        # que les huit jeux aient commencé à jouer. Un serpent d'un segment sur
+        # un champ vide est dessiné, mais il ne montre pas un jeu.
+        AFFICHE_A = 60
+        avif, jpg = encoder_affiche(images[AFFICHE_A],
+                                    os.path.join(dossier_media, "salle-affiche"),
                                     1280, 720)
         for f in (mp4, webm, avif, jpg):
             produits.append(f)
