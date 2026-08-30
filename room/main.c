@@ -1973,21 +1973,31 @@ int main(int argc, char **argv)
         }
 
         /*
-         * CE QUE LE MODÈLE N'A PAS, et qu'aucun réglage ne remplacera : il porte
-         * UN cycle et un seul. Pas de pose de repos, pas de course, pas
-         * d'accroupi. On le dit une fois au démarrage plutôt que de laisser
-         * quelqu'un chercher pendant une heure où sont les autres états.
+         * L'ACCROUPI, CALÉ SUR LA COTE DE COLLISION.
          *
-         * Ce qui EST fait avec ce cycle unique : la phase suit la distance
-         * parcourue, donc la cadence suit l'allure et les pieds ne patinent pas,
-         * à la marche comme à la course. À l'arrêt, on ramène la phase à la pose
-         * de passage mesurée. Accroupi, le personnage reste DEBOUT à l'écran —
-         * seul le point de vue descend — et c'est la limite visible du modèle.
+         * Le modèle porte UN cycle et un seul — une marche. La marche et la
+         * course s'en tirent sans rien ajouter, parce que la phase suit la
+         * distance parcourue. L'accroupi, lui, ne s'en tirait pas : la caméra
+         * descendait de 39 cm et le personnage restait DEBOUT à l'écran. Le jeu
+         * l'annonçait au démarrage depuis des mois sans le corriger.
+         *
+         * Il est maintenant DÉRIVÉ, et calé sur les deux cotes que
+         * `nineteen.env` donne déjà à la capsule de collision : le personnage
+         * accroupi fait exactement la taille que sa capsule annonce, parce que
+         * `ns_skin` balaie l'angle de genou et pèse VRAIMENT les sommets pour
+         * trouver celui qui donne cette hauteur-là. Changer `taille` ou
+         * `tailleAccroupi` déplace l'accroupi tout seul.
          */
+        if (cam.body_height_stand > 0.01f) {
+            (void)ns_skin_crouch_calibrate(personnage,
+                                           cam.body_height_crouch / cam.body_height_stand);
+        }
         if (ns_skin_duration(personnage) > 0.0f) {
             NS_INFO("personnage : un seul cycle d'animation (%.2f s) — la cadence "
-                    "suit l'allure, mais accroupi il reste debout à l'écran",
-                    (double)ns_skin_duration(personnage));
+                    "suit l'allure ; l'accroupi et le balancement d'arrêt en sont "
+                    "DÉRIVÉS (accroupi %s)",
+                    (double)ns_skin_duration(personnage),
+                    ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout");
         }
     }
 
@@ -3647,7 +3657,38 @@ play_at_done: ;
                 SDL_zero(d);
                 d.visible = true;
                 d.joint_count = ns_skin_joint_count(personnage);
-                ns_skin_pose(personnage, when, d.joint, NS_MAX_CHARACTER_JOINTS);
+
+                /*
+                 * LES DEUX ALLURES DÉRIVÉES, et pourquoi elles ne coûtent aucun
+                 * état de plus.
+                 *
+                 * L'ACCROUPI se lit sur la hauteur d'œil, qui est DÉJÀ amortie
+                 * entre debout et accroupi par `room_camera`. La fraction est
+                 * donc continue et gratuite : la descente du personnage suit
+                 * exactement la descente de la vue, image par image, sans qu'il
+                 * y ait quoi que ce soit à interpoler ici. Recalculer un état
+                 * « accroupi » à côté aurait fini par diverger de celui-là.
+                 *
+                 * LE BALANCEMENT reprend la phase de respiration de la caméra
+                 * et son facteur de repos — les mêmes que la première personne
+                 * emploie déjà pour faire respirer la vue. Les deux vues
+                 * respirent donc ensemble, ce qui est le seul comportement
+                 * défendable quand F10 bascule de l'une à l'autre.
+                 */
+                const float eye = ns_lerpf(cam.prev_eye_height, cam.eye_height,
+                                           (float)clock.alpha);
+                ns_skin_allure allure;
+                SDL_zero(allure);
+                const float plage = cam.eye_height_stand - cam.eye_height_crouch;
+                if (plage > 1e-3f) {
+                    allure.accroupi = ns_clampf((cam.eye_height_stand - eye) / plage,
+                                                0.0f, 1.0f);
+                }
+                if (SDL_getenv("NS_FORCE_ACCROUPI")) allure.accroupi = (float)SDL_atof(SDL_getenv("NS_FORCE_ACCROUPI"));
+                allure.souffle = b.breath;
+                allure.souffle_force = 1.0f - ns_clampf(b.amount, 0.0f, 1.0f);
+                ns_skin_pose_allure(personnage, when, &allure, d.joint,
+                                    NS_MAX_CHARACTER_JOINTS);
 
                 /* L'échelle : mesurée et mise à l'échelle une fois, au
                  * chargement. Voir `echelle_perso`. */
@@ -3655,7 +3696,6 @@ play_at_done: ;
 
                 /* Le lacet de la caméra : le personnage regarde là où le joueur
                  * regarde. */
-                const float eye = ns_lerpf(cam.prev_eye_height, cam.eye_height, (float)clock.alpha);
                 float dyaw = cam.yaw - cam.prev_yaw;
                 while (dyaw >  NS_PI) dyaw -= NS_TAU;
                 while (dyaw < -NS_PI) dyaw += NS_TAU;

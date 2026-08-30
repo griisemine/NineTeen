@@ -201,6 +201,10 @@ static ns_quat track_quat(const skin_track *tr, float time, ns_quat fallback)
 
 /* ------------------------------------------------------------------ chargement */
 
+/* Déclarée ici : la mesure de chargement pose déjà des matrices monde, et la
+ * définition vit plus bas avec le reste de la pose. */
+static void poser_mondes(const ns_skin *s, float t, ns_m4 *world, int count);
+
 static int node_index(const cgltf_data *d, const cgltf_node *n)
 {
     if (!n) return -1;
@@ -581,6 +585,8 @@ ns_skin *ns_skin_load(const char *logical)
                 if (r < pire) { pire = r; pied_b = j; }
             }
         }
+        s->pied[0] = pied_a;
+        s->pied[1] = pied_b;
         s->stand_time = 0.0f;
         s->stride_length = 0.0f;
         s->forward_angle = NS_PI * 0.5f;
@@ -643,12 +649,118 @@ ns_skin *ns_skin_load(const char *logical)
                 /* La perpendiculaire horizontale : l'axe des épaules. Son SIGNE
                  * est indifférent, on n'en prend que des valeurs absolues. */
                 axe_lateral = ns_v3_make(-sz * inv, 0.0f, sx * inv);
+                s->axe_lateral = axe_lateral;
                 /* L'AVANT est l'opposé du recul du pied porteur, et son signe,
                  * lui, compte : c'est ce qui décide de quel côté le personnage
                  * regarde. */
                 s->forward_angle = atan2f(-sz, -sx);
             }
         }
+    }
+
+    /*
+     * LES DEUX JAMBES ET LE BUSTE, repérés par la TOPOLOGIE.
+     *
+     * C'est ce qui permet de dériver un accroupi d'un cycle qui n'en contient
+     * pas, sans lire un seul nom d'os. Le chemin est court et chaque pas se
+     * justifie tout seul :
+     *
+     *   - le BASSIN est le premier ancêtre COMMUN aux deux pieds. Sur un
+     *     bipède, il n'y a pas d'autre candidat ;
+     *   - la HANCHE de chaque jambe est l'enfant du bassin sur le chemin de
+     *     son pied ;
+     *   - l'ÉTAGE d'un os est sa profondeur sous sa hanche : 0 la cuisse, 1 le
+     *     mollet, 2 et au-delà le pied et ce qu'il porte. C'est exactement le
+     *     découpage dont les trois rotations de `plier_jambes` ont besoin ;
+     *   - le BUSTE est l'autre enfant du bassin — celui qui n'est ni l'une ni
+     *     l'autre hanche.
+     *
+     * Le SIGNE de la flexion n'est pas deviné non plus. La vitesse d'un point
+     * tourné autour d'un axe est `axe x (point - pivot)` ; on la projette sur
+     * l'AVANT mesuré, et on garde le signe qui envoie le genou devant. Un
+     * modèle exporté dans l'autre sens plie donc du bon côté sans qu'on ait
+     * rien à régler.
+     */
+    for (int j = 0; j < NS_SKIN_MAX_JOINTS; ++j) {
+        s->etage[j] = -1;
+        s->jambe[j] = -1;
+        s->suit_buste[j] = false;
+    }
+    s->hanche[0] = s->hanche[1] = -1;
+    s->buste_noeud = -1;
+    s->sens_avant = 1.0f;
+
+    if (s->pied[0] >= 0 && s->pied[1] >= 0) {
+        int bassin = -1;
+        {
+            int chaine[64], profond = 0;
+            for (int i = s->joint_node[s->pied[0]];
+                 i >= 0 && i < s->node_count && profond < 64; i = s->node[i].parent) {
+                chaine[profond++] = i;
+            }
+            for (int i = s->joint_node[s->pied[1]]; i >= 0 && i < s->node_count && bassin < 0;
+                 i = s->node[i].parent) {
+                for (int k = 0; k < profond; ++k) if (chaine[k] == i) { bassin = i; break; }
+            }
+        }
+        for (int f = 0; f < 2 && bassin >= 0; ++f) {
+            for (int i = s->joint_node[s->pied[f]]; i >= 0 && i < s->node_count;
+                 i = s->node[i].parent) {
+                if (s->node[i].parent == bassin) { s->hanche[f] = i; break; }
+            }
+        }
+        if (s->hanche[0] >= 0 && s->hanche[1] >= 0 && s->hanche[0] != s->hanche[1]) {
+            for (int j = 0; j < s->joint_count; ++j) {
+                int niveau = 0;
+                for (int i = s->joint_node[j]; i >= 0 && i < s->node_count && niveau < 64;
+                     i = s->node[i].parent, ++niveau) {
+                    if (i == s->hanche[0] || i == s->hanche[1]) {
+                        s->jambe[j] = (int8_t)((i == s->hanche[0]) ? 0 : 1);
+                        s->etage[j] = (int8_t)((niveau > 2) ? 2 : niveau);
+                        break;
+                    }
+                }
+            }
+            /* Le buste : l'enfant du bassin qui n'est aucune des deux hanches. */
+            for (int j = 0; j < s->joint_count && s->buste_noeud < 0; ++j) {
+                for (int i = s->joint_node[j]; i >= 0 && i < s->node_count;
+                     i = s->node[i].parent) {
+                    if (s->node[i].parent != bassin) continue;
+                    if (i != s->hanche[0] && i != s->hanche[1]) { s->buste_noeud = i; }
+                    break;
+                }
+            }
+            for (int j = 0; j < s->joint_count && s->buste_noeud >= 0; ++j) {
+                for (int i = s->joint_node[j]; i >= 0 && i < s->node_count;
+                     i = s->node[i].parent) {
+                    if (i == s->buste_noeud) { s->suit_buste[j] = true; break; }
+                }
+            }
+
+            /* Le signe, mesuré sur la pose de passage. */
+            ns_m4 pose[NS_SKIN_MAX_JOINTS];
+            poser_mondes(s, s->stand_time, pose, s->joint_count);
+            int cuisse = -1, mollet = -1;
+            for (int j = 0; j < s->joint_count; ++j) {
+                if (s->jambe[j] != 0) continue;
+                if (s->etage[j] == 0) cuisse = j;
+                else if (s->etage[j] == 1 && mollet < 0) mollet = j;
+            }
+            if (cuisse >= 0 && mollet >= 0) {
+                const ns_v3 ph = ns_v3_make(pose[cuisse].m[3][0], pose[cuisse].m[3][1],
+                                            pose[cuisse].m[3][2]);
+                const ns_v3 pg = ns_v3_make(pose[mollet].m[3][0], pose[mollet].m[3][1],
+                                            pose[mollet].m[3][2]);
+                const ns_v3 v = ns_v3_cross(axe_lateral, ns_v3_sub(pg, ph));
+                const ns_v3 avant = ns_v3_make(SDL_cosf(s->forward_angle), 0.0f,
+                                               SDL_sinf(s->forward_angle));
+                s->sens_avant = (ns_v3_dot(v, avant) >= 0.0f) ? 1.0f : -1.0f;
+            }
+        }
+    }
+    if (s->hanche[0] < 0 || s->hanche[1] < 0) {
+        NS_WARN("personnage : les deux jambes n'ont pas été repérées dans le squelette — "
+                "l'accroupi restera debout");
     }
 
     /*
@@ -767,26 +879,20 @@ const void *ns_skin_image(const ns_skin *s, size_t *size)
     return s ? s->image : NULL;
 }
 
-void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max)
+/* ------------------------------------------------------------------- pose */
+
+/*
+ * Les matrices MONDE de chaque articulation, avant la liaison inverse.
+ *
+ * On peut se permettre une simple boucle croissante plutôt qu'un parcours
+ * d'arbre parce que glTF garantit qu'un nœud précède ses enfants dans le
+ * tableau… ce qui est FAUX, la spécification ne le garantit pas. On fait donc
+ * le calcul en remontant les parents pour chaque os : la profondeur d'un
+ * squelette humanoïde est de six, et dix-neuf os font cent quatorze produits —
+ * moins que ce qu'un tri topologique coûterait à écrire et à relire.
+ */
+static void poser_mondes(const ns_skin *s, float t, ns_m4 *world, int count)
 {
-    if (!s || !out) return;
-
-    /* Bouclée : un cycle de marche n'a de sens qu'en boucle, et `fmodf` d'un
-     * négatif rend un négatif — d'où le rattrapage. */
-    float t = SDL_fmodf(time, s->duration);
-    if (t < 0.0f) t += s->duration;
-
-    /*
-     * Les matrices LOCALES d'abord, puis la composition descendante.
-     *
-     * On peut se permettre une simple boucle croissante plutôt qu'un parcours
-     * d'arbre parce que glTF garantit qu'un nœud précède ses enfants dans le
-     * tableau… ce qui est FAUX, la spécification ne le garantit pas. On fait
-     * donc le calcul en remontant les parents pour chaque os : la profondeur
-     * d'un squelette humanoïde est de six, et dix-neuf os font cent quatorze
-     * produits — moins que ce qu'un tri topologique coûterait à écrire et à
-     * relire.
-     */
     ns_m4 local[256];
     const int n = (s->node_count < 256) ? s->node_count : 256;
     for (int i = 0; i < n; ++i) {
@@ -797,16 +903,276 @@ void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max)
         const ns_v3   sc = track_v3(&o->track_s, t, o->s);
         local[i] = ns_m4_trs(tr, rt, sc);
     }
-
-    const int count = (s->joint_count < max) ? s->joint_count : max;
     for (int j = 0; j < count; ++j) {
-        ns_m4 world = ns_m4_identity();
+        ns_m4 w = ns_m4_identity();
         int chain[64];
         int depth = 0;
         for (int i = s->joint_node[j]; i >= 0 && i < n && depth < 64; i = s->node[i].parent) {
             chain[depth++] = i;
         }
-        for (int k = depth - 1; k >= 0; --k) world = ns_m4_mul(world, local[chain[k]]);
-        out[j] = ns_m4_mul(world, s->inverse_bind[j]);
+        for (int k = depth - 1; k >= 0; --k) w = ns_m4_mul(w, local[chain[k]]);
+        world[j] = w;
     }
+}
+
+static ns_v3 origine(const ns_m4 *m) { return ns_v3_make(m->m[3][0], m->m[3][1], m->m[3][2]); }
+
+/* Une rotation d'angle `a` autour de `axe`, l'axe PASSANT PAR `pivot`. */
+static ns_m4 rotation_autour(ns_v3 pivot, ns_v3 axe, float a)
+{
+    return ns_m4_mul(ns_m4_translate(pivot),
+                     ns_m4_mul(ns_m4_rotate_axis(axe, a),
+                               ns_m4_translate(ns_v3_neg(pivot))));
+}
+
+/*
+ * PLIER LES JAMBES, dans l'espace MONDE.
+ *
+ * Pourquoi en monde et pas en local, qui serait le geste habituel : parce que
+ * le repère local d'un os dépend entièrement de l'exportateur — sur ce
+ * squelette-ci l'axe de l'os est son X local, ailleurs ce sera son Y — et qu'un
+ * angle de genou écrit dans ce repère-là ne veut rien dire d'un fichier à
+ * l'autre. En monde, il n'y a qu'un seul axe qui compte, celui des ÉPAULES, et
+ * il est MESURÉ (`axe_lateral`, tiré de l'intégration de la foulée).
+ *
+ * Trois rotations par jambe, chacune autour de l'articulation qu'elle plie :
+ *
+ *   1. la CUISSE part en avant de `a` ;
+ *   2. le MOLLET revient en arrière de `2a`, ce qui laisse le tibia incliné de
+ *      `-a` : la cheville reste alors À L'APLOMB de la hanche, et le
+ *      personnage s'accroupit sans partir en arrière ;
+ *   3. le PIED reprend `a` pour retrouver son horizontale. Sans cette
+ *      troisième-là, la pointe traverse le sol — c'est la première chose que
+ *      la capture a montrée.
+ *
+ * Le buste s'incline de `0,45 a`, et ce n'est pas un ornement : sans lui, la
+ * totalité des trente-neuf centimètres de descente doit venir des jambes, ce
+ * qui demande un genou à cent trente-six degrés. Avec, il en faut cent vingt —
+ * et un accroupi où le dos reste vertical se lit comme quelqu'un assis sur une
+ * chaise invisible.
+ */
+static void plier_jambes(const ns_skin *s, float a, ns_m4 *world, int count)
+{
+    if (a <= 1e-5f) return;
+    const ns_v3 axe = s->axe_lateral;
+    const float sgn = s->sens_avant;
+
+    for (int f = 0; f < 2; ++f) {
+        /* Les trois articulations de la jambe, dans la pose courante. */
+        int cuisse = -1, mollet = -1, pied = -1;
+        for (int j = 0; j < count; ++j) {
+            if (s->jambe[j] != (int8_t)f) continue;
+            if (s->etage[j] == 0 && cuisse < 0) cuisse = j;
+            else if (s->etage[j] == 1 && mollet < 0) mollet = j;
+            else if (s->etage[j] == 2 && pied < 0) pied = j;
+        }
+        if (cuisse < 0 || mollet < 0) continue;
+
+        const ns_m4 A = rotation_autour(origine(&world[cuisse]), axe, sgn * a);
+        const ns_m4 apres_a = ns_m4_mul(A, world[mollet]);
+        const ns_m4 B = ns_m4_mul(rotation_autour(origine(&apres_a), axe, -sgn * 2.0f * a), A);
+        ns_m4 C = B;
+        if (pied >= 0) {
+            const ns_m4 apres_b = ns_m4_mul(B, world[pied]);
+            C = ns_m4_mul(rotation_autour(origine(&apres_b), axe, sgn * a), B);
+        }
+
+        for (int j = 0; j < count; ++j) {
+            if (s->jambe[j] != (int8_t)f) continue;
+            const ns_m4 *m = (s->etage[j] == 0) ? &A : (s->etage[j] == 1 ? &B : &C);
+            world[j] = ns_m4_mul(*m, world[j]);
+        }
+    }
+
+    if (s->buste_noeud >= 0) {
+        /* Le pivot du buste : la première articulation qui le suit. */
+        int racine = -1;
+        for (int j = 0; j < count && racine < 0; ++j) {
+            if (s->suit_buste[j] && s->joint_node[j] == s->buste_noeud) racine = j;
+        }
+        if (racine >= 0) {
+            const ns_m4 D = rotation_autour(origine(&world[racine]), axe, sgn * 0.45f * a);
+            for (int j = 0; j < count; ++j) {
+                if (s->suit_buste[j]) world[j] = ns_m4_mul(D, world[j]);
+            }
+        }
+    }
+}
+
+/* La remontée du point le plus bas, interpolée entre deux crans mesurés. */
+static float remontee(const ns_skin *s, float c)
+{
+    if (c <= 0.0f) return 0.0f;
+    if (c >= 1.0f) return s->accroupi_remontee[NS_SKIN_ACCROUPI_CRANS - 1];
+    const float u = c * (float)(NS_SKIN_ACCROUPI_CRANS - 1);
+    const int   k = (int)u;
+    return ns_lerpf(s->accroupi_remontee[k], s->accroupi_remontee[k + 1], u - (float)k);
+}
+
+void ns_skin_pose(const ns_skin *s, float time, ns_m4 *out, int max)
+{
+    ns_skin_pose_allure(s, time, NULL, out, max);
+}
+
+void ns_skin_pose_allure(const ns_skin *s, float time, const ns_skin_allure *al,
+                         ns_m4 *out, int max)
+{
+    if (!s || !out) return;
+
+    /* Bouclée : un cycle de marche n'a de sens qu'en boucle, et `fmodf` d'un
+     * négatif rend un négatif — d'où le rattrapage. */
+    float t = SDL_fmodf(time, s->duration);
+    if (t < 0.0f) t += s->duration;
+
+    const int count = (s->joint_count < max) ? s->joint_count : max;
+    ns_m4 world[NS_SKIN_MAX_JOINTS];
+    poser_mondes(s, t, world, count);
+
+    ns_m4 monde = ns_m4_identity();
+    bool  pose_monde = false;
+
+    if (al && s->accroupi_pret && al->accroupi > 0.0f) {
+        const float c = (al->accroupi > 1.0f) ? 1.0f : al->accroupi;
+        plier_jambes(s, c * s->accroupi_angle, world, count);
+        monde = ns_m4_translate(ns_v3_make(0.0f, -remontee(s, c), 0.0f));
+        pose_monde = true;
+    }
+
+    /*
+     * LE BALANCEMENT POSTURAL.
+     *
+     * Un corps debout n'est jamais immobile : il oscille autour de ses
+     * chevilles, d'un demi-degré et à une demi-période par seconde environ.
+     * C'est pour ça qu'un personnage figé sur une image de marche se lit comme
+     * une STATUE même quand la pose est juste.
+     *
+     * On le pose donc comme une rotation du corps entier autour du SOL, pas
+     * comme un déplacement vertical : un corps qui monte et descend en bloc
+     * décolle les pieds, et huit millimètres de pied en l'air se voient. À un
+     * demi-degré, un pied à dix centimètres du pivot bouge de neuf dixièmes de
+     * millimètre — c'est-à-dire rien.
+     *
+     * Deux fréquences incommensurables plutôt qu'une : une oscillation d'une
+     * seule période se reconnaît au bout de trois secondes et devient un tic.
+     */
+    if (al && al->souffle_force > 0.0f) {
+        const float w = al->souffle;
+        const float ang = (SDL_sinf(w * 1.31f) * 0.0075f + SDL_sinf(w * 0.57f + 1.7f) * 0.0045f)
+                        * al->souffle_force;
+        const ns_v3 avant = ns_v3_make(SDL_cosf(s->forward_angle), 0.0f, SDL_sinf(s->forward_angle));
+        const ns_m4 tangage = rotation_autour(ns_v3_zero(), s->axe_lateral, ang);
+        const ns_m4 roulis  = rotation_autour(ns_v3_zero(), avant, ang * 0.6f);
+        monde = ns_m4_mul(ns_m4_mul(tangage, roulis), monde);
+        pose_monde = true;
+    }
+
+    for (int j = 0; j < count; ++j) {
+        const ns_m4 w = pose_monde ? ns_m4_mul(monde, world[j]) : world[j];
+        out[j] = ns_m4_mul(w, s->inverse_bind[j]);
+    }
+}
+
+/* ------------------------------------------------------------- l'accroupi */
+
+/* La hauteur du personnage, plié de `a`, MESURÉE sur ses sommets sous la pose.
+ * `bas` reçoit l'altitude du point le plus bas — c'est la remontée à corriger. */
+static float hauteur_pliee(const ns_skin *s, float a, float *bas)
+{
+    ns_m4 world[NS_SKIN_MAX_JOINTS];
+    poser_mondes(s, s->stand_time, world, s->joint_count);
+    plier_jambes(s, a, world, s->joint_count);
+
+    ns_m4 os[NS_SKIN_MAX_JOINTS];
+    for (int j = 0; j < s->joint_count; ++j) os[j] = ns_m4_mul(world[j], s->inverse_bind[j]);
+
+    float lo = FLT_MAX, hi = -FLT_MAX;
+    for (uint32_t i = 0; i < s->vert_count; ++i) {
+        const ns_skin_vertex *v = &s->verts[i];
+        float y = 0.0f;
+        for (int k = 0; k < NS_SKIN_INFLUENCES; ++k) {
+            const float w = v->weights[k];
+            if (w <= 0.0f) continue;
+            const ns_m4 *m = &os[v->joints[k]];
+            y += w * (m->m[0][1] * v->position[0] + m->m[1][1] * v->position[1] +
+                      m->m[2][1] * v->position[2] + m->m[3][1]);
+        }
+        if (y < lo) lo = y;
+        if (y > hi) hi = y;
+    }
+    if (bas) *bas = lo;
+    return (hi > lo) ? (hi - lo) : 0.0f;
+}
+
+bool ns_skin_crouch_calibrate(ns_skin *s, float rapport)
+{
+    if (!s) return false;
+    s->accroupi_pret = false;
+    if (s->hanche[0] < 0 || s->hanche[1] < 0) {
+        NS_WARN("personnage : les deux jambes n'ont pas été repérées — pas d'accroupi");
+        return false;
+    }
+    if (!(rapport > 0.35f && rapport < 0.98f)) {
+        NS_WARN("personnage : rapport d'accroupi %.2f hors de [0,35 ; 0,98] — ignoré",
+                (double)rapport);
+        return false;
+    }
+
+    float bas0 = 0.0f;
+    const float h0 = hauteur_pliee(s, 0.0f, &bas0);
+    if (h0 <= 1e-4f) return false;
+    const float vise = h0 * rapport;
+
+    /*
+     * BALAYAGE puis DICHOTOMIE. Le balayage d'abord parce que la hauteur n'est
+     * PAS garantie monotone : passé un certain pli, le genou ressort au-dessus
+     * de la tête et la « hauteur » du personnage se met à remonter. Une
+     * dichotomie lancée à l'aveugle sur [0 ; 2 rad] pourrait donc atterrir sur
+     * la mauvaise branche. On cherche le premier intervalle qui encadre la
+     * cote, et on n'affine que celui-là.
+     */
+    const float amax = 2.0f;
+    float lo = -1.0f, hi = -1.0f;
+    float precedent = h0;
+    for (int k = 1; k <= 40; ++k) {
+        const float a = amax * (float)k / 40.0f;
+        const float h = hauteur_pliee(s, a, NULL);
+        if (h <= vise && precedent > vise) {
+            lo = amax * (float)(k - 1) / 40.0f;
+            hi = a;
+            break;
+        }
+        precedent = h;
+    }
+    if (lo < 0.0f) {
+        NS_WARN("personnage : impossible d'atteindre %.0f %% de la hauteur en pliant "
+                "les jambes — pas d'accroupi", (double)(rapport * 100.0f));
+        return false;
+    }
+    for (int k = 0; k < 18; ++k) {
+        const float mid = 0.5f * (lo + hi);
+        if (hauteur_pliee(s, mid, NULL) > vise) lo = mid; else hi = mid;
+    }
+    s->accroupi_angle = 0.5f * (lo + hi);
+
+    for (int k = 0; k < NS_SKIN_ACCROUPI_CRANS; ++k) {
+        const float c = (float)k / (float)(NS_SKIN_ACCROUPI_CRANS - 1);
+        float bas = 0.0f;
+        (void)hauteur_pliee(s, c * s->accroupi_angle, &bas);
+        s->accroupi_remontee[k] = bas - bas0;
+    }
+    s->accroupi_pret = true;
+
+    NS_INFO("personnage : accroupi calé à %.1f degrés de cuisse (genou %.1f), "
+            "hauteur %.2f -> %.2f, bassin descendu de %.3f (unités du fichier)",
+            (double)(s->accroupi_angle / NS_DEG2RAD),
+            (double)(2.0f * s->accroupi_angle / NS_DEG2RAD),
+            (double)h0, (double)(h0 * rapport),
+            (double)s->accroupi_remontee[NS_SKIN_ACCROUPI_CRANS - 1]);
+    return true;
+}
+
+bool  ns_skin_can_crouch(const ns_skin *s) { return s && s->accroupi_pret; }
+float ns_skin_crouch_angle(const ns_skin *s)
+{
+    return s ? (s->accroupi_angle / NS_DEG2RAD) : 0.0f;
 }

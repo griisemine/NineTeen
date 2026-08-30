@@ -716,6 +716,45 @@ foreach(_p IN LISTS TEXTURES_TIERS)
     list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_p}")
 endforeach()
 
+# ---------------------------------------------------------------------------
+# CE QUE LA SALLE DECLARE RETIRE, LE PAQUET NE L'EMPORTE PLUS
+# ---------------------------------------------------------------------------
+#
+# `retiredTextures` de `salle.room.json` nomme les images que la salle n'emploie
+# PLUS, chacune avec le motif de son retrait. C'etait une declaration a l'usage
+# de `roomgen`, qui verifie qu'une texture presente mais inutilisee l'est
+# DELIBEREMENT. La copie, elle, ne la lisait pas : les dix-huit images retirees
+# partaient dans le paquet comme les autres.
+#
+# Deux d'entre elles rendent la chose grave plutot que negligente. Les atlas de
+# caisson `flappy.jpg` et `tetris.jpg` portent, mis a plat, l'OISEAU de Flappy
+# Bird et le mot TETRIS — une oeuvre d'auteur et une marque deposee. Retires du
+# decor il y a deux versions, ils continuaient d'etre livres. Une declaration
+# que le build n'honore pas ne protege de rien.
+#
+# La liste n'est PAS recopiee ici : une seconde liste est une liste qui derive.
+# Et le compte de `--expect-textures` ne bouge pas — `roomgen` compte ce que la
+# salle DECLARE, employe ou retire ; celui-ci decide de ce que le paquet
+# EMPORTE. Les deux controles regardent deux choses differentes.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/scene/salle.room.json" _room_desc_json)
+string(JSON _n_retired ERROR_VARIABLE _retired_err
+       LENGTH "${_room_desc_json}" retiredTextures)
+if(_retired_err)
+    message(FATAL_ERROR
+        "assets/scene/salle.room.json : « retiredTextures » illisible (${_retired_err}).\n"
+        "  Sans elle, le build recopierait dans le paquet des images que la salle "
+        "declare retirees — dont deux qui portent une oeuvre tierce.")
+endif()
+math(EXPR _retired_last "${_n_retired} - 1")
+foreach(_i RANGE ${_retired_last})
+    string(JSON _f GET "${_room_desc_json}" retiredTextures ${_i} file)
+    list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_f}")
+    # Gardee pour la purge des gravats, plus bas : une image retiree laisse
+    # derriere elle sa copie et ses cartes de-cuites.
+    list(APPEND RETIRED_TEXTURES "${_f}")
+endforeach()
+message(STATUS "Textures declarees retirees, non copiees : ${_n_retired}")
+
 # Un seul répertoire pour TOUS les albédos rapportés, y compris ceux des modèles.
 # Poly Haven les range dans un sous-dossier par modèle ; on les remonte ici parce
 # que la chaîne (copie, puis normale et ORM dérivées par `texgen`) est la même
@@ -1206,10 +1245,23 @@ set(ASSETS_RETIRES
 # oeuvre derivee de cette affiche : elle sort avec elle. Les quatre suffixes
 # sont listes parce que `NINETEEN_BC_MAPS` peut avoir change depuis le build qui
 # les a produites — on efface les deux formes, pas seulement celle du jour.
+# Les DIX-HUIT images que `salle.room.json` declare retirees laissent le meme
+# sillage : leur copie dans `scene/textures/` et leurs cartes dans `materials/`.
+# On les prend de la meme source que l'exclusion de copie — les recopier ici
+# serait une seconde liste, donc une liste qui derive. Deux d'entre elles sont
+# les atlas de caisson qui portent l'oiseau de Flappy Bird et le mot TETRIS.
+set(_retires_bases "")
+foreach(_f IN LISTS RETIRED_TEXTURES)
+    list(APPEND ASSETS_RETIRES "scene/textures/${_f}")
+    get_filename_component(_b "${_f}" NAME_WE)
+    list(APPEND _retires_bases "${_b}")
+    list(APPEND ASSETS_RETIRES "materials/${_b}_c.png")
+endforeach()
 foreach(_base poster_1 poster_2 poster_3 poster_4 poster_5 poster_6 poster_7 poster_8
               flappy_easy_font flappy_hard_font
               marquee_pacman marquee_tetris marquee_flappy ecran_pacman
-              ecran_flappy_facile ecran_flappy_dur floor)
+              ecran_flappy_facile ecran_flappy_dur floor
+              ${_retires_bases})
     list(APPEND ASSETS_RETIRES "materials/${_base}_n.nstex" "materials/${_base}_orm.nstex"
                                "materials/${_base}_n.png"   "materials/${_base}_orm.png")
 endforeach()
