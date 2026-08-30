@@ -40,6 +40,7 @@ add_library(nineteen_engine STATIC
     net/ns_online.c
     net/ns_realtime.c
     net/ns_lockstep.c
+    net/ns_arene.c
 )
 
 add_library(nineteen::engine ALIAS nineteen_engine)
