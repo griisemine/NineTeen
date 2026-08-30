@@ -252,7 +252,7 @@
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
-      "name": "flanc_tetris",
+      "name": "flanc_aplomb",
       "texture": "flanc_borne.png",
       "uvMetres": 1.0,
       "roughness": 0.46,
@@ -322,7 +322,7 @@
     },
     {
       "_": "Le flanc de la borne : la sérigraphie en losanges des vues de référence, teintée du jeu. Plus claire que le caisson — une décalcomanie s'imprime sur fond clair, et c'est ce qui la rend lisible de loin. Elle est portée par les deux bouchons de l'extrusion, qui SONT les deux flancs.",
-      "name": "flanc_pacman",
+      "name": "flanc_dedale",
       "texture": "flanc_borne.png",
       "uvMetres": 1.0,
       "roughness": 0.46,
@@ -377,7 +377,7 @@
       "_": "Laque vert tuyau. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
     },
     {
-      "name": "caisson_tetris",
+      "name": "caisson_aplomb",
       "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
       "roughness": 0.4,
@@ -450,7 +450,7 @@
       "_": "Laque jaune ocre. Le caisson unique valait baseColor (0,042 ; 0,048 ; 0,06) — 4 % d'albédo, et froid : plus sombre que la moquette. Aucune lumière ne rend visible un objet qui renvoie 4 % de ce qu'il reçoit, et c'est là que se jouait l'essentiel du « trop sombre », pas dans l'éclairage."
     },
     {
-      "name": "caisson_pacman",
+      "name": "caisson_dedale",
       "_atmo": "SPEC-ATMOSPHERE poste 15. Une fois le demineur passe au bleu acier, Pac-Man devient le seul ambre de la salle, donc identifiable de loin — ce qui est le service que rend une palette par jeu.",
       "texture": "painted_panel.jpg",
       "uvMetres": 0.46,
@@ -746,7 +746,7 @@
     },
     {
       "name": "ecran_flappy_facile",
-      "texture": "flappy_easy_font.jpg",
+      "texture": "ecran_flappy_facile.png",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -758,7 +758,7 @@
     },
     {
       "name": "ecran_flappy_dur",
-      "texture": "flappy_hard_font.jpg",
+      "texture": "ecran_flappy_dur.png",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -781,7 +781,7 @@
       "fit": true
     },
     {
-      "name": "ecran_tetris",
+      "name": "ecran_aplomb",
       "texture": "tetris_font.jpg",
       "roughness": 0.12,
       "emissive": [
@@ -854,9 +854,9 @@
     },
     {
       "_emis": "2,9 et non 1,35, et c'est la contrepartie du poste 14. Ces quatre bornes affichaient `coming_soon.jpg` et `chargement.png`, deux images CLAIRES : les remplacer par des plaques de neon — fond noir, tubes lumineux — a fait tomber la mediane de --view=allee de 42,2 a 35,1 et celle de --view=borne de 59,4 a 49,1, mesure a definition egale. Le remede n'est pas de revenir en arriere, c'est de laisser un neon BRILLER : l'emissif est module par l'albedo texel par texel, donc monter le facteur n'eclaircit que les tubes et laisse le fond noir.",
-      "name": "ecran_pacman",
+      "name": "ecran_dedale",
       "_atmo": "SPEC-ATMOSPHERE poste 14 (§1.4). Les bornes 7 et 18 portaient un ecran « COMING SOON » (`coming_soon.jpg`), des bandes de danger jaune et noir qui disent que le jeu n'est pas la — alors que leur enseigne dit PAC-MAN, que le jeu est jouable, et qu'il joue meme tout seul en attract. Planche dessinee par `tools/marqueeart --neon`, meme fonte et meme teinte que l'enseigne du meme jeu.",
-      "texture": "ecran_pacman.png",
+      "texture": "ecran_dedale.png",
       "roughness": 0.12,
       "emissive": [
         1.0,
@@ -908,8 +908,8 @@
     },
     {
       "_": "RECETTE VISUELLE. Elle portait « tetris.jpg » : non pas une enseigne, mais l'ATLAS DE CAISSON de 2020 — la peau du meuble mise a plat, deux joues, un bandeau d'ecran, un flanc, et le nom du jeu en bandeau VERTICAL dans le coin droit. Posee en `fit` sur la plaque de 0,62 x 0,155 m, elle y ecrasait l'atlas ENTIER : la capture montre trois pans de bleu et une colonne de tetrominos couchee, jamais le mot « TETRIS ». Le poste qui a dessine SHOOTER, DEMINEUR, PAC-MAN et PIANO n'a couvert que les jeux SANS planche ; les quatre qui en avaient une l'avaient fausse, et personne ne l'a ouverte. Meme compte que « pub.jpg » — huit bornes sur dix-neuf. Vu de pres sous `--play-at=borne_arcade_1`, ou l'enseigne tient le haut du cadre pendant toute la partie. L'atlas SORT du decor : le caisson d'une borne est « painted_panel.jpg » teinte, son flanc est « flanc_borne.png » serigraphie. La reconstruction avait deja abandonne les peaux de 2020 partout ailleurs ; le marquee etait le dernier endroit ou l'une d'elles restait accrochee, et elle y etait fausse.",
-      "name": "marquee_tetris",
-      "texture": "marquee_tetris.png",
+      "name": "marquee_aplomb",
+      "texture": "marquee_aplomb.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -971,8 +971,8 @@
       "_": "L'enseigne de « DEMINEUR », dessinee par `tools/marqueeart` avec la fonte du jeu. Cette borne portait « votre publicite ici ? » : le jeu n'avait pas d'enseigne, et huit bornes sur dix-neuf tombaient sur la pancarte du regisseur."
     },
     {
-      "name": "marquee_pacman",
-      "texture": "marquee_pacman.png",
+      "name": "marquee_dedale",
+      "texture": "marquee_dedale.png",
       "roughness": 0.3,
       "emissive": [
         1.0,
@@ -3228,7 +3228,7 @@
     {
       "name": "borne_arcade_2",
       "slot": 2,
-      "game": "tetris",
+      "game": "aplomb",
       "difficulty": "hard",
       "at": [
         -2.241,
@@ -3236,12 +3236,12 @@
         1.293
       ],
       "yaw": 0.0,
-      "materialBody": "caisson_tetris",
-      "materialSide": "flanc_tetris",
+      "materialBody": "caisson_aplomb",
+      "materialSide": "flanc_aplomb",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_tetris",
-      "marquee": "marquee_tetris"
+      "screen": "ecran_aplomb",
+      "marquee": "marquee_aplomb"
     },
     {
       "name": "borne_arcade_3",
@@ -3394,7 +3394,7 @@
     {
       "name": "borne_arcade_11",
       "slot": 11,
-      "game": "tetris",
+      "game": "aplomb",
       "difficulty": "easy",
       "at": [
         2.254,
@@ -3402,12 +3402,12 @@
         0.092
       ],
       "yaw": 180.0,
-      "materialBody": "caisson_tetris",
-      "materialSide": "flanc_tetris",
+      "materialBody": "caisson_aplomb",
+      "materialSide": "flanc_aplomb",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_tetris",
-      "marquee": "marquee_tetris",
+      "screen": "ecran_aplomb",
+      "marquee": "marquee_aplomb",
       "_difficulte": "EASY et non « normal ». Les six bornes du cote x > 0 sont EASY dans 2020, sans exception (releve § 5) ; cinq des six portaient « normal » et la douzieme « easy ». Le panneau suspendu au-dessus de l'allee dit maintenant la meme chose que la donnee."
     },
     {
@@ -3433,7 +3433,7 @@
       "_z": "La rangee est recentree sur z = -0,6 et non sur 0 : a +2,302 la derniere borne mordait le DEPART DU PAN COUPE nord-ouest, qui commence a z = 2,539. Le controle l'a dit au centimetre — « 0,02 m dehors ». Avec six bornes d'entraxe 0,942 la rangee fait 4,71 m ; centree ainsi, la plus au nord s'arrete a 2,115.",
       "name": "borne_arcade_13",
       "slot": 13,
-      "game": "pacman",
+      "game": "dedale",
       "difficulty": "normal",
       "at": [
         -6.48,
@@ -3441,19 +3441,19 @@
         -2.955
       ],
       "yaw": 90.0,
-      "materialBody": "caisson_pacman",
-      "materialSide": "flanc_pacman",
+      "materialBody": "caisson_dedale",
+      "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_pacman",
-      "marquee": "marquee_pacman",
+      "screen": "ecran_dedale",
+      "marquee": "marquee_dedale",
       "_x": "-6,48 et non -6,621 comme en 2020 : les socles des pilastres, larges de 0,566, atteignent x = -7,017, et le dos d'une borne a -6,621 tombe a -7,061. Le controle l'a chiffre au millimetre — 44 x 134 x 238 mm de recouvrement. En 2020 les pilastres du mur ouest et les deux bornes ne se genaient pas parce qu'il n'y en avait que deux, posees entre eux ; a six, la rangee croise la grille. 14 cm suffisent a degager.",
       "_jeux": "RECETTE VISUELLE — L'ORDRE DES SIX, ET NON LEUR NOMBRE. La rangee lisait PAC-MAN / PIANO / PAC-MAN / PIANO / PAC-MAN / PIANO, une alternance stricte sur six caissons alignes au meme pas, avec six enseignes identiques deux a deux. Vue de face depuis « classement » et de trois quarts depuis « sud », elle se lit comme une liste generee : aucune vraie salle ne pose ses machines en damier, elle pose les doublons COTE A COTE, parce qu'on les livre par deux et qu'on les branche sur la meme rampe. Les jeux des bornes 14 et 15, puis 17 et 18, sont donc echanges — l'ordre devient PAC-MAN, PAC-MAN, PIANO, PIANO, PIANO, PAC-MAN : deux bancs et un isole. Le COMPTE ne bouge pas (trois de chaque), ni les places, ni les cotes, ni les difficultes. Rien ici n'est un releve de 2020 : le mur ouest n'en portait que DEUX, et les six sont une invention assumee juste au-dessus ; leur ordre l'est donc aussi, et il valait mieux qu'il n'ait pas l'air tire d'une boucle."
     },
     {
       "name": "borne_arcade_14",
       "slot": 14,
-      "game": "pacman",
+      "game": "dedale",
       "difficulty": "normal",
       "at": [
         -6.48,
@@ -3461,12 +3461,12 @@
         -2.013
       ],
       "yaw": 90.0,
-      "materialBody": "caisson_pacman",
-      "materialSide": "flanc_pacman",
+      "materialBody": "caisson_dedale",
+      "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_pacman",
-      "marquee": "marquee_pacman"
+      "screen": "ecran_dedale",
+      "marquee": "marquee_dedale"
     },
     {
       "name": "borne_arcade_15",
@@ -3525,7 +3525,7 @@
     {
       "name": "borne_arcade_18",
       "slot": 18,
-      "game": "pacman",
+      "game": "dedale",
       "difficulty": "normal",
       "at": [
         -6.48,
@@ -3533,12 +3533,12 @@
         1.755
       ],
       "yaw": 90.0,
-      "materialBody": "caisson_pacman",
-      "materialSide": "flanc_pacman",
+      "materialBody": "caisson_dedale",
+      "materialSide": "flanc_dedale",
       "materialTrim": "borne_cadre",
       "materialPanel": "borne_commande",
-      "screen": "ecran_pacman",
-      "marquee": "marquee_pacman"
+      "screen": "ecran_dedale",
+      "marquee": "marquee_dedale"
     },
     {
       "_": "Le poste de classement, sur l'estrade centrale — et la phrase qui etait ici melangeait deux bornes.\nCE QU'IL Y A VRAIMENT EN (0 ; -4,541) DANS 2020 : la borne 15, un caisson COMING SOON (FLAPPY_BIRD_HARD.015_Cube.072) dont `detecterMachine` renvoie 0 — injouable (legacy/room/room.c:2409-2413). Le CLASSEMENT est la borne 16 : un MONITEUR POSE SUR LE COMPTOIR, dalle x -0,412..0,412, y 1,449..1,910, z 5,091..5,184 (Cube.046_Cube.003 et son capot Cube.060_Cube.013), regarde depuis z 4,301..4,786 face au nord (room.c:2417), cible de cadrage (0 ; 4,797) (room.c:1854).\nIL Y A DONC SEIZE BORNES ET QUINZE CAISSONS dans 2020, et ce n'est pas une incoherence du code : le seizieme poste n'est pas un caisson, c'est un ecran sur un meuble. La phrase « room.c le declare comme la seizieme cible alors qu'il n'y a que quinze caissons » etait donc fausse.\nCE QUI N'EST PAS CORRIGE ICI, ET POURQUOI : dix-neuf bornes est un choix assume du proprietaire — le jeu s'appelle Nineteen. Deplacer le classement sur le comptoir demanderait de decider ce qui prend sa place au centre, et cette decision ne m'appartient pas. Elle est posee dans le rapport. Sa cote y, elle, suit l'estrade : 0,228 et non 0,12.",

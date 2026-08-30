@@ -80,8 +80,8 @@ CREATE TABLE IF NOT EXISTS games (
 
 -- Les identifiants reprennent l'ordre des bornes de la V1 (legacy/room/room.c).
 INSERT INTO games (id, slug, name, difficulty, multiplier, max_plausible_score) VALUES
-    ( 1, 'flappy-hard',   'Flappy Bird', 'hard',   2.0,    5000),
-    ( 2, 'tetris-hard',   'Tetris',      'hard',   2.0,  999999),
+    ( 1, 'flappy-hard',   'Flappy',      'hard',   2.0,    5000),
+    ( 2, 'aplomb-hard',   'Aplomb',      'hard',   2.0,  999999),
     ( 3, 'asteroid-hard', 'Asteroid',    'hard',   2.0,  500000),
     ( 4, 'shooter-hard',  'Shooter',     'hard',   2.0,  500000),
     ( 5, 'snake-hard',    'Snake',       'hard',   2.0,   20000),
@@ -90,10 +90,10 @@ INSERT INTO games (id, slug, name, difficulty, multiplier, max_plausible_score) 
     ( 8, 'snake-easy',    'Snake',       'easy',   1.0,   20000),
     ( 9, 'shooter-easy',  'Shooter',     'easy',   1.0,  500000),
     (10, 'asteroid-easy', 'Asteroid',    'easy',   1.0,  500000),
-    (11, 'tetris-easy',   'Tetris',      'easy',   1.0,  999999),
-    (12, 'flappy-easy',   'Flappy Bird', 'easy',   1.0,    5000),
+    (11, 'aplomb-easy',   'Aplomb',      'easy',   1.0,  999999),
+    (12, 'flappy-easy',   'Flappy',      'easy',   1.0,    5000),
     -- Les deux emplacements que la V1 affichait en « COMMING SOON ».
-    (13, 'pacman',        'Pac-Man',     'normal', 1.5,  200000),
+    (13, 'dedale',        'Dédale',      'normal', 1.5,  200000),
     (14, 'piano',         'Piano',       'normal', 1.0,   50000)
 ON CONFLICT (id) DO NOTHING;
 

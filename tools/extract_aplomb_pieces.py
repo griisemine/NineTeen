@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-extract_tetris_pieces.py — recopie la table des pièces de 2020, exactement.
+extract_aplomb_pieces.py — recopie la table des pièces de 2020, exactement.
 
 `legacy/games/5_tetris/pieces.h` déclare
 `PIECES[2 difficultés][2 tailles][7 pièces][4 rotations][10][10]`, soit
@@ -8,14 +8,14 @@ extract_tetris_pieces.py — recopie la table des pièces de 2020, exactement.
 d'une erreur qu'on ne verrait qu'en jouant — une rotation fausse sur une pièce
 sur vingt-huit ne se remarque pas sur une capture.
 
-Ce script produit `games/tetris/tetris_pieces.h` à partir du fichier d'origine.
+Ce script produit `games/aplomb/aplomb_pieces.h` à partir du fichier d'origine.
 Il n'est PAS appelé par le build : le résultat est versionné, parce qu'ajouter
 un interpréteur Python à une chaîne de build en C serait un prix disproportionné
 pour une table qui ne changera plus. Ce qui garantit qu'elle reste fidèle est le
-condensé du fichier source, vérifié par `tests/test_tetris.c` : si
+condensé du fichier source, vérifié par `tests/test_aplomb.c` : si
 `pieces.h` change, le test le dit et on relance ce script.
 
-    python3 tools/extract_tetris_pieces.py
+    python3 tools/extract_aplomb_pieces.py
 """
 import hashlib
 import os
@@ -23,7 +23,7 @@ import re
 import sys
 
 SRC = os.path.join(os.path.dirname(__file__), "..", "legacy", "games", "5_tetris", "pieces.h")
-DST = os.path.join(os.path.dirname(__file__), "..", "games", "tetris", "tetris_pieces.h")
+DST = os.path.join(os.path.dirname(__file__), "..", "games", "aplomb", "aplomb_pieces.h")
 
 D, S, P, R, N = 2, 2, 7, 4, 10
 
@@ -58,9 +58,9 @@ for d in range(D):
 
 out = []
 out.append("/*\n"
-           " * tetris_pieces.h — la table des pièces de 2020, recopiée exactement.\n"
+           " * aplomb_pieces.h — la table des pièces de 2020, recopiée exactement.\n"
            " *\n"
-           " * PRODUIT PAR `tools/extract_tetris_pieces.py`. Ne pas modifier à la main :\n"
+           " * PRODUIT PAR `tools/extract_aplomb_pieces.py`. Ne pas modifier à la main :\n"
            " * relancer le script.\n"
            " *\n"
            " * Source : legacy/games/5_tetris/pieces.h\n"
@@ -83,18 +83,18 @@ out.append("/*\n"
            " * Le pivot est la case marquée « 2 » dans la source ; c'est autour d'elle que\n"
            " * tourne la pièce.\n"
            " */\n"
-           "#ifndef NS_TETRIS_PIECES_H\n"
-           "#define NS_TETRIS_PIECES_H\n\n"
+           "#ifndef NS_APLOMB_PIECES_H\n"
+           "#define NS_APLOMB_PIECES_H\n\n"
            "#include <stdint.h>\n\n"
-           "#define TET_DIFFICULTIES %d\n"
-           "#define TET_SIZES        %d\n"
-           "#define TET_PIECES       %d\n"
-           "#define TET_ROTATIONS    %d\n"
-           "#define TET_GRID         %d\n\n"
-           "#define TET_PIECES_SOURCE_SHA256 \"%s\"\n\n"
+           "#define APL_DIFFICULTIES %d\n"
+           "#define APL_SIZES        %d\n"
+           "#define APL_PIECES       %d\n"
+           "#define APL_ROTATIONS    %d\n"
+           "#define APL_GRID         %d\n\n"
+           "#define APL_PIECES_SOURCE_SHA256 \"%s\"\n\n"
            "/* [difficulté][taille][pièce][rotation][ligne] */\n"
-           "static const uint16_t TET_SHAPE[TET_DIFFICULTIES][TET_SIZES][TET_PIECES]"
-           "[TET_ROTATIONS][TET_GRID] = {\n"
+           "static const uint16_t APL_SHAPE[APL_DIFFICULTIES][APL_SIZES][APL_PIECES]"
+           "[APL_ROTATIONS][APL_GRID] = {\n"
            % (digest, D, S, P, R, N, digest))
 
 k = 0
@@ -113,8 +113,8 @@ for d in range(D):
 out.append("};\n\n")
 
 out.append("/* Le pivot, en (x, y) sur la même grille. */\n"
-           "static const uint8_t TET_PIVOT[TET_DIFFICULTIES][TET_SIZES][TET_PIECES]"
-           "[TET_ROTATIONS][2] = {\n")
+           "static const uint8_t APL_PIVOT[APL_DIFFICULTIES][APL_SIZES][APL_PIECES]"
+           "[APL_ROTATIONS][2] = {\n")
 k = 0
 for d in range(D):
     out.append("{\n")
@@ -128,7 +128,7 @@ for d in range(D):
             out.append(" },\n")
         out.append("  },\n")
     out.append("},\n")
-out.append("};\n\n#endif /* NS_TETRIS_PIECES_H */\n")
+out.append("};\n\n#endif /* NS_APLOMB_PIECES_H */\n")
 
 open(DST, "w").write("".join(out))
 print("écrit %s (%d formes, source sha256 %s)" % (DST, k, digest[:16]))

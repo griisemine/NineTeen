@@ -304,9 +304,15 @@ list(APPEND MARQUEE_ART "${_sortie}" "${GEN}/scene/textures/bloc_sortie.png"
                         "${GEN}/materials/bloc_sortie${_map_n}"
                         "${GEN}/materials/bloc_sortie${_map_orm}")
 
+# DEDALE et APLOMB portaient « PAC-MAN » et « TETRIS », deux MARQUES DÉPOSÉES
+# (Bandai Namco, Tetris Holding), écrites en toutes lettres sur cinq enseignes
+# et deux écrans d'attente. Une enseigne est ce qu'on lit d'une borne AVANT d'y
+# jouer : c'était l'endroit le plus visible du paquet. Les teintes, elles, ne
+# bougent pas — une couleur n'appartient à personne, et c'est par sa couleur
+# qu'on retrouve une borne dans l'allée.
 set(MARQUEE_shooter  "SHOOTER"  "1.0,0.36,0.14")
 set(MARQUEE_demineur "DEMINEUR" "1.0,0.74,0.20")
-set(MARQUEE_pacman   "PAC-MAN"  "1.0,0.84,0.16")
+set(MARQUEE_dedale   "DEDALE"   "1.0,0.84,0.16")
 set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
 # Les quatre teintes ajoutées suivent la même règle que les quatre premières :
 # c'est la laque du flanc, remontée juste assez pour qu'une plaque rétroéclairée
@@ -316,10 +322,10 @@ set(MARQUEE_piano    "PIANO"    "0.72,0.45,1.0")
 # étoiles de son propre écran. SNAKE est décalé vers le jaune-vert pour ne pas
 # se confondre, dans la même rangée, avec le vert de FLAPPY.
 set(MARQUEE_flappy   "FLAPPY"   "0.22,0.88,0.40")
-set(MARQUEE_tetris   "TETRIS"   "0.34,0.52,1.0")
+set(MARQUEE_aplomb   "APLOMB"   "0.34,0.52,1.0")
 set(MARQUEE_asteroid "ASTEROID" "0.72,0.80,1.0")
 set(MARQUEE_snake    "SNAKE"    "0.66,0.94,0.26")
-foreach(jeu shooter demineur pacman piano flappy tetris asteroid snake)
+foreach(jeu shooter demineur dedale piano flappy aplomb asteroid snake)
     list(GET MARQUEE_${jeu} 0 _titre)
     list(GET MARQUEE_${jeu} 1 _teinte)
     set(_png "${GEN}/sideart/marquee_${jeu}.png")
@@ -353,14 +359,24 @@ foreach(jeu shooter demineur pacman piano flappy tetris asteroid snake)
                             "${GEN}/materials/marquee_${jeu}${_map_orm}")
 endforeach()
 
-# LES DEUX ÉCRANS D'ATTENTE QUI MANQUAIENT.
+# LES ÉCRANS D'ATTENTE : deux qui manquaient, deux qu'il a fallu remplacer.
 #
 # SPEC-ATMOSPHERE poste 14. Quatre bornes sur dix-neuf déclaraient un écran qui
-# dit que le jeu n'est pas là : `coming_soon.jpg` sur les deux bornes Pac-Man
-# (7 et 18), `chargement.png` sur les deux bornes Piano (8 et 15). Les deux jeux
-# sont jouables, et leurs enseignes le disaient déjà — c'est le poste 12 de
-# `DESIGN-SALLE.md` fait à moitié : les marquees ont été dessinés, les écrans
-# non.
+# dit que le jeu n'est pas là : `coming_soon.jpg` sur les deux bornes du jeu de
+# labyrinthe (7 et 18), `chargement.png` sur les deux bornes Piano (8 et 15).
+# Les deux jeux sont jouables, et leurs enseignes le disaient déjà — c'est le
+# poste 12 de `DESIGN-SALLE.md` fait à moitié : les marquees ont été dessinés,
+# les écrans non.
+#
+# LES DEUX DE FLAPPY s'ajoutent ici, et pour la raison juridique cette fois.
+# `flappy_easy_font.jpg` et `flappy_hard_font.jpg` sont des captures du jeu de
+# 2020 : ouvertes, elles montrent L'OISEAU DE FLAPPY BIRD et SES TUYAUX, en
+# grand, sur deux dalles devant lesquelles le joueur passe. Les planches du jeu
+# viennent d'être redessinées pour cette raison exacte (voir « LES PLANCHES DES
+# MINI-JEUX ») ; laisser les mêmes sprites accrochés à deux écrans de la salle
+# aurait défait le geste, et aurait en plus montré un jeu qui n'existe plus.
+# Les deux fichiers sortent de `_room_textures` comme les huit affiches, donc du
+# compte ET de la copie.
 #
 # Même outil et même fonte que les enseignes, en mode `--neon` : un écran
 # d'attente n'est PAS un marquee. Un marquee est une plaque de plexiglas
@@ -377,9 +393,15 @@ endforeach()
 #
 # La teinte est celle de l'enseigne du même jeu : une borne se lit de loin par
 # sa couleur, et son écran ne doit pas la démentir.
-set(ECRAN_pacman "PAC-MAN" "1.0,0.84,0.16")
-set(ECRAN_piano  "PIANO"   "0.72,0.45,1.0")
-foreach(jeu pacman piano)
+#
+# Les deux écrans de Flappy portent le MÊME titre et deux teintes différentes :
+# les deux bornes lancent le même jeu, seule la difficulté change, et c'est déjà
+# ainsi que la salle distingue une paire — par la couleur, jamais par le mot.
+set(ECRAN_dedale        "DEDALE" "1.0,0.84,0.16")
+set(ECRAN_piano         "PIANO"  "0.72,0.45,1.0")
+set(ECRAN_flappy_facile "FLAPPY" "0.22,0.88,0.40")
+set(ECRAN_flappy_dur    "FLAPPY" "1.0,0.52,0.20")
+foreach(jeu dedale piano flappy_facile flappy_dur)
     list(GET ECRAN_${jeu} 0 _titre)
     list(GET ECRAN_${jeu} 1 _teinte)
     set(_png "${GEN}/sideart/ecran_${jeu}.png")
@@ -485,14 +507,22 @@ foreach(motif IN LISTS POSTER_MOTIFS)
                             "${GEN}/materials/affiche_${motif}${_map_orm}")
 endforeach()
 
-# Les huit images qu'elles remplacent, retirées de TOUTES les listes : compte,
-# dé-cuisson et copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une
-# image n'est plus employée, il n'empêche pas de la livrer.
-set(POSTERS_TIERS poster_1.png poster_2.png poster_3.jpg poster_4.jpg
-                  poster_5.jpg poster_6.jpg poster_7.jpg poster_8.jpg)
+# Les images de tiers, retirées de TOUTES les listes : compte, dé-cuisson et
+# copie. Un `retiredTextures` ne suffirait pas — il déclare qu'une image n'est
+# plus employée, il n'empêche pas de la livrer.
+#
+# Les huit affiches, plus les DEUX ÉCRANS D'ATTRACT DE FLAPPY, qui sont des
+# captures du jeu de 2020 montrant l'oiseau et les tuyaux de Flappy Bird. Ce
+# sont les deux seules captures de ce lot à contenir de l'art emprunté : les
+# cinq autres (`snake_font`, `tetris_font`, `asteroid_font`, `demineur_font`,
+# `shooter_font`) montrent des jeux dont l'art appartient bien au projet de
+# 2020, et elles restent. Ouvertes une par une pour le vérifier.
+set(TEXTURES_TIERS poster_1.png poster_2.png poster_3.jpg poster_4.jpg
+                   poster_5.jpg poster_6.jpg poster_7.jpg poster_8.jpg
+                   flappy_easy_font.jpg flappy_hard_font.jpg)
 
 file(GLOB _room_textures "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
-foreach(_p IN LISTS POSTERS_TIERS)
+foreach(_p IN LISTS TEXTURES_TIERS)
     list(REMOVE_ITEM _room_textures "${SRC_ROOM}/textures/${_p}")
 endforeach()
 
@@ -519,10 +549,12 @@ list(LENGTH _cc0_textures  _n_cc0)
 # présentes ». C'est exactement ce qui vient d'arriver en ajoutant le néon, et
 # c'est le comportement voulu — une texture générée que la salle n'emploie pas,
 # ou une texture employée qui n'est pas générée, sont deux pannes muettes.
-# +22 : les huit affiches murales dessinees s'ajoutent aux quatorze
-# planches deja generees. Les huit images qu'elles remplacent sortent du
-# compte en meme temps, retirees de `_room_textures` : le total ne bouge pas.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 22")
+# +24 : les huit affiches murales dessinees s'ajoutent aux quatorze planches
+# deja generees, puis les DEUX ECRANS D'ATTRACT DE FLAPPY. Les dix images
+# qu'elles remplacent — huit affiches, deux captures — sortent du compte en meme
+# temps, retirees de `_room_textures` : le total ne bouge pas. Deux planches en
+# plus, deux fichiers en moins, la salle en emploie toujours autant.
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 24")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"
@@ -620,9 +652,10 @@ add_custom_command(
 #
 # Voir `assets/cc0/LICENSES.md` pour l'origine et la licence de chaque fichier.
 file(GLOB LEGACY_TEXTURES "${SRC_ROOM}/textures/*.jpg" "${SRC_ROOM}/textures/*.png")
-# Voir le bloc « LES AFFICHES DES MURS » : ces huit-là sont des oeuvres tierces
-# sous droit exclusif et ne doivent ni etre de-cuites, ni etre copiees.
-foreach(_p IN LISTS POSTERS_TIERS)
+# Voir les blocs « LES AFFICHES DES MURS » et « LES ECRANS D'ATTENTE » : ces dix-la
+# sont des oeuvres tierces ou des captures qui en contiennent, et ne doivent ni
+# etre de-cuites, ni etre copiees.
+foreach(_p IN LISTS TEXTURES_TIERS)
     list(REMOVE_ITEM LEGACY_TEXTURES "${SRC_ROOM}/textures/${_p}")
 endforeach()
 
@@ -849,12 +882,19 @@ add_custom_command(
 # 3c. Les mini-jeux : planches de sprites et sons
 # ---------------------------------------------------------------------------
 #
-# Elles sont reprises TELLES QUELLES de 2020 — `birds.png`, `pipes.png`,
-# `sol.png`, `chiffre.png`… C'est ce qui fait qu'on rejoue au même jeu et pas à
-# une imitation : les cotes de la planche (oiseau 17 x 12, tuyau 26 x 160,
-# chiffre 12 x 18) sont exactement celles que le code de 2020 découpait, et le
-# portage les reprend au pixel près.
-file(GLOB FLAPPY_ART   "${SRC_LEGACY}/games/3_flappy_bird/Textures/*.png")
+# Les COTES sont reprises telles quelles de 2020 — oiseau 17 x 12, tuyau
+# 26 x 160, chiffre 12 x 18, ciel 144 x 256 — parce que c'est ce que le code de
+# 2020 découpait et que le portage le reprend au pixel près. Les IMAGES, elles,
+# ne le sont plus : voir le bloc « LES PLANCHES DES MINI-JEUX » plus bas. Six
+# des huit `.png` de ce répertoire sortent du paquet ; seul `chiffre.png` — dix
+# chiffres carrés, sans marque ni personnage — est encore copié, et `spriteart`
+# fournit les quatre planches que le jeu affiche.
+#
+# Le GLOB a été remplacé par une liste NOMMÉE, et c'est le point : c'est lui qui
+# emportait `medals.png`, `scoreBoard.png` et `high_score.png` — trois images
+# que le portage n'affiche même pas, dont une porte encore le filigrane d'une
+# banque d'images. Un glob livre ce qu'on n'a pas regardé.
+set(FLAPPY_ART "${SRC_LEGACY}/games/3_flappy_bird/Textures/chiffre.png")
 file(GLOB FLAPPY_SOUND "${SRC_LEGACY}/games/3_flappy_bird/Sounds/*.wav")
 
 add_custom_command(
@@ -864,7 +904,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLAPPY_SOUND} "${GEN}/games/flappy/"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/flappy/.stamp"
     DEPENDS ${FLAPPY_ART} ${FLAPPY_SOUND}
-    COMMENT "Copie des planches et sons de Flappy Bird"
+            "${GEN}/games/flappy/oiseau.png" "${GEN}/games/flappy/tuyaux.png"
+            "${GEN}/games/flappy/passerelle.png" "${GEN}/games/flappy/fonds.png"
+    COMMENT "Copie des sons de Flappy et de son atlas de chiffres"
     VERBATIM
 )
 
@@ -906,21 +948,29 @@ add_custom_command(
     VERBATIM
 )
 
+# APLOMB — ex-« tetris ». Le RÉPERTOIRE DE DESTINATION change avec le jeu
+# (`games/aplomb/`), la SOURCE non : `legacy/` est l'archive de 2020 et on ne la
+# réécrit jamais.
+#
+# `bricks.png` reste, et c'est un choix regardé plutôt que subi : ouverte et
+# agrandie, c'est une rangée de huit carrés biseautés de huit couleurs. Ni
+# personnage, ni logo, ni lettrage — rien qui appartienne à quelqu'un de
+# reconnaissable. Seul le NOM du jeu posait un problème, et il est réglé.
 add_custom_command(
-    OUTPUT "${GEN}/games/tetris/.stamp"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/tetris"
+    OUTPUT "${GEN}/games/aplomb/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/aplomb"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${SRC_LEGACY}/games/5_tetris/Textures/bricks.png"
             "${SRC_LEGACY}/games/5_tetris/Sound/line.wav"
             "${SRC_LEGACY}/games/5_tetris/Sound/rotate.wav"
             "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav"
-            "${GEN}/games/tetris/"
-    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/tetris/.stamp"
+            "${GEN}/games/aplomb/"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/aplomb/.stamp"
     DEPENDS "${SRC_LEGACY}/games/5_tetris/Textures/bricks.png"
             "${SRC_LEGACY}/games/5_tetris/Sound/line.wav"
             "${SRC_LEGACY}/games/5_tetris/Sound/rotate.wav"
             "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav"
-    COMMENT "Copie des planches et sons de Tetris"
+    COMMENT "Copie de la planche et des sons d'Aplomb"
     VERBATIM
 )
 
@@ -942,17 +992,73 @@ add_custom_command(
     VERBATIM
 )
 
+# ---------------------------------------------------------------------------
+# LES PLANCHES DES MINI-JEUX, et la raison JURIDIQUE de les dessiner
+# ---------------------------------------------------------------------------
+#
+# Même geste que pour les affiches des murs, et même raison. Neuf planches de
+# `legacy/games/` que le build COPIAIT étaient des oeuvres de tiers. Ouvertes
+# une par une, agrandies au plus proche sur un damier pour voir l'alpha :
+#
+#   1_pacman/enemy.png    les huit FANTOMES de PAC-MAN — silhouette a jupe
+#                         ondulee, yeux a pupille decalee        Bandai Namco
+#   1_pacman/pacman.png   les quatre PAC-MAN, disque et part de
+#                         camembert                              Bandai Namco
+#   3_flappy_bird/birds.png        l'OISEAU de Flappy Bird, trois teintes et
+#                                  trois battements
+#   3_flappy_bird/pipes.png        ses TUYAUX a embouchure
+#   3_flappy_bird/backgrounds.png  son CIEL jour/nuit, sa ville, sa haie
+#   3_flappy_bird/sol.png          son SOL raye
+#   3_flappy_bird/medals.png       ses MEDAILLES, l'oiseau grave dessus
+#   3_flappy_bird/scoreBoard.png   son TABLEAU de fin de partie
+#   3_flappy_bird/high_score.png   une image de banque d'images AVEC LE
+#                                  FILIGRANE « ©123RF » ENCORE DESSUS
+#
+# Les trois dernieres n'etaient meme pas EMPLOYEES par le portage : le glob
+# `*.png` les emportait, et elles partaient dans le paquet. C'est exactement le
+# cas des affiches — ce qui compte n'est pas ce que le jeu affiche, c'est ce que
+# le build COPIE.
+#
+# La ligne est la meme que pour les affiches : une MECANIQUE ne s'approprie pas
+# — manger des pastilles en fuyant quatre poursuivants, franchir des ouvertures
+# en battant des ailes — un NOM et un PERSONNAGE, si. Les regles de `games/`
+# n'ont pas bouge d'une ligne ; les figures, oui.
+#
+# `spriteart` les redessine AUX MEMES COTES (17 x 12 pour le mobile de Flappy,
+# 26 x 160 pour un obstacle, 144 x 256 pour un ciel) : `games/flappy/flappy.c`
+# decoupe ses atlas au pixel pres, et il n'a donc pas une ligne a changer. Un
+# remplacement d'art qui obligerait a rouvrir la logique du jeu est un
+# remplacement qu'on ne referait pas.
+#
+# Les fichiers restent dans `legacy/`, qui est l'archive de 2020 et n'est pas
+# distribuee. Ce qui change ici, c'est ce que le build COPIE.
+set(SPRITE_ART "")
+foreach(spec "dedale:heros" "dedale:creatures"
+             "flappy:oiseau" "flappy:tuyaux" "flappy:passerelle" "flappy:fonds")
+    string(REPLACE ":" ";" _p "${spec}")
+    list(GET _p 0 _jeu)
+    list(GET _p 1 _nom)
+    add_custom_command(
+        OUTPUT  "${GEN}/games/${_jeu}/${_nom}.png"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/${_jeu}"
+        COMMAND spriteart "--planche=${_jeu}_${_nom}" "${GEN}/games/${_jeu}/${_nom}.png"
+        DEPENDS spriteart
+        COMMENT "Planche de sprites : ${_jeu}/${_nom}.png"
+        VERBATIM
+    )
+    list(APPEND SPRITE_ART "${GEN}/games/${_jeu}/${_nom}.png")
+endforeach()
+
+# Le jeu de labyrinthe n'a plus AUCUNE planche copiee : ses deux images sont
+# dessinees, et il n'y a rien d'autre a prendre dans `1_pacman/`. Le repertoire
+# est cree par les commandes ci-dessus ; le jalon ne sert qu'a le rattacher a la
+# cible d'assets.
 add_custom_command(
-    OUTPUT "${GEN}/games/pacman/.stamp"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/pacman"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${SRC_LEGACY}/games/1_pacman/Textures/pacman.png"
-            "${SRC_LEGACY}/games/1_pacman/Textures/enemy.png"
-            "${GEN}/games/pacman/"
-    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/pacman/.stamp"
-    DEPENDS "${SRC_LEGACY}/games/1_pacman/Textures/pacman.png"
-            "${SRC_LEGACY}/games/1_pacman/Textures/enemy.png"
-    COMMENT "Copie des planches de Pac-Man"
+    OUTPUT "${GEN}/games/dedale/.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/dedale"
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/dedale/.stamp"
+    DEPENDS "${GEN}/games/dedale/heros.png" "${GEN}/games/dedale/creatures.png"
+    COMMENT "Planches dessinees de Dedale"
     VERBATIM
 )
 
@@ -997,8 +1103,71 @@ add_custom_command(
     VERBATIM
 )
 
+# ---------------------------------------------------------------------------
+# LES GRAVATS : ce qu'un arbre de build GARDE d'une image retirée
+# ---------------------------------------------------------------------------
+#
+# Retirer une image d'une liste de copie ne la retire PAS de l'arbre de build :
+# `copy_if_different` copie, il n'efface pas. Un arbre qui a déjà construit la
+# version d'avant garde donc `games/pacman/enemy.png`, `games/flappy/birds.png`,
+# `materials/poster_7_n.nstex`… et `room/CMakeLists.txt` installe
+# `${GEN}/games`, `${GEN}/materials` et `${GEN}/scene` EN BLOC. Le paquet
+# emporterait ce qu'on vient de sortir, sans que rien ne le signale — et le
+# contrôle qu'on croit avoir passé, on ne l'a pas passé.
+#
+# Vérifié sur cet arbre-ci avant d'écrire ces lignes : il contenait encore les
+# seize cartes dérivées des huit affiches retirées il y a deux versions.
+#
+# Le jalon dépend de CE FICHIER : la purge se rejoue exactement quand la liste
+# change, c'est-à-dire quand on retire quelque chose. Un `add_custom_target`
+# tournerait à chaque build et ne dirait jamais « rien à faire ».
+set(ASSETS_RETIRES
+    # Les personnages de PAC-MAN et le repertoire de son ancien identifiant.
+    "games/pacman"
+    # L'ancien identifiant du jeu d'empilement.
+    "games/tetris"
+    # Les planches de Flappy Bird, dont trois que le portage n'affichait meme
+    # pas et que seul le glob emportait.
+    "games/flappy/birds.png" "games/flappy/pipes.png"
+    "games/flappy/backgrounds.png" "games/flappy/sol.png"
+    "games/flappy/medals.png" "games/flappy/scoreBoard.png"
+    "games/flappy/high_score.png"
+    # Les deux captures d'attract qui montrent l'oiseau et les tuyaux.
+    "scene/textures/flappy_easy_font.jpg" "scene/textures/flappy_hard_font.jpg"
+    # Les enseignes et l'ecran des deux jeux debaptises.
+    "sideart/marquee_pacman.png" "sideart/marquee_tetris.png" "sideart/ecran_pacman.png"
+    "scene/textures/marquee_pacman.png" "scene/textures/marquee_tetris.png"
+    "scene/textures/ecran_pacman.png"
+)
+# Les cartes DERIVEES. Une normale deduite d'une affiche sous droit reste une
+# oeuvre derivee de cette affiche : elle sort avec elle. Les quatre suffixes
+# sont listes parce que `NINETEEN_BC_MAPS` peut avoir change depuis le build qui
+# les a produites — on efface les deux formes, pas seulement celle du jour.
+foreach(_base poster_1 poster_2 poster_3 poster_4 poster_5 poster_6 poster_7 poster_8
+              flappy_easy_font flappy_hard_font
+              marquee_pacman marquee_tetris ecran_pacman)
+    list(APPEND ASSETS_RETIRES "materials/${_base}_n.nstex" "materials/${_base}_orm.nstex"
+                               "materials/${_base}_n.png"   "materials/${_base}_orm.png")
+endforeach()
+
+set(PURGE_COMMANDS "")
+foreach(_r IN LISTS ASSETS_RETIRES)
+    list(APPEND PURGE_COMMANDS COMMAND ${CMAKE_COMMAND} -E rm -rf "${GEN}/${_r}")
+endforeach()
+
+add_custom_command(
+    OUTPUT  "${GEN}/.retires.stamp"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}"
+    ${PURGE_COMMANDS}
+    COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/.retires.stamp"
+    DEPENDS "${CMAKE_CURRENT_LIST_FILE}"
+    COMMENT "Purge des assets retires (oeuvres tierces) de l'arbre de build"
+    VERBATIM
+)
+
 add_custom_target(nineteen_assets ALL
     DEPENDS
+        "${GEN}/.retires.stamp"
         "${GEN}/models/personnage/personnage.glb"
         "${GEN}/scene/salle.gltf"
         "${GEN}/scene/salle.nsbvh"
@@ -1008,12 +1177,13 @@ add_custom_target(nineteen_assets ALL
         "${GEN}/games/flappy/.stamp"
         "${GEN}/games/snake/.stamp"
         "${GEN}/games/demineur/.stamp"
-        "${GEN}/games/tetris/.stamp"
+        "${GEN}/games/aplomb/.stamp"
         "${GEN}/games/asteroid/.stamp"
-        "${GEN}/games/pacman/.stamp"
+        "${GEN}/games/dedale/.stamp"
         "${GEN}/games/shooter/.stamp"
         "${GEN}/scene/cabinets.json"
         "${GEN}/scene/textures/.stamp"
+        ${SPRITE_ART}
         ${LEGACY_ROOM_OUTPUTS}
         ${GENERATED_MAPS}
 )

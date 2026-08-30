@@ -138,7 +138,14 @@ static void test_canonical_matches_server(void)
     /*
      * Vecteur produit par `server/internal/runs`, avec son propre contexte de
      * test : graine 1234567890, secret « secret-de-partie-32-octets-exact »,
-     * quatre événements de Tetris pour 701 points.
+     * quatre événements pour 701 points.
+     *
+     * Le mot « tetris » subsiste DANS LA CHARGE, et il doit y rester. Ce n'est
+     * pas le nom du jeu — celui-ci n'entre pas dans le format canonique, comme
+     * la charge ci-dessous le montre — c'est un NOM D'ÉVÉNEMENT arbitraire du
+     * vecteur de test Go. Le changer changerait le sceau, donc invaliderait la
+     * comparaison avec le serveur, qui est tout l'objet de ce test. Le jeu, lui,
+     * a bien été débaptisé : sa clé est « aplomb », plus bas.
      */
     static const char *WANT_PAYLOAD =
         "v1|1234567890|30000|701|4|2000:drop:0|4000:lines:1|9000:lines:2|15000:tetris:0";
@@ -149,7 +156,7 @@ static void test_canonical_matches_server(void)
     CHECK(r != NULL, "le journal se crée");
     if (!r) return;
 
-    ns_runlog_begin(r, "tetris", "hard", 1234567890,
+    ns_runlog_begin(r, "aplomb", "hard", 1234567890,
                     (const uint8_t *)SECRET, strlen(SECRET));
     ns_runlog_event(r,  2000, "drop",   0);
     ns_runlog_event(r,  4000, "lines",  1);
@@ -378,15 +385,15 @@ static void test_scores_round_trip(void)
     ns_scores_set_path(g_tmp_scores);
     ns_scores_load();
     ns_scores_clear();
-    ns_scores_record("tetris", "normal", 7777, 123456, "Jo|hn\nDoe");
-    ns_scores_record("tetris", "normal", 100, 2000, "");
+    ns_scores_record("aplomb", "normal", 7777, 123456, "Jo|hn\nDoe");
+    ns_scores_record("aplomb", "normal", 100, 2000, "");
     CHECK(ns_scores_save(), "l'écriture réussit");
 
     /* Relecture depuis zéro : c'est le seul contrôle qui prouve que le format
      * écrit est celui qu'on sait relire. */
     ns_scores_clear();
     ns_scores_load();
-    const ns_score_board *b = ns_scores_board("tetris", "normal");
+    const ns_score_board *b = ns_scores_board("aplomb", "normal");
     CHECK(b != NULL && b->count == 2, "deux entrées relues");
     if (!b || b->count < 2) return;
     CHECK(b->entry[0].score == 7777, "le score survit (%u)", b->entry[0].score);
@@ -451,11 +458,11 @@ static const struct {
 } g_server_vocab[] = {
     { "flappy",   { "pipe", "flap", "death", NULL } },
     { "snake",    { "fruit", "bonus", "turn", "death", NULL } },
-    { "tetris",   { "lines", "drop", "rotate", "death", NULL } },
+    { "aplomb",   { "lines", "drop", "rotate", "death", NULL } },
     { "asteroid", { "rock", "bonus", "wave", "shot", "death", NULL } },
     { "shooter",  { "enemy", "boss", "wave", "shot", "death", NULL } },
     { "demineur", { "cell", "flag", "win", "move", "death", NULL } },
-    { "pacman",   { "pellet", "power", "ghost", "level", "turn", "death", NULL } },
+    { "dedale",   { "pellet", "power", "ghost", "level", "turn", "death", NULL } },
     { "piano",    { "note", "combo", "death", NULL } },
 };
 

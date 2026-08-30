@@ -87,6 +87,7 @@ typedef struct shooter {
     int   ammo_kind;         /* SH_ALLY_* */
     float fire_timer, fire_period;
     float invuln;
+    int   lives;             /* vies restantes EN PLUS de celle en cours */
 
     sh_enemy enemy[SH_MAX_ENEMIES];
     sh_shot  shot[SH_MAX_SHOTS];

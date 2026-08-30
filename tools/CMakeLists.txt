@@ -47,6 +47,18 @@ target_include_directories(posterart PRIVATE
     # recopier : une affiche qui montrerait un plan perime serait pire
     # qu'une affiche absente.
     "${CMAKE_SOURCE_DIR}/third_party/jsmn")
+# Les PLANCHES DE SPRITES des mini-jeux. Même raison que `posterart`, un cran
+# plus haut dans la gravité : ce n'étaient pas des affiches accrochées au mur,
+# c'étaient les PERSONNAGES eux-mêmes. `1_pacman/pacman.png` et
+# `1_pacman/enemy.png` sont le héros et les fantômes de la borne de 1980
+# (Bandai Namco) ; les huit `.png` de `3_flappy_bird/` sont l'oiseau, les
+# tuyaux, le ciel et les médailles de Flappy Bird, dont l'un porte encore le
+# filigrane « ©123RF » d'une banque d'images. Une mécanique ne s'approprie pas ;
+# un nom et un personnage, si. Les règles de `games/` n'ont pas bougé, les
+# figures sont redessinées ici — aux MÊMES cotes, pour que le code de découpe
+# des jeux reste valable au pixel près.
+nineteen_add_tool(spriteart spriteart.c)
+
 nineteen_add_tool(bvhbake  bvhbake.c)
 # Même raison d'être que `sideart` et `panelart`, sur l'autre sens : la banque de
 # pas et les nappes d'ambiance sont SYNTHÉTISÉES au lieu d'être enregistrées. Un

@@ -330,14 +330,14 @@ var rulesTable = map[string]gameRules{
 		valueMin:         -100_000,
 		valueMax:         100_000,
 	},
-	"tetris": {
+	"aplomb": {
 		// « lines » porte les POINTS de la fournée, pas leur nombre, et c'est
 		// imposé par le barème de 2020 : la première ligne vaut cent, chaque
 		// ligne simultanée vaut le DOUBLE de la précédente, une ligne d'une
 		// seule couleur vaut dix fois ce total, un bonus multi le double encore
 		// et un bonus plat ajoute cinq cents. Aucun barème fixe côté serveur ne
 		// reconstitue ça — et viser la couleur unique plutôt que le quadruple
-		// est précisément ce qui rend le Tetris de 2020 reconnaissable.
+		// est précisément ce qui rend l'empilement de 2020 reconnaissable.
 		//
 		// La borne haute suit : 1 500 pour un quadruple, dix fois plus en
 		// couleur unique, deux fois plus encore avec un multi.
@@ -398,13 +398,16 @@ var rulesTable = map[string]gameRules{
 		maxRatePerSecond: map[string]float64{"cell": 15, "flag": 8, "win": 0.2, "move": 30},
 		minDurationMs:    1000,
 	},
-	"pacman": {
-		// Cette table attendait depuis le début un Pac-Man COMPLET — pastilles,
-		// super-pastilles, fantômes, niveaux — alors que celui de 2020 n'avait
-		// ni fantôme ni score. Elle décrivait le jeu qu'il devait être ; c'est
-		// maintenant le jeu qui existe.
+	"dedale": {
+		// Cette table attendait depuis le début un jeu de labyrinthe COMPLET —
+		// pastilles, super-pastilles, poursuivants, niveaux — alors que celui de
+		// 2020 n'avait ni poursuivant ni score. Elle décrivait le jeu qu'il
+		// devait être ; c'est maintenant le jeu qui existe. Le jeu a depuis été
+		// débaptisé — « pacman » était une marque déposée — mais le VOCABULAIRE
+		// ne bouge pas : « ghost » est un nom commun, et changer un nom
+		// d'événement invaliderait tout journal déjà scellé.
 		//
-		// Un fantôme vaut 200 à plat, et la chaîne du jeu d'arcade — 200, 400,
+		// Un poursuivant vaut 200 à plat, et la chaîne d'arcade — 200, 400,
 		// 800, 1 600 — se journalise en autant d'événements que le multiple le
 		// demande. C'est ce qui garde le score et le journal d'accord sans
 		// dupliquer un barème dans les deux langages.

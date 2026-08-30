@@ -16,11 +16,11 @@
   ],
 
   "cabinets": [
-    { "slot": 1,  "game": "flappy",   "difficulty": "hard", "marquee": "flappy_hard_font",   "attract": true },
-    { "slot": 0,  "game": "flappy",   "difficulty": "easy", "marquee": "flappy_easy_font",   "attract": true },
+    { "slot": 1,  "game": "flappy",   "difficulty": "hard", "marquee": "ecran_flappy_dur",    "attract": true },
+    { "slot": 0,  "game": "flappy",   "difficulty": "easy", "marquee": "ecran_flappy_facile", "attract": true },
 
-    { "slot": 2,  "game": "tetris",   "difficulty": "hard", "marquee": "tetris_font",        "attract": true },
-    { "slot": 3,  "game": "tetris",   "difficulty": "easy", "marquee": "tetris_font",        "attract": true },
+    { "slot": 2,  "game": "aplomb",   "difficulty": "hard", "marquee": "marquee_aplomb",      "attract": true },
+    { "slot": 3,  "game": "aplomb",   "difficulty": "easy", "marquee": "marquee_aplomb",      "attract": true },
 
     { "slot": 5,  "game": "asteroid", "difficulty": "hard", "marquee": "asteroid_font_hard", "attract": true },
     { "slot": 4,  "game": "asteroid", "difficulty": "easy", "marquee": "asteroid_font",      "attract": true },
@@ -34,7 +34,7 @@
     { "slot": 12, "game": "demineur", "difficulty": "hard", "marquee": "demineur_font",      "attract": true },
     { "slot": 11, "game": "demineur", "difficulty": "easy", "marquee": "demineur_font",      "attract": true },
 
-    { "slot": 13, "game": "pacman",   "difficulty": "normal", "marquee": "coming_soon",      "attract": true },
+    { "slot": 13, "game": "dedale",   "difficulty": "normal", "marquee": "coming_soon",      "attract": true },
     { "slot": 14, "game": "piano",    "difficulty": "normal", "marquee": "coming_soon",      "attract": true },
 
     { "slot": 8,  "game": "leaderboard", "difficulty": "none", "marquee": "leaderboard_font", "attract": false }

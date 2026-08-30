@@ -236,18 +236,44 @@ static void test_la_mort(void)
     shooter_tick(&g, STEP);
     CHECK(g.phase == SH_PLAYING, "et le tir ne le tue pas");
 
-    /* Une fois l'invincibilité passée, si. */
-    for (int i = 0; i < 120 * 2; ++i) shooter_tick(&g, STEP);
-    CHECK(g.invuln <= 0.0f, "l'invincibilité expire");
-    g.shot[1].alive = true;
-    g.shot[1].hostile = true;
-    g.shot[1].x = g.ship_x;
-    g.shot[1].y = g.ship_y;
-    g.shot[1].vy = 100.0f;
-    g.shot[1].radius = 5.0f;
-    g.shot[1].life = 1.0f;
-    shooter_tick(&g, STEP);
-    CHECK(g.phase == SH_DEAD, "et le tir suivant tue");
+    /*
+     * Une fois l'invincibilité passée, un tir COÛTE UNE VIE — et seule la
+     * dernière termine la partie.
+     *
+     * Le vaisseau part avec trois vies en réserve. Avant, il n'en avait
+     * aucune : mesuré sur cinq graines, le pilote automatique mourait à 10,3 s
+     * et le score ne bougeait plus de la douzième à la deux-cent-quarantième
+     * seconde, alors que le premier boss n'arrive qu'à la vingt-deuxième. Le
+     * jeu se terminait avant son propre contenu. Ce test tient la règle des
+     * deux côtés : chaque coup entame la réserve, et le dernier tue.
+     */
+    CHECK(g.lives == 3, "le vaisseau part avec trois vies en réserve (%d)", g.lives);
+
+    for (int vie = 3; vie >= 0; --vie) {
+        /* On attend la fin de l'invincibilité — celle du départ, puis celle
+         * que chaque réapparition redonne. */
+        for (int i = 0; i < 120 * 3 && g.invuln > 0.0f; ++i) shooter_tick(&g, STEP);
+        CHECK(g.invuln <= 0.0f, "l'invincibilité expire (vies restantes %d)", g.lives);
+        CHECK(g.lives == vie, "il reste %d vies avant le coup (%d)", vie, g.lives);
+
+        g.shot[1].alive = true;
+        g.shot[1].hostile = true;
+        g.shot[1].x = g.ship_x;
+        g.shot[1].y = g.ship_y;
+        g.shot[1].vy = 100.0f;
+        g.shot[1].radius = 5.0f;
+        g.shot[1].life = 1.0f;
+        shooter_tick(&g, STEP);
+
+        if (vie > 0) {
+            CHECK(g.phase == SH_PLAYING, "le coup coûte une vie et la partie continue");
+            CHECK(g.lives == vie - 1, "la réserve descend à %d (%d)", vie - 1, g.lives);
+            CHECK(g.invuln > 0.0f, "et la réapparition redonne un répit (%.2f s)",
+                  (double)g.invuln);
+        } else {
+            CHECK(g.phase == SH_DEAD, "et le coup de trop, réserve vide, tue");
+        }
+    }
 
     const int64_t s = g.score;
     shooter_tick(&g, STEP);

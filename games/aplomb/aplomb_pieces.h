@@ -1,7 +1,7 @@
 /*
- * tetris_pieces.h — la table des pièces de 2020, recopiée exactement.
+ * aplomb_pieces.h — la table des pièces de 2020, recopiée exactement.
  *
- * PRODUIT PAR `tools/extract_tetris_pieces.py`. Ne pas modifier à la main :
+ * PRODUIT PAR `tools/extract_aplomb_pieces.py`. Ne pas modifier à la main :
  * relancer le script.
  *
  * Source : legacy/games/5_tetris/pieces.h
@@ -24,21 +24,21 @@
  * Le pivot est la case marquée « 2 » dans la source ; c'est autour d'elle que
  * tourne la pièce.
  */
-#ifndef NS_TETRIS_PIECES_H
-#define NS_TETRIS_PIECES_H
+#ifndef NS_APLOMB_PIECES_H
+#define NS_APLOMB_PIECES_H
 
 #include <stdint.h>
 
-#define TET_DIFFICULTIES 2
-#define TET_SIZES        2
-#define TET_PIECES       7
-#define TET_ROTATIONS    4
-#define TET_GRID         10
+#define APL_DIFFICULTIES 2
+#define APL_SIZES        2
+#define APL_PIECES       7
+#define APL_ROTATIONS    4
+#define APL_GRID         10
 
-#define TET_PIECES_SOURCE_SHA256 "e91c1024017b525960a48cd1f2e67e3bbf48cd94a781fb1cbd88b18ea473699c"
+#define APL_PIECES_SOURCE_SHA256 "e91c1024017b525960a48cd1f2e67e3bbf48cd94a781fb1cbd88b18ea473699c"
 
 /* [difficulté][taille][pièce][rotation][ligne] */
-static const uint16_t TET_SHAPE[TET_DIFFICULTIES][TET_SIZES][TET_PIECES][TET_ROTATIONS][TET_GRID] = {
+static const uint16_t APL_SHAPE[APL_DIFFICULTIES][APL_SIZES][APL_PIECES][APL_ROTATIONS][APL_GRID] = {
 {
   {
     {
@@ -222,7 +222,7 @@ static const uint16_t TET_SHAPE[TET_DIFFICULTIES][TET_SIZES][TET_PIECES][TET_ROT
 };
 
 /* Le pivot, en (x, y) sur la même grille. */
-static const uint8_t TET_PIVOT[TET_DIFFICULTIES][TET_SIZES][TET_PIECES][TET_ROTATIONS][2] = {
+static const uint8_t APL_PIVOT[APL_DIFFICULTIES][APL_SIZES][APL_PIECES][APL_ROTATIONS][2] = {
 {
   {
     { { 2, 1 }, { 1, 1 }, { 1, 2 }, { 2, 2 }, },
@@ -265,4 +265,4 @@ static const uint8_t TET_PIVOT[TET_DIFFICULTIES][TET_SIZES][TET_PIECES][TET_ROTA
 },
 };
 
-#endif /* NS_TETRIS_PIECES_H */
+#endif /* NS_APLOMB_PIECES_H */

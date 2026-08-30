@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// Contexte de référence : une partie de Tetris ouverte il y a une minute.
+// Contexte de référence : une partie d'Aplomb ouverte il y a une minute.
 func testContext() Context {
 	return Context{
 		Secret:            []byte("secret-de-partie-32-octets-exact"),
 		Seed:              1234567890,
 		StartedAt:         time.Now().Add(-time.Minute),
 		Now:               time.Now(),
-		GameSlug:          "tetris-hard",
+		GameSlug:          "aplomb-hard",
 		MaxPlausibleScore: 999999,
 	}
 }
@@ -215,8 +215,8 @@ func TestValeurEnormeRejetee(t *testing.T) {
 func TestPartieTropCourteRejetee(t *testing.T) {
 	ctx := testContext()
 	sub := Submission{
-		DurationMs:   50, // 50 ms pour un Tetris
-		Events:       []Event{{At: 10, Kind: "tetris"}},
+		DurationMs:   50, // 50 ms pour un Aplomb
+		Events:       []Event{{At: 10, Kind: "lines"}},
 		ClaimedScore: 400,
 	}
 	sign(ctx, &sub)
@@ -282,7 +282,7 @@ func TestJournalTropVolumineuxRejete(t *testing.T) {
 
 // Les règles doivent se résoudre pour les deux difficultés d'un même jeu.
 func TestReglesParDifficulte(t *testing.T) {
-	for _, slug := range []string{"tetris", "tetris-easy", "tetris-hard", "flappy-easy", "pacman"} {
+	for _, slug := range []string{"aplomb", "aplomb-easy", "aplomb-hard", "flappy-easy", "dedale"} {
 		if _, ok := rulesFor(slug); !ok {
 			t.Errorf("règles introuvables pour %q", slug)
 		}
@@ -491,7 +491,7 @@ func TestValeurAuDelaDesBornesToujoursRefusee(t *testing.T) {
 		t.Fatal("une valeur au-delà de la borne de Snake aurait dû être refusée")
 	}
 
-	// Tetris n'en déclare pas : il garde 0 à 10 000.
+	// Aplomb n'en déclare pas : il garde 0 à 10 000.
 	ctx2 := testContext()
 	sub2 := Submission{
 		DurationMs:   10_000,

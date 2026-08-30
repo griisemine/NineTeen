@@ -136,6 +136,10 @@ static const int WEAPON_KIND_ENEMY[SH_ENEMY_KINDS][7] = {
 #define WAVE_PERIOD_BASE 5.5f
 #define BOSS_EVERY 5u
 
+/* Voir le commentaire de `die` : trois vies, c'est le plus petit nombre qui
+ * amène le joueur jusqu'au boss de la cinquième vague. */
+#define SH_LIVES 3
+
 /* ==========================================================================
  * Aides
  * ========================================================================== */
@@ -183,6 +187,31 @@ static void spawn_enemy(shooter *g, int kind, float x)
      * `SPAWN_ENEMY_Y` et `TARGET_ENEMY_Y` de 2020, où le boss arrive de très
      * haut et s'arrête en haut de l'écran. */
     e->target_y = (kind >= 2) ? (SH_H * (kind == 4 ? 0.18f : 0.22f)) : -1.0f;
+
+    /*
+     * LE BOSS QUI N'ARRIVAIT JAMAIS.
+     *
+     * `ENEMY_SPEED[4]` vaut 0, et c'est fidèle à 2020 : là-bas, c'est la
+     * vitesse du boss UNE FOIS EN PLACE, parce que l'original le fait
+     * APPARAÎTRE sur sa ligne. Ici, tous les ennemis entrent par le haut —
+     * `e->y` part à `-ENEMY_RADIUS - 20`. Pour le boss, ça fait −170, et une
+     * vitesse d'entrée de zéro l'y laissait POUR TOUJOURS.
+     *
+     * Mesuré, graine 1000, pilote automatique : à 30 s, 40 s et 50 s de partie,
+     * le boss est toujours à y = −170 pour une cible à 194, avec ses 90 points
+     * de vie intacts. Il ne pouvait pas les perdre : les missiles alliés sont
+     * retirés dès `y < -60`, donc aucun ne l'atteignait jamais. Et comme les
+     * vagues sont suspendues tant que `boss_alive` est vrai, la partie restait
+     * bloquée à la vague 5, score gelé, pendant les 128 secondes suivantes.
+     *
+     * Un boss invisible, invulnérable, et qui arrête le jeu : les trois d'un
+     * coup, à cause d'un zéro qui voulait dire autre chose.
+     *
+     * 130 px/s met 2,8 s à l'amener de −170 à sa ligne — le temps de le voir
+     * arriver. La clause `target_y` existante l'y arrête ensuite, ce qui rend
+     * bien la vitesse nulle de 2020 : immobile UNE FOIS EN PLACE.
+     */
+    if (e->target_y > 0.0f && e->vy <= 0.0f) e->vy = 130.0f;
     for (int w = 0; w < ENEMY_WEAPONS[kind] && w < 7; ++w) {
         e->reload[w] = RELOAD_ENEMY[kind][w] / FPS30 * frandf(&g->rng, 0.6f, 1.4f);
         e->burst[w] = 0;
@@ -195,6 +224,29 @@ static void spawn_wave(shooter *g)
     g->wave++;
     g->pend_wave++;
     g->score += PTS_WAVE;
+
+    /*
+     * UNE ARME TOUTES LES DEUX VAGUES — la sortie d'une impasse.
+     *
+     * Jusqu'ici, la SEULE source d'armement était `kill_enemy` quand on abat un
+     * boss. Et le premier boss arrive vague 5. Autrement dit : pour renforcer
+     * son tir il fallait tuer un boss, et pour tuer un boss il aurait fallu un
+     * tir renforcé. La table `WEAPON_DISPOSITION`, ses cinq emplacements et les
+     * trois types de missiles — tout ce que l'en-tête décrit longuement —
+     * étaient inatteignables : `weapons` valait 1 du début à la fin de chaque
+     * partie jamais jouée.
+     *
+     * Le compte : un emplacement tire un missile toutes les 0,18 s à un point
+     * de dégât, soit 5,5 points par seconde. Le boss en a 90. Il fallait donc
+     * SEIZE SECONDES d'alignement parfait sous une rafale de douze, avec le
+     * tir le plus faible du jeu — quand toutes les vagues d'avant se nettoient
+     * en moins de cinq. Ce n'était pas un boss difficile, c'était un mur.
+     *
+     * Une arme aux vagues 2 et 4 met trois emplacements en face du premier
+     * boss : 16,6 points par seconde, cinq secondes et demie de combat. Les
+     * boss abattus continuent d'en donner, ce qui garde la récompense.
+     */
+    if ((g->wave % 2u) == 0u && g->weapons < SH_MAX_WEAPONS) g->weapons++;
 
     if (g->wave % BOSS_EVERY == 0) {
         /* Le boss : l'ennemi 4, quatre-vingt-dix points de vie, immobile en
@@ -296,6 +348,7 @@ void shooter_reset(shooter *g, uint64_t seed, bool hard)
     g->fire_period = 0.18f;
     g->wave_timer = 1.5f;
     g->invuln = 1.5f;
+    g->lives = SH_LIVES;
 }
 
 void shooter_press(shooter *g, ns_game_button b)
@@ -313,8 +366,42 @@ void shooter_hold(shooter *g, const bool held[NS_GAME_BUTTON_COUNT])
     for (int i = 0; i < NS_GAME_BUTTON_COUNT; ++i) g->held[i] = held[i];
 }
 
+/*
+ * LES VIES — ce qui manquait pour que le jeu atteigne son propre contenu.
+ *
+ * Mesuré, cinq graines, pilote automatique : la partie s'arrête à 10,3 s en
+ * normal et 9,2 s en difficile, et le score plafonne à 870 de la douzième
+ * seconde jusqu'à la deux-cent-quarantième. Une touche, c'était fini.
+ *
+ * Or ce jeu a une montée en puissance ÉCRITE, et la lire suffit à voir le
+ * problème : l'ennemi 1 arrive vague 2, l'ennemi 2 — celui à sept armes —
+ * vague 3, et `BOSS_EVERY` pose un boss toutes les CINQ vagues. Les vagues
+ * tombent toutes les 5,5 s moins 0,12 s par vague. L'ennemi 2 apparaît donc
+ * vers 16 s et le premier boss vers 22 s. Le boss est la pièce dont l'en-tête
+ * du fichier parle le plus longuement — et PERSONNE NE L'AVAIT JAMAIS VU.
+ *
+ * Trois vies, c'est le contrat d'arcade ordinaire, et c'est le plus petit
+ * nombre qui amène au boss : il faut survivre deux vagues de plus.
+ *
+ * Ce qui est rendu à la mort : la position de départ, l'invulnérabilité
+ * d'entrée, et RIEN d'autre. Les armes ramassées ne sont pas rendues, sinon
+ * mourir deviendrait indolore. L'écran est vidé de ses missiles hostiles, parce
+ * que réapparaître dans une rafale déjà en vol n'est pas une difficulté, c'est
+ * une confiscation.
+ */
 static void die(shooter *g)
 {
+    if (g->lives > 0) {
+        g->lives--;
+        g->ship_x = SH_W * 0.5f;
+        g->ship_y = SH_H * 0.82f;
+        g->ship_vx = 0.0f;
+        g->invuln = 2.0f;
+        for (int i = 0; i < SH_MAX_SHOTS; ++i) {
+            if (g->shot[i].alive && g->shot[i].hostile) g->shot[i].alive = false;
+        }
+        return;
+    }
     g->phase = SH_DEAD;
     g->dead_time = 0.0f;
     g->died = true;
@@ -373,8 +460,27 @@ void shooter_tick(shooter *g, float dt)
     }
 
     /* --- les vagues --- */
+    /*
+     * Les vagues s'arrêtent pendant un boss — SAUF s'il s'éternise.
+     *
+     * Le boss tire à la VERTICALE depuis le haut du couloir : le seul endroit
+     * d'où on l'atteint est la colonne qu'il balaie en permanence. C'est un
+     * duel qui se gagne en échangeant des coups, et un joueur le fait. Le
+     * pilote automatique, lui, refuse par construction d'entrer dans une
+     * colonne battue : mesuré, il ne passe que 5 % du temps aligné, laisse le
+     * boss à 47 points de vie sur 90 et se gare définitivement à 175 px de lui.
+     * La partie ne se terminait plus jamais — score figé de la trentième à la
+     * deux-cent-quarantième seconde, sans mort. Une borne en mode attraction
+     * montrait un combat immobile.
+     *
+     * `wave_timer` continue de descendre sous zéro pendant le boss : sa valeur
+     * dit donc, en secondes et sans champ nouveau, depuis quand il tient. Passé
+     * vingt secondes, les vagues reprennent PAR-DESSUS lui. Ce n'est pas une
+     * échappatoire offerte au joueur, c'est l'inverse : celui qui n'abat pas
+     * son boss se retrouve avec le boss ET la suite.
+     */
     g->wave_timer -= dt;
-    if (g->wave_timer <= 0.0f && !g->boss_alive) {
+    if (g->wave_timer <= 0.0f && (!g->boss_alive || g->wave_timer < -20.0f)) {
         spawn_wave(g);
         float period = WAVE_PERIOD_BASE - (float)g->wave * 0.12f;
         if (period < 2.2f) period = 2.2f;
@@ -545,8 +651,22 @@ bool shooter_autopilot(shooter *g)
             const float dy = g->ship_y - e->y;
             if (dy < 0.0f) continue;
             if (fabsf(e->x - x) < r && dy < 420.0f) cost += 260.0f / (0.4f + dy / 200.0f);
-            /* À danger égal, se placer SOUS un ennemi : c'est là qu'on tire. */
-            else if (fabsf(e->x - x) < 26.0f) cost -= 6.0f;
+            /*
+             * À danger égal, se placer SOUS un ennemi : c'est là qu'on tire.
+             *
+             * La prime est PROPORTIONNELLE aux points de vie restants, et la
+             * fenêtre s'élargit avec la taille de la cible. Sans ça, le pilote
+             * esquivait indéfiniment devant le boss : mesuré, il ne lui retirait
+             * que 14 points de vie sur 90 en cent secondes, et la partie restait
+             * bloquée à la vague 5 puisque les vagues attendent qu'il tombe.
+             * Une borne en mode attraction affichait donc un combat figé.
+             *
+             * Une prime de 6 ne pesait rien face aux 60 que coûte un tir à
+             * esquiver ; un boss à 90 points de vie en vaut 27, ce qui décide le
+             * pilote à tenir sa ligne entre deux rafales.
+             */
+            else if (fabsf(e->x - x) < 26.0f + ENEMY_RADIUS[e->kind] * 0.25f)
+                cost -= 6.0f + e->hp * 0.24f;
         }
         if (cost < best_cost) { best_cost = cost; best_x = x; }
     }
@@ -661,11 +781,21 @@ void shooter_draw(ns_sprite *s, const shooter *g, const shooter_art *a,
     static const char *const AMMO[3] = { "CANON", "ZIGZAG", "CHERCHEUR" };
     SDL_snprintf(line, sizeof line, "VAGUE %u   %s x%d",
                  g->wave, AMMO[g->ammo_kind < 3 ? g->ammo_kind : 0], g->weapons);
-    ns_sprite_text(s, 30.0f * sc, 100.0f * sc, sc * 3.4f, amber, line);
+    ns_sprite_text(s, 30.0f * sc, 104.0f * sc, sc * 5.0f, amber, line);
+
+    /* Les vies restantes, en clair : une vie qu'on ne voit pas ne change rien
+     * à la façon dont on joue. Des losanges plutôt qu'un nombre — on les compte
+     * d'un coup d'œil sans quitter le vaisseau des yeux. */
+    for (int i = 0; i < g->lives; ++i) {
+        static const float life[4] = { 0.45f, 0.90f, 1.0f, 1.0f };
+        ns_sprite_texture(s, NULL);
+        ns_sprite_rect(s, (34.0f + (float)i * 40.0f) * sc, 156.0f * sc,
+                       26.0f * sc, 26.0f * sc, life);
+    }
 
     if (g->phase == SH_READY) {
         const char *msg = "MANCHE POUR SE DEPLACER   BOUTON POUR TIRER";
-        const float t = sc * 3.4f;
+        const float t = sc * 5.0f;
         ns_sprite_text(s, (logical_w - ns_sprite_text_width(msg, t)) * 0.5f,
                        logical_h * 0.93f, t, white, msg);
     } else if (g->phase == SH_DEAD) {

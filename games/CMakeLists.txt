@@ -13,9 +13,9 @@ add_library(nineteen_games STATIC
     flappy/flappy.c
     snake/snake.c
     demineur/demineur.c
-    tetris/tetris.c
+    aplomb/aplomb.c
     asteroid/asteroid.c
-    pacman/pacman.c
+    dedale/dedale.c
     piano/piano.c
     shooter/shooter.c
 )

@@ -153,11 +153,30 @@ bool flappy_art_load(ns_rhi *r, flappy_art *a)
     /* `srgb = true` : ce sont des images destinées à être vues, pas des données.
      * `gen_mips = false` : le filtrage est au plus proche, une pyramide ne
      * servirait qu'à flouter ce qu'on veut net. */
+    /*
+     * QUATRE PLANCHES SUR CINQ SONT DESSINÉES, et pas reprises de 2020.
+     *
+     * `birds.png`, `pipes.png`, `backgrounds.png` et `sol.png` étaient les
+     * planches de Flappy Bird : l'oiseau, ses tuyaux, son ciel, son sol. Elles
+     * ne sont plus copiées dans le paquet — voir le bloc « LES PLANCHES DES
+     * MINI-JEUX » d'`assets/CMakeLists.txt` — et `tools/spriteart` les
+     * remplace par un cerf-volant, des pylônes, un ciel à collines et une
+     * passerelle.
+     *
+     * Les COTES et le découpage n'ont pas bougé d'un pixel : `SPR_BIRD_W 17`,
+     * `SPR_PIPE_W 26`, `SPR_BG_W 144`, quatre colonnes de tuyaux, trois images
+     * d'aile. C'est la condition pour que rien d'autre dans ce fichier ne
+     * change, et donc pour que le remplacement soit vérifiable en regardant
+     * l'écran plutôt qu'en relisant du code.
+     *
+     * `chiffre.png` reste : dix chiffres carrés en blanc sur noir, sans marque
+     * ni personnage. Il n'y avait aucune raison de le redessiner.
+     */
     const bool ok =
-        ns_texture_load(r, &a->background, "games/flappy/backgrounds.png", true, false) &&
-        ns_texture_load(r, &a->birds,      "games/flappy/birds.png",       true, false) &&
-        ns_texture_load(r, &a->pipes,      "games/flappy/pipes.png",       true, false) &&
-        ns_texture_load(r, &a->ground,     "games/flappy/sol.png",         true, false) &&
+        ns_texture_load(r, &a->background, "games/flappy/fonds.png",  true, false) &&
+        ns_texture_load(r, &a->birds,      "games/flappy/oiseau.png", true, false) &&
+        ns_texture_load(r, &a->pipes,      "games/flappy/tuyaux.png", true, false) &&
+        ns_texture_load(r, &a->ground,     "games/flappy/passerelle.png", true, false) &&
         load_black_keyed(r, &a->digits,    "games/flappy/chiffre.png");
     a->ready = ok;
     if (!ok) NS_WARN("flappy : planches introuvables, le jeu tournera sans images");
@@ -186,7 +205,48 @@ static float gap_top(int slot)
 }
 
 static float gap_height(const flappy *g) { (void)g; return GAP_HEIGHT; }
-static float pipe_spacing(const flappy *g) { return g->hard ? SPACING_HARD : SPACING_EASY; }
+
+/*
+ * L'ÉCART QUI SE RESSERRE — la courbe que ce jeu n'avait pas.
+ *
+ * Ce qui a été mesuré, en faisant tourner le pilote automatique sur cinq
+ * graines et six durées (6, 12, 30, 60, 120, 240 s) :
+ *
+ *     durée      6    12    30    60   120   240
+ *     score      1     4    15    33    69   141      morts : 0 sur 5, partout
+ *
+ * Le score est une DROITE — 0,588 tuyau par seconde, du début à la fin — et il
+ * est identique aux cinq graines près. Autrement dit : l'écart ne bouge jamais,
+ * rien n'accélère, et une partie de quatre minutes n'est pas plus difficile que
+ * ses douze premières secondes. Ce n'est pas un jeu d'arcade, c'est un chrono.
+ *
+ * La borne « hard » prouvait pourtant que le levier existait : le MÊME pilote,
+ * avec l'écart à 328 px au lieu de 400, meurt à 31 s après dix-neuf tuyaux. Le
+ * mécanisme marchait ; personne ne l'avait branché sur le temps.
+ *
+ * On fait donc ce que faisait 2020 — « difficulte max en distance d'obstacle »,
+ * son propre commentaire — mais progressivement : l'écart part de sa valeur
+ * facile et descend vers sa valeur dure au fil des tuyaux franchis. Les deux
+ * bornes de la rampe sont les deux valeurs DÉJÀ mesurées, ce qui garantit que
+ * ni le début ni la fin ne sont des réglages inventés : on commence exactement
+ * au jeu d'hier, on finit exactement à sa borne « hard ».
+ *
+ * La hauteur du passage, elle, ne bouge pas, et c'est mesuré aussi : une
+ * impulsion fait monter de 123 px, un passage de 196 px en laisse juste assez
+ * pour loger l'oiseau. Le resserrer donne un jeu infranchissable, pas
+ * difficile — voir le commentaire de SPACING_HARD.
+ */
+#define RAMP_PIPES 35.0f     /* tuyaux pour aller d'un bout à l'autre de la rampe */
+#define SPACING_FLOOR (76.0f * SCALE)   /* 304 px : le plancher de la borne dure */
+
+static float pipe_spacing(const flappy *g)
+{
+    const float from = g->hard ? SPACING_HARD : SPACING_EASY;
+    const float to   = g->hard ? SPACING_FLOOR : SPACING_HARD;
+    float t = (float)g->score / RAMP_PIPES;
+    if (t > 1.0f) t = 1.0f;
+    return from + (to - from) * t;
+}
 
 void flappy_reset(flappy *g, uint64_t seed, bool hard)
 {
@@ -464,8 +524,12 @@ void flappy_draw(ns_sprite *s, const flappy *g, const flappy_art *a,
         const float top = gap_top(g->pipes[i].slot);
         const float bottom = top + gap_height(g);
 
-        /* Le tuyau du haut est la planche RETOURNÉE : on inverse v, ce qui met
-         * l'embouchure — dessinée en bas de la planche — vers le bas. */
+        /* Le tuyau du haut est la planche RETOURNÉE : on inverse v, ce qui
+         * ramène l'embouchure — dessinée EN HAUT de la planche, ligne 0 —
+         * contre l'ouverture. Le tuyau du bas la prend telle quelle, et pour la
+         * même raison : sa première ligne est celle qui borde l'ouverture. Le
+         * commentaire d'origine disait « en bas » ; la planche de 2020 le
+         * contredisait déjà, et celle de `spriteart` suit la planche. */
         blit(&c, &a->pipes, px, top - PIPE_H, PIPE_W, PIPE_H,
              pipe_u, SPR_PIPE_H, SPR_PIPE_W, -SPR_PIPE_H,
              SPR_PIPE_W * 4.0f, SPR_PIPE_H, NULL);

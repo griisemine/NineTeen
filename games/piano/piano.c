@@ -234,9 +234,28 @@ void piano_tick(piano *g, float dt)
     }
     if (last < g->time + 3.0f) extend_chart(g);
 
-    /* En hardcore, laisser passer trois notes termine la partie : sans quoi
-     * une borne « hard » se jouerait en ne touchant à rien. */
-    if (g->hard && g->misses >= 3) fail(g, PN_FAIL_TOO_MANY_MISSES);
+    /*
+     * Laisser passer trop de notes termine la partie — dans LES DEUX modes.
+     *
+     * Le commentaire d'origine disait déjà pourquoi, pour la borne « hard » :
+     * « sans quoi une borne se jouerait en ne touchant à rien ». L'objection
+     * vaut mot pour mot pour la borne normale, et personne ne l'y avait
+     * appliquée : `g->hard &&` laissait le mode ordinaire sans aucune condition
+     * de défaite. Mesuré, cinq graines : le pilote automatique passe 300 s sans
+     * mourir, et un joueur qui ne touche à RIEN en fait autant — indéfiniment,
+     * avec un score de zéro qu'aucune règle ne vient interrompre.
+     *
+     * Un jeu qu'on ne peut pas perdre n'a pas de fin, donc pas de score qui
+     * compte, donc rien à défendre au classement. C'est la seule des trois
+     * questions d'une borne à laquelle Piano ne répondait pas.
+     *
+     * Douze en normal contre trois en difficile : la partition boucle en
+     * s'accélérant, donc les oublis finissent par arriver à tout le monde et
+     * la limite se paie d'elle-même. Douze laisse la place d'apprendre une
+     * mesure ratée sans finir la partie dessus.
+     */
+    const uint32_t cap = g->hard ? 3u : 12u;
+    if (g->misses >= cap) fail(g, PN_FAIL_TOO_MANY_MISSES);
 }
 
 /* ==========================================================================
@@ -324,7 +343,18 @@ void piano_draw(ns_sprite *s, const piano *g, const piano_art *a,
     ns_sprite_text(s, 30.0f * base, 24.0f * base, base * 6.0f, white, line);
     if (g->combo >= 2) {
         SDL_snprintf(line, sizeof line, "COMBO %u", g->combo);
-        ns_sprite_text(s, 30.0f * base, 100.0f * base, base * 4.0f, amber, line);
+        ns_sprite_text(s, 30.0f * base, 104.0f * base, base * 5.0f, amber, line);
+    }
+    /* Les oublis restants. On ne les montre qu'une fois le premier commis :
+     * avant, c'est du bruit ; après, c'est le compte à rebours qui dit qu'on
+     * joue sa partie. Une limite qu'on ne voit pas venir est arbitraire. */
+    if (g->misses > 0) {
+        static const float red[4] = { 1.0f, 0.40f, 0.36f, 1.0f };
+        const uint32_t cap = g->hard ? 3u : 12u;
+        SDL_snprintf(line, sizeof line, "OUBLIS %u/%u", g->misses, cap);
+        ns_sprite_text(s, PN_LOGICAL_W * base - 30.0f * base
+                          - ns_sprite_text_width(line, base * 5.0f),
+                       24.0f * base, base * 5.0f, red, line);
     }
 
     if (g->phase == PN_READY) {

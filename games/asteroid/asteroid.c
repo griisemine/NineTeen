@@ -531,6 +531,39 @@ void asteroid_tick(asteroid *g, float dt)
     if (g->held[NS_GAME_DOWN] && g->nukes > 0) detonate_nuke(g);
 
     /* --- les apparitions --- */
+    /*
+     * LE CHAMP NE SE VIDE JAMAIS.
+     *
+     * La cadence de 2020 — une apparition toutes les douze secondes, jusqu'à
+     * six et demie — décrit un champ qui se REMPLIT, pas un champ qu'on vide.
+     * Elle suppose qu'on n'arrive pas à tout casser. Un joueur correct y
+     * arrive, et alors il ne se passe plus rien : mesuré sur cinq graines, le
+     * score du pilote automatique passe de 380 à 6 s à 480 à 12 s — cent points
+     * en six secondes, contre trois cent quatre-vingts dans les six premières.
+     * La capture en borne à dix secondes le montre en une image : un écran
+     * noir, un vaisseau, et rien à faire.
+     *
+     * Six secondes de vide dans un jeu d'arcade, c'est six secondes pendant
+     * lesquelles on lâche le manche.
+     *
+     * La règle ajoutée ne touche PAS à la cadence : tant que le champ est
+     * fourni, l'intervalle de 2020 s'applique tel quel. Elle ne fait que
+     * l'avancer quand il ne reste presque rien — ce qui n'arrive que si le
+     * joueur a fait le travail, et qui le récompense donc par du jeu plutôt
+     * que par de l'attente.
+     *
+     * Elle n'AVANCE qu'une apparition déjà prévue : la condition
+     * `spawn_timer <= spawn_period` la retient quand l'appelant a délibérément
+     * garé le compteur hors du cycle — ce que fait `test_le_tir_normal_est_
+     * inepuisable`, qui vide le champ pour mesurer les MUNITIONS et pas la
+     * survie. Une règle de remplissage n'a pas à créer des astéroïdes là où la
+     * cadence n'en prévoit aucun.
+     */
+    if (asteroid_live_rocks(g) < 2
+        && g->spawn_timer > 2.0f && g->spawn_timer <= g->spawn_period) {
+        g->spawn_timer = 2.0f;
+    }
+
     g->spawn_timer -= dt;
     if (g->spawn_timer <= 0.0f) {
         /*
@@ -906,22 +939,22 @@ void asteroid_draw(ns_sprite *s, const asteroid *g, const asteroid_art *a,
     static const char *const SHOT_NAME[AST_SHOT_COUNT] = {
         "NORMAL", "ZIGZAG", "CHERCHEUR", "GLACE", "LASER"
     };
-    SDL_snprintf(line, sizeof line, "%s  x%d", SHOT_NAME[g->shot_kind], g->multi);
-    ns_sprite_text(s, c.ox + 40.0f * c.scale, c.oy + 96.0f * c.scale, c.scale * 3.0f, amber, line);
+    SDL_snprintf(line, sizeof line, "%s x%d", SHOT_NAME[g->shot_kind], g->multi);
+    ns_sprite_text(s, c.ox + 40.0f * c.scale, c.oy + 100.0f * c.scale, c.scale * 5.0f, amber, line);
     if (g->shot_kind != AST_SHOT_NORMAL) {
         static const float bar[4] = { 0.41f, 0.81f, 0.95f, 1.0f };
-        ns_sprite_rect(s, c.ox + 40.0f * c.scale, c.oy + 134.0f * c.scale,
-                       260.0f * g->ammo / MAX_RATIO_AMMO * c.scale, 12.0f * c.scale, bar);
+        ns_sprite_rect(s, c.ox + 40.0f * c.scale, c.oy + 148.0f * c.scale,
+                       260.0f * g->ammo / MAX_RATIO_AMMO * c.scale, 16.0f * c.scale, bar);
     }
     if (g->nukes > 0) {
-        SDL_snprintf(line, sizeof line, "BOMBE x%d  (BAS)", g->nukes);
-        ns_sprite_text(s, c.ox + 40.0f * c.scale, c.oy + 160.0f * c.scale,
-                       c.scale * 3.0f, amber, line);
+        SDL_snprintf(line, sizeof line, "BOMBE x%d BAS", g->nukes);
+        ns_sprite_text(s, c.ox + 40.0f * c.scale, c.oy + 176.0f * c.scale,
+                       c.scale * 5.0f, amber, line);
     }
 
     if (g->phase == AST_READY) {
         const char *msg = "MANCHE POUR PILOTER   BOUTON POUR TIRER";
-        const float sc = c.scale * 3.6f;
+        const float sc = c.scale * 5.0f;
         ns_sprite_text(s, c.ox + (AST_LOGICAL_W * c.scale
                                   - ns_sprite_text_width(msg, sc)) * 0.5f,
                        c.oy + AST_LOGICAL_H * c.scale * 0.90f, sc, white, msg);

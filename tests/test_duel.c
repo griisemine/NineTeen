@@ -105,8 +105,8 @@ static void test_verrous(void)
     CHECK(!ns_realtime_enabled(), "et il se déclare inactif");
 
     /* Et il ne rend rien, jamais : on le constate en demandant. */
-    ns_realtime_publish(1.0f, 0.0f, 2.0f, 0.5f, "borne-01", "pacman", 0);
-    ns_realtime_request_ghosts("pacman", "normal");
+    ns_realtime_publish(1.0f, 0.0f, 2.0f, 0.5f, "borne-01", "dedale", 0);
+    ns_realtime_request_ghosts("dedale", "normal");
     SDL_Delay(200);
     ns_realtime_peer peers[NS_RT_MAX_PEERS];
     CHECK(ns_realtime_peers(peers, NS_RT_MAX_PEERS) == 0,
@@ -175,12 +175,12 @@ static void test_analyseur(void)
     int64_t seed = 0;
 
     /* --- Le cas normal --- */
-    const char *ok = "v1 pacman normal 20240418\n0 0 0\n281 4 0\n900 8 16\n";
+    const char *ok = "v1 dedale normal 20240418\n0 0 0\n281 4 0\n900 8 16\n";
     CHECK(ns_runlog_parse_inputs(ok, SDL_strlen(ok), game, sizeof game,
                                  diff, sizeof diff, &seed, &in, &n),
           "un journal bien formé se relit");
     CHECK(n == 3, "ses trois changements (%u)", n);
-    CHECK(SDL_strcmp(game, "pacman") == 0, "le jeu (%s)", game);
+    CHECK(SDL_strcmp(game, "dedale") == 0, "le jeu (%s)", game);
     CHECK(seed == 20240418, "la graine (%lld)", (long long)seed);
     CHECK(in && in[2].tick == 900 && in[2].held == 8 && in[2].pressed == 16,
           "et la dernière ligne");
@@ -207,8 +207,8 @@ static void test_analyseur(void)
      * fait une réponse HTTP, dont le corps n'est pas une chaîne C. Un analyseur
      * qui lirait jusqu'au zéro lirait ce qui traîne derrière.
      */
-    const char *bounded = "v1 tetris easy 3\n5 1 0\nCECI-NE-DOIT-PAS-ETRE-LU";
-    const size_t cut = SDL_strlen("v1 tetris easy 3\n5 1 0\n");
+    const char *bounded = "v1 aplomb easy 3\n5 1 0\nCECI-NE-DOIT-PAS-ETRE-LU";
+    const size_t cut = SDL_strlen("v1 aplomb easy 3\n5 1 0\n");
     CHECK(ns_runlog_parse_inputs(bounded, cut, game, sizeof game,
                                  diff, sizeof diff, &seed, &in, &n),
           "la LONGUEUR fait foi, pas l'octet nul");
@@ -216,7 +216,7 @@ static void test_analyseur(void)
     SDL_free(in); in = NULL;
 
     /* --- Des lignes illisibles : sautées, pas fatales --- */
-    const char *dirty = "v1 pacman normal 5\n0 0 0\nn'importe quoi\n\n60 2 0\n";
+    const char *dirty = "v1 dedale normal 5\n0 0 0\nn'importe quoi\n\n60 2 0\n";
     CHECK(ns_runlog_parse_inputs(dirty, SDL_strlen(dirty), game, sizeof game,
                                  diff, sizeof diff, &seed, &in, &n),
           "un journal partiellement abîmé se relit quand même");
@@ -241,7 +241,7 @@ static void test_analyseur(void)
      * définis. Les laisser passer ferait atteindre un jeu par un bouton qui
      * n'existe pas.
      */
-    const char *wide = "v1 pacman normal 1\n0 255 255\n";
+    const char *wide = "v1 dedale normal 1\n0 255 255\n";
     CHECK(ns_runlog_parse_inputs(wide, SDL_strlen(wide), game, sizeof game,
                                  diff, sizeof diff, &seed, &in, &n),
           "un masque trop large se relit");
@@ -406,7 +406,7 @@ static void test_presence(const char *url)
     CHECK(ns_realtime_enabled(), "le temps réel est actif");
     CHECK(true, "et il n'a demandé AUCUN compte pour ça");
 
-    ns_realtime_publish(1.5f, 0.0f, 2.5f, 0.75f, "borne-pacman", "pacman", 120);
+    ns_realtime_publish(1.5f, 0.0f, 2.5f, 0.75f, "borne-dedale", "dedale", 120);
 
     /* Le second joueur, par la porte d'à côté. */
     char purl[640];
@@ -414,7 +414,7 @@ static void test_presence(const char *url)
     const char *bob =
         "{\"clientId\":\"bobbobbobbobbob\",\"nickname\":\"Bob\","
         "\"x\":-3.0,\"y\":0.0,\"z\":1.0,\"yaw\":1.0,"
-        "\"cabinet\":\"borne-tetris\",\"game\":\"tetris\",\"score\":7}";
+        "\"cabinet\":\"borne-aplomb\",\"game\":\"aplomb\",\"score\":7}";
 
     bool seen_ada = false;
     for (int i = 0; i < 40 && !seen_ada; ++i) {
@@ -450,7 +450,7 @@ static void test_presence(const char *url)
                 found = true;
                 CHECK(peers[i].x < -2.5f && peers[i].x > -3.5f,
                       "avec sa position (%.2f)", (double)peers[i].x);
-                CHECK(SDL_strcmp(peers[i].cabinet, "borne-tetris") == 0,
+                CHECK(SDL_strcmp(peers[i].cabinet, "borne-aplomb") == 0,
                       "et la borne devant laquelle il se tient (%s)", peers[i].cabinet);
                 CHECK(peers[i].score == 7, "et son score (%d)", peers[i].score);
             }
@@ -537,7 +537,7 @@ static void test_duel_complet(const char *url, const char *token)
      * secondes à Flappy. Un duel dont les deux scores valent zéro ne prouve
      * rien.
      */
-    const ns_game_api *api = ns_game_find("pacman");
+    const ns_game_api *api = ns_game_find("dedale");
     if (!api) { CHECK(false, "Pac-Man est porté"); goto done; }
 
     /* --- 1. Le billet : la graine vient du SERVEUR, avant qu'on joue --- */
@@ -748,7 +748,7 @@ static void test_serveur_mort(void)
     /* On joue : la boucle de jeu ne doit rien attendre. */
     const uint64_t t0 = SDL_GetTicks();
     for (int i = 0; i < 200; ++i) {
-        ns_realtime_publish((float)i, 0.0f, 0.0f, 0.0f, "borne", "pacman", i);
+        ns_realtime_publish((float)i, 0.0f, 0.0f, 0.0f, "borne", "dedale", i);
     }
     const uint64_t dt = SDL_GetTicks() - t0;
     CHECK(dt < 100, "publier une position ne bloque JAMAIS (%llu ms pour 200 appels)",

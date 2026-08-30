@@ -3,10 +3,10 @@
 #include "flappy/flappy.h"
 #include "demineur/demineur.h"
 #include "asteroid/asteroid.h"
-#include "pacman/pacman.h"
+#include "dedale/dedale.h"
 #include "piano/piano.h"
 #include "shooter/shooter.h"
-#include "tetris/tetris.h"
+#include "aplomb/aplomb.h"
 #include "snake/snake.h"
 
 #include <SDL3/SDL.h>
@@ -25,7 +25,7 @@
 static const ns_game_api *const g_games[] = {
     &g_flappy_api,
     &g_snake_api,
-    &g_demineur_api, &g_tetris_api, &g_asteroid_api, &g_pacman_api, &g_piano_api, &g_shooter_api,
+    &g_demineur_api, &g_aplomb_api, &g_asteroid_api, &g_dedale_api, &g_piano_api, &g_shooter_api,
 };
 
 uint64_t ns_game_state_hash(const ns_game_api *api, const void *state)

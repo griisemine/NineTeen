@@ -204,12 +204,12 @@ nineteen_set_warnings(ns_test_piano)
 nineteen_apply_sanitizers(ns_test_piano)
 add_test(NAME piano COMMAND ns_test_piano)
 
-add_executable(ns_test_pacman test_pacman.c)
-target_link_libraries(ns_test_pacman PRIVATE nineteen::games)
-target_include_directories(ns_test_pacman PRIVATE "${CMAKE_SOURCE_DIR}/games/pacman")
-nineteen_set_warnings(ns_test_pacman)
-nineteen_apply_sanitizers(ns_test_pacman)
-add_test(NAME pacman COMMAND ns_test_pacman)
+add_executable(ns_test_dedale test_dedale.c)
+target_link_libraries(ns_test_dedale PRIVATE nineteen::games)
+target_include_directories(ns_test_dedale PRIVATE "${CMAKE_SOURCE_DIR}/games/dedale")
+nineteen_set_warnings(ns_test_dedale)
+nineteen_apply_sanitizers(ns_test_dedale)
+add_test(NAME dedale COMMAND ns_test_dedale)
 
 add_executable(ns_test_asteroid test_asteroid.c)
 target_link_libraries(ns_test_asteroid PRIVATE nineteen::games)
@@ -218,16 +218,16 @@ nineteen_set_warnings(ns_test_asteroid)
 nineteen_apply_sanitizers(ns_test_asteroid)
 add_test(NAME asteroid COMMAND ns_test_asteroid)
 
-add_executable(ns_test_tetris test_tetris.c)
-target_link_libraries(ns_test_tetris PRIVATE nineteen::games)
-target_include_directories(ns_test_tetris PRIVATE "${CMAKE_SOURCE_DIR}/games/tetris")
+add_executable(ns_test_aplomb test_aplomb.c)
+target_link_libraries(ns_test_aplomb PRIVATE nineteen::games)
+target_include_directories(ns_test_aplomb PRIVATE "${CMAKE_SOURCE_DIR}/games/aplomb")
 # Le test relit le fichier de 2020 pour vérifier que la table en est bien la
 # copie : il lui faut donc son chemin, et pas une copie de plus.
-target_compile_definitions(ns_test_tetris PRIVATE
-    TETRIS_LEGACY_PIECES="${CMAKE_SOURCE_DIR}/legacy/games/5_tetris/pieces.h")
-nineteen_set_warnings(ns_test_tetris)
-nineteen_apply_sanitizers(ns_test_tetris)
-add_test(NAME tetris COMMAND ns_test_tetris)
+target_compile_definitions(ns_test_aplomb PRIVATE
+    APLOMB_LEGACY_PIECES="${CMAKE_SOURCE_DIR}/legacy/games/5_tetris/pieces.h")
+nineteen_set_warnings(ns_test_aplomb)
+nineteen_apply_sanitizers(ns_test_aplomb)
+add_test(NAME aplomb COMMAND ns_test_aplomb)
 
 add_executable(ns_test_demineur test_demineur.c)
 target_link_libraries(ns_test_demineur PRIVATE nineteen::games)

@@ -135,6 +135,51 @@ static void test_pipes_stay_spaced(void)
     }
 }
 
+/*
+ * LA COURBE : le jeu doit devenir plus difficile.
+ *
+ * Ce qui manquait, et qui ne se voit qu'en mesurant longtemps : le score de
+ * Flappy était une DROITE. Pilote automatique, cinq graines, six durées — 1, 4,
+ * 15, 33, 69, 141 tuyaux à 6, 12, 30, 60, 120 et 240 s — soit 0,588 tuyau par
+ * seconde du début à la fin, identique aux cinq graines, et zéro mort en quatre
+ * minutes. L'écart entre deux tuyaux ne bougeait jamais.
+ *
+ * Le test tient les deux bouts de la rampe : l'écart de DÉPART est bien celui
+ * de 2020, et il s'est resserré une fois la rampe parcourue. Sans les deux, on
+ * pourrait « corriger » la courbe en durcissant le début — ce qui chasserait le
+ * débutant au lieu de retenir l'habitué.
+ */
+static void test_la_difficulte_monte(void)
+{
+    flappy g;
+    flappy_reset(&g, 4242, false);
+
+    /* Au départ : l'écart de 2020, à un pixel près. */
+    const float depart = g.pipes[1].position - g.pipes[0].position;
+    CHECK(depart > 399.0f && depart < 401.0f,
+          "l'écart de départ est celui de 2020 (%.1f px)", (double)depart);
+
+    /* Une fois la rampe parcourue, il s'est resserré. On force le score
+     * plutôt que de jouer une heure : c'est LUI qui pilote la rampe. */
+    g.phase = FLAPPY_PLAYING;     /* le décor ne défile qu'en jeu */
+    g.score = 100;
+    for (int i = 0; i < FLAPPY_PIPES; ++i) g.pipes[i].position = -1e4f;
+    flappy_tick(&g, DT);          /* le recyclage replace les huit tuyaux */
+
+    float dmin = 1e9f;
+    for (int i = 0; i < FLAPPY_PIPES; ++i) {
+        for (int j = i + 1; j < FLAPPY_PIPES; ++j) {
+            const float d = fabsf(g.pipes[i].position - g.pipes[j].position);
+            if (d > 1.0f && d < dmin) dmin = d;
+        }
+    }
+    CHECK(dmin < depart - 40.0f,
+          "après cent tuyaux l'écart s'est resserré (%.1f px contre %.1f)",
+          (double)dmin, (double)depart);
+    CHECK(dmin > 300.0f,
+          "mais il reste franchissable (%.1f px)", (double)dmin);
+}
+
 static void test_score_counts_once(void)
 {
     flappy g;
@@ -206,6 +251,7 @@ int main(void)
     test_flap_lifts();
     test_gap_is_passable();
     test_pipes_stay_spaced();
+    test_la_difficulte_monte();
     test_score_counts_once();
     test_death_and_floor();
     test_deterministic();

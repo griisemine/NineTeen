@@ -71,10 +71,16 @@ static int neighbours(const demineur *g, int r, int c)
  * l'original, et c'est la règle qui distingue un démineur d'une loterie : le
  * premier coup ouvre toujours une zone.
  */
+int demineur_bombs(const demineur *g)
+{
+    return g->hard ? DEM_BOMBS_HARD : DEM_BOMBS_EASY;
+}
+
 static void place_bombs(demineur *g, int safe_r, int safe_c)
 {
+    const int want = demineur_bombs(g);
     int placed = 0, guard = 0;
-    while (placed < DEM_BOMBS && guard++ < DEM_ROWS * DEM_COLS * 40) {
+    while (placed < want && guard++ < DEM_ROWS * DEM_COLS * 40) {
         const int r = (int)ns_rng_below(&g->rng, DEM_ROWS);
         const int c = (int)ns_rng_below(&g->rng, DEM_COLS);
         if (g->bomb[r][c]) continue;
@@ -148,7 +154,7 @@ static void reveal(demineur *g, int r0, int c0)
 static void check_won(demineur *g)
 {
     if (g->phase == DEM_WON) return;
-    if (g->revealed >= (uint32_t)(DEM_ROWS * DEM_COLS - DEM_BOMBS)) {
+    if (g->revealed >= (uint32_t)(DEM_ROWS * DEM_COLS - demineur_bombs(g))) {
         g->phase = DEM_WON;
         g->score += PTS_WIN;
         g->pend_win = true;
@@ -419,7 +425,7 @@ bool demineur_autopilot(demineur *g)
                 if (!g->shown[r][c] && !g->flag[r][c]) masked_total++;
         if (masked_total == 0) return false;
 
-        const int left = DEM_BOMBS - (int)g->flags;
+        const int left = demineur_bombs(g) - (int)g->flags;
         float base = (left > 0) ? (float)left / (float)masked_total : 0.0f;
 
         int br = -1, bc = -1;
@@ -512,13 +518,32 @@ void demineur_draw(ns_sprite *s, const demineur *g, const demineur_art *a,
     }
 
     /* Le curseur : un cadre, pas une case pleine — on doit voir ce qu'il y a
-     * dessous. Il respire pour se trouver d'un coup d'œil. */
+     * dessous. Il respire pour se trouver d'un coup d'œil.
+     *
+     * L'ÉPAISSEUR EST UNE MESURE, pas un goût. Le jeu dessine dans un repère de
+     * 1920 de large ; la dalle d'une borne est une cible de 512 x 288
+     * (`room/main.c`), donc tout est divisé par 3,75 avant même d'être projeté
+     * sur un quad déformé en barillet. Le trait de 4 px d'origine arrivait à
+     * 1,07 px sur la dalle, et à 0,8 px à l'écran : la capture en borne ne
+     * montrait AUCUN curseur. Sur un démineur qui se joue au manche, ne pas
+     * voir où l'on est n'est pas une gêne, c'est l'impossibilité de jouer.
+     *
+     * 9 px donnent 2,4 px sur la dalle, et le fond translucide donne à la case
+     * une masse qu'on repère sans chercher le trait. Le battement ne descend
+     * plus sous 0,70 : à 0,55 il disparaissait la moitié du temps.
+     */
     if (g->phase == DEM_READY || g->phase == DEM_PLAYING) {
-        const float pulse = 0.55f + 0.45f * (0.5f + 0.5f * sinf(g->time * 6.0f));
+        const float pulse = 0.70f + 0.30f * (0.5f + 0.5f * sinf(g->time * 6.0f));
         const float col[4] = { 1.0f, 0.85f, 0.30f, pulse };
         const float x = gx + (float)g->cursor_c * DEM_CELL;
         const float y = gy + (float)g->cursor_r * DEM_CELL;
-        const float th = 4.0f;
+        const float th = 9.0f;
+
+        /* Le voile intérieur : c'est lui qui se voit de loin, le cadre ne fait
+         * que dire exactement quelle case est visée. */
+        const float wash[4] = { 1.0f, 0.85f, 0.30f, 0.22f * pulse };
+        ns_sprite_rect(s, c.ox + x * c.scale, c.oy + y * c.scale,
+                       DEM_CELL * c.scale, DEM_CELL * c.scale, wash);
         ns_sprite_rect(s, c.ox + x * c.scale, c.oy + y * c.scale,
                        DEM_CELL * c.scale, th * c.scale, col);
         ns_sprite_rect(s, c.ox + x * c.scale, c.oy + (y + DEM_CELL - th) * c.scale,
@@ -532,15 +557,26 @@ void demineur_draw(ns_sprite *s, const demineur *g, const demineur_art *a,
     static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     static const float amber[4] = { 1.0f, 0.82f, 0.30f, 1.0f };
 
+    /*
+     * LA TAILLE DU TEXTE EST UNE MESURE. La fonte fait 7 px de haut, le repère
+     * 1920 de large, la dalle d'une borne 512 : un texte écrit à `scale * k`
+     * arrive sur la dalle à 7 x k x (512/1920) = 1,87 x k pixels. La recette en
+     * borne dit où passe le seuil : à k = 6 (11 px) le score se lit ; à k = 4
+     * (7,5 px) la capture ne montre qu'une tache — le score du démineur y était
+     * illisible, et c'est la seule chose que le joueur vient chercher.
+     *
+     * Le plancher retenu est donc k = 6 pour le score et k = 5 pour les
+     * consignes, sur les huit jeux.
+     */
     char line[64];
     SDL_snprintf(line, sizeof line, "%lld", (long long)g->score);
-    const float ts = c.scale * 4.0f;
+    const float ts = c.scale * 6.0f;
     ns_sprite_text(s, c.ox + (DEM_W * c.scale - ns_sprite_text_width(line, ts)) * 0.5f,
-                   c.oy + 26.0f * c.scale, ts, white, line);
+                   c.oy + 22.0f * c.scale, ts, white, line);
 
     if (g->phase == DEM_READY) {
         const char *msg = "MANCHE POUR VISER   BOUTON POUR OUVRIR";
-        const float sc = c.scale * 4.0f;
+        const float sc = c.scale * 5.0f;
         ns_sprite_text(s, c.ox + (DEM_W * c.scale - ns_sprite_text_width(msg, sc)) * 0.5f,
                        c.oy + DEM_H * c.scale * 0.92f, sc, white, msg);
     } else if (g->phase == DEM_DEAD || g->phase == DEM_WON) {

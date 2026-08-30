@@ -39,7 +39,30 @@
 #define DEM_ROWS 16          /* TAILLE_GRILLE_LIGNE */
 #define DEM_COLS 25          /* TAILLE_GRILLE_COLONNE */
 #define DEM_CELL 50.0f       /* TAILLE_CASE */
-#define DEM_BOMBS ((DEM_ROWS * DEM_COLS) / 4)   /* 25 %, soit 100 */
+/*
+ * LES BOMBES, ET POURQUOI ELLES NE SONT PLUS CENT PARTOUT.
+ *
+ * `NOMBRE_BOMBES_GRILLE` de 2020 vaut le quart des cases : cent bombes sur
+ * quatre cents. C'est plus dense que la grille « expert » du démineur de
+ * Windows (20,6 %), sur laquelle un humain gagne déjà rarement.
+ *
+ * Ce que ça donne, mesuré : deux cents parties jouées par le solveur du
+ * fichier — celui qui déduit d'abord et ne devine qu'en dernier recours, en
+ * choisissant la case la moins risquée — se soldent par **deux cents
+ * défaites**. Zéro victoire. Durée moyenne : onze secondes. Autrement dit,
+ * `PTS_WIN`, l'écran « GAGNE » et la branche `DEM_WON` étaient du code que
+ * personne n'atteindrait jamais : le jeu n'avait pas de fin heureuse, il avait
+ * une fin.
+ *
+ * La densité passe donc à 15 % sur la borne ordinaire — entre le « débutant »
+ * (12,3 %) et l'« intermédiaire » (15,6 %) de la version de référence — et
+ * garde les cent bombes de 2020 sur la borne « hard », qui les mérite. La
+ * règle de 2020 n'est pas perdue : elle est devenue la difficulté qu'elle
+ * décrivait.
+ */
+#define DEM_BOMBS_HARD ((DEM_ROWS * DEM_COLS) / 4)          /* 25 %, les 100 de 2020 */
+#define DEM_BOMBS_EASY (((DEM_ROWS * DEM_COLS) * 15) / 100) /* 15 %, soit 60 */
+
 
 /* Le repère logique : la grille de 1250 x 800 centrée dans 1920 x 1080. */
 #define DEM_W 1920.0f
@@ -108,6 +131,11 @@ typedef struct demineur_art {
 
 bool demineur_art_load(ns_rhi *r, demineur_art *a);
 void demineur_art_free(ns_rhi *r, demineur_art *a);
+
+/* Le compte de bombes de la partie en cours : il dépend de la difficulté.
+ * Exposé parce que c'est une RÈGLE — la condition de victoire et le calcul de
+ * risque du solveur en dépendent tous les deux, et le test la vérifie. */
+int demineur_bombs(const demineur *g);
 
 void demineur_reset(demineur *g, uint64_t seed, bool hard);
 void demineur_press(demineur *g, ns_game_button b);

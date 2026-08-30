@@ -603,7 +603,7 @@ func (s *Server) handleRunBegin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Le fantôme doit être du jeu demandé. Sans ce contrôle, on pourrait
-		// ouvrir une partie de Tetris sur la graine d'un fantôme de Flappy :
+		// ouvrir une partie d'Aplomb sur la graine d'un fantôme de Flappy :
 		// le duel n'aurait aucun sens, et le client rejouerait des entrées
 		// faites pour un autre jeu.
 		if ghostGame != game.ID {

@@ -1,2 +1,0 @@
-v1 tetris normal 20240418 5
-0 0 0

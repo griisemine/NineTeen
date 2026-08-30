@@ -1,9 +1,9 @@
 /*
- * test_tetris.c — les règles de Tetris, confrontées à celles de 2020.
+ * test_aplomb.c — les règles de Aplomb, confrontées à celles de 2020.
  *
  * Le cas qui justifie le fichier à lui seul : **la table des pièces**. Onze
  * mille deux cents entiers écrits à la main en 2020, dont
- * `tools/extract_tetris_pieces.py` fait une copie. Une rotation fausse sur une
+ * `tools/extract_aplomb_pieces.py` fait une copie. Une rotation fausse sur une
  * pièce sur vingt-huit ne se voit pas sur une capture — elle se découvre en
  * jouant, longtemps après. Le condensé du fichier source est donc vérifié ici :
  * si `pieces.h` change, le test le dit et on relance le script.
@@ -17,7 +17,7 @@
 #include "games.h"
 #include "ns_core.h"
 #include "ns_runlog.h"
-#include "tetris.h"
+#include "aplomb.h"
 
 #include <SDL3/SDL.h>
 
@@ -51,7 +51,7 @@ static int g_failures = 0;
  */
 static void test_table_fidele_a_2020(void)
 {
-    const char *path = TETRIS_LEGACY_PIECES;   /* défini par CMake */
+    const char *path = APLOMB_LEGACY_PIECES;   /* défini par CMake */
     FILE *f = fopen(path, "rb");
     CHECK(f != NULL, "le fichier de 2020 est lisible : %s", path);
     if (!f) return;
@@ -74,10 +74,10 @@ static void test_table_fidele_a_2020(void)
     for (int i = 0; i < 32; ++i) SDL_snprintf(hex + i * 2, 3, "%02x", digest[i]);
     hex[64] = '\0';
 
-    CHECK(SDL_strcmp(hex, TET_PIECES_SOURCE_SHA256) == 0,
+    CHECK(SDL_strcmp(hex, APL_PIECES_SOURCE_SHA256) == 0,
           "la table vient bien de ce pieces.h — sinon relancer "
-          "tools/extract_tetris_pieces.py (lu %s, attendu %s)",
-          hex, TET_PIECES_SOURCE_SHA256);
+          "tools/extract_aplomb_pieces.py (lu %s, attendu %s)",
+          hex, APL_PIECES_SOURCE_SHA256);
 }
 
 /* Chaque rotation d'une pièce a le MÊME nombre de cases : une rotation qui en
@@ -86,14 +86,14 @@ static void test_table_fidele_a_2020(void)
 static void test_rotations_conservent_les_cases(void)
 {
     int faults = 0;
-    for (int d = 0; d < TET_DIFFICULTIES; ++d) {
-        for (int s = 0; s < TET_SIZES; ++s) {
-            for (int p = 0; p < TET_PIECES; ++p) {
+    for (int d = 0; d < APL_DIFFICULTIES; ++d) {
+        for (int s = 0; s < APL_SIZES; ++s) {
+            for (int p = 0; p < APL_PIECES; ++p) {
                 int ref = -1;
-                for (int r = 0; r < TET_ROTATIONS; ++r) {
+                for (int r = 0; r < APL_ROTATIONS; ++r) {
                     int n = 0;
-                    for (int row = 0; row < TET_GRID; ++row) {
-                        uint16_t bits = TET_SHAPE[d][s][p][r][row];
+                    for (int row = 0; row < APL_GRID; ++row) {
+                        uint16_t bits = APL_SHAPE[d][s][p][r][row];
                         while (bits) { n += (bits & 1u); bits >>= 1; }
                     }
                     if (ref < 0) ref = n;
@@ -106,10 +106,10 @@ static void test_rotations_conservent_les_cases(void)
     CHECK(faults == 0, "les 112 formes gardent leur nombre de cases (%d écarts)", faults);
 
     /* Les sept pièces normales sont des tétrominos : quatre cases. */
-    for (int p = 0; p < TET_PIECES; ++p) {
+    for (int p = 0; p < APL_PIECES; ++p) {
         int n = 0;
-        for (int row = 0; row < TET_GRID; ++row) {
-            uint16_t bits = TET_SHAPE[0][0][p][0][row];
+        for (int row = 0; row < APL_GRID; ++row) {
+            uint16_t bits = APL_SHAPE[0][0][p][0][row];
             while (bits) { n += (bits & 1u); bits >>= 1; }
         }
         CHECK(n == 4, "la pièce %d est un tétromino (%d cases)", p, n);
@@ -124,12 +124,12 @@ static void test_les_raccourcis_sont_faux(void)
 {
     /* Aucune forme commune entre les deux difficultés : 56 sur 56 diffèrent. */
     int shared = 0;
-    for (int s = 0; s < TET_SIZES; ++s) {
-        for (int p = 0; p < TET_PIECES; ++p) {
-            for (int r = 0; r < TET_ROTATIONS; ++r) {
+    for (int s = 0; s < APL_SIZES; ++s) {
+        for (int p = 0; p < APL_PIECES; ++p) {
+            for (int r = 0; r < APL_ROTATIONS; ++r) {
                 bool identical = true;
-                for (int row = 0; row < TET_GRID; ++row) {
-                    if (TET_SHAPE[0][s][p][r][row] != TET_SHAPE[1][s][p][r][row]) {
+                for (int row = 0; row < APL_GRID; ++row) {
+                    if (APL_SHAPE[0][s][p][r][row] != APL_SHAPE[1][s][p][r][row]) {
                         identical = false;
                         break;
                     }
@@ -147,25 +147,25 @@ static void test_les_raccourcis_sont_faux(void)
      * a tranché.
      */
     int doubled = 0, pivot_doubled = 0;
-    for (int d = 0; d < TET_DIFFICULTIES; ++d) {
-        for (int p = 0; p < TET_PIECES; ++p) {
-            for (int r = 0; r < TET_ROTATIONS; ++r) {
+    for (int d = 0; d < APL_DIFFICULTIES; ++d) {
+        for (int p = 0; p < APL_PIECES; ++p) {
+            for (int r = 0; r < APL_ROTATIONS; ++r) {
                 bool ok = true;
-                for (int row = 0; row < TET_GRID / 2 && ok; ++row) {
-                    const uint16_t src = TET_SHAPE[d][0][p][r][row];
+                for (int row = 0; row < APL_GRID / 2 && ok; ++row) {
+                    const uint16_t src = APL_SHAPE[d][0][p][r][row];
                     uint16_t want = 0;
-                    for (int c = 0; c < TET_GRID / 2; ++c)
+                    for (int c = 0; c < APL_GRID / 2; ++c)
                         if (src & (1u << c)) want |= (uint16_t)(3u << (c * 2));
-                    if (TET_SHAPE[d][1][p][r][row * 2] != want) ok = false;
-                    if (TET_SHAPE[d][1][p][r][row * 2 + 1] != want) ok = false;
+                    if (APL_SHAPE[d][1][p][r][row * 2] != want) ok = false;
+                    if (APL_SHAPE[d][1][p][r][row * 2 + 1] != want) ok = false;
                 }
                 if (ok) doubled++;
-                if (TET_PIVOT[d][1][p][r][0] == TET_PIVOT[d][0][p][r][0] * 2
-                 && TET_PIVOT[d][1][p][r][1] == TET_PIVOT[d][0][p][r][1] * 2) pivot_doubled++;
+                if (APL_PIVOT[d][1][p][r][0] == APL_PIVOT[d][0][p][r][0] * 2
+                 && APL_PIVOT[d][1][p][r][1] == APL_PIVOT[d][0][p][r][1] * 2) pivot_doubled++;
             }
         }
     }
-    CHECK(doubled == TET_DIFFICULTIES * TET_PIECES * TET_ROTATIONS,
+    CHECK(doubled == APL_DIFFICULTIES * APL_PIECES * APL_ROTATIONS,
           "la forme géante est la forme normale doublée, partout (%d / 56)", doubled);
     /*
      * Mais le PIVOT ne l'est pas, dans 42 cas sur 56. C'est ce qui interdit de
@@ -181,17 +181,17 @@ static void test_les_raccourcis_sont_faux(void)
 
 static void test_depart(void)
 {
-    tetris g;
-    tetris_reset(&g, 1234, false);
+    aplomb g;
+    aplomb_reset(&g, 1234, false);
 
-    CHECK(g.phase == TET_READY, "la partie commence en sursis");
+    CHECK(g.phase == APL_READY, "la partie commence en sursis");
     CHECK(g.score == 0 && g.lines == 0, "tout est à zéro");
     CHECK(g.pieces == 1, "une pièce est entrée (%u)", g.pieces);
 
     int filled = 0;
-    for (int y = 0; y < TET_H; ++y)
-        for (int x = 0; x < TET_W; ++x)
-            if (g.cell[y][x] != TET_EMPTY) filled++;
+    for (int y = 0; y < APL_H; ++y)
+        for (int x = 0; x < APL_W; ++x)
+            if (g.cell[y][x] != APL_EMPTY) filled++;
     CHECK(filled == 0, "le plateau est vide (%d cases)", filled);
 
     /* La courbe de vitesse part de FRAME_MAX[DOWN] = 20 images à 30 Hz. */
@@ -204,12 +204,12 @@ static void test_depart(void)
  * rampe qu'on aurait trouvée jolie. */
 static void test_la_vitesse_suit_la_courbe(void)
 {
-    tetris g;
-    tetris_reset(&g, 7, false);
-    tetris_press(&g, NS_GAME_LEFT);      /* démarre la partie */
+    aplomb g;
+    aplomb_reset(&g, 7, false);
+    aplomb_press(&g, NS_GAME_LEFT);      /* démarre la partie */
 
     const float p0 = g.fall_period;
-    for (int i = 0; i < 120 * 60; ++i) tetris_tick(&g, STEP);   /* une minute */
+    for (int i = 0; i < 120 * 60; ++i) aplomb_tick(&g, STEP);   /* une minute */
     const float p60 = g.fall_period;
 
     /* FRAME_MAX * 0.99976^(30*60) = 20 * 0.99976^1800 = 12,97 images. */
@@ -220,7 +220,7 @@ static void test_la_vitesse_suit_la_courbe(void)
           (double)p60, (double)want);
 
     /* Le plancher : FRAME_MIN[DOWN] = 1 image. */
-    for (int i = 0; i < 120 * 900; ++i) tetris_tick(&g, STEP);
+    for (int i = 0; i < 120 * 900; ++i) aplomb_tick(&g, STEP);
     CHECK(g.fall_period >= 1.0f / 30.0f - 1e-5f,
           "elle ne descend jamais sous une image par ligne (%.4f)", (double)g.fall_period);
 }
@@ -229,14 +229,14 @@ static void test_la_vitesse_suit_la_courbe(void)
  * fixe, et c'est ce qu'on casserait sans s'en apercevoir. */
 static void test_independant_du_pas(void)
 {
-    tetris a, b;
-    tetris_reset(&a, 99, false);
-    tetris_reset(&b, 99, false);
-    tetris_press(&a, NS_GAME_LEFT);
-    tetris_press(&b, NS_GAME_LEFT);
+    aplomb a, b;
+    aplomb_reset(&a, 99, false);
+    aplomb_reset(&b, 99, false);
+    aplomb_press(&a, NS_GAME_LEFT);
+    aplomb_press(&b, NS_GAME_LEFT);
 
-    for (int i = 0; i < 120 * 30; ++i) tetris_tick(&a, 1.0f / 120.0f);
-    for (int i = 0; i < 40 * 30; ++i)  tetris_tick(&b, 1.0f / 40.0f);
+    for (int i = 0; i < 120 * 30; ++i) aplomb_tick(&a, 1.0f / 120.0f);
+    for (int i = 0; i < 40 * 30; ++i)  aplomb_tick(&b, 1.0f / 40.0f);
 
     CHECK(fabsf(a.fall_period - b.fall_period) < 1e-4f,
           "la courbe de vitesse est la même à 120 Hz et à 40 Hz (%.5f / %.5f)",
@@ -246,10 +246,10 @@ static void test_independant_du_pas(void)
 /* -------------------------------------------------------------------------- */
 
 /* Remplit une ligne, sauf une case, avec une couleur donnée. */
-static void fill_row(tetris *g, int y, int id, int hole)
+static void fill_row(aplomb *g, int y, int id, int hole)
 {
-    for (int x = 0; x < TET_W; ++x) {
-        g->cell[y][x] = (x == hole) ? TET_EMPTY : (int8_t)id;
+    for (int x = 0; x < APL_W; ++x) {
+        g->cell[y][x] = (x == hole) ? APL_EMPTY : (int8_t)id;
         g->cell_bonus[y][x] = 0;
     }
 }
@@ -259,11 +259,11 @@ typedef struct ledger {
     uint32_t drops, rotates, dies;
 } ledger;
 
-static void drain(tetris *g, ledger *l)
+static void drain(aplomb *g, ledger *l)
 {
     ns_game_events ev;
     SDL_zero(ev);
-    g_tetris_api.events(g, &ev);
+    g_aplomb_api.events(g, &ev);
     if (ev.blip) {
         l->rotates++;
         if (SDL_strcmp(ev.blip_kind, "rotate") != 0) l->total += 999999;
@@ -276,16 +276,16 @@ static void drain(tetris *g, ledger *l)
     if (ev.die) l->dies++;
 }
 
-static void play(tetris *g, uint64_t seed, ledger *l, float *seconds)
+static void play(aplomb *g, uint64_t seed, ledger *l, float *seconds)
 {
     memset(l, 0, sizeof *l);
-    tetris_reset(g, seed, false);
+    aplomb_reset(g, seed, false);
     float t = 0.0f;
     /* Trois minutes suffisent : le joueur automatique survit au-delà, et
      * simuler quinze minutes par graine ne prouverait rien de plus. */
     for (int i = 0; i < 120 * 180 && l->dies == 0; ++i) {
-        tetris_autopilot(g);
-        tetris_tick(g, STEP);
+        aplomb_autopilot(g);
+        aplomb_tick(g, STEP);
         t += STEP;
         drain(g, l);
     }
@@ -294,35 +294,35 @@ static void play(tetris *g, uint64_t seed, ledger *l, float *seconds)
 
 static void test_une_ligne_vaut_cent(void)
 {
-    tetris g;
-    tetris_reset(&g, 1, false);
+    aplomb g;
+    aplomb_reset(&g, 1, false);
     /* Deux couleurs différentes : sinon c'est une ligne de couleur unique, qui
      * vaut dix fois plus — et le test mesurerait autre chose. */
-    fill_row(&g, TET_H - 1, 0, -1);
-    g.cell[TET_H - 1][0] = 1;
+    fill_row(&g, APL_H - 1, 0, -1);
+    g.cell[APL_H - 1][0] = 1;
 
-    const int n = tetris_clear_lines(&g);
+    const int n = aplomb_clear_lines(&g);
     CHECK(n == 1, "une ligne pleine part (%d)", n);
     CHECK(g.score == 100, "et vaut SCORE_BASE (%lld)", (long long)g.score);
     CHECK(g.lines == 1, "elle est comptée (%u)", g.lines);
-    for (int x = 0; x < TET_W; ++x)
-        CHECK(g.cell[TET_H - 1][x] == TET_EMPTY, "la ligne est vidée en %d", x);
+    for (int x = 0; x < APL_W; ++x)
+        CHECK(g.cell[APL_H - 1][x] == APL_EMPTY, "la ligne est vidée en %d", x);
 }
 
 /*
- * Le barème de 2020, et il n'est PAS celui d'un Tetris standard : chaque ligne
+ * Le barème de 2020, et il n'est PAS celui d'un Aplomb standard : chaque ligne
  * simultanée vaut le DOUBLE de la précédente. Un quadruple vaut donc
  * 100 + 200 + 400 + 800 = 1 500.
  */
 static void test_les_lignes_simultanees_doublent(void)
 {
-    tetris g;
-    tetris_reset(&g, 1, false);
+    aplomb g;
+    aplomb_reset(&g, 1, false);
     for (int k = 0; k < 4; ++k) {
-        fill_row(&g, TET_H - 1 - k, 0, -1);
-        g.cell[TET_H - 1 - k][0] = 1;    /* casser la couleur unique */
+        fill_row(&g, APL_H - 1 - k, 0, -1);
+        g.cell[APL_H - 1 - k][0] = 1;    /* casser la couleur unique */
     }
-    const int n = tetris_clear_lines(&g);
+    const int n = aplomb_clear_lines(&g);
     CHECK(n == 4, "quatre lignes partent ensemble (%d)", n);
     CHECK(g.score == 100 + 200 + 400 + 800,
           "et valent 1 500, pas 400 (%lld)", (long long)g.score);
@@ -333,11 +333,11 @@ static void test_les_lignes_simultanees_doublent(void)
  * rapporte davantage que viser le quadruple. */
 static void test_la_couleur_unique_vaut_dix_fois(void)
 {
-    tetris g;
-    tetris_reset(&g, 1, false);
-    fill_row(&g, TET_H - 1, 3, -1);      /* dix cases de la même pièce */
+    aplomb g;
+    aplomb_reset(&g, 1, false);
+    fill_row(&g, APL_H - 1, 3, -1);      /* dix cases de la même pièce */
 
-    const int n = tetris_clear_lines(&g);
+    const int n = aplomb_clear_lines(&g);
     CHECK(n == 1, "la ligne part (%d)", n);
     CHECK(g.score == 100 * 10,
           "et vaut dix fois cent (%lld)", (long long)g.score);
@@ -346,70 +346,70 @@ static void test_la_couleur_unique_vaut_dix_fois(void)
 /* Les lignes au-dessus descendent, et rien ne se perd en route. */
 static void test_la_pile_descend(void)
 {
-    tetris g;
-    tetris_reset(&g, 1, false);
-    fill_row(&g, TET_H - 1, 0, -1);
-    g.cell[TET_H - 1][0] = 1;
+    aplomb g;
+    aplomb_reset(&g, 1, false);
+    fill_row(&g, APL_H - 1, 0, -1);
+    g.cell[APL_H - 1][0] = 1;
     /* Un témoin juste au-dessus. */
-    g.cell[TET_H - 2][4] = 5;
+    g.cell[APL_H - 2][4] = 5;
 
-    (void)tetris_clear_lines(&g);
-    CHECK(g.cell[TET_H - 1][4] == 5,
-          "la case au-dessus est descendue d'une ligne (%d)", g.cell[TET_H - 1][4]);
-    CHECK(g.cell[TET_H - 2][4] == TET_EMPTY, "et a quitté sa place");
+    (void)aplomb_clear_lines(&g);
+    CHECK(g.cell[APL_H - 1][4] == 5,
+          "la case au-dessus est descendue d'une ligne (%d)", g.cell[APL_H - 1][4]);
+    CHECK(g.cell[APL_H - 2][4] == APL_EMPTY, "et a quitté sa place");
 }
 
 /* -------------------------------------------------------------------------- */
 
 static void test_collisions(void)
 {
-    tetris g;
-    tetris_reset(&g, 5, false);
+    aplomb g;
+    aplomb_reset(&g, 5, false);
 
     /* Poussée à gauche jusqu'au mur : elle s'arrête, elle ne sort pas. */
-    for (int i = 0; i < 40; ++i) tetris_press(&g, NS_GAME_LEFT);
-    CHECK(tetris_fits(&g, &g.cur), "la pièce collée au mur gauche est valide");
-    tet_piece p = g.cur;
+    for (int i = 0; i < 40; ++i) aplomb_press(&g, NS_GAME_LEFT);
+    CHECK(aplomb_fits(&g, &g.cur), "la pièce collée au mur gauche est valide");
+    apl_piece p = g.cur;
     p.x--;
-    CHECK(!tetris_fits(&g, &p), "et un pas de plus la ferait sortir");
+    CHECK(!aplomb_fits(&g, &p), "et un pas de plus la ferait sortir");
 
-    for (int i = 0; i < 40; ++i) tetris_press(&g, NS_GAME_RIGHT);
-    CHECK(tetris_fits(&g, &g.cur), "idem à droite");
+    for (int i = 0; i < 40; ++i) aplomb_press(&g, NS_GAME_RIGHT);
+    CHECK(aplomb_fits(&g, &g.cur), "idem à droite");
     p = g.cur;
     p.x++;
-    CHECK(!tetris_fits(&g, &p), "et un pas de plus la ferait sortir");
+    CHECK(!aplomb_fits(&g, &p), "et un pas de plus la ferait sortir");
 
     /* Le fond. */
-    tetris_reset(&g, 5, false);
+    aplomb_reset(&g, 5, false);
     while (true) {
         p = g.cur;
         p.y++;
-        if (!tetris_fits(&g, &p)) break;
+        if (!aplomb_fits(&g, &p)) break;
         g.cur = p;
     }
-    CHECK(tetris_fits(&g, &g.cur), "la pièce posée au fond est valide");
+    CHECK(aplomb_fits(&g, &g.cur), "la pièce posée au fond est valide");
 }
 
 /* La descente maximale pose la pièce, tout de suite. */
 static void test_la_descente_maximale(void)
 {
-    tetris g;
-    tetris_reset(&g, 5, false);
+    aplomb g;
+    aplomb_reset(&g, 5, false);
     const uint32_t before = g.pieces;
-    tetris_press(&g, NS_GAME_ACTION);
+    aplomb_press(&g, NS_GAME_ACTION);
     CHECK(g.pieces == before + 1, "une nouvelle pièce est entrée (%u)", g.pieces);
 
     int filled = 0;
-    for (int y = 0; y < TET_H; ++y)
-        for (int x = 0; x < TET_W; ++x) if (g.cell[y][x] != TET_EMPTY) filled++;
+    for (int y = 0; y < APL_H; ++y)
+        for (int x = 0; x < APL_W; ++x) if (g.cell[y][x] != APL_EMPTY) filled++;
     CHECK(filled >= 4, "la pièce posée est dans le plateau (%d cases)", filled);
 }
 
 /* La partie finit quand une pièce ne peut plus entrer, et pas avant. */
 static void test_la_defaite(void)
 {
-    tetris g;
-    tetris_reset(&g, 5, false);
+    aplomb g;
+    aplomb_reset(&g, 5, false);
     /*
      * Plein SAUF la dernière colonne. Un plateau vraiment plein verrait ses
      * vingt lignes disparaître à la première pose, et la partie continuerait —
@@ -417,16 +417,16 @@ static void test_la_defaite(void)
      * empêche toute ligne de se compléter tout en ne laissant aucune place à
      * une pièce.
      */
-    for (int y = 0; y < TET_H; ++y)
-        for (int x = 0; x < TET_W - 1; ++x) g.cell[y][x] = 0;
+    for (int y = 0; y < APL_H; ++y)
+        for (int x = 0; x < APL_W - 1; ++x) g.cell[y][x] = 0;
 
-    for (int i = 0; i < 40 && g.phase != TET_DEAD; ++i) tetris_press(&g, NS_GAME_ACTION);
-    CHECK(g.phase == TET_DEAD, "un plateau sans place finit la partie");
+    for (int i = 0; i < 40 && g.phase != APL_DEAD; ++i) aplomb_press(&g, NS_GAME_ACTION);
+    CHECK(g.phase == APL_DEAD, "un plateau sans place finit la partie");
 
     /* Et plus rien ne bouge. */
     const uint32_t pieces = g.pieces;
-    tetris_press(&g, NS_GAME_ACTION);
-    tetris_press(&g, NS_GAME_LEFT);
+    aplomb_press(&g, NS_GAME_ACTION);
+    aplomb_press(&g, NS_GAME_LEFT);
     CHECK(g.pieces == pieces, "une partie finie ne se joue plus");
 }
 
@@ -437,7 +437,7 @@ static void test_la_defaite(void)
 static void test_le_journal_vaut_le_score(void)
 {
     for (uint64_t seed = 0; seed < 8; ++seed) {
-        tetris g;
+        aplomb g;
         ledger l;
         play(&g, 400u + seed, &l, NULL);
         if (l.total != g.score) {
@@ -459,18 +459,18 @@ static void test_le_journal_vaut_le_score(void)
  */
 static void test_la_fin_est_annoncee(void)
 {
-    tetris g;
-    tetris_reset(&g, 5, false);
-    for (int y = 0; y < TET_H; ++y)
-        for (int x = 0; x < TET_W - 1; ++x) g.cell[y][x] = 0;
+    aplomb g;
+    aplomb_reset(&g, 5, false);
+    for (int y = 0; y < APL_H; ++y)
+        for (int x = 0; x < APL_W - 1; ++x) g.cell[y][x] = 0;
 
     ledger l;
     memset(&l, 0, sizeof l);
-    for (int i = 0; i < 40 && g.phase != TET_DEAD; ++i) {
-        tetris_press(&g, NS_GAME_ACTION);
+    for (int i = 0; i < 40 && g.phase != APL_DEAD; ++i) {
+        aplomb_press(&g, NS_GAME_ACTION);
         drain(&g, &l);
     }
-    CHECK(g.phase == TET_DEAD, "la partie est finie");
+    CHECK(g.phase == APL_DEAD, "la partie est finie");
 
     for (int i = 0; i < 8; ++i) drain(&g, &l);
     CHECK(l.dies == 1, "et elle l'annonce une fois exactement (%u)", l.dies);
@@ -479,7 +479,7 @@ static void test_la_fin_est_annoncee(void)
 }
 
 /*
- * Les cadences de `rulesTable["tetris"]` : « lines » 4/s, « drop » 6/s,
+ * Les cadences de `rulesTable["aplomb"]` : « lines » 4/s, « drop » 6/s,
  * « rotate » 30/s. Le joueur automatique produit les captures ; s'il dépasse,
  * toute partie capturée est refusée par l'anti-triche — et c'est le genre de
  * défaut qu'on ne voit pas sans serveur en face.
@@ -487,7 +487,7 @@ static void test_la_fin_est_annoncee(void)
 static void test_les_cadences_du_serveur(void)
 {
     for (uint64_t seed = 0; seed < 4; ++seed) {
-        tetris g;
+        aplomb g;
         ledger l;
         float seconds = 0.0f;
         play(&g, 1200u + seed, &l, &seconds);
@@ -509,7 +509,7 @@ static void test_les_cadences_du_serveur(void)
 
 static void test_determinisme(void)
 {
-    tetris a, b;
+    aplomb a, b;
     ledger la, lb;
     play(&a, 31337, &la, NULL);
     play(&b, 31337, &lb, NULL);
@@ -520,7 +520,7 @@ static void test_determinisme(void)
           "même partie (%u/%u lignes, %u/%u pièces)", a.lines, b.lines, a.pieces, b.pieces);
     CHECK(memcmp(a.cell, b.cell, sizeof a.cell) == 0, "et le même plateau");
 
-    tetris c;
+    aplomb c;
     ledger lc;
     play(&c, 31338, &lc, NULL);
     CHECK(memcmp(a.cell, c.cell, sizeof a.cell) != 0,
@@ -533,16 +533,16 @@ static void test_le_robot_joue(void)
 {
     uint32_t lines = 0;
     for (uint64_t seed = 0; seed < 6; ++seed) {
-        tetris g;
+        aplomb g;
         ledger l;
         play(&g, 2000u + seed, &l, NULL);
         lines += g.lines;
 
         /* Aucune case ne porte un identifiant impossible. */
-        for (int y = 0; y < TET_H; ++y)
-            for (int x = 0; x < TET_W; ++x)
-                if (g.cell[y][x] != TET_EMPTY
-                    && (g.cell[y][x] < 0 || g.cell[y][x] >= TET_PIECES)) {
+        for (int y = 0; y < APL_H; ++y)
+            for (int x = 0; x < APL_W; ++x)
+                if (g.cell[y][x] != APL_EMPTY
+                    && (g.cell[y][x] < 0 || g.cell[y][x] >= APL_PIECES)) {
                     CHECK(false, "case (%d,%d) = %d", x, y, g.cell[y][x]);
                     return;
                 }
@@ -553,19 +553,19 @@ static void test_le_robot_joue(void)
 /* Le vocabulaire émis tient dans celui déclaré. */
 static void test_le_vocabulaire(void)
 {
-    tetris g;
+    aplomb g;
     ledger l;
     (void)l;
-    tetris_reset(&g, 4242, false);
+    aplomb_reset(&g, 4242, false);
 
     const char *seen[8] = { 0 };
     int count = 0;
     for (int i = 0; i < 120 * 300; ++i) {
-        tetris_autopilot(&g);
-        tetris_tick(&g, STEP);
+        aplomb_autopilot(&g);
+        aplomb_tick(&g, STEP);
         ns_game_events ev;
         SDL_zero(ev);
-        g_tetris_api.events(&g, &ev);
+        g_aplomb_api.events(&g, &ev);
         const char *kinds[2] = { ev.blip ? ev.blip_kind : NULL,
                                  ev.score ? ev.score_kind : NULL };
         for (int k = 0; k < 2; ++k) {
@@ -578,7 +578,7 @@ static void test_le_vocabulaire(void)
     }
     for (int i = 0; i < count; ++i) {
         bool declared = false;
-        for (const char *const *k = g_tetris_api.event_kinds; *k; ++k)
+        for (const char *const *k = g_aplomb_api.event_kinds; *k; ++k)
             if (SDL_strcmp(*k, seen[i]) == 0) declared = true;
         CHECK(declared, "« %s » est émis : il doit être déclaré", seen[i]);
     }

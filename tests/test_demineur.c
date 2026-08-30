@@ -116,7 +116,10 @@ static void test_depart(void)
     CHECK(bombs == 0, "la grille est vide tant qu'on n'a pas joué (%d)", bombs);
 
     CHECK(DEM_ROWS == 16 && DEM_COLS == 25, "la grille de 2020 : 16 x 25");
-    CHECK(DEM_BOMBS == 100, "cent bombes, soit le quart des cases (%d)", DEM_BOMBS);
+    CHECK(DEM_BOMBS_HARD == 100, "cent bombes sur la borne dure, le quart des cases (%d)",
+          DEM_BOMBS_HARD);
+    CHECK(DEM_BOMBS_EASY == 60, "soixante bombes sur la borne ordinaire, 15 %% (%d)",
+          DEM_BOMBS_EASY);
 }
 
 /*
@@ -148,21 +151,29 @@ static void test_premiere_case_toujours_sure(void)
 
 static void test_cent_bombes_posees(void)
 {
-    for (uint64_t seed = 0; seed < 40; ++seed) {
-        demineur g;
-        demineur_reset(&g, seed, false);
-        demineur_press(&g, NS_GAME_ACTION);
-        int bombs = 0;
-        for (int r = 0; r < DEM_ROWS; ++r)
-            for (int c = 0; c < DEM_COLS; ++c)
-                if (g.bomb[r][c]) bombs++;
-        if (bombs != DEM_BOMBS) {
-            CHECK(false, "graine %llu : %d bombes au lieu de %d",
-                  (unsigned long long)seed, bombs, DEM_BOMBS);
-            return;
+    /* Les DEUX difficultés : la borne ordinaire en pose soixante, la dure les
+     * cent de 2020. Ne vérifier qu'un seul compte laisserait l'autre libre. */
+    for (int hard = 0; hard < 2; ++hard) {
+        const int want = hard ? DEM_BOMBS_HARD : DEM_BOMBS_EASY;
+        for (uint64_t seed = 0; seed < 40; ++seed) {
+            demineur g;
+            demineur_reset(&g, seed, hard != 0);
+            demineur_press(&g, NS_GAME_ACTION);
+            int bombs = 0;
+            for (int r = 0; r < DEM_ROWS; ++r)
+                for (int c = 0; c < DEM_COLS; ++c)
+                    if (g.bomb[r][c]) bombs++;
+            if (bombs != want) {
+                CHECK(false, "hard=%d graine %llu : %d bombes au lieu de %d",
+                      hard, (unsigned long long)seed, bombs, want);
+                return;
+            }
+            CHECK(demineur_bombs(&g) == want,
+                  "demineur_bombs annonce le compte de la difficulté (%d)",
+                  demineur_bombs(&g));
         }
     }
-    CHECK(true, "quarante graines posent exactement cent bombes");
+    CHECK(true, "quarante graines par difficulté posent le bon compte de bombes");
 }
 
 /*
@@ -289,9 +300,9 @@ static void test_la_victoire_ne_mange_pas_la_cascade(void)
     for (int i = 0; i < 8; ++i) drain(&g, &l);
 
     CHECK(l.wins == 1, "la victoire est annoncée une fois (%u)", l.wins);
-    CHECK(l.cells == (uint32_t)(DEM_ROWS * DEM_COLS - DEM_BOMBS),
+    CHECK(l.cells == (uint32_t)(DEM_ROWS * DEM_COLS - demineur_bombs(&g)),
           "les %d cases sûres sont toutes journalisées (%u)",
-          DEM_ROWS * DEM_COLS - DEM_BOMBS, l.cells);
+          DEM_ROWS * DEM_COLS - demineur_bombs(&g), l.cells);
     CHECK(l.dies == 1, "et la fin de partie est annoncée après elle (%u)", l.dies);
     CHECK(l.total == g.score,
           "le serveur recalcule le même score (%lld contre %lld)",
@@ -520,6 +531,34 @@ static void test_le_robot_deduit(void)
     CHECK(best > 50, "sa meilleure partie en ouvre %u", best);
 }
 
+/*
+ * LA PARTIE PEUT SE GAGNER — ce qui n'allait pas de soi.
+ *
+ * Avec les cent bombes de 2020 sur quatre cents cases, soit 25 % — plus dense
+ * que la grille « expert » de la version de référence — le solveur de
+ * `demineur.c` perdait DEUX CENTS parties sur deux cents. Zéro victoire, onze
+ * secondes de moyenne. `PTS_WIN`, l'écran « GAGNE » et toute la branche
+ * `DEM_WON` étaient du code inatteignable : le jeu n'avait pas de fin heureuse.
+ *
+ * La borne ordinaire est passée à 15 %, et le même solveur en gagne six sur
+ * dix. Ce test garde la propriété qui compte — qu'il existe une manche à
+ * gagner — sans exiger un taux précis : un seuil bas suffit à distinguer « on
+ * peut gagner » de « on ne peut jamais ».
+ */
+static void test_la_partie_se_gagne(void)
+{
+    int gagnees = 0;
+    const int parties = 30;
+    for (int i = 0; i < parties; ++i) {
+        demineur g;
+        ledger l;
+        play(&g, 9000u + (uint64_t)i * 131u, false, &l, NULL);
+        if (g.phase == DEM_WON) gagnees++;
+    }
+    CHECK(gagnees >= parties / 4,
+          "la borne ordinaire se gagne (%d parties sur %d)", gagnees, parties);
+}
+
 /* Le score exposé au classement ne descend jamais sous zéro, et il tient dans
  * un `uint32_t`. */
 static void test_le_score_expose(void)
@@ -559,6 +598,7 @@ int main(void)
     test_le_robot_joue_a_cadence_humaine();
     test_le_vocabulaire_est_complet();
     test_le_robot_deduit();
+    test_la_partie_se_gagne();
     test_le_score_expose();
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);

@@ -168,6 +168,40 @@ static void test_l_oubli_ne_tue_pas(void)
     CHECK(g.combo == 0, "mais il casse le combo (%u)", g.combo);
 }
 
+/*
+ * Mais TROP d'oublis tuent — dans les deux modes, et c'est nouveau.
+ *
+ * Le mode normal n'avait aucune condition de défaite : `g->hard &&` gardait la
+ * limite pour la seule borne difficile. Mesuré, cinq graines : le pilote
+ * automatique tenait 300 s sans mourir, et un joueur qui ne touchait à RIEN en
+ * faisait autant, indéfiniment, avec zéro point. Un jeu qu'on ne peut pas
+ * perdre n'a pas de score qui compte.
+ *
+ * Ce test tient la règle par son bout le plus simple : on ne joue pas, et la
+ * partie doit finir — quelle que soit la borne.
+ */
+static void test_ne_rien_jouer_finit_par_tuer(void)
+{
+    for (int hard = 0; hard < 2; ++hard) {
+        piano g;
+        piano_reset(&g, 3, hard != 0);
+        piano_press(&g, NS_GAME_ACTION);
+
+        int steps = 0;
+        while (g.phase != PN_DEAD && steps < 120 * 120) { piano_tick(&g, STEP); steps++; }
+
+        CHECK(g.phase == PN_DEAD,
+              "%s : ne rien jouer termine la partie (%.1f s)",
+              hard ? "hard  " : "normal", (double)steps / 120.0);
+        CHECK(g.fail_reason == PN_FAIL_TOO_MANY_MISSES,
+              "%s : et c'est bien l'oubli qui l'a terminée (%d)",
+              hard ? "hard  " : "normal", (int)g.fail_reason);
+        CHECK(g.misses == (uint32_t)(hard ? 3 : 12),
+              "%s : la limite est celle de la borne (%u oublis)",
+              hard ? "hard  " : "normal", g.misses);
+    }
+}
+
 /* La partition boucle et accélère : sans ça, treize notes font cinq secondes de
  * jeu et le score ne veut rien dire. */
 static void test_la_partition_boucle_et_accelere(void)
@@ -332,6 +366,7 @@ int main(void)
     test_la_fausse_note_termine();
     test_le_bareme();
     test_l_oubli_ne_tue_pas();
+    test_ne_rien_jouer_finit_par_tuer();
     test_la_partition_boucle_et_accelere();
     test_le_hardcore();
     test_le_journal_vaut_le_score();

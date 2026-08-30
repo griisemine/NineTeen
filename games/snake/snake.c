@@ -828,10 +828,26 @@ void snake_draw(ns_sprite *s, const snake *g, const snake_art *a,
     c.ox = (logical_w - SNAKE_W * c.scale) * 0.5f;
     c.oy = (logical_h - SNAKE_H * c.scale) * 0.5f;
 
-    /* --- le fond -------------------------------------------------------- */
+    /* --- le fond --------------------------------------------------------
+     *
+     * LÉGÈREMENT ASSOMBRI — et l'écart utile est ailleurs, ce qui a été mesuré.
+     *
+     * La planche de 2020 est un vert vif quasi uniforme ; sur la dalle d'une
+     * borne — 512 x 288 — la capture montrait un aplat lumineux sur lequel le
+     * serpent, vert plus sombre, ne se détachait pas.
+     *
+     * Assombrir le FOND seul n'y suffit pas, et le compte le dit : mesurée sur
+     * la capture, la luminance passait de 190 à 154 pour le terrain mais de 159
+     * à 131 pour le corps — l'écart entre les deux TOMBAIT de 31 à 23. Teinter
+     * le décor déplace tout le monde ensemble.
+     *
+     * Ce qui sépare vraiment, c'est de teinter le SERPENT dans l'autre sens :
+     * voir `body_tint` plus bas. Le fond ne descend donc que d'un cran, pour le
+     * score et les fruits, et le gros de l'écart est pris sur le corps. */
+    static const float field_tint[4] = { 0.72f, 0.78f, 0.72f, 1.0f };
     if (a->ready && a->background.handle) {
         blit(&c, &a->background, 0, 0, SNAKE_W, SNAKE_H, 0, 0, SNAKE_W, SNAKE_H,
-             SNAKE_W, SNAKE_H, NULL);
+             SNAKE_W, SNAKE_H, field_tint);
     } else {
         static const float green[4] = { 0.10f, 0.24f, 0.09f, 1.0f };
         ns_sprite_rect(s, c.ox, c.oy, SNAKE_W * c.scale, SNAKE_H * c.scale, green);
@@ -885,19 +901,49 @@ void snake_draw(ns_sprite *s, const snake *g, const snake_art *a,
                          && fmodf(g->invincible * 6.0f, 1.0f) < 0.5f;
     const float row = invincible ? (blink_body ? 2.0f : 1.0f) : 0.0f;
 
+    /*
+     * LE CORPS EST TEINTÉ FROID, et c'est là qu'on gagne la lisibilité.
+     *
+     * Le terrain est un vert-jaune vif ; le corps sort de la même famille de
+     * verts, et sur la dalle d'une borne les deux se confondent — la capture
+     * montrait un serpent qu'il fallait chercher. Un bleu ardoise s'oppose au
+     * terrain à la fois en TEINTE et en luminance, sans coûter un seul quad de
+     * plus : c'est la même planche, avec une couleur de sommet.
+     *
+     * On ne teinte pas quand l'invincibilité clignote : ces deux lignes-là de
+     * la planche existent précisément pour se voir, et les recolorer effacerait
+     * l'avertissement.
+     */
+    static const float body_tint[4] = { 0.38f, 0.52f, 0.85f, 1.0f };
+    const float *body_col = invincible ? NULL : body_tint;
+
     for (uint32_t i = g->parts - 1; i >= SNAKE_PRE; --i) {
         const snake_part *b = &g->part[i];
         const float r = BODY_RADIUS + b->radius;
         blit(&p, &a->body, b->x - r, b->y - r, r * 2.0f, r * 2.0f,
-             0.0f, row * CELL, CELL, CELL, CELL * 2.0f, CELL * 3.0f, NULL);
+             0.0f, row * CELL, CELL, CELL, CELL * 2.0f, CELL * 3.0f, body_col);
         if (i == SNAKE_PRE) break;   /* uint32_t : pas de i >= 0 possible */
     }
-    /* La tête, sur la seconde colonne de la planche. */
+    /* La tête, sur la seconde colonne de la planche.
+     *
+     * Elle porte désormais un HALO, parce que la capture en borne posait la
+     * question qu'un jeu ne doit jamais poser : « lequel de ces ronds est
+     * moi ? ». Corps et tête sortent de la même planche, aux mêmes deux
+     * couleurs ; à 512 px de large le serpent est un trait uniforme dont on ne
+     * voit pas par quel bout il avance — et c'est le bout qu'on pilote.
+     *
+     * Un seul quad, dessiné DESSOUS : ça ne coûte rien au lot de sprites et ça
+     * ne cache pas le dessin d'origine. */
     {
         const snake_part *h = &g->part[SNAKE_PRE];
         const float r = BODY_RADIUS + h->radius;
+        const float halo[4] = { 1.0f, 0.94f, 0.35f, invincible ? 0.85f : 0.60f };
+        const float hr = r * 1.45f;
+        ns_sprite_texture(s, NULL);
+        ns_sprite_rect(s, p.ox + (h->x - hr) * p.scale, p.oy + (h->y - hr) * p.scale,
+                       hr * 2.0f * p.scale, hr * 2.0f * p.scale, halo);
         blit(&p, &a->body, h->x - r, h->y - r, r * 2.0f, r * 2.0f,
-             CELL, row * CELL, CELL, CELL, CELL * 2.0f, CELL * 3.0f, NULL);
+             CELL, row * CELL, CELL, CELL, CELL * 2.0f, CELL * 3.0f, body_col);
     }
 
     /* --- les scores qui s'envolent --------------------------------------- */
@@ -931,8 +977,38 @@ void snake_draw(ns_sprite *s, const snake *g, const snake_art *a,
              0.0f, bh - fill, bw, fill, bw, bh, NULL);
     }
 
-    draw_number(&c, a, (int64_t)(g->score_shown + (g->score_shown < 0 ? -0.5f : 0.5f)),
-                SNAKE_W * 0.5f, 26.0f, 2.2f);
+    /* Le score : les chiffres font 12 x 18 dans la planche, donc 26 x 40 px de
+     * repère à l'échelle 2,2 — soit 7 x 11 px sur la dalle 512 x 288 d'une
+     * borne, ce que la capture montrait comme une tache. Flappy dessine les
+     * MÊMES chiffres à 6,4 et se lit. 4,5 met le score de Snake au-dessus du
+     * seuil sans mordre sur le terrain. */
+    /*
+     * UN CARTOUCHE SOUS LE SCORE.
+     *
+     * Les chiffres sont blancs, le terrain est un vert clair : sur la dalle
+     * d'une borne, du blanc sur du vert à 190 de luminance ne se lit pas. Un
+     * fond sombre translucide donne au nombre le contraste que le terrain lui
+     * refuse, et il coûte un quad.
+     *
+     * Et il descend à 96 : à 4,5 les chiffres font 81 px de haut, si bien qu'à
+     * 18 ils passaient sous le bord haut de la dalle — la capture les montrait
+     * coupés par le cadre du tube.
+     */
+    {
+        const int64_t shown = (int64_t)(g->score_shown
+                                        + (g->score_shown < 0 ? -0.5f : 0.5f));
+        char tmp[24];
+        SDL_snprintf(tmp, sizeof tmp, "%lld", (long long)shown);
+        const float dw = DIGIT_W * 4.5f * (float)SDL_strlen(tmp);
+        const float pad = 22.0f;
+        static const float plate[4] = { 0.04f, 0.10f, 0.03f, 0.62f };
+        ns_sprite_texture(s, NULL);
+        ns_sprite_rect(s, c.ox + (SNAKE_W * 0.5f - dw * 0.5f - pad) * c.scale,
+                       c.oy + (96.0f - pad * 0.5f) * c.scale,
+                       (dw + pad * 2.0f) * c.scale,
+                       (DIGIT_H * 4.5f + pad) * c.scale, plate);
+        draw_number(&c, a, shown, SNAKE_W * 0.5f, 96.0f, 4.5f);
+    }
 
     static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     static const float amber[4] = { 1.0f, 0.82f, 0.30f, 1.0f };
