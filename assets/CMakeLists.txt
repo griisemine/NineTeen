@@ -1233,8 +1233,9 @@ add_custom_command(
 file(GLOB ROOM_SOUNDS "${SRC_ROOM}/sounds/*.wav" "${SRC_LEGACY}/assets/*.wav")
 
 # `stepgen` écrit dans le MÊME répertoire, juste après la copie : la banque de
-# pas par matériau et les trois nappes d'ambiance sont synthétisées à chaque
-# build plutôt que commitées. Elles sortent ici et pas dans un répertoire à part
+# pas par matériau, les trois nappes d'ambiance, la chasse d'eau, le coup sur
+# une borne et les trois bruits de jeton — vingt-six fichiers — sont synthétisés
+# à chaque build plutôt que commités. Elles sortent ici et pas dans un répertoire à part
 # — contrairement à `sideart` — parce qu'aucun outil ne vérifie l'exhaustivité de
 # `sounds/` comme `roomgen` le fait pour les textures : il n'y a donc rien à
 # fausser en mélangeant les deux origines, et le moteur n'a qu'un chemin à
@@ -1246,7 +1247,7 @@ add_custom_command(
     COMMAND stepgen "${GEN}/sounds"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/sounds/.stamp"
     DEPENDS ${ROOM_SOUNDS} stepgen
-    COMMENT "Copie des sons, puis synthèse des pas et des nappes d'ambiance"
+    COMMENT "Copie des sons, puis synthèse des pas, des nappes et des jetons"
     VERBATIM
 )
 

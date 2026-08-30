@@ -886,6 +886,257 @@ static size_t sg_render_coup(float *out, size_t cap)
 }
 
 /* ==========================================================================
+ * LE JETON — trois bruits, et pourquoi ce n'est pas un seul
+ * ==========================================================================
+ * Un jeton fait trois choses distinctes dans cette salle, et les confondre
+ * s'entend : on l'INSERE dans une borne, le monnayeur le RECRACHE quand il ne
+ * passe pas, et il TOMBE DANS LE GODET quand on en prend au distributeur. Le
+ * meme fichier joue trois fois ne raconterait qu'une chose, et il la
+ * raconterait faux deux fois sur trois.
+ *
+ * Le modele : un disque de metal, pas une corde
+ * ---------------------------------------------
+ * Une corde vibre sur des harmoniques ENTIERES, et c'est ce qui lui donne une
+ * note. Un disque, non : ses modes de flexion sont INHARMONIQUES — pour une
+ * plaque circulaire libre, les premiers tombent autour de 1 : 1,72 : 2,31 —
+ * et c'est exactement pour ca qu'un jeton qui tombe ne CHANTE pas. Il tinte.
+ * Trois modes suffisent : c'est le meme raisonnement que les deux modes de
+ * tole du coup de poing, ou un resonateur unique donnait une note.
+ *
+ * Les modes sont haut places — le fondamental du jeton insere est a 2 100 Hz —
+ * parce qu'un disque de deux centimetres et demi est petit. C'est cette hauteur
+ * qui rend le jeton BRILLANT, l'exact contraire du coup de poing qui est mat :
+ * mesures par le meme `sg_brillance`, le coup vaut 0,45 fois un bruit blanc et
+ * les jetons 3,08, 13,09 et 15,14. Le rendu VERIFIE ces deux proprietes — la
+ * brillance et le compte de rebonds — et refuse d'ecrire un fichier qui ment.
+ *
+ * Les rebonds, et l'intervalle qui RACCOURCIT
+ * -------------------------------------------
+ * C'est le detail qui fait toute la difference entre « ca tombe » et « ca sonne
+ * trois fois ». Une piece qui rebondit perd de l'energie a chaque choc, donc
+ * remonte moins haut, donc RETOMBE PLUS TOT : l'intervalle se resserre. Un
+ * intervalle constant s'entendrait comme un mecanisme regulier — c'est
+ * l'argument des glouglous de la chasse et des tripes du coup de poing, la
+ * troisieme fois qu'il sert ici.
+ *
+ * Chaque choc a donc son propre banc de resonateurs, et non un banc commun :
+ * une enveloppe unique ancree a t = 0 eteindrait les rebonds tardifs, et un
+ * resonateur laisse a son seul Q sonnerait tres court — il faudrait un Q de
+ * 400 pour tenir soixante millisecondes a 2 100 Hz, ce que ce filtre a variable
+ * d'etat ne tient pas proprement. Douze filtres au total, pour trois fichiers
+ * rendus une fois au build : ca ne coute rien.
+ *
+ * Ce qui reste sous le tintement
+ * ------------------------------
+ * LE BAC. La piece ne rebondit pas dans le vide : elle rebondit SUR quelque
+ * chose, et ce quelque chose sonne. Une caisse de monnayeur est un coffret de
+ * tole — grave et long ; un godet de distributeur est petit — plus aigu et plus
+ * court ; le clapet de refus est amorti — il n'a presque rien a rendre. C'est
+ * cette resonance-la, et non la piece, qui distingue les trois lieux.
+ */
+
+/* Trois modes, quatre chocs au plus : un contact d'entree et trois rebonds. */
+#define SG_COIN_MODES 3
+#define SG_COIN_CHOCS 4
+
+/*
+ * Les rapports inharmoniques d'un disque libre. Ecrits une fois pour les trois
+ * pieces : c'est le MEME jeton qui tombe dans les trois fichiers, seuls le lieu
+ * et la maniere changent. Leur donner trois jeux de rapports ferait entendre
+ * trois pieces differentes, ce qui est l'inverse de ce qu'on cherche.
+ */
+static const float g_coin_ratio[SG_COIN_MODES] = { 1.00f, 1.72f, 2.31f };
+
+typedef struct sg_coin {
+    const char *file;
+    const char *quoi;        /* ce qu'on entend, pour le journal */
+    float length;
+
+    float base_hz;                       /* le mode fondamental du disque */
+    float mode_q[SG_COIN_MODES];
+    float mode_gain[SG_COIN_MODES];
+    float mode_tau[SG_COIN_MODES];       /* les modes hauts s'eteignent avant */
+
+    int   chocs;             /* le contact d'entree, plus les rebonds */
+    float gap;               /* intervalle du premier rebond, en secondes */
+    float gap_ratio;         /* < 1 : il RACCOURCIT, c'est le point */
+    float chute;             /* l'energie que garde un rebond sur le precedent */
+    float excit_tau;         /* duree du contact : dur, ou amorti par le clapet */
+
+    float bac_gain;          /* ce sur quoi la piece rebondit */
+    float bac_hz, bac_q, bac_tau;
+
+    float peak;              /* pic vise a l'ecriture */
+
+    /*
+     * CE QU'ON EXIGE DU FICHIER PRODUIT, verifie et non promis.
+     *
+     * Le nombre d'attaques est BORNE DES DEUX COTES, et ce n'est pas de la
+     * coquetterie : un jeton refuse n'a qu'un seul choc — c'est ce qui le
+     * distingue a l'oreille des deux autres — donc lui demander « au moins
+     * deux » reviendrait a exiger le defaut qu'on cherche a eviter. Chaque
+     * fichier declare donc ce qu'il pretend etre, et le refus tombe des qu'il
+     * ment dans un sens ou dans l'autre.
+     */
+    int   attaques_min, attaques_max;
+    double brillance_min;
+} sg_coin;
+
+static const sg_coin g_coins[] = {
+    /*
+     * INSERE — la piece glisse dans la fente, bascule dans le mecanisme et
+     * tombe au fond de la caisse. Trois chocs apres le contact d'entree, un
+     * intervalle qui passe de 62 a 30 ms, et la caisse de tole du monnayeur a
+     * 190 Hz sous le tout. C'est le plus long des trois parce que c'est le seul
+     * ou la piece tombe VRAIMENT : elle a de la hauteur a perdre.
+     */
+    { "jeton_insere.wav", "insere dans la fente", 0.42f,
+      2100.0f,
+      { 26.0f, 20.0f, 16.0f },
+      { 1.00f, 0.62f, 0.34f },
+      { 0.090f, 0.055f, 0.032f },
+      4, 0.062f, 0.62f, 0.55f, 0.00050f,
+      0.55f, 190.0f, 4.0f, 0.075f,
+      0.88f,
+      /* MESURE : 13,09 fois un bruit blanc, 3 attaques a 0, 61 et 99 ms —
+       * l'intervalle passe donc de 61 a 38 ms, il RACCOURCIT. Le quatrieme
+       * choc existe dans le rendu (a 124 ms, un sixieme de l'energie du
+       * premier) et reste sous le declencheur : il s'entend comme une queue,
+       * pas comme un rebond, ce qui est exactement son role. */
+      3, 5, 6.00 },
+
+    /*
+     * REFUSE — le monnayeur n'en veut pas et le rend par le clapet.
+     *
+     * UN SEUL CHOC, et c'est toute la difference : la piece ne tombe pas, elle
+     * est POUSSEE hors du mecanisme et retenue par un clapet amorti. Le contact
+     * dure quatre fois plus longtemps que celui d'une piece qui rebondit sur de
+     * la tole (2 ms contre 0,5), ce qui est exactement ce qui rend le coup de
+     * poing mat dans la section precedente — un contact long filtre l'aigu. Le
+     * fondamental descend a 1 550 Hz : la piece est tenue, donc ses modes hauts
+     * sont etouffes avant de s'etablir.
+     */
+    { "jeton_refuse.wav", "refuse par le monnayeur", 0.22f,
+      1550.0f,
+      { 14.0f, 11.0f, 9.0f },
+      { 1.00f, 0.40f, 0.16f },
+      { 0.030f, 0.018f, 0.010f },
+      1, 0.050f, 1.00f, 1.00f, 0.00200f,
+      0.34f, 260.0f, 2.6f, 0.040f,
+      0.72f,
+      /* MESURE : 3,08 fois un bruit blanc — quatre fois moins brillant que les
+       * deux autres, et sept fois plus que le coup de poing. C'est bien la
+       * place qu'on lui cherchait : du metal, mais etouffe. Une seule attaque,
+       * a 0 ms. */
+      1, 1, 1.60 },
+
+    /*
+     * BAC — la piece rendue par le distributeur, qui tombe dans le godet.
+     *
+     * Deux rebonds seulement et des intervalles courts : le godet est petit, la
+     * piece n'a que quelques centimetres a tomber. Sa resonance est HAUTE —
+     * 520 Hz contre 190 pour la caisse — parce qu'un petit volume sonne haut,
+     * et c'est elle qui fait entendre qu'on prend une piece plutot qu'on n'en
+     * met une. Le fichier est court : c'est celui qu'on joue CINQ FOIS de
+     * suite quand le monnayeur rend cinq jetons, et un fichier qui traine
+     * empilerait cinq queues.
+     */
+    { "jeton_bac.wav", "tombe dans le godet", 0.26f,
+      2450.0f,
+      { 22.0f, 17.0f, 14.0f },
+      { 1.00f, 0.55f, 0.30f },
+      { 0.048f, 0.030f, 0.018f },
+      3, 0.041f, 0.66f, 0.48f, 0.00045f,
+      0.42f, 520.0f, 5.0f, 0.045f,
+      0.85f,
+      /* MESURE : 15,14 fois un bruit blanc — le plus brillant des trois, ce que
+       * le godet explique — et 3 attaques a 0, 39 et 67 ms, soit 39 puis 28 ms
+       * d'intervalle. */
+      2, 4, 6.00 },
+};
+
+#define SG_COIN_COUNT ((int)(sizeof g_coins / sizeof g_coins[0]))
+
+static size_t sg_render_coin(const sg_coin *c, float *out, size_t cap)
+{
+    const size_t frames = (size_t)(c->length * (float)SG_RATE);
+    if (frames > cap) tool_fatalf("tampon trop petit pour « %s »", c->file);
+    if (c->chocs < 1 || c->chocs > SG_COIN_CHOCS) {
+        tool_fatalf("« %s » declare %d chocs, hors de 1..%d", c->file,
+                    c->chocs, SG_COIN_CHOCS);
+    }
+
+    /* La graine melange le nom du fichier : les trois pieces ne partagent
+     * jamais leur bruit, et chacune se regenere a l'identique. */
+    sg_rng r;
+    uint64_t h = 0xCB1Eull;
+    for (const char *p = c->file; *p; ++p) h = h * 131ull + (uint64_t)(unsigned char)*p;
+    sg_seed(&r, h);
+
+    /*
+     * Les instants des chocs. L'intervalle est multiplie par `gap_ratio` a
+     * chaque rebond, donc il DECROIT geometriquement — la piece remonte moins
+     * haut, donc elle retombe plus tot. L'energie decroit de son cote, et les
+     * deux ensemble sont ce qui s'entend comme une chute.
+     */
+    float at[SG_COIN_CHOCS], amp[SG_COIN_CHOCS];
+    {
+        float t = 0.0f, gap = c->gap, e = 1.0f;
+        for (int k = 0; k < c->chocs; ++k) {
+            at[k] = t; amp[k] = e;
+            t += gap; gap *= c->gap_ratio; e *= c->chute;
+        }
+    }
+
+    /* Un banc de resonateurs PAR CHOC : voir l'en-tete de section. */
+    sg_svf mode[SG_COIN_CHOCS][SG_COIN_MODES];
+    sg_svf bac[SG_COIN_CHOCS];
+    for (int k = 0; k < c->chocs; ++k) {
+        for (int m = 0; m < SG_COIN_MODES; ++m) {
+            sg_svf_set(&mode[k][m], c->base_hz * g_coin_ratio[m], c->mode_q[m]);
+        }
+        sg_svf_set(&bac[k], c->bac_hz, c->bac_q);
+    }
+
+    /* Le retrait du continu, meme raison que pour le coup : une resonance basse
+     * excitee par du bruit laisse une composante lente qui deplace le zero du
+     * fichier sans s'entendre, et mange de la dynamique a la normalisation. */
+    sg_pole dc; sg_pole_set(&dc, 30.0f);
+
+    for (size_t i = 0; i < frames; ++i) {
+        const float t = (float)i / (float)SG_RATE;
+        const float n = sg_noise(&r);
+
+        float v = 0.0f;
+        for (int k = 0; k < c->chocs; ++k) {
+            const float d = t - at[k];
+            if (d < 0.0f) continue;
+
+            /* L'excitation de CE choc : une salve courte, d'autant plus courte
+             * que le contact est dur. C'est elle qui porte le timbre du
+             * contact ; le disque, lui, ne fait que repondre. */
+            const float choc = n * amp[k] * sg_decay(d, c->excit_tau);
+
+            for (int m = 0; m < SG_COIN_MODES; ++m) {
+                v += sg_svf_band(&mode[k][m], choc) * c->mode_gain[m]
+                   * sg_decay(d, c->mode_tau[m]) * sg_attack(d, 0.00025f);
+            }
+            v += sg_svf_band(&bac[k], choc) * c->bac_gain
+               * sg_decay(d, c->bac_tau) * sg_attack(d, 0.0020f);
+        }
+
+        out[i] = sg_highpass(&dc, v);
+    }
+
+    /* Fondu de sortie, meme raison que partout ailleurs dans ce fichier. */
+    const size_t fade = (size_t)(0.010f * (float)SG_RATE);
+    for (size_t i = 0; i < fade && i < frames; ++i) {
+        out[frames - 1 - i] *= (float)i / (float)fade;
+    }
+    return frames;
+}
+
+/* ==========================================================================
  * Programme
  * ========================================================================== */
 
@@ -915,6 +1166,102 @@ static double rms_db(const float *v, size_t n, float scale)
 
 #define SG_MAX_FRAMES ((size_t)(SG_RATE * 8))
 
+/*
+ * LA BRILLANCE : la puissance d'une bande haute contre une bande basse,
+ * RAPPORTEE A CELLE D'UN BRUIT BLANC.
+ *
+ * La normalisation n'est pas un detail, et elle a coute un seuil faux. Les deux
+ * filtres sont a Q constant, donc leurs largeurs sont proportionnelles a leur
+ * frequence, et la bande de 2 200 Hz en couvre 4,9 fois plus que celle de 450.
+ * Compares bruts, ils annoncaient 2,2 pour le coup de poing — un son qui est en
+ * realite DEUX FOIS PLUS SOMBRE que du bruit blanc. C'etait le premier seuil
+ * ecrit ici, et il refusait un fichier correct. Divisee par 4,9, la mesure vaut
+ * 0,45 et veut enfin dire quelque chose : « moitie moins d'aigu qu'un bruit
+ * blanc ».
+ *
+ * Une seule fonction pour le coup ET pour les trois jetons, et c'est le point :
+ * « le jeton est brillant » et « le coup est mat » ne sont deux affirmations
+ * comparables que si elles sortent du meme instrument. Deux mesures voisines
+ * mais distinctes laisseraient croire a une comparaison qui n'en serait pas
+ * une.
+ */
+#define SG_BRILLANCE_BAS   450.0f
+#define SG_BRILLANCE_HAUT 2200.0f
+
+static double sg_brillance(const float *v, size_t n)
+{
+    sg_svf bas, haut;
+    sg_svf_set(&bas,  SG_BRILLANCE_BAS,  2.0f);
+    sg_svf_set(&haut, SG_BRILLANCE_HAUT, 2.0f);
+    double ebas = 0.0, ehaut = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        const double a = sg_svf_band(&bas, v[i]);
+        const double b = sg_svf_band(&haut, v[i]);
+        ebas += a * a; ehaut += b * b;
+    }
+    /* La reference : le rapport que donnerait du bruit blanc, c'est-a-dire le
+     * rapport des largeurs de bande, c'est-a-dire celui des frequences
+     * centrales puisque le Q est le meme. */
+    const double blanc = (double)SG_BRILLANCE_HAUT / (double)SG_BRILLANCE_BAS;
+    return (ebas > 1e-12) ? (ehaut / ebas) / blanc : 1e9;
+}
+
+/*
+ * LES ATTAQUES : le nombre de fois ou de l'energie ARRIVE dans le fichier.
+ *
+ * C'est ce qui separe une piece qui tombe d'une piece qui sonne une fois, et
+ * c'est donc ce qu'il faut mesurer plutot que promettre — la table des jetons
+ * declare des rebonds, ce compte dit s'ils sont la.
+ *
+ * ON NE COMPTE PAS LES SOMMETS DE L'ENVELOPPE, et l'avoir essaye est ce qui a
+ * mene ici : les rebonds se CHEVAUCHENT. Le mode fondamental du jeton insere
+ * tient 90 ms et le deuxieme choc arrive au bout de 62 — l'enveloppe n'a donc
+ * pas le temps de redescendre entre les deux, elle fait une bosse sur une pente
+ * et non un pic isole. Compte ainsi, un jeton parfaitement audible n'a qu'une
+ * seule attaque.
+ *
+ * On compte donc les MONTEES : la variation de l'enveloppe sur deux
+ * millisecondes. Un choc etablit la sienne en moins d'une milliseconde, une
+ * decroissance ne remonte jamais. Le declencheur est a hysteresis — haut a
+ * 15 % de la plus forte montee, bas a 5 % — parce qu'une seule attaque etalee
+ * franchirait sinon le seuil plusieurs fois de suite et compterait double.
+ */
+static int sg_attaques(const float *v, size_t n, float *quand, int cap)
+{
+    static float env[SG_MAX_FRAMES];
+    const size_t w = (size_t)(0.002f * (float)SG_RATE);
+    if (n <= w || n > SG_MAX_FRAMES) return 0;
+
+    /* 120 Hz : assez lent pour effacer la porteuse redressee — le mode le plus
+     * grave des trois pieces est a 1 550 Hz, donc a 3 100 apres redressement,
+     * soit vingt-six fois plus haut — et assez rapide pour suivre un contact
+     * d'une demi-milliseconde. */
+    sg_pole lp; sg_pole_set(&lp, 120.0f);
+    for (size_t i = 0; i < n; ++i) env[i] = sg_lowpass(&lp, fabsf(v[i]));
+
+    float rmax = 0.0f;
+    for (size_t i = w; i < n; ++i) {
+        const float r = env[i] - env[i - w];
+        if (r > rmax) rmax = r;
+    }
+    if (rmax <= 1e-9f) return 0;
+
+    const float haut = 0.15f * rmax, bas = 0.05f * rmax;
+    int count = 0;
+    bool dedans = false;
+    for (size_t i = w; i < n; ++i) {
+        const float r = env[i] - env[i - w];
+        if (!dedans && r >= haut) {
+            dedans = true;
+            if (count < cap) quand[count] = (float)(i - w) / (float)SG_RATE;
+            ++count;
+        } else if (dedans && r <= bas) {
+            dedans = false;
+        }
+    }
+    return count;
+}
+
 int main(int argc, char **argv)
 {
     const char *out_dir = NULL;
@@ -932,8 +1279,11 @@ int main(int argc, char **argv)
             "\n"
             "Produit %d x %d pas (`pas_<materiau>_<n>.wav`), trois boucles\n"
             "d'ambiance (`amb_neon.wav`, `amb_ventilo.wav`, `amb_rue.wav`),\n"
-            "la chasse d'eau et le coup sur une borne (`coup_borne.wav`).\n",
-            argv[0], SG_MATERIAL_COUNT, SG_VARIANTS);
+            "la chasse d'eau, le coup sur une borne (`coup_borne.wav`) et les\n"
+            "%d bruits de jeton (`jeton_insere`, `jeton_refuse`, `jeton_bac`),\n"
+            "soit %d fichiers en tout.\n",
+            argv[0], SG_MATERIAL_COUNT, SG_VARIANTS, SG_COIN_COUNT,
+            SG_MATERIAL_COUNT * SG_VARIANTS + 3 + 1 + 1 + SG_COIN_COUNT);
         return 2;
     }
     if (peak_target <= 0.05f || peak_target > 1.0f) {
@@ -1094,15 +1444,11 @@ int main(int argc, char **argv)
      *   choc mais une cloche, et c'est exactement ce qu'on obtient si un Q part
      *   à la hausse.
      *
-     *   MAT : la puissance dans une bande haute contre une bande basse, RAPPORTÉE
-     *   À CELLE D'UN BRUIT BLANC. La normalisation n'est pas un détail : les
-     *   deux filtres sont à Q constant, donc leurs largeurs sont
-     *   proportionnelles à leur fréquence, et la bande de 2 200 Hz en couvre
-     *   4,9 fois plus que celle de 450. Comparés bruts, ils annoncent 2,2 pour
-     *   un son qui est en réalité DEUX FOIS PLUS SOMBRE que du bruit blanc —
-     *   c'est le premier seuil écrit ici, et il refusait un fichier correct.
-     *   Divisée par 4,9, la mesure vaut 0,45 et veut enfin dire quelque chose :
-     *   « moitié moins d'aigu qu'un bruit blanc ».
+     *   MAT : `sg_brillance`, dont l'en-tête porte la normalisation par le bruit
+     *   blanc et le seuil faux qu'elle a corrigé. C'est le seul chiffre de ce
+     *   fichier qui se compare d'un son à l'autre — le coup vaut 0,45, les
+     *   jetons plus de 1,6 — et il ne le pourrait pas s'il était mesuré deux
+     *   fois de deux façons voisines.
      */
     {
         static float coup[SG_MAX_FRAMES];
@@ -1126,20 +1472,10 @@ int main(int argc, char **argv)
         const double d_tete  = (tete > 0) ? e_tete / (double)tete : 0.0;
         const double d_queue = (frames > tete) ? e_queue / (double)(frames - tete) : 0.0;
 
-        sg_svf bas, haut;
-        sg_svf_set(&bas,   450.0f, 2.0f);
-        sg_svf_set(&haut, 2200.0f, 2.0f);
-        double ebas = 0.0, ehaut = 0.0;
-        for (size_t i = 0; i < frames; ++i) {
-            const double a = sg_svf_band(&bas, coup[i]);
-            const double b = sg_svf_band(&haut, coup[i]);
-            ebas += a * a; ehaut += b * b;
-        }
-        /* La référence : le rapport que donnerait du bruit blanc, c'est-à-dire
-         * le rapport des largeurs de bande, c'est-à-dire celui des fréquences
-         * centrales puisque le Q est le même. */
-        const double blanc = 2200.0 / 450.0;
-        const double mat = (ebas > 1e-12) ? (ehaut / ebas) / blanc : 1e9;
+        /* La MEME mesure que celle des trois jetons, et c'est ce qui rend les
+         * deux chiffres comparables : `sg_brillance` porte la normalisation par
+         * le bruit blanc et l'histoire du seuil faux qu'elle a corrige. */
+        const double mat = sg_brillance(coup, frames);
 
         tool_infof("coup  « %-15s » : %.0f ms, tête/queue %.0fx, "
                    "aigu %.2f fois celui d'un bruit blanc (mat)",
@@ -1152,6 +1488,71 @@ int main(int argc, char **argv)
         if (mat > 0.60) {
             tool_fatalf("le coup est trop brillant (%.2f fois un bruit blanc) : "
                         "c'est un marteau, pas un poing", mat);
+        }
+    }
+
+    /* ---- les trois jetons ---------------------------------------------------
+     * Normalises CHACUN POUR SOI, comme les nappes et contrairement aux pas.
+     * Les trois ne se comparent pas entre eux : ils ne sonnent jamais ensemble,
+     * ils sortent de trois endroits differents de la salle, et c'est
+     * `room_sound.c` qui decide de leurs niveaux relatifs en sachant ou chacun
+     * est place. Les mettre a l'echelle ensemble ne fixerait rien.
+     *
+     * Ce qu'on verifie, ce sont les DEUX mots qui decrivent un jeton, comme
+     * « court » et « mat » decrivent le coup juste au-dessus :
+     *
+     *   BRILLANT — l'exact contraire du coup de poing. Meme mesure, meme
+     *   normalisation, donc les deux chiffres se comparent, et l'ecart est
+     *   celui qu'on esperait : le coup vaut 0,45 fois un bruit blanc, le jeton
+     *   refuse 3,08, l'insere 13,09 et celui du godet 15,14. Les seuils sont
+     *   ecrits APRES la mesure et sous les valeurs reelles — 6,00 pour les deux
+     *   pieces qui tombent, 1,60 pour celle qu'on rend —, avec la marge qu'il
+     *   faut pour qu'un reglage de timbre ne casse pas le build sans raison,
+     *   mais pas plus : au-dela ils ne refuseraient plus rien.
+     *
+     *   REBONDISSANT — le compte des attaques, borne des DEUX cotes par la
+     *   table. Un jeton insere qui n'aurait qu'une attaque ne tomberait pas ;
+     *   un jeton refuse qui en aurait trois ne serait plus un refus.
+     */
+    {
+        static float coin[SG_MAX_FRAMES];
+        for (int i = 0; i < SG_COIN_COUNT; ++i) {
+            const sg_coin *c = &g_coins[i];
+            const size_t frames = sg_render_coin(c, coin, SG_MAX_FRAMES);
+            const float p = peak_of(coin, frames);
+            if (p < 1e-6f) tool_fatalf("« %s » est silencieux", c->file);
+            const float scale = c->peak / p;
+
+            snprintf(path, sizeof path, "%s/%s", out_dir, c->file);
+            sg_write_wav(path, coin, frames, scale);
+
+            const double brillance = sg_brillance(coin, frames);
+            float quand[8];
+            const int n = sg_attaques(coin, frames, quand, 8);
+
+            /* Les instants sont dans le journal et pas seulement le compte :
+             * c'est ce qui permet de VOIR que l'intervalle raccourcit, ce que
+             * le nombre seul ne dit pas. */
+            char liste[128]; size_t used = 0; liste[0] = 0;
+            for (int k = 0; k < n && k < 8 && used + 8 < sizeof liste; ++k) {
+                used += (size_t)snprintf(liste + used, sizeof liste - used,
+                                         "%s%.0f", k ? " " : "", (double)quand[k] * 1000.0);
+            }
+            tool_infof("jeton « %-16s » : %.0f ms, %s, aigu %.2f fois celui d'un "
+                       "bruit blanc, %d attaque(s) a %s ms",
+                       c->file, (double)c->length * 1000.0, c->quoi,
+                       brillance, n, liste);
+
+            if (brillance < c->brillance_min) {
+                tool_fatalf("« %s » n'est pas assez brillant (%.2f fois un bruit "
+                            "blanc, plancher %.2f) : ce n'est plus du metal",
+                            c->file, brillance, c->brillance_min);
+            }
+            if (n < c->attaques_min || n > c->attaques_max) {
+                tool_fatalf("« %s » compte %d attaque(s), attendu %d a %d : "
+                            "les rebonds ne sont pas ceux qu'il annonce",
+                            c->file, n, c->attaques_min, c->attaques_max);
+            }
         }
     }
 
