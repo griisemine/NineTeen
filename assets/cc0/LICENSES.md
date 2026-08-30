@@ -10,10 +10,12 @@ droit de faire :
    livré en est désormais une **œuvre dérivée** : sa texture a été repeinte, ce
    que la même licence oblige à déclarer ;
 3. le **logiciel tiers** lié dans le binaire — section « Le logiciel tiers » ;
-4. les **images de 2020**, dont la provenance n'est pas établie, et dont huit
-   sont identifiées comme appartenant à des tiers — section « Les images de
-   2020 : ce qui n'est PAS établi ». **C'est la section à lire avant de
-   vendre.**
+4. les **images de 2020**, dont la provenance n'est pas établie — section « Les
+   images de 2020 : ce qui n'est PAS établi ». **C'est la section à lire avant
+   de vendre.** Les vingt et une identifiées comme appartenant à des tiers
+   — huit affiches et treize planches, **le tapis du hall compris** — **ne sont
+   plus copiées dans le paquet** ; il en reste **29** dans le décor livré dont
+   personne ne peut dire d'où elles viennent.
 
 ## Les textures rapportées
 
@@ -298,25 +300,32 @@ et laissait croire par omission que le reste était réglé. Il ne l'est pas.
 
 ## Ce qui a été mesuré
 
-Le paquet installé porte, à la mesure de cette version, **93 images** dans
-`bin/assets/scene/textures/`. Le total bouge — la direction artistique
-remplace en ce moment des enseignes de 2020 par des planches dessinées au
-build — mais **le nombre d'images de 2020 ne bouge pas**, et c'est lui qui
-compte ici :
+Mesuré en déballant l'archive `nineteen-17.0.0-Darwin.tar.gz` et en classant
+chaque fichier par son origine dans l'arbre — pas en lisant une liste. Le
+paquet porte **73 images** dans `bin/assets/scene/textures/` :
 
 | | |
 |---|---|
-| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **58** |
+| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **29** |
 | viennent d'ici — Poly Haven, CC0, listées plus haut | **19** |
-| **générées au build** (enseignes de `marqueeart`, écrans de jeu, flanc de borne, néon) | **14** |
-| **orphelines** : aucune source dans l'arbre, aucun matériau qui les référence | **2** |
+| **générées au build** (affiches de `posterart`, enseignes, écrans de jeu, flanc de borne, néon, tapis) | **25** |
+| **orphelines** : aucune source dans l'arbre, aucun matériau qui les référence | **0** |
 
-Le reste — enseignes, écrans de jeu, flanc de borne, néon — est **généré au
-build** et ne pose aucune question de licence : c'est de l'arithmétique.
+Sur le paquet entier — planches de jeu comprises — cela fait **103 images** :
+**41** de 2020, **19** Poly Haven, **43** générées au build.
 
-**Les cinquante-huit images de 2020 ne portent aucune trace d'origine ni de
-licence** — ni dans ce fichier, ni dans `legacy/`, qui ne contient aucun
-document de licence.
+Le chiffre à retenir est le premier, et il a **bougé de moitié** : les images de
+2020 encore livrées passent de **58 à 29** dans le décor, parce que les huit
+affiches, les treize planches empruntées et les dix-huit `retiredTextures` ne
+sont plus copiées. Les **deux orphelines** ont disparu avec elles.
+
+Le reste — affiches, enseignes, écrans de jeu, flanc de borne, néon, tapis du
+hall — est **généré au build** et ne pose aucune question de licence : c'est de
+l'arithmétique.
+
+**Les vingt-neuf images de 2020 encore livrées ne portent aucune trace d'origine
+ni de licence** — ni dans ce fichier, ni dans `legacy/`, qui ne contient aucun
+document de licence. Le risque a beaucoup diminué ; il n'est pas éteint.
 
 Une texture de béton ou de moquette sans provenance est un risque théorique.
 Huit de ces images n'en sont pas un : elles ont été **ouvertes et regardées**,
@@ -436,20 +445,20 @@ généré. Sans elle, le contrôle qu'on croit avoir passé, on ne l'a pas pass�
   logotype d'un tiers. Ces fontes ne sont **pas** dans le paquet du jeu — elles
   ne concernent que le site web du classement — mais publier ce site les
   distribue.
-* **Deux images orphelines** voyagent dans le paquet de 17.0.0 :
-  `gamepad_diff_1k.jpg` (reliquat d'un modèle Poly Haven retiré) et
-  `coffeetable_01_diff_1k.jpg` (la texture turquoise écartée, voir plus haut).
-  Mesuré : `grep` sur `salle.gltf` **0**, sur `salle.room.json` **0**, et
-  `find assets legacy` ne trouve **aucun fichier source** pour l'une ni pour
-  l'autre. Ce sont des résidus d'un répertoire de build incrémental. Elles sont
-  CC0, donc sans risque juridique — mais un paquet qui emporte deux fichiers
-  dont plus aucune source ne rend compte est exactement ce que ce document
-  existe pour empêcher. Une reconstruction depuis un répertoire de build neuf
-  les fait disparaître.
-* **`legacy/`** n'est pas installé par CPack, mais il est dans le dépôt. Si le
-  dépôt devient public, il publie les 60 images de 2020 et les planches des
-  jeux — les huit affiches, les personnages de Namco et l'oiseau de *Flappy
-  Bird* compris.
+* ~~**Deux images orphelines**~~ — **réglé**. `gamepad_diff_1k.jpg` (reliquat
+  d'un modèle Poly Haven retiré) et `coffeetable_01_diff_1k.jpg` (la texture
+  turquoise écartée, voir plus haut) voyageaient dans le paquet de 17.0.0 sans
+  qu'aucune source ne les explique. Re-mesuré en déballant l'archive :
+  **absentes toutes les deux**, et le compte d'orphelines du paquet est
+  maintenant **0**. C'étaient bien des résidus de répertoire de build
+  incrémental, et la liste nommée qui a remplacé le `file(GLOB)` les a fait
+  disparaître.
+* **`legacy/`** n'est pas installé par CPack, mais il est dans le dépôt. Compté :
+  **685 images**, dont les **58** de `legacy/room/textures/` et les **62** de
+  `legacy/games/`. Si le dépôt devient public, il publie tout cela — les huit
+  affiches, les personnages de Namco, l'oiseau de *Flappy Bird* et le tapis du
+  hall compris. **Les sortir du paquet ne les a pas sorties du dépôt** ; c'est
+  la décision qui reste, et elle n'est pas technique.
 * **`docs/render-*.png`** non plus n'est pas installé, et pose la même question
   en plus petit : une douzaine de captures de recette montrent l'état d'avant,
   donc les affiches, l'oiseau, le tapis et les personnages. Elles servent de

@@ -258,8 +258,18 @@ static bool parse_options(int argc, char **argv, options *o)
 {
     SDL_zerop(o);
     o->frames = 4;
-    o->width = 1600;
-    o->height = 900;
+    /* ZERO veut dire « pas demande », et non « 1600 ».
+     *
+     * Ces deux champs valaient le defaut, et plus bas on lisait « l'option
+     * a-t-elle ete donnee ? » en COMPARANT au defaut. Consequence mesuree :
+     * `--width=1600 --height=900` — la definition que `--help` annonce — etait
+     * prise pour une absence d'option, et la configuration gardee l'emportait ;
+     * la fenetre sortait en 1280x720. Pire, les deux axes decidant separement,
+     * `--width=1600 --height=1080` rendait 2560x1080 : un rapport d'image faux,
+     * en silence. Un defaut ne peut pas servir de sentinelle des lors qu'il est
+     * aussi une valeur qu'on peut vouloir. */
+    o->width = 0;
+    o->height = 0;
     o->vsync = true;
     o->quality = NS_QUALITY_MEDIUM;
     o->camera_mode = ROOM_CAM_PLAYER;
@@ -375,7 +385,10 @@ static bool parse_options(int argc, char **argv, options *o)
         }
     }
 
-    if (o->width < 64 || o->height < 64) {
+    /* Zero est la sentinelle « pas demande » — voir `parse_options` — et n'a donc
+     * pas a passer ce controle. On refuse ce qui a ete DEMANDE et qui est
+     * absurde, pas ce qui n'a pas ete demande du tout. */
+    if ((o->width != 0 && o->width < 64) || (o->height != 0 && o->height < 64)) {
         fprintf(stderr, "résolution trop petite\n");
         return false;
     }
@@ -1356,8 +1369,8 @@ int main(int argc, char **argv)
 
     /* La ligne de commande gagne sur la configuration, la configuration gagne
      * sur les valeurs par défaut. */
-    const int win_w = (opt.width  != 1600) ? opt.width  : ns_config_get_int(NS_CFG_WINDOW_W, 1600);
-    const int win_h = (opt.height != 900)  ? opt.height : ns_config_get_int(NS_CFG_WINDOW_H, 900);
+    const int win_w = (opt.width  > 0) ? opt.width  : ns_config_get_int(NS_CFG_WINDOW_W, 1600);
+    const int win_h = (opt.height > 0) ? opt.height : ns_config_get_int(NS_CFG_WINDOW_H, 900);
 
     ns_rhi_desc rhi_desc;
     SDL_zero(rhi_desc);
@@ -2403,6 +2416,10 @@ play_at_done: ;
      * des bornes.
      */
     uint8_t pad_prev = 0;
+    /* Le saut se declenche sur un FRONT : maintenu, le bouton ferait rebondir le
+     * joueur a chaque pas de simulation. Le clavier le tient de l'evenement
+     * SDL ; la manette n'en produit pas, on garde donc l'etat precedent. */
+    bool pad_jump_prev = false;
 
     /*
      * Le contrôle des réglages, ICI et pas ailleurs : tous les lecteurs ont
@@ -2907,7 +2924,9 @@ play_at_done: ;
                           - (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN] ? 1.0f : 0.0f);
         cam.input_strafe  = (keys[SDL_SCANCODE_D] || keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f)
                           - (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
-        cam.running = keys[SDL_SCANCODE_LSHIFT];
+        cam.running = keys[SDL_SCANCODE_LSHIFT] || pad_state.run;
+        if (pad_state.jump && !pad_jump_prev) cam.jump_requested = true;
+        pad_jump_prev = pad_state.jump;
 
         /*
          * LE STICK GAUCHE MARCHE, il ne se contente pas d'aller à fond.
@@ -2966,7 +2985,8 @@ play_at_done: ;
         /* Espace et Ctrl ne veulent pas dire la même chose selon le mode : en vol
          * libre ils montent et descendent, en mode joueur ils sautent et
          * accroupissent. Les confondre donnait un joueur capable de s'envoler. */
-        cam.crouch_held = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_C];
+        cam.crouch_held = keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_C]
+                       || pad_state.crouch;
         if (cam.mode == ROOM_CAM_FREE) {
             cam.input_up = (keys[SDL_SCANCODE_SPACE] ? 1.0f : 0.0f)
                          - (keys[SDL_SCANCODE_LCTRL] ? 1.0f : 0.0f);

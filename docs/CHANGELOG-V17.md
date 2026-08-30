@@ -1,221 +1,179 @@
-# Nineteen 17.0.0 — le jeu se présente, et dit d'où il vient
+# Nineteen 17.0.0 — le paquet devient vendable, sauf sur trois points
 
-16.0.0 avait rendu la salle juste. Cette version-ci s'occupe de ce qui sépare un
-projet d'un produit : ce que le joueur comprend en arrivant, et ce que le
-distributeur a le droit de distribuer. Comme la précédente, chaque affirmation
-porte sa mesure, et ce qui n'est pas tenu est dit à la fin plutôt que passé sous
-silence.
+16.0.0 avait rendu la salle juste. 17.0.0 s'occupe de ce qui séparait un projet
+d'un produit : ce que le joueur comprend en arrivant, ce qu'il tient dans les
+mains, et ce que le distributeur a le **droit** de distribuer.
+
+Ce document a été **réécrit après recette**, et non tenu à jour au fil des
+commits. Tout ce qui suit a été vérifié en **déballant l'archive et en lançant
+le jeu depuis le répertoire déballé** — jamais depuis l'arbre de build. C'est la
+distinction qui compte : ce projet a déjà cru livrer des assets que seul l'arbre
+de build fournissait.
 
 ## Ce qui change en une phrase
 
-Le jeu **dit enfin ce qu'il est** — écran de crédits, page de commandes, aide
-d'arrivée — et l'inventaire de licences nomme pour la première fois **les huit
-affiches qui interdisent de le vendre**.
+Les **vingt et une images de tiers** identifiées ne sont plus dans le paquet,
+**trois jeux ont changé de nom**, la **manette** est branchée jusque dans le
+journal d'entrées, et quatre jeux qui ne se jouaient pas se jouent.
+
+---
+
+## Comment cette recette a été faite
+
+```sh
+cd build/macos-universal && cpack                 # nineteen-17.0.0-Darwin.tar.gz
+tar xzf …/nineteen-17.0.0-Darwin.tar.gz -C /ailleurs
+cd /ailleurs/nineteen-17.0.0-Darwin/bin && ./nineteen …
+```
+
+Le jeu le confirme lui-même à la première ligne de son journal, et c'est cette
+ligne qui rend la recette valable :
+
+```
+assets trouvés à côté du binaire : l'arbre de build n'est pas monté
+(c'est une installation, elle se suffit)
+```
 
 ---
 
 ## La liste de 16.0.0, reprise point par point
 
-| Ce que 16.0.0 disait non tenu | Mesuré aujourd'hui, et comment | État |
+| Ce qui était annoncé non tenu | Mesuré aujourd'hui, et comment | État |
 |---|---|---|
-| **Le paquet n'est pas signé** | inchangé : `CMakeLists.txt` produit des archives non signées et le dit. Les certificats appartiennent au propriétaire | **toujours non tenu** — décision et achat |
-| **Trois critères d'éclairage** non atteints, « `sud` à 14,4 et `travee` à 16,3 pour ≥ 30 » | `--view=` sur les trois cadrages, `--quality=high`, 4 images, médiane lue dans le journal : **`centre` 39 ✓, `travee` 27 ✗, `sud` 14 ✗** | **partiellement tenu** : `travee` passe de 16,3 à 27, `centre` passe ; `sud` n'a pas bougé |
-| **Douze défauts de placement mineurs** ouverts | les **bloquants** sont fermés et gardés : roomgen confronte **108 objets** au parement intérieur, **0 toléré**, et **36 paires de boîtes** dont **0 défaut connu non corrigé**. Les mineurs (P-16 à P-23) n'ont **pas** été re-mesurés un par un ici | **tenu pour les bloquants, non vérifié pour les mineurs** |
-| **Cinq des neuf contrôles** de l'audit ne sont pas écrits | compté dans `tools/roomgen.c` : C-01 `check_inside_shell` ✓, C-02 `check_solid_overlaps` ✓, C-03 `check_grounded` ✓, C-09 `check_cabinet_clearance` ✓ — **C-04 à C-08 absents**. `check_grounded` le dit lui-même en commentaire pour C-06 | **toujours non tenu, cinq sur neuf** |
-| **Déterminisme** sur deux architectures d'un seul système | `lipo -info` : le binaire porte `x86_64 arm64`. `tests/check_determinism.cmake` rejoue chaque journal dans **deux processus** — même machine, même système | **toujours non tenu** : un seul système |
-| **Découverte d'adversaire** inexistante, relais sans TLS | rien n'a changé : l'identifiant de duel se convient hors du jeu | **toujours non tenu** |
-
-Deux chiffres de 16.0.0 ont bougé sans qu'on les ait promis : `nineteen.env`
-passe de **19 à 30 clés**, toutes consommées — le jeu le vérifie au démarrage et
-nomme dans le journal celle que personne ne lirait — et la suite de tests de
-**36 à 39**.
+| **Huit affiches de tiers** dans la salle | archive déballée, chaque image classée par son origine dans l'arbre : **0 `poster_*`**, 0 planche *Flappy Bird*, 0 personnage Namco, 0 `high_score.png` (celle au filigrane « ©123RF ») | **tenu** |
+| **Deux noms de marque** (`PACMAN`, `TETRIS`) | il y en avait **trois** : + `FLAPPY BIRD`. Les enseignes de borne ont été ouvertes : elles portent **APLOMB**, **DÉDALE**, **ENVOL** | **tenu, et sous-estimé** |
+| **Il n'y a pas de manette** | `SDL_InitSubSystem(SDL_INIT_GAMEPAD)` (`room/main.c:1328`), branchement à chaud suivi, et le pad est fusionné dans `hmask` (`room/main.c:3188`). Test **n° 4 « manette »** dans la suite | **tenu** |
+| **Le menu ne règle ni la résolution ni le plein écran** | capture du menu ouverte : les lignes **DEFINITION** et **PLEIN ECRAN** y sont, sur **18 lignes**, toutes dans le cadre | **tenu** |
+| **Il n'y a pas d'icône de fenêtre** | `SDL_SetWindowIcon` appelé (`engine/rhi/ns_rhi.c:189`) | **tenu** |
+| **`--width`/`--height` ne font rien** | corrigé, **mais pas complètement** : 640x360, 1280x720, 1920x1080, 2560x1440 sortent juste — **1600x900 sort en 1280x720**. Voir « ce qui n'est pas tenu », point 1 | **partiellement tenu** |
+| **Le paquet n'est pas signé** | `codesign -dv` sur le binaire déballé : `Signature=adhoc`, `linker-signed`. Ni Developer ID ni Authenticode | **toujours non tenu** — achat et décision |
+| **Le personnage n'a qu'un cycle d'animation** | le jeu le dit encore lui-même : « un seul cycle d'animation (2.00 s) ». Mais l'accroupi n'est plus un défaut : il est **dérivé et calé** à 67,6° de cuisse, pieds recalés à 1e-4 près | **toujours non tenu, mais l'accroupi est réparé** |
+| **Cinq des neuf contrôles de l'audit** absents | recompté dans `tools/roomgen.c` : `check_inside_shell`, `check_solid_overlaps`, `check_grounded`, `check_cabinet_clearance`. **C-04 à C-08 toujours absents** | **toujours non tenu, cinq sur neuf** |
+| **Déterminisme sur un seul système** | `lipo -info` : `x86_64 arm64`. `tests/check_determinism.cmake` rejoue dans **deux processus** — même machine, même macOS | **toujours non tenu** |
+| **Découverte d'adversaire, relais sans TLS** | inchangé | **toujours non tenu** |
 
 ---
 
-## Ce que 17.0.0 ajoute
+## Ce que 17.0.0 tient, avec sa mesure
 
-### L'écran de crédits — une obligation, pas une finition
+### Le paquet ne porte plus d'œuvre de tiers identifiée
 
-`assets/cc0/LICENSES.md` dit depuis le début que l'attribution de **CesiumMan**
-(© 2017 Cesium, **CC BY 4.0**) est obligatoire et « doit l'être aussi partout où
-le jeu est distribué — écran de crédits, page de téléchargement, archive ».
+Chaque image du paquet déballé a été classée par son origine réelle dans
+l'arbre — pas par ce qu'une liste en disait.
 
-Vérifié : `grep -rin credit room/ engine/ games/` ne rendait **rien**. L'archive
-était tenue — `room/CMakeLists.txt` y installe le fichier — l'écran ne l'était
-pas. Un Markdown posé à côté d'un binaire n'est pas un écran de crédits.
-
-Il existe maintenant : `Échap` → `CREDITS`. Il porte les quatre choses que
-CC BY 4.0 demande nommément — l'œuvre, l'auteur, la licence, le lien vers son
-texte — plus les cinq bibliothèques tierces liées dans le binaire, dont **cgltf
-et jsmn, sous MIT, dont la licence exige la mention pour un binaire distribué**.
-
-Et il est **défendu**. Les crédits sont une table publique
-(`room/room_credits.c`), pas une suite d'appels de dessin : `tests/test_menu.c`
-vérifie que « CESIUMMAN », « CESIUM », « CC BY 4.0 » et
-« CREATIVECOMMONS.ORG » y sont, et qu'une ligne du menu ouvre la page. Effacer
-l'un des quatre fait échouer le test `menu`, donc le build. Une mention légale
-que rien ne défend finit par disparaître dans un nettoyage.
-
-### La première minute
-
-Lancé et regardé en joueur qui ne connaît rien : on démarre dans le sas, on voit
-deux mains, et **l'écran ne porte pas un mot**. Ni titre, ni commande, ni
-indication. Les touches n'étaient dites que dans `--help` et `docs/JOUER.md` —
-c'est-à-dire nulle part pour qui a téléchargé un paquet et double-cliqué dessus.
-
-Trois choses, dans l'ordre où on en a besoin :
-
-* un **bandeau d'arrivée** en bas de l'écran pendant 14 secondes — quatre
-  commandes, pas quinze : se déplacer, regarder, jouer, `Échap`. Quatorze
-  secondes parce que le sas fait neuf mètres et qu'une aide disparue avant
-  qu'on arrive dans la salle n'a aidé personne. Il se tait dès qu'on est devant
-  une borne, où l'invite « E — JOUER À … » prend le relais ;
-* une page **COMMANDES** dans `Échap`, permanente ;
-* la page **CREDITS**, juste au-dessous.
-
-### Deux défauts trouvés en regardant les captures, et corrigés
-
-* **Le menu débordait de son propre cadre.** À seize lignes, la formule
-  `78 + 16 × 38 + 74 = 760` dépassait les 700 disponibles : le cadre était
-  raboté, les lignes ne l'étaient pas, et « QUITTER LE JEU » s'écrivait par
-  dessus « FLECHES CHOISIR ET REGLER ». Le commentaire d'origine affirmait que
-  la formule « désamorce le piège une fois pour toutes » — elle ne le
-  désamorçait que tant que le rabot ne servait pas. C'est le pas des lignes qui
-  cède maintenant, et le calcul se fait sur `MI_COUNT` au dessin.
-* **Le bandeau d'arrivée dépassait sous le menu**, l'affichage étant dessiné
-  avant lui.
-
-Les deux se voyaient sur capture et ne se voyaient pas dans le code.
-
-### `--menu=N` ouvre vraiment la page
-
-`--menu=13` cadrait la ligne « CREDITS » sans jamais montrer les crédits :
-l'écran qui porte une obligation de licence était le seul du jeu qu'on ne
-pouvait pas capturer en ligne de commande, donc le seul qu'on ne pouvait pas
-vérifier sans le jouer à la main. Les deux pages d'information s'ouvrent
-maintenant, visées par leur **libellé** et non par un indice de ligne.
-
-### `docs/JOUER.md` disait trois choses fausses
-
-C'est le document **livré dans le paquet**. Il annonçait :
-
-| Ce qu'il disait | Ce qui est mesuré |
+| | |
 |---|---|
-| « le binaire ne contient pas le code nécessaire pour ouvrir une connexion » | `nm -u` : **huit symboles de l'API socket** importés — `_socket`, `_connect`, `_getaddrinfo`, `_recv`, `_send`, `_select`, `_setsockopt`, `_close` |
-| « `engine/net/` est un répertoire vide » | **3 331 lignes** de C dans six modules |
-| « `NS_CFG_SERVER_URL` … rien ne la lit » | `ns_config.h` explique lui-même qu'elle est revenue **parce qu'elle a un lecteur** |
-| « Deux jeux sont portés : Flappy Bird et Snake » | **huit**, et les six autres sont décrits vingt lignes plus bas dans le même document |
+| images dans le paquet | **103** |
+| générées au build (`posterart`, `spriteart`, `moquetteart`, `marqueeart`, `texgen`) | **43** |
+| Poly Haven, CC0, documentées | **19** |
+| venant de `legacy/`, **sans origine ni licence établie** | **41** |
+| dont dans le décor (`scene/textures/`) | **29**, contre 58 en 16.0.0 |
+| **œuvres de tiers identifiées** | **0** |
+| images orphelines (aucune source, aucun matériau) | **0**, contre 2 |
 
-Le document se contredisait donc lui-même, et le paragraphe rassurant a survécu
-deux versions parce qu'il rassurait. Corrigé, avec la mesure à la place de
-l'affirmation, et la mention explicite de ce qui a été faux — un document qui
-efface ses erreurs demande qu'on le croie sur parole une seconde fois.
+Les **dix-huit `retiredTextures`** déclarées par la salle ont été cherchées une
+par une dans l'archive, **cartes normales et ORM dérivées comprises** :
+**aucune n'est livrée**. La salle de 2020 (`salle-legacy.*`) n'est pas installée
+non plus.
 
----
+Trois vérifications ont été faites **en ouvrant les images**, parce que le nom
+d'un fichier ne prouve rien :
 
-## Ce qui a été trouvé, et qui n'est pas réparable par du code
+* le **tapis du hall** (`moquette_neon.png`) portait un Pac-Man, un de ses
+  fantômes, ses cerises et une manette de console. Celui qui est livré porte une
+  épingle, un dé, une étoile, une note, une planète, un éclair et une cible —
+  dessiné par `tools/moquetteart` ;
+* les **poursuivants de DÉDALE** ne sont plus des fantômes : ce sont des croix
+  et des rotors à quatre pales, en niveaux de gris ;
+* `tetris_font.jpg`, `snake_font.jpg`, `asteroid_font.jpg` portent des noms qui
+  inquiètent et ne sont **pas** des œuvres de tiers : ce sont les écrans d'aide
+  du projet de 2020, sans logo ni personnage. `tetris_font.jpg` ne porte nulle
+  part le mot TETRIS.
 
-C'est le vrai résultat de cette version, et ce n'est pas un ajout : c'est un
-inventaire, fait en **ouvrant les fichiers** plutôt qu'en lisant ce qui était
-écrit à leur sujet.
+### Trois jeux renommés, jusque dans la base
 
-`assets/cc0/LICENSES.md` documentait soigneusement les **2,6 Mio rapportés**
-(Poly Haven, CC0) et laissait croire par omission que le reste était réglé. Le
-paquet installé porte **93 images** dans `bin/assets/scene/textures/`, comptées
-une par une : **19** viennent de Poly Haven, **14** sont générées au build, **2**
-sont orphelines — aucune source dans l'arbre, aucun matériau qui les référence —
-et **58 sont les images de 2020, sans une ligne d'origine ni de licence nulle
-part**. `legacy/` ne contient aucun document de licence. Le total bouge pendant
-que la direction artistique remplace des enseignes ; **le 58 ne bouge pas**.
+**TETRIS → APLOMB**, **PAC-MAN → DÉDALE**, **FLAPPY BIRD → ENVOL**. Les
+enseignes de borne ont été ouvertes et lues. La migration `0003_debaptise.sql`
+**renomme le créneau** au lieu d'en créer un neuf : un classement mondial change
+d'étiquette, pas de contenu. Les règles de `games/` n'ont pas bougé.
 
-Huit d'entre elles ont été ouvertes et regardées :
+`ASTEROID` **n'est pas renommé** : nom commun, mais à une lettre de la marque
+*Asteroids* d'Atari. Signalé comme risque résiduel — c'est une décision, pas un
+travail.
 
-| Fichier | Ce que c'est | Ayant droit apparent |
+### La manette, et le piège qu'elle cachait
+
+Le branchement n'était pas la difficulté. La difficulté était que
+`--journal-entrees`, `--rejouer` et les duels en pas verrouillé reposent tous
+sur un masque d'appuis. Une manette qui aurait alimenté les touches sans
+alimenter ce masque aurait rendu **toute partie jouée au pad irreproductible**,
+et fait diverger les duels — sans erreur et sans message.
+
+Elle l'alimente : `hmask = room_keys_mask(keys) | pad_mask`
+(`room/main.c:3188`), et le test **n° 4 « manette »** vérifie que les deux
+périphériques produisent le même masque. Le test garde le build.
+
+Ce qu'elle ne fait pas : **ni saut, ni accroupi, ni course** — la table est
+`dpad` + `A` + `Start` + `B` + deux sticks, et elle est **en dur**.
+
+### Quatre jeux qui ne se jouaient pas
+
+Personne n'avait joué les jeux ; ce sont eux qu'on vient chercher. Les tests qui
+les gardent sont les n° 12 à 19 de la suite.
+
+| Jeu | Ce qui n'allait pas | Vérifié par |
 |---|---|---|
-| `poster_7.jpg` | le flyer d'arcade **PAC-MAN**, logo Midway compris | Bandai Namco / Midway |
-| `poster_8.jpg` | le flyer d'arcade **DONKEY KONG**, logo Nintendo compris | Nintendo |
-| `poster_3.jpg` | le flyer **ATARI « Video Pinball »** | Atari |
-| `poster_6.jpg` | l'affiche **« Palace Arcade — Hawkins »** de *Stranger Things* | Netflix |
-| `poster_5.jpg` | une illustration de la gamme **« Arcade »** de *League of Legends* | Riot Games |
-| `poster_2.jpg` | **« Space Paranoids — ENCOM »**, l'arcade fictive de *Tron* | Disney |
-| `poster_1.jpg` | affiche de festival « Arcade Armageddon », graphisme d'auteur | inconnu |
-| `poster_4.jpg` | illustration de « gaming room » retitrée NINE 19 TEEN | inconnu |
+| **DÉMINEUR** | **ingagnable** : 100 bombes sur 400 cases, 200 parties, 200 défaites. `PTS_WIN` et tout l'écran GAGNE étaient du code inatteignable | `tests/test_demineur.c` compte les `DEM_WON` |
+| **PIANO** | **imperdable** : la limite d'oublis était gardée par `hard &&`, donc une borne se jouait en ne touchant à rien, indéfiniment | `test_ne_rien_jouer_finit_par_tuer` |
+| **SHOOTER** | le boss naissait à `y = -170`, hors écran, à vitesse nulle : **invisible et invulnérable**, les vagues gelées derrière lui, les cinq armes en code mort | `tests/test_shooter.c` |
+| **ENVOL** | un **chronomètre déguisé en score** : une droite à 0,588 tuyau/s, identique sur cinq graines | `tests/test_envol.c` : « deux graines différentes donnent des parties différentes » |
+| **DÉDALE** | parties **toutes identiques** | `tests/test_dedale.c` ; la graine décide l'ordre de sortie de l'enclos |
 
-Elles étaient **accrochées aux murs de la salle et visibles en jeu** ; elles ne
-sont plus copiées. Le même examen, poussé jusqu'aux planches des jeux et au sol,
-a donné treize images de plus — les personnages de Namco dans `games/pacman/`,
-la planche d'oiseaux de *Flappy Bird*, et le tapis du hall. Toutes retirées,
-toutes remplacées par du dessin.
+Les huit jeux ont été relancés **depuis le paquet déballé**, en `--autoplay` :
+tous démarrent et tous marquent — APLOMB 12 700, SHOOTER 2 130, ASTEROID 1 980,
+DÉDALE 980, DÉMINEUR 287, PIANO 100, SNAKE 70, ENVOL 12.
 
-**Une attribution ne rattrape pas ces fichiers.** Ce ne sont pas des œuvres sous
-licence libre mal créditées ; ce sont des œuvres sous droit exclusif employées
-sans droit. Le détail complet, avec les cas plus petits — `sega.ttf` dans le
-serveur web, deux images orphelines dans le paquet — est dans
-`assets/cc0/LICENSES.md`, section « Les images de 2020 : ce qui n'est PAS
-établi ».
+### La première minute, regardée sur capture
 
-**Rien n'a été retiré.** `salle.room.json` appartient à la direction artistique,
-et remplacer huit affiches est une décision de contenu.
+Les captures ont été sorties du paquet, réduites et **ouvertes** — c'est comme
+ça que les deux défauts de cadre de 16.0.0 avaient été trouvés, et pas
+autrement.
 
----
-
-## La manette : ce que ça coûterait, mesuré plutôt qu'estimé au doigt
-
-Il n'y en a pas. `SDL_Init` demande `VIDEO | EVENTS | AUDIO` et **pas**
-`SDL_INIT_GAMEPAD` ; aucun `SDL_EVENT_GAMEPAD_*` n'apparaît dans le dépôt. Une
-manette branchée est vue par le système — `_GCControllerDidConnectNotification`
-est bien dans les symboles importés, via SDL — et ignorée par le jeu.
-
-Les points à toucher ont été **comptés**, pas devinés : dix sites, tous dans
-`room/main.c`.
-
-| Site | Lignes | Ce qu'il faut |
-|---|---|---|
-| `SDL_Init` | 1309 | ajouter `SDL_INIT_GAMEPAD` |
-| ouverture / fermeture | — | `SDL_EVENT_GAMEPAD_ADDED` / `REMOVED`, `SDL_OpenGamepad` |
-| déplacement | 2670-2674 | axes gauche → `input_forward` / `input_strafe`, avec zone morte |
-| regard | 2608 | axe droit → l'accumulateur de la souris, à sensibilité propre |
-| accroupi / saut | 2706-2709 | deux boutons |
-| interaction `E` | 2523 | un bouton |
-| menu | 2364-2383 | croix + A/B → les six `ROOM_MENU_*` |
-| jeu, appuis | 2405-2445 | croix + A → `game_api->press` |
-| jeu, maintiens | 2882-2886 | croix + A → `held[]` |
-| **journal d'entrées** | **2904-2908** | **le même masque `hmask`** |
-
-La dernière ligne est celle qui compte, et c'est elle qu'un devis rapide
-oublierait. `hmask` est ce que `--journal-entrees` écrit, ce que
-`tests/test_replay.c` rejoue sur les huit jeux, et ce qu'un duel en pas
-verrouillé publie à l'adversaire. Une manette qui alimenterait `held[]` sans
-alimenter `hmask` rendrait **toute partie jouée à la manette non reproductible**
-et **ferait diverger les duels** — sans erreur, sans message, avec pour seul
-symptôme deux scores qui se contredisent.
-
-Estimation : **une demi-journée pour que ça marche, une journée pour que ce soit
-juste**, plus une table de correspondance rendue réglable (`nineteen.env`) et un
-test qui vérifie que les deux chemins d'entrée produisent le même `hmask`.
-
-**Ce n'est pas fait, et délibérément :** il n'y a pas de manette branchée à cette
-machine. Livrer du code d'entrée qu'on n'a pas pu essayer, dans le fichier le
-plus sollicité du dépôt, contredirait la règle que ce projet tient depuis le
-début — « je refuse de livrer une salle que je ne peux pas regarder ».
+* **Le bandeau d'arrivée** est lisible et tient sur une ligne :
+  « ZQSD/WASD SE DEPLACER · SOURIS REGARDER · E JOUER SUR UNE BORNE · ECHAP
+  REGLAGES ET AIDE ».
+* **Le menu tient dans son cadre** à **18 lignes** — il en avait 16 quand il a
+  débordé, et deux lui ont été ajoutées depuis. Le cadre se calcule au dessin
+  sur `MI_COUNT` ; c'est le pas des lignes qui cède.
+* **La page COMMANDES** et **la page CREDITS** s'ouvrent et tiennent dans leur
+  cadre.
+* **L'écran de crédits** porte les quatre mentions que CC BY 4.0 exige —
+  CESIUMMAN, © 2017 CESIUM, CC BY 4.0 INTERNATIONAL,
+  CREATIVECOMMONS.ORG/LICENSES/BY/4.0/ — **et la mention « MODIFIE »** qu'exige
+  le § 3.a.1.B, formulée « TEXTURE REPEINTE — MAILLAGE ET ANIMATION INTACTS ».
+  `tests/test_menu.c` échoue si l'une disparaît.
 
 ---
 
 ## La recette
 
+Mesurée sur un arbre de build **neuf** (625 cibles, reconfiguré depuis zéro),
+pour que « zéro avertissement » veuille dire quelque chose.
+
 | | |
 |---|---|
-| la suite de tests | **39 / 39** |
-| le compilateur | **0 avertissement** |
-| `nineteen.env` | **30 clés, toutes consommées**, vérifié au démarrage |
-| roomgen, objets confrontés au parement | **108, dont 0 toléré** |
-| roomgen, paires de boîtes | **36, dont 0 défaut connu non corrigé** |
-| roomgen, couloir devant les bornes | **0,80 m sur 19 bornes**, 0 défaut |
-| accessibilité à pied | **34 cibles** atteignables depuis le départ |
-| la salle | 151 objets, 158 872 triangles, 45 lumières, 19 bornes |
+| la suite de tests | **41 / 41** |
+| le compilateur | **0 avertissement** sur 625 cibles reconstruites |
+| `nineteen.env` | **34 clés, toutes consommées**, vérifié au démarrage |
 | le binaire | universel, `x86_64 arm64` |
-| le paquet | **249 Mio déballé**, 170 Mio en `.tar.gz` |
-| l'éclairage | `centre` 39, `travee` 27, `sud` 14 (pour ≥ 30 demandés) |
+| la signature | **`adhoc` / `linker-signed`** — c'est-à-dire aucune |
+| le paquet | **231 Mio déballé**, **166 Mio** en `.tar.gz` |
+| images de tiers identifiées dans le paquet | **0** |
+| `retiredTextures` livrées | **0 sur 18** |
+| la salle | 152 objets, 140 matériaux, 64 lumières, **19 bornes** |
+| les jeux | **8 sur 8** démarrent et marquent, depuis le paquet |
+| le personnage | 3 273 sommets, 4 672 triangles, **19 os**, monté |
+| roomgen, contrôles d'audit écrits | **4 sur 9** |
 
 ---
 
@@ -223,94 +181,159 @@ début — « je refuse de livrer une salle que je ne peux pas regarder ».
 
 Dans l'ordre de ce qui empêche la vente.
 
-### 1. ~~Huit affiches et deux planches de lutins appartiennent à des tiers~~ — TENU
+### 1. `--width`/`--height` mentent encore, sur une valeur précise
 
-Les huit affiches sont dessinées par `tools/posterart`. **Treize autres images**
-ont été trouvées ensuite, dans le même examen mené jusqu'au bout : les deux
-planches de Pac-Man, les sept planches de *Flappy Bird* — dont une image de
-banque d'images **avec le filigrane « ©123RF » encore dessus** —, les deux
-captures d'attract qui les montrent, et **le tapis du hall**, qui portait au
-néon un Pac-Man, un de ses fantômes, ses cerises et une manette de console. Les
-treize sortent du paquet ; `tools/spriteart` et `tools/moquetteart` dessinent
-les remplaçantes. Le détail, image par image, est dans `assets/cc0/LICENSES.md`.
+Le correctif est réel — 640x360, 1280x720, 1920x1080 et 2560x1440 sortent
+exactement à la taille demandée. Mais **`--width=1600 --height=900` sort en
+1280x720**, c'est-à-dire à la définition gardée dans `settings.cfg`.
 
-### 2. ~~Les noms « PACMAN » et « TETRIS » sont des marques déposées~~ — TENU, et il y en avait TROIS
+La cause est à `room/main.c:1359` :
 
-**PAC-MAN → DÉDALE**, **TETRIS → APLOMB**, et **FLAPPY BIRD → ENVOL**, qui
-manquait à la liste : c'est le nom d'une œuvre précise de 2013, exactement le
-même motif. Les cinq autres titres ont été examinés et gardés — SNAKE et SHOOTER
-sont des noms de genre, DEMINEUR et PIANO des noms communs. ASTEROID est signalé
-comme risque **résiduel** : c'est un nom commun, mais il est à une lettre de la
-marque *Asteroids* d'Atari, et cette décision-là n'est pas technique.
+```c
+const int win_w = (opt.width  != 1600) ? opt.width  : ns_config_get_int(NS_CFG_WINDOW_W, 1600);
+const int win_h = (opt.height != 900)  ? opt.height : ns_config_get_int(NS_CFG_WINDOW_H, 900);
+```
 
-Une mécanique ne s'approprie pas ; un nom et un personnage, si. Les règles de
-`games/` n'ont pas bougé d'une ligne — ni le barème, ni les vitesses, ni le
-vocabulaire d'événements du serveur, qui aurait invalidé tout journal déjà
-scellé.
+« L'option a-t-elle été donnée ? » est testée en **comparant à la valeur par
+défaut** au lieu de retenir si le drapeau a été passé. Demander explicitement le
+défaut documenté revient donc à ne rien demander. Et comme les deux axes
+décident **séparément**, on obtient des cadrages que personne n'a demandés :
+mesuré, `--width=1600 --height=1080` rend **2560x1080**, et
+`--width=1920 --height=900` rend **1920x1080** — rapport d'image faux, en
+silence.
 
-### 3. Le paquet n'est pas signé
+C'est un défaut de recette : toute capture prise à 1600x900, la définition par
+défaut annoncée par `--help`, sort à une autre taille dès qu'un `settings.cfg`
+existe.
 
-Ni Developer ID ni Authenticode. macOS et Windows avertiront au premier
-lancement. Les certificats appartiennent au propriétaire : **achat et décision**,
-pas travail.
+### 2. Le paquet n'est pas signé
 
-### 4. Il n'y a pas de manette
+`Signature=adhoc`. macOS et Windows avertiront au premier lancement. Les
+certificats appartiennent au propriétaire : **achat et décision**, pas travail.
 
-Chiffré plus haut. Pour un jeu d'arcade, c'est l'attente évidente.
+### 3. La page COMMANDES ignore la manette
 
-### 5. Le menu ne règle ni la résolution ni le plein écran
+La manette marche, et **le jeu ne le dit nulle part**. La page `COMMANDES` ne
+liste que le clavier et la souris. Le commentaire qui garde cette page
+(`room/room_credits.c:80-84`) affirme encore, noir sur blanc, qu'il n'y a pas de
+manette parce que « `SDL_Init` ne demande pas `SDL_INIT_GAMEPAD` » — ce qui
+était vrai à l'écriture et ne l'est plus depuis `room/main.c:1328`.
 
-`window.width`, `window.height` et `window.fullscreen` existent dans
-`ns_config.h`, sont lus au démarrage, et **aucune ligne du menu ne les écrit** :
-il faut éditer `settings.cfg` à la main. Les seize lignes du menu sont par ailleurs
-complètes et compréhensibles — vérifié sur capture.
+Le commentaire disait : « une page d'aide qui annonce une commande qui n'existe
+pas est pire que pas de page du tout ». Le défaut est exactement l'inverse, et
+il coûte autant : un acheteur qui branche une manette n'a **aucun moyen depuis
+le jeu** d'apprendre qu'elle marche.
 
-### 6. `--width` et `--height` ne font rien en `--headless` sur macOS
+Il manque aussi au pad le **saut**, l'**accroupi** et la **course**, et sa table
+n'est pas réglable.
 
-Mesuré : trois tailles demandées, `640x360`, `1600x900`, `2560x1440`, **trois
-fois le même résultat**, `3024x1964` — la définition native de l'écran. Toutes
-les captures du dépôt ont donc été prises à une définition que personne n'a
-choisie, et à un coût de rendu vingt-cinq fois supérieur à ce qui était demandé
-dans le pire cas. Piste : `SDL_WINDOW_HIDDEN | SDL_WINDOW_HIGH_PIXEL_DENSITY`
-dans `engine/rhi/ns_rhi.c:187-195`. **Le cas fenêtre visible n'a pas pu être
-mesuré** depuis cette session.
+### 4. Un lieu de la salle est refusé au chargement, à chaque démarrage
 
-### 7. Le personnage n'a qu'un seul cycle d'animation
+Le paquet livré écrit un avertissement au démarrage :
 
-2,00 s de marche. La cadence suit l'allure, mais **accroupi il reste debout à
-l'écran** — le jeu le dit lui-même au démarrage.
+```
+WARN ns_scene.c:526 — lieu « monnayeur » de nature inconnue (« monnayeur ») : ignoré
+```
 
-### 8. Cinq des neuf contrôles de l'audit ne sont pas écrits
+`salle.scene.json` déclare **7 lieux**, le moteur en charge **6**.
+`ns_poi_kind_from_name` (`engine/scene/ns_scene.c:88`) connaît quinze mots,
+`monnayeur` n'en fait pas partie. Le monnayeur est un poste déclaré non fait
+dans `salle.room.json` ; ce qui n'est pas voulu, c'est qu'un paquet vendu crie
+un avertissement à chaque lancement.
 
-C-04 `check_facing`, C-05 `check_panel_visible`, C-06 `check_hanging`,
-C-07 `check_light_has_body`, C-08 `check_floor_material`.
+### 5. Le personnage n'a qu'un seul cycle d'animation
 
-### 9. Douze défauts de placement mineurs
+2,00 s de marche, et le jeu le dit lui-même au démarrage. La cadence suit
+l'allure, l'accroupi et le balancement d'arrêt en sont **dérivés** — l'accroupi
+est calé à 67,6° de cuisse, genou 135,2°, pieds recalés à 1e-4 près, ce qui
+règle le défaut de 16.0.0 où il restait debout à l'écran. Mais il n'y a
+toujours **ni course, ni saut, ni animation de repos** distinctes.
+
+### 6. Le déterminisme n'est mesuré que sur un système
+
+Deux architectures — `x86_64` et `arm64`, dans le même binaire universel — mais
+**un seul macOS**. `tests/check_determinism.cmake` rejoue chaque journal dans
+deux processus séparés, ce qui attrape les états qui dépendent d'une adresse ;
+ça n'attrape pas une différence de bibliothèque mathématique entre systèmes. Ni
+Windows ni Linux n'ont été mesurés.
+
+### 7. Cinq des neuf contrôles de l'audit ne sont pas écrits
+
+Comptés dans `tools/roomgen.c` : C-01 `check_inside_shell`,
+C-02 `check_solid_overlaps`, C-03 `check_grounded`,
+C-09 `check_cabinet_clearance`. Absents : **C-04 `check_facing`,
+C-05 `check_panel_visible`, C-06 `check_hanging`, C-07 `check_light_has_body`,
+C-08 `check_floor_material`**. `check_grounded` le dit lui-même en commentaire
+pour C-06.
+
+### 8. `ASTEROID` reste un risque de marque
+
+Nom commun, à une lettre d'*Asteroids* (Atari). Les quatre autres titres ont été
+examinés et gardés : SNAKE et SHOOTER sont des noms de genre, DEMINEUR et PIANO
+des noms communs. **Décision du propriétaire**, pas travail.
+
+### 9. Vingt-neuf images du décor n'ont toujours pas d'origine établie
+
+Aucune n'a été identifiée comme appartenant à un tiers — ce sont des bétons, des
+carrelages, des bois, des marbres. Mais « pas identifié » n'est pas « établi »,
+et `legacy/` ne contient aucun document de licence. Le risque a été divisé par
+deux ; il n'est pas éteint.
+
+### 10. `legacy/` reste dans le dépôt
+
+Les images sont sorties du **paquet**, pas du **dépôt** : `legacy/` porte
+**685 images**, dont les huit affiches, les personnages de Namco, l'oiseau de
+*Flappy Bird* et le tapis au Pac-Man. Ouvrir le dépôt les publierait. Même
+question, en plus petit, pour la douzaine de `docs/render-*.png` qui montrent
+l'état d'avant.
+
+### 11. Douze défauts de placement mineurs
 
 Ouverts depuis 16.0.0, listés dans `docs/AUDIT-PLACEMENT.md`. **Ils n'ont pas
-été re-mesurés un par un ici**, et aucun contrôle de build ne les attrape :
-`check_grounded` ne couvre pas les objets suspendus, et le dit lui-même.
-
-### 10. Deux critères d'éclairage sur trois ne sont pas atteints
-
-`sud` à 14 et `travee` à 27, pour ≥ 30. `sud` n'a pas bougé depuis 16.0.0.
-
-### 11. Le déterminisme n'est mesuré que sur un système
-
-Deux architectures — `x86_64` et `arm64` — mais un seul macOS. Ni Windows ni
-Linux.
+été re-mesurés ici**, et aucun contrôle de build ne les attrape.
 
 ### 12. La découverte d'adversaire n'existe pas, et le relais ne parle pas TLS
 
 L'identifiant de duel se convient hors du jeu.
 
-### 13. Il n'y a pas d'icône de fenêtre
+### 13. Il n'y a pas de page de téléchargement
 
-`SDL_SetWindowIcon` n'est appelé nulle part. `packaging/nineteen.png` n'est
-installé que sur les bureaux Linux, via le `.desktop`. Le titre de fenêtre, lui,
-est correct : « Nineteen ».
+C'est le troisième endroit où CC BY 4.0 demande l'attribution. Les deux autres —
+l'écran de crédits, l'archive — sont tenus.
 
-### 14. Il n'y a pas de page de téléchargement
+---
 
-C'est le troisième endroit que CC BY 4.0 demande. Les deux autres — l'écran,
-l'archive — sont tenus depuis cette version.
+## Ce qui reste entre ce paquet et une mise en vente
+
+### Ce qui demande du TRAVAIL
+
+1. **Réparer `--width`/`--height`** (point 1). Une heure : un drapeau
+   « donné / pas donné » à la place de la comparaison au défaut. C'est le seul
+   défaut de cette liste qui fausse *les mesures des autres recettes*.
+2. **Une ligne MANETTE dans la page COMMANDES** (point 3), et corriger le
+   commentaire de `room_credits.c` qui affirme le contraire. Une demi-journée
+   avec le saut, l'accroupi et la course au pad.
+3. **Faire taire l'avertissement `monnayeur`** (point 4) : soit le moteur
+   connaît le mot, soit la salle ne le déclare pas.
+4. **Écrire C-04 à C-08** (point 7), et re-mesurer les douze défauts mineurs.
+5. **Mesurer le déterminisme sur Windows et Linux** (point 6) — la chaîne CI
+   existe, le contrôle est déjà écrit.
+6. **Un deuxième cycle d'animation** (point 5) : course et repos.
+7. **Une page de téléchargement** portant l'attribution CesiumMan (point 13).
+
+### Ce qui demande une DÉCISION ou un ACHAT du propriétaire
+
+1. **Acheter les certificats** Developer ID (Apple) et Authenticode (Windows),
+   et brancher la signature dans CPack — sans quoi les deux systèmes avertissent
+   au premier lancement. **C'est le seul point qui bloque une vente au grand
+   public.**
+2. **Trancher `ASTEROID`** : renommer, ou assumer le risque par écrit.
+3. **Décider du sort de `legacy/`** avant d'ouvrir le dépôt : le purger, ou
+   garder le dépôt privé.
+4. **Décider quoi faire des 29 images sans origine** : les remplacer par du
+   dessin ou du CC0 comme les 21 autres, ou assumer le risque par écrit.
+5. **Décider si le relais chiffre** (TLS) avant d'ouvrir les duels au public.
+
+**En l'état, le jeu est jouable, complet et déballable sans erreur bloquante.
+Ce qui empêche la vente n'est plus le contenu — c'est la signature (achat) et
+deux décisions de marque et de dépôt.**

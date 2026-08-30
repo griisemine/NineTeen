@@ -128,6 +128,7 @@ typedef enum ns_poi_kind {
     NS_POI_TOILETS,
     NS_POI_EXIT,
     NS_POI_LEADERBOARD,
+    NS_POI_TOKENS,          /* le monnayeur : la ou l'on prend ses jetons */
     NS_POI_KIND_COUNT
 } ns_poi_kind;
 
@@ -359,6 +360,16 @@ typedef struct ns_scene {
     int32_t    scoreboard_material;
 
     ns_poi     pois[NS_MAX_POI];
+    /*
+     * LES LIEUX NOMMES, charges et pas encore employes.
+     *
+     * `ns_scene_load` remplit cette liste depuis la description de la salle, et
+     * RIEN dans le depot ne la lit — verifie. Ce n'est pas un oubli a corriger
+     * en la supprimant : elle est le seul endroit ou la salle dise « le billard
+     * est ICI », ce dont auront besoin une signaletique, un guidage de camera ou
+     * un mode attraction. C'est ecrit ici pour que le prochain ne croie pas
+     * qu'elle pilote deja quelque chose.
+     */
     uint32_t   poi_count;
 
     ns_aabb  bounds;        /* toute la géométrie, décor lointain compris */

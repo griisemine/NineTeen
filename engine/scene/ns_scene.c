@@ -103,6 +103,13 @@ static ns_poi_kind ns_poi_kind_from_name(const char *name)
         { "exit",        NS_POI_EXIT },
         { "leaderboard", NS_POI_LEADERBOARD },
         { "classement",  NS_POI_LEADERBOARD },
+        /* Le monnayeur etait declare par la salle et absent de cette table :
+         * chaque lancement du jeu, y compris depuis le paquet, imprimait
+         * « lieu monnayeur de nature inconnue ». Un avertissement qui sort a
+         * chaque demarrage est un avertissement que plus personne ne lit, et
+         * sous lequel le prochain se cachera. */
+        { "monnayeur",   NS_POI_TOKENS },
+        { "tokens",      NS_POI_TOKENS },
     };
     if (!name || !name[0]) return NS_POI_NONE;
     for (size_t t = 0; t < SDL_arraysize(table); ++t) {

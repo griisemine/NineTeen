@@ -437,10 +437,17 @@ static void test_credits(void)
     CHECK(cn > 0, "la page des commandes a des lignes (%d)", cn);
 
     /*
-     * Et elle NE MENT PAS. Il n'y a pas une ligne de code manette dans le
-     * dépôt — `SDL_Init` ne demande pas `SDL_INIT_GAMEPAD` — donc la page ne
-     * doit pas en promettre une. Un joueur à qui l'on annonce une commande qui
-     * n'existe pas croit son matériel cassé, ce qui est pire que le silence.
+     * ET ELLE DIT LA VERITE, dans les deux sens.
+     *
+     * Ce controle exigeait l'inverse : que la page ne promette PAS de manette,
+     * parce qu'il n'y en avait pas et qu'annoncer une commande inexistante fait
+     * croire au joueur que son materiel est casse. La manette existe depuis
+     * `room/room_pad.c`, et la meme regle demande donc l'oppose — une commande
+     * qui existe et que rien n'annonce est une commande que personne n'emploie.
+     *
+     * On ne verifie pas seulement le mot « MANETTE » : un titre de section sans
+     * lignes en dessous serait une promesse vide. Les quatre gestes qu'un
+     * joueur cherche en premier doivent y etre nommes.
      */
     int i;
     bool promises_pad = false;
@@ -449,7 +456,17 @@ static void test_credits(void)
         if ((cl[i].what && SDL_strstr(cl[i].what, "MANETTE"))
          || (cl[i].who  && SDL_strstr(cl[i].who,  "MANETTE"))) promises_pad = true;
     }
-    CHECK(!promises_pad, "la page des commandes ne promet pas de manette : il n'y en a pas");
+    CHECK(promises_pad, "la page des commandes annonce la manette : il y en a une");
+
+    static const char *const gestes[] = { "STICK GAUCHE", "STICK DROIT", "SAUTER", "COURIR" };
+    for (size_t k = 0; k < SDL_arraysize(gestes); ++k) {
+        bool trouve = false;
+        for (i = 0; i < cn; ++i) {
+            if ((cl[i].what && SDL_strstr(cl[i].what, gestes[k]))
+             || (cl[i].who  && SDL_strstr(cl[i].who,  gestes[k]))) trouve = true;
+        }
+        CHECK(trouve, "la page des commandes nomme « %s »", gestes[k]);
+    }
 
     room_menu_close(&m);
     CHECK(m.page == ROOM_MENU_PAGE_SETTINGS, "fermer le menu repose la page des réglages");

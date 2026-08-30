@@ -169,6 +169,14 @@ void room_pad_sample(SDL_Gamepad *g, room_pad_state *out)
     out->action = SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_SOUTH);
     out->menu   = SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START);
 
+    /* Sauter, s'accroupir, courir — les trois que le clavier a et que la
+     * manette n'avait pas. Le bouton du BAS reste l'action : c'est celui du
+     * manche d'une borne, et le deplacer pour y mettre le saut ferait
+     * apprendre deux choses au lieu d'une. */
+    out->jump   = SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_WEST);
+    out->crouch = SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_EAST);
+    out->run    = SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+
     out->move_x = axis(g, SDL_GAMEPAD_AXIS_LEFTX);
     out->move_y = axis(g, SDL_GAMEPAD_AXIS_LEFTY);
     out->look_x = axis(g, SDL_GAMEPAD_AXIS_RIGHTX);

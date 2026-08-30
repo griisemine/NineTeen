@@ -77,11 +77,18 @@ const room_credit_line *room_credits_lines(int *count)
 /*
  * Ce qui est écrit ici doit être ce que `main.c` fait, et rien d'autre.
  *
- * La tentation est d'y mettre ce qu'on aimerait avoir — une ligne « MANETTE »,
- * par exemple. Il n'y en a pas : `SDL_Init` ne demande pas `SDL_INIT_GAMEPAD`
- * et aucun `SDL_EVENT_GAMEPAD_*` n'est lu dans tout le dépôt. Une page d'aide
- * qui annonce une commande qui n'existe pas est pire que pas de page du tout :
- * le joueur croit sa manette cassée.
+ * La règle a d'abord servi à REFUSER une ligne « MANETTE » : il n'y en avait
+ * pas, et une page d'aide qui annonce une commande inexistante est pire que pas
+ * de page du tout — le joueur croit sa manette cassée. Elle sert maintenant à
+ * l'exiger, pour la raison symétrique : la manette MARCHE depuis
+ * `room/room_pad.c`, et un acheteur qui en branche une n'avait aucun moyen, DANS
+ * le jeu, de l'apprendre. Une commande qui existe et que rien n'annonce est une
+ * commande que personne n'emploie.
+ *
+ * Les libellés de manette suivent SDL3, qui nomme les boutons par leur POSITION
+ * et non par leur lettre — une manette Nintendo porte le A là où une Xbox porte
+ * le B. On dit donc « BOUTON DU BAS » et on donne la lettre Xbox entre
+ * parenthèses, parce que c'est celle que la plupart des gens ont sous les yeux.
  *
  * Les touches de déplacement sont lues par POSITION physique, d'où « ZQSD /
  * WASD » sur la même ligne : ce n'est pas deux liaisons, c'est le même bloc de
@@ -94,6 +101,15 @@ static const room_credit_line g_controls[] = {
     { "MAJ GAUCHE",            "COURIR", false },
     { "ESPACE",                "SAUTER", false },
     { "CTRL GAUCHE OU C",      "S'ACCROUPIR", false },
+
+    { "A LA MANETTE", NULL, true },
+    { "STICK GAUCHE / CROIX", "SE DEPLACER, ET LE MANCHE EN PARTIE", false },
+    { "STICK DROIT",          "REGARDER", false },
+    { "BOUTON DU BAS (A)",    "AGIR : LE JETON, LA PORTE, LE BOUTON DE BORNE", false },
+    { "BOUTON GAUCHE (X)",    "SAUTER", false },
+    { "BOUTON DROIT (B)",     "S'ACCROUPIR", false },
+    { "GACHETTE HAUTE G. (LB)", "COURIR", false },
+    { "START",                "LES REGLAGES", false },
 
     { "JOUER", NULL, true },
     { "E",       "DEVANT UNE BORNE : INSERER UN JETON ET JOUER", false },

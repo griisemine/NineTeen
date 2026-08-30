@@ -98,10 +98,37 @@ C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
 | `F7` / `F8` | palier de qualité / échelle de rendu |
 | `F10` | première ou troisième personne |
 
-**Il n'y a pas de manette.** Ni clavier virtuel, ni pad : `SDL_Init` ne demande pas
-`SDL_INIT_GAMEPAD` et aucun événement `SDL_EVENT_GAMEPAD_*` n'est lu. Une manette branchée sera
-vue par le système et ignorée par le jeu. Ce que ça coûterait de la brancher est chiffré dans
-`docs/CHANGELOG-V17.md`.
+**La manette est branchée**, depuis 17.0.0. `SDL_InitSubSystem(SDL_INIT_GAMEPAD)` est appelé
+(`room/main.c:1328`), les branchements et débranchements à chaud sont suivis
+(`SDL_EVENT_GAMEPAD_ADDED` / `REMOVED`), et on traverse la salle, on ouvre le menu et on joue aux
+huit jeux au pad :
+
+| Manette | |
+|---|---|
+| Stick gauche | se déplacer |
+| Stick droit | regarder |
+| A (bouton du bas) | devant une borne : insérer un jeton et jouer ; en partie : le bouton |
+| Croix directionnelle | en partie : le manche de la borne ; dans le menu : choisir et régler |
+| `Start` | ouvrir et fermer le menu |
+| B (bouton de droite) | fermer le menu |
+
+Le point qui comptait n'est pas le branchement, c'est le **journal**. Les appuis de la manette
+sont fusionnés dans le même masque que le clavier — `hmask = room_keys_mask(keys) | pad_mask`
+(`room/main.c:3188`) — et c'est ce masque que `--journal-entrees` écrit, que `--rejouer` relit et
+qu'un duel en pas verrouillé publie. Une partie jouée à la manette est donc **rejouable et
+reproductible** exactement comme une partie au clavier. Une implémentation qui aurait nourri les
+touches sans nourrir le masque aurait rendu toute partie à la manette irreproductible, sans
+message et sans erreur. Le test `manette` (`tests/test_pad.c`, n° 4 de la suite) vérifie que les
+deux périphériques produisent le **même masque**, et il fait partie des 41 qui gardent le build.
+
+**Ce que la manette n'a pas encore**, et il faut le savoir avant de brancher :
+
+- **ni saut, ni accroupi, ni course** — `Espace`, `Ctrl` gauche et `Maj` gauche n'ont pas
+  d'équivalent au pad ;
+- **la page `COMMANDES` du jeu ne l'affiche pas**. Elle ne liste que le clavier et la souris. Le
+  tableau ci-dessus est, pour l'instant, le seul endroit où la correspondance est écrite — dans
+  un fichier à ouvrir à côté du jeu, donc pas là où le joueur la cherchera ;
+- **la correspondance n'est pas réglable** : elle est en dur.
 
 Ces touches sont aussi **dans le jeu**, depuis 17.0.0 : `Échap` puis `COMMANDES`. Un bandeau
 les rappelle pendant les quatorze premières secondes — le temps de traverser le sas.
@@ -249,13 +276,20 @@ Le jeu se parcourt, se joue, et se règle. Ce qui manque :
   par défaut et ne parle pas TLS ;
 - ~~du mobilier importé au-delà de trois modèles~~ : **douze modèles**, listés dans
   `assets/cc0/LICENSES.md` ;
-- **la manette.** Rien n'est branché : voir le tableau des touches plus haut ;
-- **les licences des images de 2020.** Huit affiches accrochées dans la salle appartiennent à
-  des tiers — Nintendo, Bandai Namco, Atari, Netflix, Riot Games. Elles sont nommées une par une
-  dans `assets/cc0/LICENSES.md`, section « Les images de 2020 ». **Le jeu ne peut pas être vendu
-  en l'état** ;
-- **la signature du paquet.** Ni Developer ID ni Authenticode : macOS et Windows avertiront au
-  premier lancement.
+- ~~la manette~~ : **branchée**, et le journal d'entrées la suit. Il lui manque le saut,
+  l'accroupi, la course, une ligne dans la page `COMMANDES` du jeu et une table réglable ;
+- ~~les huit affiches de tiers~~ : **dessinées** par `tools/posterart`, avec treize autres
+  planches empruntées et le tapis du hall. Vérifié en déballant l'archive : plus une seule
+  des vingt et une images identifiées n'y est ;
+- **les licences des images de 2020.** Il reste **29 images** dans le décor livré qui viennent
+  de `legacy/room/textures/` et **ne portent aucune trace d'origine ni de licence**. Aucune n'a
+  été identifiée comme appartenant à un tiers — ce sont des bétons, des carrelages, des bois —
+  mais « pas identifié » n'est pas « établi ». Détail dans `assets/cc0/LICENSES.md`, section
+  « Les images de 2020 » ;
+- **le nom `ASTEROID`.** À une lettre de la marque *Asteroids* d'Atari. Risque résiduel signalé,
+  pas tranché : c'est une décision, pas un travail ;
+- **la signature du paquet.** Ni Developer ID ni Authenticode — mesuré : `codesign -dv` rend
+  `adhoc, linker-signed`. macOS et Windows avertiront au premier lancement.
 
 Cette liste a été fausse deux fois plutôt qu'une : elle annonçait encore « aucun son », « aucune
 interaction » et « la collision n'est pas branchée » longtemps après que les trois aient été
@@ -281,9 +315,14 @@ message.
 ### Ce qui marche aujourd'hui, sans rien installer
 
 Le classement est **local**, et il l'est par conception. À la fin d'une partie le
-score est écrit dans `scores.txt`, dans le répertoire utilisateur du jeu
-(`~/.local/share/nineteen/` sous Linux, `~/Library/Application Support/nineteen/`
-sous macOS, `%APPDATA%\nineteen\` sous Windows). L'écriture est **atomique** — un
+score est écrit dans `scores.txt`, dans le répertoire utilisateur du jeu — celui
+de la section « Où le jeu écrit » plus haut, et **pas** un répertoire `nineteen/`
+séparé : `SDL_GetPrefPath("recognizer", "Nineteen")` (`engine/core/ns_paths.c:72`)
+donne `~/Library/Application Support/recognizer/Nineteen/` sous macOS,
+`~/.local/share/recognizer/Nineteen/` sous Linux et `%APPDATA%\recognizer\Nineteen\`
+sous Windows. *(Ce paragraphe annonçait un chemin sans `recognizer/` jusqu'en
+17.0.0 : il envoyait chercher le fichier de scores dans un répertoire qui n'a
+jamais existé.)* L'écriture est **atomique** — un
 temporaire puis un renommage —, donc une coupure de courant laisse l'ancien
 fichier intact plutôt qu'un fichier tronqué.
 
@@ -573,11 +612,22 @@ En dessous de 0,5, le texte des écrans de bornes cesse d'être lisible.
 
 ### En jeu
 
-`Échap` ouvre le **menu de réglages** : palier de qualité (avec son coût relatif
-mesuré sur M1, de `x0.30` à `x6.20`), échelle de rendu (avec le pourcentage de pixels
-économisé), densité de poussière, luminosité, les quatre volumes et la
-sensibilité de la souris. Les flèches choisissent et règlent, `Entrée` valide,
-`Échap` referme.
+`Échap` ouvre le **menu de réglages**. Il porte **dix-huit lignes**, dans cet ordre : palier de
+qualité (avec son coût relatif mesuré sur M1, de `x0.30` à `x6.20`), échelle de rendu (avec le
+pourcentage de pixels économisé), densité de poussière, luminosité, **définition**, **plein
+écran**, les six volumes — général, musique, effets, ambiance, pas, fond de salle —, sensibilité
+de la souris, temps réel, puis les deux pages d'information **COMMANDES** et **CREDITS**,
+reprendre et quitter. Les flèches choisissent et règlent, `Entrée` valide, `Échap` referme.
+
+**La définition et le plein écran se règlent depuis le menu** depuis 17.0.0 : il n'est plus
+nécessaire d'éditer `settings.cfg` à la main pour changer de résolution. Les deux sont gardés
+comme les autres réglages.
+
+Les deux pages d'information s'ouvrent aussi en ligne de commande, pour la recette :
+`--menu=14` donne `COMMANDES`, `--menu=15` donne `CREDITS`. **`--menu=` attend un numéro de
+ligne, pas un libellé** — `--menu=CREDITS` ne produit pas d'erreur, il vaut `--menu=0` et ouvre
+le menu sur la première ligne. Et un numéro se décale dès qu'on ajoute un réglage : vérifiez la
+capture plutôt que le numéro.
 
 La salle **continue de vivre derrière le voile** — c'est ce qui permet de juger
 un réglage pendant qu'on le change plutôt qu'après l'avoir fermé. Seul le joueur

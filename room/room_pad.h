@@ -57,6 +57,13 @@ typedef struct room_pad_state {
     bool  dpad[4];
     bool  action;          /* le bouton du bas (A / croix) */
     bool  menu;            /* Start */
+    /* Les trois modificateurs de deplacement de la SALLE. Ils ne vont PAS dans
+     * le masque : le masque est ce que les mini-jeux reçoivent et ce que le
+     * journal d'entrees publie, et un jeu de plateforme n'a que cinq boutons.
+     * Sauter ou s'accroupir devant une borne ne regarde que la salle. */
+    bool  jump;            /* face gauche (X sur une Xbox) */
+    bool  crouch;          /* face droite (B sur une Xbox), maintenu */
+    bool  run;             /* gachette d'epaule gauche, maintenue */
     float move_x, move_y;  /* stick gauche, −1 à +1 */
     float look_x, look_y;  /* stick droit, −1 à +1 */
 } room_pad_state;
