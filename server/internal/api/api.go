@@ -47,27 +47,34 @@ type Server struct {
 	// la page bâtissait trois liens de téléchargement vers une release qui
 	// n'existe pas.
 	publiee bool
-	assets  http.Handler
+	// L'adresse PUBLIQUE du serveur, celle que le joueur passe à `--server=`.
+	// Vide quand `NINETEEN_PUBLIC_URL` n'est pas posée : la page cache alors le
+	// bloc plutôt que d'annoncer une adresse devinée. Contrôlée avant d'arriver
+	// ici — voir `urlPubliqueValide` dans cmd/nineteend.
+	publicURL string
+	assets    http.Handler
 }
 
 type Config struct {
-	Store   *store.Store
-	Logger  *slog.Logger
-	Secure  bool
-	Version string
-	Publiee bool
-	Assets  http.Handler
+	Store     *store.Store
+	Logger    *slog.Logger
+	Secure    bool
+	Version   string
+	Publiee   bool
+	PublicURL string
+	Assets    http.Handler
 }
 
 func New(cfg Config) *Server {
 	s := &Server{
-		store:   cfg.Store,
-		log:     cfg.Logger,
-		mux:     http.NewServeMux(),
-		secure:  cfg.Secure,
-		version: cfg.Version,
-		publiee: cfg.Publiee,
-		assets:  cfg.Assets,
+		store:     cfg.Store,
+		log:       cfg.Logger,
+		mux:       http.NewServeMux(),
+		secure:    cfg.Secure,
+		version:   cfg.Version,
+		publiee:   cfg.Publiee,
+		publicURL: cfg.PublicURL,
+		assets:    cfg.Assets,
 	}
 	s.routes()
 	return s
@@ -1075,9 +1082,20 @@ func (s *Server) handleGhost(w http.ResponseWriter, r *http.Request) {
 // n'affirme pas qu'un paquet existe. Le jour où la release est publiée,
 // NINETEEN_RELEASE_PUBLIEE=1 rallume les boutons — une variable, pas un
 // redéploiement du site.
+// `serveur` : l'adresse que le JEU doit viser, et que lui seul ignore.
+//
+// Le site, lui, n'en a aucun besoin — `app.js` appelle l'API en relatif et
+// `credentials: "same-origin"`, donc il fonctionne sur n'importe quel hôte sans
+// rien savoir de son propre nom. Ce champ ne sert pas à l'API du site : il sert
+// à ce que la page de téléchargement puisse écrire, sous le bouton, la ligne
+// exacte à taper. Sans lui le joueur repart avec un binaire et aucune adresse.
+//
+// Vide quand `NINETEEN_PUBLIC_URL` n'est pas posée. La page cache alors le bloc
+// — un serveur qu'on lance sans rien dire n'annonce rien, comme pour `publiee`.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "version": s.version, "publiee": s.publiee,
+		"serveur": s.publicURL,
 	})
 }
 

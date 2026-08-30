@@ -1,10 +1,16 @@
 # docker-compose.yml — la pile complète en une commande.
 #
+#   cp .env.example .env      # au minimum : NINETEEN_DB_PASSWORD
 #   docker compose up --build
 #
 # Le site est alors sur http://localhost:8080, base migrée et jeux insérés.
 # L'original demandait un hébergement mutualisé avec la bonne version de PHP et
 # une arborescence exacte ; ici tout est dans l'image.
+#
+# TOUT CE QUI SE RÈGLE EST DANS `.env`, et rien n'y est obligatoire sauf le mot
+# de passe. Les `${VAR:-defaut}` ci-dessous portent le défaut de développement :
+# la pile démarre donc telle quelle, et se déplace vers un vrai déploiement sans
+# qu'on touche à ce fichier.
 
 services:
   db:
@@ -36,13 +42,36 @@ services:
       # faux positif, et il est leve explicitement plutot que desarme : dans un
       # conteneur, ecouter sur la boucle locale rendrait le service injoignable
       # depuis l'hote — il FAUT « :8080 ». Ce qui borne l'exposition, c'est la
-      # publication ci-dessous, « 127.0.0.1:8080:8080 », qui ne sort pas de la
-      # machine. Derriere un vrai proxy TLS, retirer cette ligne et poser
+      # publication ci-dessous, qui ne sort pas de la machine par defaut.
+      # Derriere un vrai proxy TLS, retirer cette ligne et poser
       # NINETEEN_SECURE=1.
-      NINETEEN_INSECURE_OK: "1"
-      NINETEEN_LOG: json
+      NINETEEN_INSECURE_OK: ${NINETEEN_INSECURE_OK:-1}
+      NINETEEN_SECURE: ${NINETEEN_SECURE:-}
+      NINETEEN_LOG: ${NINETEEN_LOG:-json}
+      # L'ADRESSE QUE LE JEU DOIT VISER — celle que la page de téléchargement
+      # écrit sous le bouton, telle qu'on la tape dans `--server=`.
+      #
+      # Elle ne peut pas se déduire de `NINETEEN_ADDR` : le serveur écoute sur
+      # « :8080 » DANS le conteneur, et le monde le joint par la publication
+      # ci-dessous, ou par un proxy, sur un tout autre nom. Seul l'exploitant
+      # sait laquelle est la bonne.
+      #
+      # Vide par défaut : un serveur lancé sans rien dire n'annonce rien, et la
+      # page cache le bloc. C'est le même parti que NINETEEN_RELEASE_PUBLIEE.
+      NINETEEN_PUBLIC_URL: ${NINETEEN_PUBLIC_URL:-}
+      # Les paquets de cette version sont-ils publiés sur GitHub ? À 1, la page
+      # rallume ses trois boutons de téléchargement.
+      NINETEEN_RELEASE_PUBLIEE: ${NINETEEN_RELEASE_PUBLIEE:-}
     ports:
-      - "127.0.0.1:8080:8080"
+      # 127.0.0.1 PAR DÉFAUT, et c'est le choix qui compte dans cette ligne :
+      # le service ne sort pas de la machine tant que personne ne l'a demandé.
+      #
+      # `NINETEEN_BIND=0.0.0.0` l'ouvre au réseau — et c'est exactement le
+      # moment où il FAUT un proxy TLS devant, avec NINETEEN_SECURE=1 et sans
+      # NINETEEN_INSECURE_OK : sinon le cookie de session part en clair sur une
+      # adresse joignable. Le serveur le dit et refuse de démarrer si l'on ôte
+      # NINETEEN_INSECURE_OK sans poser NINETEEN_SECURE.
+      - "${NINETEEN_BIND:-127.0.0.1}:${NINETEEN_PORT:-8080}:8080"
     restart: unless-stopped
     # Durcissement du conteneur : rien de tout cela n'est nécessaire au service.
     read_only: true

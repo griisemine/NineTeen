@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -72,11 +73,36 @@ func main() {
 			"adresse d'ecoute du relais de duel (vide = pas de duel en direct)")
 		insecureOK = flag.Bool("insecure-ok", envOr("NINETEEN_INSECURE_OK", "") != "",
 			"autoriser l'écoute publique SANS cookies Secure (à n'employer qu'en connaissance de cause)")
+		// L'ADRESSE PUBLIQUE, celle que le JEU doit viser.
+		//
+		// Elle n'a rien à voir avec `-addr`, et c'est tout l'intérêt : `-addr`
+		// dit où le processus écoute — « :8080 » dans un conteneur — tandis que
+		// celle-ci dit où le monde le joint. Derrière une publication Docker ou
+		// un proxy TLS, les deux diffèrent toujours, et le serveur est le seul
+		// à connaître la seconde.
+		//
+		// Ce qu'elle répare : la page de téléchargement livrait un binaire et
+		// aucun moyen de savoir quoi lui donner. Le joueur téléchargeait le jeu,
+		// et devait deviner l'URL à mettre dans `--server=`. Elle sort
+		// maintenant par `/api/v1/version`, et la page l'affiche telle qu'on la
+		// tape.
+		//
+		// Vide par défaut, exactement comme `NINETEEN_RELEASE_PUBLIEE` : un
+		// serveur lancé sans rien dire n'affirme rien. La page cache simplement
+		// le bloc.
+		publicURL = flag.String("public-url", envOr("NINETEEN_PUBLIC_URL", ""),
+			"URL publique du serveur, annoncée au joueur pour --server= (vide = rien n'est annoncé)")
 	)
 	flag.Parse()
 
 	logger := newLogger(*logFormat)
 	slog.SetDefault(logger)
+
+	// Une adresse publique fausse est PIRE que pas d'adresse : elle envoie tous
+	// les joueurs de la page vers un serveur qui n'existe pas, et le seul
+	// symptôme côté jeu est un classement qui reste local. On la contrôle donc
+	// ici, et on refuse de l'annoncer plutôt que de la propager.
+	*publicURL = urlPubliqueValide(*publicURL, logger)
 
 	// Une adresse publique sans `-secure` envoie le cookie de session en clair.
 	//
@@ -132,12 +158,13 @@ func main() {
 	}
 
 	srv := api.New(api.Config{
-		Store:   db,
-		Logger:  logger,
-		Secure:  *secure,
-		Version: version,
-		Publiee: os.Getenv("NINETEEN_RELEASE_PUBLIEE") == "1",
-		Assets:  assets,
+		Store:     db,
+		Logger:    logger,
+		Secure:    *secure,
+		Version:   version,
+		Publiee:   os.Getenv("NINETEEN_RELEASE_PUBLIEE") == "1",
+		PublicURL: *publicURL,
+		Assets:    assets,
 	})
 
 	httpServer := &http.Server{
@@ -215,6 +242,68 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// urlPubliqueValide contrôle `NINETEEN_PUBLIC_URL` et rend ce qu'on peut
+// annoncer — la chaîne vide quand il n'y a rien de sûr à dire.
+//
+// Trois refus, et chacun correspond à une faute qu'on fait vraiment :
+//
+//   - PAS D'HÔTE (« http:// », « /api », « arcade.example » sans schéma). Le
+//     joueur recopierait une adresse que rien ne peut joindre.
+//
+//   - UNE BARRE OBLIQUE FINALE. Le client la retire déjà de son côté
+//     (`ns_online_init`), donc elle ne casse rien — mais la page afficherait
+//     « --server=http://x:8080/ » là où le journal du jeu répondra
+//     « http://x:8080 », et deux textes qui diffèrent sur la même chose font
+//     douter du bon. On la retire ici plutôt que d'expliquer la différence.
+//
+//   - `https`. Ce n'est PAS un avertissement de confort : le client refuse
+//     explicitement `https://` — `ns_http_parse_url` échoue, et
+//     `tests/test_online.c` le cloue (« https est refusé »), parce que le
+//     traiter comme du HTTP en clair enverrait le jeton de session sur un port
+//     qui ne le comprend pas. Annoncer une adresse `https` au joueur lui
+//     donnerait donc à coup sûr une URL que son jeu ne sait pas ouvrir. On la
+//     refuse au lieu de la propager, et le message dit quoi faire.
+func urlPubliqueValide(brut string, logger *slog.Logger) string {
+	brut = strings.TrimSpace(brut)
+	if brut == "" {
+		return ""
+	}
+
+	u, err := url.Parse(brut)
+	if err != nil || u.Host == "" {
+		logger.Error("NINETEEN_PUBLIC_URL illisible, rien ne sera annoncé au joueur",
+			"valeur", brut,
+			"aide", "attendu « http://hote:port », schéma et hôte compris")
+		return ""
+	}
+
+	if u.Scheme == "https" {
+		logger.Error("NINETEEN_PUBLIC_URL en https : le jeu ne sait pas l'ouvrir, rien ne sera annoncé",
+			"valeur", brut,
+			"aide", "le client refuse https (voir ns_http_parse_url) ; annoncer l'adresse "+
+				"http joignable par le jeu, ou ne rien annoncer tant que le client ne parle pas TLS")
+		return ""
+	}
+	if u.Scheme != "http" {
+		logger.Error("NINETEEN_PUBLIC_URL : schéma inattendu, rien ne sera annoncé",
+			"valeur", brut, "schema", u.Scheme, "aide", "seul « http » est utilisable par le jeu")
+		return ""
+	}
+
+	// Le chemin est vidé : le jeu colle « /api/v1/… » derrière ce qu'on lui
+	// donne, donc tout suffixe produirait « http://x/quelquechose/api/v1/games ».
+	u.Path = strings.TrimRight(u.Path, "/")
+	if u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		logger.Warn("NINETEEN_PUBLIC_URL : chemin ou paramètres ignorés",
+			"valeur", brut, "aide", "le jeu ajoute lui-même « /api/v1/… » derrière l'origine")
+		u.Path, u.RawQuery, u.Fragment = "", "", ""
+	}
+
+	propre := u.String()
+	logger.Info("adresse publique annoncée au joueur", "url", propre)
+	return propre
 }
 
 // redactURL masque le mot de passe d'une URL de connexion.
