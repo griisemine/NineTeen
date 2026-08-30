@@ -14,7 +14,7 @@ droit de faire :
    images de 2020 : ce qui n'est PAS établi ». **C'est la section à lire avant
    de vendre.** Les vingt et une identifiées comme appartenant à des tiers
    — huit affiches et treize planches, **le tapis du hall compris** — **ne sont
-   plus copiées dans le paquet** ; il en reste **29** dans le décor livré dont
+   plus copiées dans le paquet** ; il en reste **28** dans le décor livré dont
    personne ne peut dire d'où elles viennent.
 
 ## Les textures rapportées
@@ -302,22 +302,46 @@ et laissait croire par omission que le reste était réglé. Il ne l'est pas.
 
 Mesuré en déballant l'archive `nineteen-17.0.0-Darwin.tar.gz` et en classant
 chaque fichier par son origine dans l'arbre — pas en lisant une liste. Le
-paquet porte **73 images** dans `bin/assets/scene/textures/` :
+paquet porte **75 images** dans `bin/assets/scene/textures/` :
 
 | | |
 |---|---|
-| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **29** |
+| viennent de `legacy/room/textures/`, c'est-à-dire de **2020** | **28** |
 | viennent d'ici — Poly Haven, CC0, listées plus haut | **19** |
-| **générées au build** (affiches de `posterart`, enseignes, écrans de jeu, flanc de borne, néon, tapis) | **25** |
+| **générées au build** (affiches de `posterart`, enseignes, écrans de jeu, flanc de borne, néon, tapis, crépi) | **28** |
 | **orphelines** : aucune source dans l'arbre, aucun matériau qui les référence | **0** |
 
-Sur le paquet entier — planches de jeu comprises — cela fait **103 images** :
-**41** de 2020, **19** Poly Haven, **43** générées au build.
+Sur le paquet entier — planches de jeu comprises — cela fait **104 images** :
+**39** de 2020, **19** Poly Haven, **46** générées au build.
 
 Le chiffre à retenir est le premier, et il a **bougé de moitié** : les images de
-2020 encore livrées passent de **58 à 29** dans le décor, parce que les huit
-affiches, les treize planches empruntées et les dix-huit `retiredTextures` ne
+2020 encore livrées passent de **58 à 28** dans le décor, parce que les huit
+affiches, les treize planches empruntées et les dix-neuf `retiredTextures` ne
 sont plus copiées. Les **deux orphelines** ont disparu avec elles.
+
+La vingt-neuvième vient de partir : `mur_gris.jpg` habillait les 197 m² de mur
+du hall, la plus grande surface verticale de la salle. Elle est remplacée par
+`mur_crepi.png`, dessinée par `tools/murart` — même réflectance sur les trois
+canaux à la quatrième décimale, spectre borné à quatre texels. Le motif du
+retrait n'était pas la licence mais la mesure : sa tache dominante fait 12 à
+14 mm là où un crépi écrasé en fait 1 à 3, et son écart-type de luminance valait
+32,3 sur 255, c'est-à-dire une ombre peinte dans l'albédo. Le bénéfice de
+licence est venu en prime, et c'est ce qui rend cette liste réductible : chaque
+image de 2020 qu'on remplace pour une raison de RENDU sort aussi du risque.
+
+**Chacune des 28 restantes est employée par un matériau** — vérifié fichier par
+fichier contre les 125 matériaux de `salle.room.json`. Aucune n'est du poids
+mort qu'il suffirait de ne plus copier ; les retirer demande de les remplacer.
+
+Reste, et ce n'est pas éteint : `tetris_font.jpg` porte une marque déposée DANS
+SON NOM DE FICHIER. Son contenu, lui, a été ouvert et regardé — c'est l'écran
+d'aide du jeu d'empilement de 2020, l'art du projet, et le mot n'y figure pas.
+Ce qui subsiste est donc un nom de fichier et le nom de matériau qu'il porte
+dans `salle.gltf` : aucune revendication, aucun affichage, mais un mot qu'on
+préférerait ne pas livrer. Le renommer à la copie est une ligne de CMake ; c'est
+écrit ici plutôt que fait dans le même lot, parce que ça déplace le compte de
+`--expect-textures` et que ce compte est un invariant qui mérite son propre
+passage.
 
 Le reste — affiches, enseignes, écrans de jeu, flanc de borne, néon, tapis du
 hall — est **généré au build** et ne pose aucune question de licence : c'est de
