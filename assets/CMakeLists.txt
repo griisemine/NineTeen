@@ -304,6 +304,83 @@ list(APPEND MARQUEE_ART "${_sortie}" "${GEN}/scene/textures/bloc_sortie.png"
                         "${GEN}/materials/bloc_sortie${_map_n}"
                         "${GEN}/materials/bloc_sortie${_map_orm}")
 
+# ---------------------------------------------------------------------------
+# LES DEUX MOTS DU PANNEAU HARD / EASY
+# ---------------------------------------------------------------------------
+#
+# LA DETTE QUE CECI SOLDE ETAIT ECRITE, et c'est ce qui rend le defaut
+# interessant : `salle.room.json` disait deja, a l'endroit meme du panneau,
+# « les glyphes de 2020 sont de la geometrie 3D (Texte.004 a Texte.007) que
+# cette description ne sait pas produire : ils sont ici deux bandeaux de couleur
+# inversee, QUI PORTENT LA MEME LECTURE ».
+#
+# La derniere affirmation est la seule qui soit verifiable, et la capture la
+# refute. Vue de l'allee centrale — la vue « allee », qui a ce panneau dans son
+# axe et dont le commentaire annonce « le panneau HARD/EASY au-dessus de
+# l'allee » — on lit DEUX RECTANGLES VIDES, et de surcroit dans des couleurs
+# qu'aucun spectateur ne peut relier a une consigne : une plaque bleutee sur la
+# moitie rouge, une plaque brune sur la moitie bleue. Ce n'est pas « la meme
+# lecture », c'est une enseigne cassee — sur le SEUL objet de la salle dont la
+# fonction entiere est de dire quelque chose.
+#
+# La description ne sait pas produire de glyphes ; le DEPOT, si. C'est
+# exactement ce qui s'est passe six blocs plus haut pour le bloc de secours, qui
+# portait une capture d'ecran du menu de 2020 : `marqueeart` dessine une plaque
+# retroeclairee avec le mot en reserve, dans la fonte du jeu, et c'est le meme
+# objet qu'un marquee de borne en plus petit.
+#
+# LES COULEURS SONT CELLES DE LA MESURE DE 2020, et elles surprennent : le mot
+# du cote HARD est ROUGE sur le fond bleu, celui du cote EASY BLEU sur le fond
+# rouge. C'est l'inversion relevee sur le modele d'origine, et elle est gardee.
+#
+# COTES : la plaque declaree fait 0,36 x 0,104 m, soit 3,462:1. 1024 x 296 donne
+# 3,459:1 — l'ecart est de 0,1 %, invisible, et il evite un nombre impair de
+# texels. Densite 2844 texels/m : c'est beaucoup pour une plaque de 36 cm, et
+# c'est voulu, parce qu'elle se lit de trois metres et que le mot n'y occupe que
+# 104 mm de haut.
+set(_mots_hard "${GEN}/sideart/mot_hard.png")
+set(_mots_easy "${GEN}/sideart/mot_easy.png")
+add_custom_command(
+    OUTPUT  "${_mots_hard}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND marqueeart --titre=HARD "--teinte=0.86,0.14,0.16"
+            --width=1024 --height=296 "${_mots_hard}"
+    DEPENDS marqueeart
+    COMMENT "Panneau de difficulte : mot_hard.png"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT  "${_mots_easy}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
+    COMMAND marqueeart --titre=EASY "--teinte=0.16,0.38,0.86"
+            --width=1024 --height=296 "${_mots_easy}"
+    DEPENDS marqueeart
+    COMMENT "Panneau de difficulte : mot_easy.png"
+    VERBATIM
+)
+foreach(_mot hard easy)
+    add_custom_command(
+        OUTPUT  "${GEN}/scene/textures/mot_${_mot}.png"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/scene/textures"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${GEN}/sideart/mot_${_mot}.png" "${GEN}/scene/textures/mot_${_mot}.png"
+        DEPENDS "${GEN}/scene/textures/.stamp" "${GEN}/sideart/mot_${_mot}.png"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT  "${GEN}/materials/mot_${_mot}${_map_n}" "${GEN}/materials/mot_${_mot}${_map_orm}"
+        COMMAND texgen --max-map=${NINETEEN_MAX_MAP} ${_bc} --strength=0.35
+                "${GEN}/sideart/mot_${_mot}.png" "${GEN}/materials"
+        DEPENDS texgen "${GEN}/sideart/mot_${_mot}.png"
+        COMMENT "Materiau PBR : mot_${_mot}"
+        VERBATIM
+    )
+    list(APPEND MARQUEE_ART "${GEN}/sideart/mot_${_mot}.png"
+                            "${GEN}/scene/textures/mot_${_mot}.png"
+                            "${GEN}/materials/mot_${_mot}${_map_n}"
+                            "${GEN}/materials/mot_${_mot}${_map_orm}")
+endforeach()
+
 # DEDALE et APLOMB portaient « PAC-MAN » et « TETRIS », deux MARQUES DÉPOSÉES
 # (Bandai Namco, Tetris Holding), écrites en toutes lettres sur cinq enseignes
 # et deux écrans d'attente. Une enseigne est ce qu'on lit d'une borne AVANT d'y
@@ -795,7 +872,12 @@ list(LENGTH _cc0_textures  _n_cc0)
 #   termes de l'addition si. Voir « LES IMAGES DE 2020 QU'ON RECOPIE SOUS UN
 #   AUTRE NOM ».
 #
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 29")
+#   +2 « mot_hard.png » et « mot_easy.png », les deux mots du panneau de
+#   difficulte. Elles ne remplacent aucun fichier : le panneau portait deux
+#   materiaux d'APLAT — « rouge » et « bleu » — qui restent employes ailleurs
+#   dans la salle. Voir « LES DEUX MOTS DU PANNEAU HARD / EASY ».
+#
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 31")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"

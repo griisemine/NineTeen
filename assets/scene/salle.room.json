@@ -1291,6 +1291,34 @@
       "emissiveStrength": 0.85
     },
     {
+      "name": "mot_hard",
+      "texture": "mot_hard.png",
+      "roughness": 0.36,
+      "metallic": 0.05,
+      "fit": true,
+      "emissive": [
+        1.0,
+        0.42,
+        0.38
+      ],
+      "emissiveStrength": 1.15,
+      "_": "Le MOT du panneau de difficulte, dessine par `marqueeart` dans la fonte du jeu — meme recette que « bloc_sortie », et pour le meme motif : une plaque retroeclairee avec le mot en reserve.\nIl remplace un APLAT. Le panneau portait « rouge » et « bleu », deux materiaux sans motif : de l'allee on lisait deux rectangles vides, sur le seul objet de la salle dont la fonction entiere est de dire quelque chose. La description assumait la dette — « les glyphes de 2020 sont de la geometrie 3D que cette description ne sait pas produire » — en affirmant que les deux bandeaux « portent la meme lecture ». La capture l'a refutee.\n`fit` parce que la plaque est un quad a UV 0..1 : un pavage remettrait un motif qui ne connait pas les bords de la piece qu'il habille.\nEMISSIF a 1,15, comme les deux fonds le sont a 0,45 et 0,85 : le panneau pend a 2,09 m au-dessus de l'allee, entre deux rampes qui l'eclairent par la tranche, et le mot doit sortir DEVANT son propre fond. Plus fort que les fonds, sans quoi la reserve claire du mot se noierait dans la couleur qui l'entoure."
+    },
+    {
+      "name": "mot_easy",
+      "texture": "mot_easy.png",
+      "roughness": 0.36,
+      "metallic": 0.05,
+      "fit": true,
+      "emissive": [
+        0.46,
+        0.62,
+        1.0
+      ],
+      "emissiveStrength": 1.15,
+      "_": "Le MOT du panneau de difficulte, dessine par `marqueeart` dans la fonte du jeu — meme recette que « bloc_sortie », et pour le meme motif : une plaque retroeclairee avec le mot en reserve.\nIl remplace un APLAT. Le panneau portait « rouge » et « bleu », deux materiaux sans motif : de l'allee on lisait deux rectangles vides, sur le seul objet de la salle dont la fonction entiere est de dire quelque chose. La description assumait la dette — « les glyphes de 2020 sont de la geometrie 3D que cette description ne sait pas produire » — en affirmant que les deux bandeaux « portent la meme lecture ». La capture l'a refutee.\n`fit` parce que la plaque est un quad a UV 0..1 : un pavage remettrait un motif qui ne connait pas les bords de la piece qu'il habille.\nEMISSIF a 1,15, comme les deux fonds le sont a 0,45 et 0,85 : le panneau pend a 2,09 m au-dessus de l'allee, entre deux rampes qui l'eclairent par la tranche, et le mot doit sortir DEVANT son propre fond. Plus fort que les fonds, sans quoi la reserve claire du mot se noierait dans la couleur qui l'entoure."
+    },
+    {
       "_atmo": "SPEC-ATMOSPHERE poste 13, applique APRES verification et pas comme il etait ecrit. La specification disait de remplacer la texture parce qu'elle mesurait 0,0030 de reflectance et que c'etait « un aplat de 1 x 1 pixel ». C'etait vrai de l'etat d'ORIGINE ; `bordeau_uni.jpg` est retire depuis, et ce materiau porte deja `lacquered_wood.jpg`, une vraie texture. Sa premisse etait donc perimee, et l'appliquer telle quelle orphelinait une texture — ce qu'a dit l'invariant de comptage de roomgen, « 83 employees pour 84 presentes ». La vraie cause du caisson noir n'etait pas la texture mais le MULTIPLICATEUR, a 0,40 de rouge et 0,07 de vert. 0,62 / 0,13 / 0,17 : le jukebox redevient bordeaux au lieu d'etre une silhouette.",
       "name": "bordeau_uni",
       "texture": "lacquered_wood.jpg",
@@ -7351,7 +7379,7 @@
       ]
     },
     {
-      "_": "LE PANNEAU HARD / EASY, suspendu au-dessus de l'allee centrale — le SEUL signal spatial de la regle de difficulte, et il n'existait pas.\nLA REGLE, elle, est sans exception dans 2020 : les six bornes HARD sont a x < 0, les six EASY a x > 0 (releve § 5). Rien dans le decor ne le disait plus.\nCOTES MESUREES sur PANNEAU_EASY/HARD_Cube.035 : x -0,470 a 0,501, y 2,088 a 2,476, z 0,631 a 0,709 ; tige Cylindre.005 de 2,467 a 2,953. Le panneau tombe donc a 0,016 pres dans l'axe de l'allee et exactement entre les deux rangees (z 0,092 et 1,293, milieu 0,6925).\nLES COULEURS SONT CELLES DE LA MESURE, ET ELLES SURPRENNENT : le FOND rouge est du cote x > 0, c'est-a-dire du cote EASY, et le fond bleu du cote HARD ; les LETTRES font l'inverse, rouges a x < 0 et bleues a x > 0. Les glyphes de 2020 sont de la geometrie 3D (Texte.004 a Texte.007) que cette description ne sait pas produire : ils sont ici deux bandeaux de couleur inversee, qui portent la meme lecture — deux moities, deux couleurs, et chaque face montre les deux.\nLa tige monte jusqu'a 3,10, la sous-face du plafond, et non 2,953 : le plafond de 2020 etait a 2,879 et la tige le traversait.\nLES DEUX FONDS SONT EMISSIFS a 0,45 et les LETTRES ne le sont pas : c'est un panneau retroeclaire, et c'est la seule facon qu'il se lise a cette hauteur. Premiere capture, fonds non emissifs : deux rectangles gris.",
+      "_": "LE PANNEAU HARD / EASY, suspendu au-dessus de l'allee centrale — le SEUL signal spatial de la regle de difficulte, et il n'existait pas.\nLA REGLE, elle, est sans exception dans 2020 : les six bornes HARD sont a x < 0, les six EASY a x > 0 (releve § 5). Rien dans le decor ne le disait plus.\nCOTES MESUREES sur PANNEAU_EASY/HARD_Cube.035 : x -0,470 a 0,501, y 2,088 a 2,476, z 0,631 a 0,709 ; tige Cylindre.005 de 2,467 a 2,953. Le panneau tombe donc a 0,016 pres dans l'axe de l'allee et exactement entre les deux rangees (z 0,092 et 1,293, milieu 0,6925).\nLES COULEURS SONT CELLES DE LA MESURE, ET ELLES SURPRENNENT : le FOND rouge est du cote x > 0, c'est-a-dire du cote EASY, et le fond bleu du cote HARD ; les LETTRES font l'inverse, rouges a x < 0 et bleues a x > 0. Les glyphes de 2020 sont de la geometrie 3D (Texte.004 a Texte.007) que cette description ne sait pas produire. Ils ont d'abord ete DEUX BANDEAUX DE COULEUR nus, avec cette phrase pour justification : « ils portent la meme lecture ». C'etait la seule affirmation verifiable du bloc, et la capture l'a refutee — de l'allee on lisait deux rectangles vides, dans des couleurs qu'aucun spectateur ne peut relier a une consigne. La description ne sait pas produire de glyphes ; le DEPOT, si : `marqueeart` dessine une plaque retroeclairee avec le mot en reserve, dans la fonte du jeu, et c'est ce que portent maintenant les quatre plaques (« mot_hard », « mot_easy »). Meme correction que pour le bloc de secours du sas, six blocs plus haut dans assets/CMakeLists.txt.\nLa tige monte jusqu'a 3,10, la sous-face du plafond, et non 2,953 : le plafond de 2020 etait a 2,879 et la tige le traversait.\nLES DEUX FONDS SONT EMISSIFS a 0,45 et les LETTRES ne le sont pas : c'est un panneau retroeclaire, et c'est la seule facon qu'il se lise a cette hauteur. Premiere capture, fonds non emissifs : deux rectangles gris.",
       "name": "panneau_hard_easy",
       "at": [
         0.016,
@@ -7394,9 +7422,9 @@
           "chamfer": 0.006
         },
         {
-          "_": "face nord : le mot du cote HARD, en ROUGE sur le fond bleu",
+          "_": "face nord : le mot du cote HARD, en ROUGE sur le fond bleu. L'inversion est celle de la mesure de 2020 et elle est gardee.",
           "type": "panel",
-          "material": "rouge",
+          "material": "mot_hard",
           "at": [
             -0.2425,
             2.282,
@@ -7408,9 +7436,9 @@
           ]
         },
         {
-          "_": "face nord : le mot du cote EASY, en BLEU sur le fond rouge",
+          "_": "face nord : le mot du cote EASY, en BLEU sur le fond rouge.",
           "type": "panel",
-          "material": "bleu",
+          "material": "mot_easy",
           "at": [
             0.2425,
             2.282,
@@ -7424,7 +7452,7 @@
         {
           "_": "face sud, meme inversion",
           "type": "panel",
-          "material": "rouge",
+          "material": "mot_hard",
           "at": [
             -0.2425,
             2.282,
@@ -7438,7 +7466,7 @@
         },
         {
           "type": "panel",
-          "material": "bleu",
+          "material": "mot_easy",
           "at": [
             0.2425,
             2.282,
