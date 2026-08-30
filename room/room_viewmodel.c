@@ -152,6 +152,46 @@ void room_viewmodel_read_env(void)
 #define VM_T_HIT       (VM_T_HIT_ARME + VM_T_HIT_OUT + VM_T_HIT_BACK)
 
 /*
+ * L'INSTANT OÙ LE JETON BASCULE, dans la séquence complète.
+ *
+ * `insert_push` monte jusqu'à 55 % de `ROOM_VM_INSERT` puis redescend : c'est
+ * là que la pièce cesse d'avancer dans la fente et que la main se retire. 55 %
+ * de 550 ms font 302 ms après l'entrée dans l'état, soit 722 ms après le début
+ * du geste — le chiffre est écrit ici pour qu'on n'ait pas à le recomposer
+ * ailleurs, et surtout pour qu'il n'y ait qu'UN endroit à changer si la forme
+ * de la poussée bouge.
+ */
+#define VM_INSERT_SOMMET  0.55f
+#define VM_T_INSERT_DROP  (VM_T_INSERT * VM_INSERT_SOMMET)
+
+/*
+ * LA RELANCE : 220 ms d'aller, 180 de retour. 400 en tout.
+ *
+ * Les deux durées sont mesurées comme celles du coup, par la distance sur le
+ * temps. Le poignet droit part du dessus du panneau — `panel_centre` relevé
+ * d'un tiers de paume — et va à la fente, `coin_slot` plus une paume le long de
+ * la normale : **40,8 cm**, et la cote est la même sur les dix-neuf bornes,
+ * leurs ancres étant dérivées d'une seule géométrie.
+ *
+ *   ALLER   40,8 cm en 220 ms = **1,85 m/s**. Le geste d'une main qui sait où
+ *           est la fente : franc, mais on ne jette pas une pièce.
+ *   RETOUR  40,8 cm en 180 ms = **2,27 m/s**, donc PLUS VITE que l'aller.
+ *
+ * C'est l'exact contraire du coup de poing, dont le retour dure trois fois et
+ * demie l'aller, et la raison est la même dans les deux cas : un coup s'ACHÈVE,
+ * donc il retombe ; une insertion est le DÉBUT d'autre chose, et la partie
+ * tourne déjà quand la main revient. Un retour traînant ici se lirait comme une
+ * hésitation devant un jeu qu'on vient de relancer.
+ *
+ * Et surtout : 400 ms contre les 1 310 de `REACH` + `INSERT` + `PRESS`. Le
+ * raisonnement complet est dans `room_viewmodel.h`, à `ROOM_VM_RELANCE`.
+ */
+#define VM_T_RELANCE_OUT   0.220f
+#define VM_T_RELANCE_BACK  0.180f
+#define VM_T_RELANCE       (VM_T_RELANCE_OUT + VM_T_RELANCE_BACK)
+#define VM_RELANCE_SOMMET  (VM_T_RELANCE_OUT / VM_T_RELANCE)
+
+/*
  * L'ARMÉ et le COUP PORTÉ, en espace caméra.
  *
  * L'armé est le poing ramené près des côtes, décalé vers la droite et bas :
@@ -252,6 +292,7 @@ static float state_duration(room_vm_state s)
          * exactement le comportement voulu. */
         case ROOM_VM_RETURN: return VM_T_RETURN;
         case ROOM_VM_HIT:    return VM_T_HIT;
+        case ROOM_VM_RELANCE: return VM_T_RELANCE;
         default:             return 0.0f;
     }
 }
@@ -431,12 +472,42 @@ bool room_viewmodel_is_hitting(const room_viewmodel *vm)
     return vm && vm->state == ROOM_VM_HIT;
 }
 
+bool room_viewmodel_relance(room_viewmodel *vm)
+{
+    /*
+     * UNIQUEMENT depuis `ROOM_VM_PLAY`, et la liste est courte exprès : ce
+     * geste part des commandes et y revient. Le déclencher les mains vides
+     * ferait viser une fente à une main qui n'est nulle part, et le déclencher
+     * pendant la séquence complète insérerait deux pièces pour un jeton.
+     *
+     * `has_target` est exigé pour la même raison que le reste du fichier : la
+     * scène peut avoir été rechargée sous nos pieds.
+     */
+    if (!vm || vm->state != ROOM_VM_PLAY || !vm->has_target) return false;
+
+    vm->state         = ROOM_VM_RELANCE;
+    vm->elapsed       = 0.0f;
+    vm->prev_elapsed  = 0.0f;
+    vm->token_drop    = false;
+    vm->token_visible = true;   /* la pièce réapparaît dans la main droite */
+    vm->tap           = 0.0f;   /* l'index lâche les boutons le temps du geste */
+    return true;
+}
+
 bool room_viewmodel_take_impact(room_viewmodel *vm, ns_v3 *point, int32_t *material)
 {
     if (!vm || !vm->hit_impact) return false;
     vm->hit_impact = false;
     if (point)    *point = vm->hit_point;
     if (material) *material = vm->hit_material;
+    return true;
+}
+
+bool room_viewmodel_take_token(room_viewmodel *vm, ns_v3 *at)
+{
+    if (!vm || !vm->token_drop) return false;
+    vm->token_drop = false;
+    if (at) *at = vm->target_coin;
     return true;
 }
 
@@ -566,6 +637,11 @@ static ns_v3 lean_for(room_vm_state s, float t)
          * bras tendus.
          */
         case ROOM_VM_PLAY:   return ns_v3_make(0.0f, -0.16f, 0.42f);
+        /* LA MÊME que celle du jeu, et c'est tout l'intérêt du geste court : le
+         * corps ne se redresse pas pour remettre une pièce. Lui donner sa
+         * propre inclinaison ferait osciller les épaules à chaque relance, ce
+         * qui est précisément l'attente qu'on cherche à supprimer. */
+        case ROOM_VM_RELANCE: return ns_v3_make(0.0f, -0.16f, 0.42f);
         case ROOM_VM_RETURN: return ns_v3_scale(ns_v3_make(0.0f, -0.10f, 0.16f), 1.0f - k);
         default:             return ns_v3_zero();
     }
@@ -642,6 +718,28 @@ static ns_v3 sequence_wrist(const room_viewmodel *vm, ns_v3 shoulder_world, floa
             const ns_v3 above = ns_v3_add(vm->target_panel,
                                           ns_v3_make(0.0f, VM_HAND + 0.02f, 0.0f));
             return ns_v3_add(above, ns_v3_scale(n, 0.02f));
+        }
+        case ROOM_VM_RELANCE: {
+            /*
+             * L'aller-retour de la relance, entre les DEUX points exacts où la
+             * main droite se tient déjà par ailleurs : sa place de jeu
+             * au-dessus des boutons, et la fente. Les recopier ici plutôt que
+             * d'inventer un troisième point est ce qui garantit que le geste
+             * part de là où la main est et y revient — sans quoi le lissage
+             * ferait un saut visible à l'entrée et à la sortie de l'état.
+             *
+             * Le sommet est à `VM_RELANCE_SOMMET` et non à 0,5 : l'aller dure
+             * 220 ms et le retour 180, donc le point de rebroussement n'est pas
+             * au milieu du temps.
+             */
+            const ns_v3 up    = ns_v3_make(0.0f, VM_HAND * 0.35f, 0.0f);
+            const ns_v3 above = ns_v3_add(vm->target_panel, up);
+            const ns_v3 slot  = ns_v3_add(vm->target_coin,
+                                          ns_v3_scale(n, 0.015f + VM_HAND));
+            const float p = (t < VM_RELANCE_SOMMET)
+                          ? (t / VM_RELANCE_SOMMET)
+                          : (1.0f - (t - VM_RELANCE_SOMMET) / (1.0f - VM_RELANCE_SOMMET));
+            return ns_v3_lerp(above, slot, smoothstep01(ns_clampf(p, 0.0f, 1.0f)));
         }
         default:
             return shoulder_world;
@@ -734,13 +832,42 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
             vm->choc = 1.0f;
         }
 
+        /*
+         * LE JETON QUI BASCULE, et c'est le même mécanisme que l'impact : le
+         * pas de simulation qui FRANCHIT le sommet de la poussée, pas un seuil
+         * testé à chaque image. À 120 Hz, `elapsed >= 302 ms` est vrai pendant
+         * les 248 ms qui restent de l'état, soit trente pas — le son partirait
+         * trente fois.
+         *
+         * Les deux gestes qui insèrent une pièce le lèvent, et eux seuls. Le
+         * sommet de chacun est ailleurs parce que leurs courbes sont
+         * différentes : 55 % pour l'insertion complète, 220 ms sur 400 pour la
+         * relance. Ce sont les deux mêmes constantes qui décident de la forme
+         * du geste, donc l'image et le son ne peuvent pas diverger.
+         *
+         * Le jeton DISPARAÎT ici et non à la fin de l'état. Il tombe dans le
+         * mécanisme à cet instant précis ; le laisser dans les doigts pendant
+         * que la main se retire montrerait une pièce qu'on vient d'entendre
+         * tomber.
+         */
+        {
+            const float sommet = (vm->state == ROOM_VM_INSERT)  ? VM_T_INSERT_DROP
+                               : (vm->state == ROOM_VM_RELANCE) ? VM_T_RELANCE_OUT
+                               : -1.0f;
+            if (sommet > 0.0f && vm->prev_elapsed < sommet && vm->elapsed >= sommet) {
+                vm->token_drop    = true;
+                vm->token_visible = false;
+            }
+        }
+
         const float dur = state_duration(vm->state);
         if (vm->elapsed >= dur) {
             vm->elapsed -= dur;
             switch (vm->state) {
                 case ROOM_VM_REACH:  vm->state = ROOM_VM_INSERT; break;
-                case ROOM_VM_INSERT: vm->state = ROOM_VM_PRESS;
-                                     vm->token_visible = false;  break;
+                /* `token_visible` est déjà faux ici : il est retombé au sommet
+                 * de la poussée, avec le front. */
+                case ROOM_VM_INSERT: vm->state = ROOM_VM_PRESS;  break;
                 case ROOM_VM_PRESS:  vm->state = ROOM_VM_RETURN; break;
                 /*
                  * Le coup rend les mains AUX COMMANDES s'il les y a prises.
@@ -749,6 +876,23 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
                  * `ROOM_VM_PLAY` avait justement été ajouté pour corriger, et
                  * qu'un état de plus rouvrirait par la bande.
                  */
+                /*
+                 * La relance rend les mains AUX COMMANDES, comme le coup quand
+                 * il les y avait prises — et sans repasser par le contrôle de
+                 * portée, qui a déjà eu lieu à l'entrée en jeu. Sans
+                 * `has_target`, il ne reste rien à viser : on retombe au repos
+                 * plutôt que de jouer devant une borne qui n'existe plus.
+                 */
+                case ROOM_VM_RELANCE:
+                    if (vm->has_target) {
+                        vm->state = ROOM_VM_PLAY;
+                        vm->reach_checked = true;
+                    } else {
+                        vm->state = ROOM_VM_IDLE;
+                    }
+                    vm->token_visible = false;
+                    vm->elapsed = 0.0f;
+                    break;
                 case ROOM_VM_HIT:
                     if (vm->hit_from_play && vm->has_target) {
                         vm->state = ROOM_VM_PLAY;
@@ -792,7 +936,16 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
      * interpolé — ferait avancer le jeton par paliers de pas de simulation. */
     float push = 0.0f;
     if (vm->state == ROOM_VM_INSERT) {
-        push = (t < 0.55f) ? (t / 0.55f) : ns_maxf(0.0f, 1.0f - (t - 0.55f) / 0.45f);
+        push = (t < VM_INSERT_SOMMET)
+             ? (t / VM_INSERT_SOMMET)
+             : ns_maxf(0.0f, 1.0f - (t - VM_INSERT_SOMMET) / (1.0f - VM_INSERT_SOMMET));
+    } else if (vm->state == ROOM_VM_RELANCE) {
+        /* La même grandeur pour le même objet : c'est elle qui amène le bout du
+         * doigt sur la fente dans `room_viewmodel_pose`. Sa courbe diffère
+         * seulement par la place de son sommet. */
+        push = (t < VM_RELANCE_SOMMET)
+             ? (t / VM_RELANCE_SOMMET)
+             : ns_maxf(0.0f, 1.0f - (t - VM_RELANCE_SOMMET) / (1.0f - VM_RELANCE_SOMMET));
     }
     vm->insert_push = ns_damp(vm->insert_push, push, 20.0f, dt);
 
@@ -823,11 +976,18 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     const float breath = sinf(bob.breath * 1.9f) * 0.008f * rest;
     want_l.y += breath; want_r.y += breath;
 
-    if (vm->state == ROOM_VM_PLAY && vm->has_target) {
+    if ((vm->state == ROOM_VM_PLAY || vm->state == ROOM_VM_RELANCE) && vm->has_target) {
         /*
          * Les DEUX mains, et chacune sur sa commande : la gauche sur le manche,
-         * la droite sur les boutons. C'est le seul état où la main gauche a une
-         * cible — partout ailleurs elle suit le corps.
+         * la droite sur les boutons. C'est le seul endroit où la main gauche a
+         * une cible — partout ailleurs elle suit le corps.
+         *
+         * LA RELANCE PASSE PAR ICI ET NON PAR LA SÉQUENCE, et c'est tout ce qui
+         * la distingue : elle emprunte la main gauche du jeu et remplace la
+         * seule main droite juste en dessous. Passer par la branche de la
+         * séquence retirerait la gauche du manche et reculerait les épaules —
+         * c'est-à-dire referait le geste complet, celui qu'on a mesuré à
+         * 1,31 s et écarté.
          *
          * Chaque épaule reçoit son propre décalage latéral : viser le manche
          * depuis l'épaule DROITE croiserait les bras devant le torse, ce qui se
@@ -847,6 +1007,13 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
 
         want_l = to_camera(&b, clamp_reach(sh_l, grip,  VM_REACH));
         want_r = to_camera(&b, clamp_reach(sh_r, above, VM_REACH));
+
+        /* La main droite SEULE quitte les boutons le temps du jeton. La gauche
+         * garde la cible qu'on vient de lui donner. */
+        if (vm->state == ROOM_VM_RELANCE) {
+            want_r = to_camera(&b, clamp_reach(sh_r, sequence_wrist(vm, sh_r, t),
+                                               VM_REACH));
+        }
 
         /*
          * Si les commandes sont hors d'atteinte, on le DIT.
@@ -1190,8 +1357,10 @@ void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
     const float push = ns_lerpf(vm->prev_insert_push, vm->insert_push, alpha);
     ns_v3 tip_target;
     const ns_v3 *tip = NULL;
-    if (vm->has_target && vm->state == ROOM_VM_INSERT) {
-        /* Le jeton entre : le doigt part à 9 cm de la fente et vient la toucher. */
+    if (vm->has_target && (vm->state == ROOM_VM_INSERT || vm->state == ROOM_VM_RELANCE)) {
+        /* Le jeton entre : le doigt part à 9 cm de la fente et vient la toucher.
+         * Les deux gestes d'insertion partagent cette ligne parce qu'ils
+         * partagent `insert_push`, qui est ce que le doigt suit. */
         tip_target = ns_v3_add(vm->target_coin,
                                ns_v3_scale(ns_v3_norm(vm->target_normal),
                                            0.090f * (1.0f - push)));

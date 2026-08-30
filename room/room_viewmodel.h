@@ -77,6 +77,28 @@ typedef enum room_vm_state {
      * partie — c'est-à-dire quand on rage.
      */
     ROOM_VM_HIT,
+    /*
+     * LA RELANCE : le jeton de la partie suivante, sans se relever.
+     *
+     * Ajouté APRÈS `ROOM_VM_HIT` pour la raison exacte qui a fait ajouter
+     * celui-ci en dernier : les valeurs qui précèdent sont lues par `--pose=`
+     * et par la table de `room_viewmodel_set_forced_pose`, et les décaler d'un
+     * rang changerait en silence ce qu'une capture de référence produit.
+     *
+     * POURQUOI IL EXISTE, ET POURQUOI CE N'EST PAS LA SÉQUENCE COMPLÈTE.
+     * Relancer une partie coûte un jeton — `room/main.c` le débite déjà — et ce
+     * jeton ne s'entendait ni ne se voyait : les deux mains restaient sur les
+     * commandes et une partie neuve apparaissait. Rejouer `REACH` → `INSERT` →
+     * `PRESS` corrigerait ça et coûterait **1,31 s** (0,42 + 0,55 + 0,34),
+     * pendant lesquelles le joueur qui vient de mourir et qui a déjà appuyé
+     * attend. Cet état-ci fait le même geste en **0,40 s**, avec la seule main
+     * droite : la gauche ne quitte pas le manche, le corps ne se redresse pas,
+     * et on repart des commandes où l'on était.
+     *
+     * Il ne s'insère donc pas dans la séquence du jeton, exactement comme le
+     * coup : il INTERROMPT `ROOM_VM_PLAY` et y revient.
+     */
+    ROOM_VM_RELANCE,
     ROOM_VM_STATE_COUNT
 } room_vm_state;
 
@@ -126,6 +148,23 @@ typedef struct room_viewmodel {
     bool  primed;                 /* faux avant la première mise à jour */
 
     bool  token_visible;
+    /*
+     * LE JETON QUI BASCULE : un front, posé à l'instant précis où la pièce
+     * quitte les doigts pour le mécanisme, et consommé par
+     * `room_viewmodel_take_token`.
+     *
+     * Le MÊME motif que `hit_impact`, et pour le même argument, qui est écrit
+     * un peu plus bas : un bruit calculé séparément depuis `elapsed` se
+     * décalerait d'un pas de simulation de l'image qui le justifie, et un choc
+     * dont le bruit arrive huit millisecondes après l'image ne se lit plus
+     * comme un choc. Un jeton n'y échappe pas — c'est un choc, simplement plus
+     * petit.
+     *
+     * L'instant est le SOMMET de `insert_push`, c'est-à-dire le moment où la
+     * pièce cesse d'avancer dans la fente et où la main commence à se retirer.
+     * C'est là qu'elle bascule, et c'est aussi là qu'elle disparaît de la main.
+     */
+    bool  token_drop;
     float press_depth, prev_press_depth;   /* 0 à 1, enfoncement de l'index */
     float insert_push, prev_insert_push;   /* 0 à 1, avancée du jeton dans la fente */
 
@@ -189,6 +228,24 @@ void room_viewmodel_stop_playing(room_viewmodel *vm);
 /* Un appui : l'index droit descend puis remonte. Le jeu ne connaît pas les bras,
  * c'est l'appelant qui relaie son événement de battement. */
 void room_viewmodel_tap(room_viewmodel *vm);
+
+/*
+ * LE GESTE COURT DE LA RELANCE : la main droite seule va chercher la fente et
+ * revient, en 0,40 s. Refuse — et rend false — si l'on ne joue pas.
+ *
+ * Le choix entre ce geste et la séquence complète a été fait sur une DURÉE
+ * mesurée, pas sur un goût. `REACH` + `INSERT` + `PRESS` valent 1,31 s ; le
+ * poignet droit parcourt 40,8 cm du dessus du panneau à la fente sur les
+ * dix-neuf bornes — la cote est identique partout, les ancres étant dérivées de
+ * la même géométrie. Ce geste-ci fait l'aller en 220 ms (1,85 m/s) et le retour
+ * en 180 (2,27 m/s) : on revient plus VITE qu'on ne part, parce qu'à ce
+ * moment-là la partie est déjà lancée et que les boutons servent.
+ *
+ * C'est l'inverse du coup de poing, dont le retour dure trois fois et demie
+ * l'aller. Un coup s'achève ; une insertion, non — elle est le début d'autre
+ * chose.
+ */
+bool room_viewmodel_relance(room_viewmodel *vm);
 
 /* ==========================================================================
  * COGNER LA MACHINE
@@ -266,6 +323,21 @@ bool room_viewmodel_is_hitting(const room_viewmodel *vm);
  * faire dérailler la bonne dalle sans avoir à retrouver la borne lui-même.
  */
 bool room_viewmodel_take_impact(room_viewmodel *vm, ns_v3 *point, int32_t *material);
+
+/*
+ * Le FRONT du jeton : vrai UNE fois, au pas de simulation où la pièce bascule
+ * dans le mécanisme. Consommé par l'appel, comme `room_viewmodel_take_impact`.
+ *
+ * Il est levé par les DEUX gestes qui insèrent une pièce — la séquence
+ * complète et la relance — et par aucun autre. Il ne l'est pas par une pose
+ * figée de `--pose=insert`, qui ne fait pas avancer le temps, ni par le coup de
+ * poing, qui a son propre front : on ne paie pas en cognant.
+ *
+ * `at` reçoit la fente visée, en monde. C'est ce qui permet à l'appelant de
+ * placer le son sur la borne sans avoir à retrouver celle-ci lui-même — même
+ * service que `point` pour l'impact.
+ */
+bool room_viewmodel_take_token(room_viewmodel *vm, ns_v3 *at);
 
 /*
  * Ce qui reste du choc à l'instant `alpha`, de 1 à 0.
