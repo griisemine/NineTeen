@@ -21,6 +21,17 @@ Les affiches de 2020 annonçaient « 5 POUR 1 EURO » et « 20 POUR 3 EUROS ». 
 plausible d'une vraie salle, et c'est devenu un mensonge le jour où le monnayeur a été branché.
 Elles ne le disent plus : voir *Les affiches ne peuvent plus mentir*, plus bas.
 
+## Ce que ça donne dans la salle
+
+| | |
+|---|---|
+| ![le monnayeur](render-eco-monnayeur.png) | **Le monnayeur**, à l'est du comptoir. `E` complète jusqu'à cinq jetons, gratuitement. Le solde est en haut à gauche. |
+| ![la vitrine](render-eco-vitrine.png) | **La vitrine à lots**, mur est du hall. Sa face porte la liste et les prix — dessinée depuis la même table que le jeu débite —, et l'invite dit ce que `E` achète et ce que ça change. |
+| ![en partie](render-eco-hud.png) | **En partie.** Le solde reste affiché : c'est le moment où l'on se demande ce que la partie en cours va rapporter. |
+
+Captures faites en `--headless --quality=high` à 1400 × 875, sur un portefeuille de démonstration
+(4 jetons, 213 tickets, série de 3 jours, `QUITTE OU DOUBLE` acquis).
+
 ## Où ça vit
 
 | | |
