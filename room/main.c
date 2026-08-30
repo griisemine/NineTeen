@@ -189,7 +189,8 @@ static void print_usage(const char *exe)
         "  --warmup=S           avance le mini-jeu de S secondes avant de rendre\n"
         "  --play-at=BORNE      se place devant la borne nommée et lance sa partie,\n"
         "                       en restant EN 3D : le jeu tourne dans sa dalle\n"
-        "  --pose=NOM           fige les bras : idle, walk, reach, insert, press\n"
+        "  --pose=NOM           fige les bras : idle, walk, reach, insert,\n"
+        "                       press, frappe\n"
         "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
         "  --help               affiche ce message\n",
@@ -2808,7 +2809,13 @@ play_at_done: ;
         } else if (SDL_strcasecmp(opt.pose, "idle") != 0
                 && SDL_strcasecmp(opt.pose, "repos") != 0
                 && SDL_strcasecmp(opt.pose, "walk") != 0
-                && SDL_strcasecmp(opt.pose, "marche") != 0) {
+                && SDL_strcasecmp(opt.pose, "marche") != 0
+                /* La frappe non plus n'a besoin d'aucune cible : on cogne
+                 * dans le vide aussi bien que sur une borne, et le geste est
+                 * le même. Avertir ici enverrait chercher un défaut qui
+                 * n'existe pas. */
+                && SDL_strcasecmp(opt.pose, "frappe") != 0
+                && SDL_strcasecmp(opt.pose, "hit") != 0) {
             NS_WARN("--pose=%s : aucune borne à portée, les bras resteront au repos "
                     "(essayer --view=borne)", opt.pose);
         }
@@ -4359,6 +4366,31 @@ play_at_done: ;
                 const room_view_bob b = room_camera_bob(&cam, (float)clock.alpha);
                 const float duree = ns_skin_duration(personnage);
                 static float repos = 0.0f;
+                /*
+                 * LE DÉCALAGE ENTRE LA PHASE DE DISTANCE ET LA PHASE POSÉE.
+                 *
+                 * Il corrige un CLAQUEMENT qu'aucun réglage ne rattrapait, et
+                 * qui ne se voit qu'en regardant les jambes au moment précis où
+                 * l'on repart.
+                 *
+                 * L'entrée au repos était déjà continue : `repos` reprend la
+                 * dernière phase de marche. La SORTIE ne l'était pas. Pendant
+                 * l'arrêt, `repos` glisse vers la position de passage, tandis
+                 * que la distance parcourue, elle, ne bouge plus. Au premier pas
+                 * qui repart, la phase sautait donc de l'une à l'autre — et
+                 * l'écart peut valoir une DEMI-DURÉE de cycle, soit une seconde
+                 * sur les deux du modèle, c'est-à-dire un pas entier. Les deux
+                 * jambes s'échangeaient en une image.
+                 *
+                 * Le décalage rend les deux sorties continues sans toucher à la
+                 * CADENCE : il est constant pendant la marche, donc la phase
+                 * avance toujours exactement comme la distance, et le patinage
+                 * n'est ni amélioré ni aggravé. Il n'est mis à jour que pendant
+                 * l'arrêt, c'est-à-dire quand la cadence ne veut rien dire.
+                 */
+                static float decalage = 0.0f;
+                const float phase_distance =
+                    (b.distance / room_camera_stride(&cam)) * duree;
                 float when;
                 if (b.amount > 0.02f) {
                     /*
@@ -4378,7 +4410,7 @@ play_at_done: ;
                      * allure. C'était déjà juste, et c'est ce qui rend le cycle
                      * unique du modèle supportable.
                      */
-                    when = (b.distance / room_camera_stride(&cam)) * duree;
+                    when = phase_distance + decalage;
                     repos = when;
                 } else {
                     /*
@@ -4405,6 +4437,12 @@ play_at_done: ;
                     const float debout = ns_skin_stand_time(personnage);
                     repos = ns_damp(repos, debout, 6.0f, (float)clock.frame_seconds);
                     when = repos;
+                    /* La marche reprendra EXACTEMENT ici. Ramené dans le cycle à
+                     * chaque image : laissé libre, ce décalage dériverait avec
+                     * la distance parcourue et finirait par perdre en précision
+                     * de flottant ce qu'une phase d'animation ne peut pas se
+                     * permettre de perdre. */
+                    decalage = SDL_fmodf(repos - phase_distance, duree);
                 }
 
                 ns_character_draw d;

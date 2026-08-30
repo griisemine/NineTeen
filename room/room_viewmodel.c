@@ -227,7 +227,8 @@ enum {
     VM_FORCE_WALK,
     VM_FORCE_REACH,
     VM_FORCE_INSERT,
-    VM_FORCE_PRESS
+    VM_FORCE_PRESS,
+    VM_FORCE_HIT
 };
 
 /* --------------------------------------------------------------------------
@@ -324,6 +325,12 @@ bool room_viewmodel_set_forced_pose(room_viewmodel *vm, const char *name)
         { "reach",  VM_FORCE_REACH  },
         { "insert", VM_FORCE_INSERT },
         { "press",  VM_FORCE_PRESS  },
+        /* Le coup, sous ses deux noms : ce dépôt est en français, mais les cinq
+         * poses qui précèdent sont nommées en anglais depuis A7 et des captures
+         * de référence portent ces noms-là. On ajoute donc les deux plutôt que
+         * de choisir, ce qui ne coûte qu'une ligne. */
+        { "frappe", VM_FORCE_HIT    },
+        { "hit",    VM_FORCE_HIT    },
     };
     if (!name || !name[0]) return false;
     for (size_t i = 0; i < sizeof table / sizeof table[0]; ++i) {
@@ -675,9 +682,25 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
             case VM_FORCE_REACH:  vm->state = ROOM_VM_REACH;  break;
             case VM_FORCE_INSERT: vm->state = ROOM_VM_INSERT; break;
             case VM_FORCE_PRESS:  vm->state = ROOM_VM_PRESS;  break;
+            case VM_FORCE_HIT:    vm->state = ROOM_VM_HIT;    break;
             default:              vm->state = ROOM_VM_IDLE;   break;
         }
-        vm->elapsed = state_duration(vm->state) * 0.82f;
+        /*
+         * 82 % DE LA DURÉE, SAUF POUR LE COUP.
+         *
+         * Les quatre autres gestes sont à peu près symétriques : leur instant
+         * le plus lisible est vers la fin, avant que le retour ne commence. Le
+         * coup ne l'est pas du tout — 110 ms d'armé, 90 d'aller, 300 de retour
+         * — et 82 % de sa durée tombe au MILIEU DU RETOUR, bras à moitié
+         * revenu. Une capture prise là ne montre pas un coup de poing, elle
+         * montre quelqu'un qui range son bras.
+         *
+         * On le fige donc à l'IMPACT, qui est le seul instant qu'on veuille
+         * photographier d'un geste asymétrique.
+         */
+        vm->elapsed = (vm->state == ROOM_VM_HIT)
+            ? (VM_T_HIT_ARME + VM_T_HIT_OUT)
+            : state_duration(vm->state) * 0.82f;
         vm->token_visible = (vm->state == ROOM_VM_REACH || vm->state == ROOM_VM_INSERT);
     } else if (vm->state == ROOM_VM_PLAY) {
         /* `elapsed` avance aussi en jeu — il ne déclenche simplement aucune
