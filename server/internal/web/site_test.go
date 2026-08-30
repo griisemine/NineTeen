@@ -1,6 +1,6 @@
 // site_test.go — le contrôle qui empêche le site de pourrir.
 //
-// POURQUOI CE FICHIER EXISTE
+// # POURQUOI CE FICHIER EXISTE
 //
 // Le site a annoncé « Quinze bornes » et « 64 sources lumineuses » pendant deux
 // versions entières, alors que la scène en déclarait dix-neuf et vingt-six, et
