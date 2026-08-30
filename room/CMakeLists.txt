@@ -9,6 +9,7 @@ add_executable(nineteen
     room_menu.c
     room_economie.c
     room_pad.c
+    room_poste.c
     room_presence.c
     room_credits.c
     room_sound.c

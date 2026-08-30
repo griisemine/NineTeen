@@ -39,6 +39,7 @@
 #include "room_presence.h"
 #include "room_sound.h"
 #include "room_viewmodel.h"
+#include "room_poste.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -1672,6 +1673,7 @@ int main(int argc, char **argv)
     /* Les cotes de bras sont lues tout de suite : elles doivent l'être même
      * quand aucune image ne dessine de bras — voir room_viewmodel.c. */
     room_viewmodel_read_env();
+    room_poste_read_env();
 
     ns_config_init("settings.cfg");
 
@@ -2007,6 +2009,26 @@ int main(int argc, char **argv)
      * imposé en permanence, il enlève le droit de regarder ailleurs.
      */
     float look_pitch = 0.0f, look_settle = 0.0f;
+
+    /*
+     * LE POSTE DE JEU : le point de vue s'approche de la dalle quand la partie
+     * tourne dedans. Le corps ne bouge pas — voir `room_poste.h`, qui porte la
+     * mesure du timbre-poste à 8 % du cadre et la table des deux leviers.
+     */
+    room_poste poste;
+    room_poste_init(&poste);
+    /*
+     * LA PORTEE, en mètres depuis le centre de la dalle : au-delà, la vue est
+     * rendue au corps. Elle est ce qui fait qu'on peut RECULER en jouant sans
+     * que la caméra reste collée à la machine — la partie continue, c'est la
+     * salle qui revient.
+     *
+     * 1,40 m contre 0,870 m à l'ancre déclarée : un demi-mètre de battement,
+     * soit un pas en arrière. Plus serré, le poste se lâcherait sur le
+     * balancement de la marche sur place ; plus large, on emmènerait la vue à
+     * deux mètres de la borne.
+     */
+    const float poste_portee = 1.40f;
     /*
      * La borne sur laquelle le regard est DÉJÀ descendu.
      *
@@ -2664,11 +2686,23 @@ int main(int argc, char **argv)
              * déjà où est son écran.
              */
             {
-                const float ex = pick->screen_center.x - cam.position.x;
-                const float ey = pick->screen_center.y - cam.position.y;
-                const float ez = pick->screen_center.z - cam.position.z;
-                const float flat = sqrtf(ex * ex + ez * ez);
-                cam.pitch = cam.prev_pitch = atan2f(ey, ns_maxf(0.05f, flat));
+                /*
+                 * LE TANGAGE VIENT DU POSTE quand il y en a un, et c'est la même
+                 * correction que celle du commentaire ci-dessus, un cran plus
+                 * loin : viser depuis l'œil du CORPS alors que la vue va se
+                 * placer 25 cm plus loin donne un cadrage juste pendant une
+                 * demi-seconde, puis faux. Sur `borne_arcade_1` les deux angles
+                 * valent -31,0 et -19,9 degrés.
+                 */
+                if (room_poste_prendre(&poste, pick, cam.position)) {
+                    cam.pitch = cam.prev_pitch = room_poste_tangage(&poste);
+                } else {
+                    const float ex = pick->screen_center.x - cam.position.x;
+                    const float ey = pick->screen_center.y - cam.position.y;
+                    const float ez = pick->screen_center.z - cam.position.z;
+                    const float flat = sqrtf(ex * ex + ez * ez);
+                    cam.pitch = cam.prev_pitch = atan2f(ey, ns_maxf(0.05f, flat));
+                }
             }
             cam.velocity = ns_v3_zero();
 
@@ -3383,8 +3417,16 @@ play_at_done: ;
                      * le geste qu'on fait devant une vraie borne ; le
                      * lui arracher ensuite ne l'est pas.
                      */
-                    look_pitch  = pitch_onto(cam.position, near->screen_center);
-                    look_settle = 0.33f;
+                    if (room_poste_prendre(&poste, near, cam.position)) {
+                        /* Le poste avance la vue : le tangage se prend DEPUIS
+                         * lui, sinon la dalle monte vers le haut du cadre
+                         * pendant toute l'avancée. */
+                        look_pitch  = room_poste_tangage(&poste);
+                        look_settle = 0.55f;
+                    } else {
+                        look_pitch  = pitch_onto(cam.position, near->screen_center);
+                        look_settle = 0.33f;
+                    }
                     /*
                      * On reste EN 3D : le jeu tourne dans la dalle de la
                      * borne, et la tête reste libre. C'est toute la
@@ -3750,6 +3792,36 @@ play_at_done: ;
             room_camera_tick(&cam, &scene.bvh, &blockers, (float)clock.tick_seconds);
 
             /*
+             * LE POSTE DE JEU, entretenu en UN SEUL endroit.
+             *
+             * Il aurait pu être pris et lâché aux cinq sites qui font commencer
+             * et finir une partie ; ils sont cinq, et le cinquième aurait été
+             * oublié — c'est déjà ce qui était arrivé au tangage, posé par
+             * `--play-at` et pas par la touche E, c'est-à-dire pas par le chemin
+             * que le joueur emprunte. Une condition relue à chaque pas ne peut
+             * pas avoir de trou.
+             *
+             * Il se lâche donc tout seul : on quitte la partie, on ouvre le
+             * menu, on passe en troisième personne, on recule d'un pas — et la
+             * vue revient au corps sans que personne ait eu à y penser.
+             */
+            {
+                const bool poste_voulu =
+                       in_game && !fullscreen_game && playing_cab && !menu.open
+                    && cam.mode == ROOM_CAM_PLAYER && !cam.third_person
+                    && ns_v3_dist(cam.position, playing_cab->screen_center) < poste_portee;
+                if (poste_voulu) {
+                    /* Reprise SILENCIEUSE : on ne repose pas le tangage de
+                     * quelqu'un qui vient de tourner la tête ou de reculer. Le
+                     * regard n'est posé qu'à l'entrée en partie et à la mort. */
+                    if (!poste.pris) (void)room_poste_prendre(&poste, playing_cab, cam.position);
+                } else {
+                    room_poste_lacher(&poste);
+                }
+                room_poste_tick(&poste, (float)clock.tick_seconds);
+            }
+
+            /*
              * La descente du regard vers la dalle, APRÈS le pas de caméra : la
              * souris du joueur a déjà été intégrée, donc bouger la souris
              * pendant ces trois dixièmes de seconde n'est pas ignoré, seulement
@@ -3973,7 +4045,9 @@ play_at_done: ;
                      * comme à l'entrée.
                      */
                     if (playing_cab && !fullscreen_game && cam.mode == ROOM_CAM_PLAYER) {
-                        look_pitch  = pitch_onto(cam.position, playing_cab->screen_center);
+                        look_pitch  = poste.pris
+                                    ? room_poste_tangage(&poste)
+                                    : pitch_onto(cam.position, playing_cab->screen_center);
                         look_settle = 0.45f;
                     }
                     last_rank = finish_run(runlog, run_ms, game_api, game,
@@ -4248,7 +4322,20 @@ play_at_done: ;
                 continue;
             }
 
-            const ns_camera render_cam = room_camera_resolve(&cam, &scene.bvh, (float)clock.alpha);
+            ns_camera render_cam = room_camera_resolve(&cam, &scene.bvh, (float)clock.alpha);
+            /*
+             * LE POSTE N'EST APPLIQUÉ QU'ICI, sur la caméra de RENDU.
+             *
+             * `cam.position` n'est pas touché, et c'est ce qui rend le poste
+             * petit : la collision, le ramassage, le contrôle de portée,
+             * l'écoute et les pas continuent de partir du CORPS. C'est la règle
+             * que `room_camera.h` a posée pour la troisième personne, appliquée
+             * dans l'autre sens — approcher la vue plutôt que la reculer.
+             */
+            render_cam.position = room_poste_oeil(&poste, render_cam.position,
+                                                  (float)clock.alpha);
+            render_cam.fov_y_degrees = room_poste_fov(&poste, render_cam.fov_y_degrees,
+                                                      (float)clock.alpha);
 
             /*
              * TOUS LES CORPS DE L'IMAGE : le joueur, puis les pairs.
@@ -4495,7 +4582,25 @@ play_at_done: ;
             ns_renderer_set_characters(renderer, poses, poses_n);
 
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
-            room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
+            /*
+             * LES BRAS SUIVENT LA VUE, et il le faut.
+             *
+             * Ils sont posés depuis l'ŒIL : les épaules y sont accrochées, les
+             * poignets visent les commandes EN MONDE. Avancer la caméra sans
+             * avancer les épaules les laisserait derrière le plan de coupe
+             * proche — on verrait deux avant-bras flotter sans corps, ce qui est
+             * exactement le défaut que la troisième personne a mis un an à
+             * découvrir chez elle.
+             *
+             * On lui passe donc une caméra dont les DEUX pas de simulation sont
+             * décalés, et non un œil déjà interpolé : `room_viewmodel_pose`
+             * interpole lui-même, et interpoler deux fois fait dériver les bras
+             * d'une image à chaque changement de vitesse.
+             */
+            room_camera cam_bras = cam;
+            cam_bras.position      = room_poste_oeil_pas(&poste, cam.position, true);
+            cam_bras.prev_position = room_poste_oeil_pas(&poste, cam.prev_position, false);
+            room_viewmodel_pose(&vmstate, &cam_bras, (float)clock.alpha, &viewmodel);
             /*
              * ET JAMAIS EN TROISIÈME PERSONNE.
              *

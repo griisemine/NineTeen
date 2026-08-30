@@ -84,6 +84,17 @@ nineteen_set_warnings(ns_test_camera)
 nineteen_apply_sanitizers(ns_test_camera)
 add_test(NAME camera COMMAND ns_test_camera "${CMAKE_BINARY_DIR}/assets")
 
+# Le POSTE DE JEU : la vue qui s'approche de la dalle. Calcul pur — une hauteur
+# de dalle, une part voulue, un champ, une distance, un tangage, une rampe — donc
+# ni GPU ni salle. Les cotes de la borne de reference sont recopiees dans le test
+# et c'est volontaire : si la borne change, la table de room_poste.h est fausse.
+add_executable(ns_test_poste test_poste.c "${CMAKE_SOURCE_DIR}/room/room_poste.c")
+target_include_directories(ns_test_poste PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_poste PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_poste)
+nineteen_apply_sanitizers(ns_test_poste)
+add_test(NAME poste COMMAND ns_test_poste)
+
 # Le classement local et le journal de partie scellé.
 #
 # Le contrôle qui justifie ce test à lui seul : le format canonique et le sceau
