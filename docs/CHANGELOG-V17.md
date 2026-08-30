@@ -305,21 +305,45 @@ l'écran de crédits, l'archive — sont tenus.
 
 ## Ce qui reste entre ce paquet et une mise en vente
 
+### Fait depuis la rédaction de cette liste
+
+Les trois premiers points ci-dessous ont été traités APRÈS que cette recette les
+ait relevés. Ils restent écrits parce qu'un changelog qui efface ses propres
+constats ne dit plus comment on y est arrivé.
+
+- **`--width`/`--height` réparés.** La correction précédente avait redressé le
+  rendu hors écran et laissé la LECTURE des options, qui demandait « l'option
+  a-t-elle été donnée ? » en comparant à la valeur par défaut : `--width=1600`
+  — la valeur que `--help` annonce — était donc prise pour une absence. Zéro sert
+  désormais de sentinelle, comme `render_scale` le faisait déjà deux lignes plus
+  bas. Vérifié sur quatre définitions, RHI et PNG.
+- **La page COMMANDES annonce la manette**, avec le saut, l'accroupi et la
+  course qui lui manquaient (face gauche, face droite, gâchette d'épaule). Le
+  test qui exigeait l'ABSENCE de cette ligne exige maintenant sa présence : la
+  règle n'a pas changé, elle s'est retournée.
+- **L'avertissement `monnayeur` est tu** : le moteur connaît le mot. Au passage,
+  il est écrit dans l'en-tête que **rien ne lit la liste des lieux** — pour que
+  le prochain ne croie pas qu'elle pilote déjà quelque chose.
+- **Snake, piano et asteroid repris.** Le pilote automatique de Snake ne
+  connaissait pas son propre corps : la courbe mesurée décrivait le pilote, pas
+  le jeu. Quatre règles de 2020 étaient mal lues, dont une invincibilité de
+  départ qui supprimait les murs de l'arène pendant huit secondes, et un `6` lu
+  comme des secondes au lieu d'une chance par image — un facteur trente. Piano
+  reposait sur une série géométrique **convergente** : son morceau infini se
+  consommait en 3 min 40, après quoi la vitesse atteignait 207 949. Asteroid
+  tirait aux dés deux règles que 2020 déduisait de l'horloge.
+
 ### Ce qui demande du TRAVAIL
 
-1. **Réparer `--width`/`--height`** (point 1). Une heure : un drapeau
-   « donné / pas donné » à la place de la comparaison au défaut. C'est le seul
-   défaut de cette liste qui fausse *les mesures des autres recettes*.
-2. **Une ligne MANETTE dans la page COMMANDES** (point 3), et corriger le
-   commentaire de `room_credits.c` qui affirme le contraire. Une demi-journée
-   avec le saut, l'accroupi et la course au pad.
-3. **Faire taire l'avertissement `monnayeur`** (point 4) : soit le moteur
-   connaît le mot, soit la salle ne le déclare pas.
-4. **Écrire C-04 à C-08** (point 7), et re-mesurer les douze défauts mineurs.
-5. **Mesurer le déterminisme sur Windows et Linux** (point 6) — la chaîne CI
-   existe, le contrôle est déjà écrit.
-6. **Un deuxième cycle d'animation** (point 5) : course et repos.
-7. **Une page de téléchargement** portant l'attribution CesiumMan (point 13).
+1. **Écrire C-04 à C-08**, et re-mesurer les douze défauts mineurs.
+2. **Mesurer le déterminisme sur Windows et Linux** — la chaîne CI existe, le
+   contrôle est déjà écrit.
+3. **Un deuxième cycle d'animation** : s'asseoir, ramasser, être poussé. Un
+   cycle ne se fabrique pas par arithmétique — l'accroupi, lui, est fait.
+4. **Une page de téléchargement** portant l'attribution CesiumMan.
+5. **Un quatrième crochet de son** pour les mini-jeux : l'interface n'en offre
+   que trois, et Snake a cinq sons de potion et de bombe que le portage n'a
+   jamais pu brancher. Les sons existent, les événements aussi.
 
 ### Ce qui demande une DÉCISION ou un ACHAT du propriétaire
 
