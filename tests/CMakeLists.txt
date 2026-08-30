@@ -549,7 +549,12 @@ add_test(NAME rejeu-cli
 add_executable(ns_test_presence test_presence.c
     "${CMAKE_SOURCE_DIR}/room/room_presence.c")
 target_include_directories(ns_test_presence PRIVATE "${CMAKE_SOURCE_DIR}/room")
-target_link_libraries(ns_test_presence PRIVATE nineteen::engine)
+# `nineteen::games` en plus du moteur : les marcheurs de demonstration tirent le
+# nom du jeu qu'ils jouent du REGISTRE et non d'une table ecrite a la main — la
+# table portait « TETRIS » et « PONG », deux marques deposees que ce depot avait
+# retirees ailleurs. Le registre est la seule source qui ne puisse pas les
+# reintroduire, et il vaut donc une dependance de plus au test.
+target_link_libraries(ns_test_presence PRIVATE nineteen::games nineteen::engine)
 nineteen_set_warnings(ns_test_presence)
 nineteen_apply_sanitizers(ns_test_presence)
 add_test(NAME presence COMMAND ns_test_presence)

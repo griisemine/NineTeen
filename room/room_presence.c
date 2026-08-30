@@ -2,6 +2,10 @@
  * déduit, et pourquoi un pair n'est pas un obstacle. */
 #include "room_presence.h"
 
+/* Le REGISTRE DES JEUX, pour les marcheurs de demonstration : voir plus bas,
+ * la table qui les nommait a la main portait deux marques deposees. */
+#include "games.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -470,7 +474,27 @@ uint32_t room_presence_demo(ns_realtime_peer *out, uint32_t max,
      */
     static const char *NOMS[] = { "Ada", "Bob", "Chloe", "Dan",
                                   "Elise", "Femi", "Gus", "Hana" };
-    static const char *JEUX[] = { "TETRIS", "", "SNAKE", "", "PONG", "", "CASSE", "" };
+
+    /*
+     * CE QU'ILS JOUENT VIENT DU REGISTRE, ET C'EST UNE CORRECTION.
+     *
+     * Cette ligne etait une table ecrite a la main : « TETRIS », « SNAKE »,
+     * « PONG », « CASSE ». TETRIS est une marque deposee de Tetris Holding et
+     * PONG une marque d'Atari ; ce depot a debaptise trois de ses jeux et
+     * migre sa base pour retirer exactement ces mots-la
+     * (`server/internal/migrations/0003_debaptise.sql`), et deux d'entre eux
+     * revenaient ici — dans un mode documente par `--help` et employe pour
+     * produire une image livree avec le depot. Une salle qui ne porte plus une
+     * marque mais dont la capture de presentation l'affiche n'a rien retire.
+     *
+     * Le registre ne peut pas mentir : il ne contient que les jeux que la salle
+     * PORTE, sous le nom qu'elle leur donne. Un jeu debaptise demain suivra
+     * sans qu'on ait a se souvenir de cette ligne.
+     *
+     * Un marcheur sur deux ne joue a rien : c'est ce qui fait que l'etiquette
+     * a deux lignes et l'etiquette a une ligne se voient toutes les deux sur la
+     * meme capture.
+     */
 
     const float EYE = 1.63f;      /* la hauteur d'œil debout du jeu */
     const float SPEED = 1.4f;
@@ -487,7 +511,11 @@ uint32_t room_presence_demo(ns_realtime_peer *out, uint32_t max,
         p->id[4] = (char)('0' + (int)(i % 10u));
         p->id[5] = '\0';
         copy_bounded(p->name, sizeof p->name, NOMS[i % 8u], 8u);
-        copy_bounded(p->game, sizeof p->game, JEUX[i % 8u], 8u);
+        const int jeux = ns_game_count();
+        const ns_game_api *api = ((i % 2u) == 0u && jeux > 0)
+                               ? ns_game_at((int)((i / 2u) % (uint32_t)jeux))
+                               : NULL;
+        copy_bounded(p->game, sizeof p->game, (api && api->label) ? api->label : "", 8u);
         p->verified = ((i % 3u) != 1u);
         p->score = (int32_t)(1200 + 137 * (int)i);
 

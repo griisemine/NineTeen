@@ -1123,7 +1123,62 @@ static void draw_presence(ns_sprite *s, const room_presence *pr,
      * l'afficher comme les autres reviendrait à garantir ce qu'on ne sait pas. */
     const float unverified[4] = { 0.85f, 0.78f, 0.45f, 0.95f };
 
-    for (uint32_t i = 0; i < n; ++i) {
+    /*
+     * LES ETIQUETTES SE DESEMPILENT, et il a fallu quatre marcheurs pour le voir.
+     *
+     * Elles etaient dessinees dans l'ordre du tableau de pairs, chacune centree
+     * sur la tete de son corps. A quatre personnes groupees dans l'allee — ce
+     * qui est la situation NORMALE d'une salle d'arcade, pas un cas limite — les
+     * quatre plaques se recouvrent et plus aucun nom ne se lit : la capture
+     * montrait « Dan », « Chloe » et « SNAKE 1474 » imprimes les uns sur les
+     * autres. Une etiquette illisible est pire qu'une etiquette absente, parce
+     * qu'elle abime aussi celle du voisin.
+     *
+     * Trois regles, dans cet ordre :
+     *
+     *   1. DU PLUS PROCHE AU PLUS LOIN. Celui qui est devant a la priorite, et
+     *      sa plaque opaque passe par-dessus. C'est aussi l'ordre qui donne la
+     *      bonne lecture de profondeur : un nom lointain qui recouvre un nom
+     *      proche est un contresens.
+     *   2. ON DECALE VERS LE HAUT. Une plaque qui tombe sur une deja posee
+     *      remonte d'une hauteur de plaque, jusqu'a trois fois. Vers le haut et
+     *      non vers le bas parce qu'au-dessus d'une tete il y a le plafond,
+     *      et au-dessous il y a le corps qu'on cherche a designer.
+     *   3. SI CA NE SUFFIT PAS, ON RENONCE. Le nom reste dans la liste en haut
+     *      a droite, qui existe precisement pour dire QUI est la quand
+     *      l'etiquette ne le peut pas.
+     *
+     * Le rectangle teste inclut la SOUS-LIGNE (le jeu et le score) : c'est elle
+     * qui depasse et qui va cogner le nom du voisin.
+     */
+    uint32_t order[ROOM_PRESENCE_MAX];
+    float    order_d[ROOM_PRESENCE_MAX];
+    uint32_t order_n = 0;
+    for (uint32_t i = 0; i < n && order_n < ROOM_PRESENCE_MAX; ++i) {
+        const room_presence_body *p = &pr->body[i];
+        const ns_v3 w = ns_v3_make(p->feet.x, p->label_y, p->feet.z);
+        order[order_n]   = i;
+        order_d[order_n] = ns_v3_len(ns_v3_sub(w, cam->position));
+        order_n++;
+    }
+    /* Tri par insertion : seize elements au plus, et il tourne une fois par
+     * image. Un tri plus savant coûterait plus a lire qu'a executer. */
+    for (uint32_t a = 1; a < order_n; ++a) {
+        const uint32_t ki = order[a];
+        const float    kd = order_d[a];
+        uint32_t b = a;
+        while (b > 0 && order_d[b - 1] > kd) {
+            order[b] = order[b - 1]; order_d[b] = order_d[b - 1]; b--;
+        }
+        order[b] = ki; order_d[b] = kd;
+    }
+
+    /* Les plaques deja posees, en (x, y, largeur, hauteur). */
+    float placed[ROOM_PRESENCE_MAX][4];
+    uint32_t placed_n = 0;
+
+    for (uint32_t k = 0; k < order_n; ++k) {
+        const uint32_t i = order[k];
         const room_presence_body *p = &pr->body[i];
 
         /*
@@ -1160,6 +1215,47 @@ static void draw_presence(ns_sprite *s, const room_presence *pr,
         const float tw = ns_sprite_text_width(p->name, scale);
         const float th = ns_sprite_text_height(scale);
 
+        /* La sous-ligne est calculee AVANT le placement : elle fait partie de
+         * l'encombrement, et c'est elle qui depasse par le bas. */
+        char line[64];
+        line[0] = '\0';
+        float sub = 0.0f, sw = 0.0f, sh = 0.0f;
+        if (p->game[0]) {
+            if (p->score > 0) {
+                SDL_snprintf(line, sizeof line, "%s %d", p->game, (int)p->score);
+            } else {
+                SDL_snprintf(line, sizeof line, "%s", p->game);
+            }
+            sub = ns_maxf(scale * 0.7f, 1.0f);
+            sw  = ns_sprite_text_width(line, sub);
+            sh  = ns_sprite_text_height(sub) + 4.0f;
+        }
+
+        const float bw = ns_maxf(tw + 12.0f, sw);
+        const float bh = th + 8.0f + sh;
+        float bx = sx - bw * 0.5f;
+        float by = sy - th * 0.5f - 4.0f;
+
+        bool libre = false;
+        for (int essai = 0; essai < 4 && !libre; ++essai) {
+            libre = true;
+            for (uint32_t q = 0; q < placed_n; ++q) {
+                if (bx < placed[q][0] + placed[q][2] && bx + bw > placed[q][0]
+                    && by < placed[q][1] + placed[q][3] && by + bh > placed[q][1]) {
+                    libre = false;
+                    break;
+                }
+            }
+            if (!libre) by -= bh + 3.0f;
+        }
+        if (!libre) continue;      /* la liste en haut a droite le dira */
+
+        placed[placed_n][0] = bx; placed[placed_n][1] = by;
+        placed[placed_n][2] = bw; placed[placed_n][3] = bh;
+        placed_n++;
+
+        const float name_y = by + 4.0f + th * 0.5f;
+
         /* Les trois teintes reprises telles quelles, alpha multiplié par le
          * fondu : c'est le même effacement que le corps, pas un second. */
         const float name_src[4] = { p->verified ? white[0] : unverified[0],
@@ -1169,22 +1265,13 @@ static void draw_presence(ns_sprite *s, const room_presence *pr,
         const float back_f[4] = { back[0], back[1], back[2], back[3] * fade };
         const float dim_f[4]  = { dim[0],  dim[1],  dim[2],  dim[3]  * fade };
 
-        ns_sprite_rect(s, sx - tw * 0.5f - 6.0f, sy - th * 0.5f - 4.0f,
-                       tw + 12.0f, th + 8.0f, back_f);
-        ns_sprite_text(s, sx - tw * 0.5f, sy - th * 0.5f, scale, name_src, p->name);
+        ns_sprite_rect(s, bx, by, tw + 12.0f, th + 8.0f, back_f);
+        ns_sprite_text(s, bx + 6.0f, name_y - th * 0.5f, scale, name_src, p->name);
 
         /* Ce qu'il fait, sous son nom. C'est ça qui rend la salle vivante :
-         * « Bob — TETRIS 1200 » raconte quelque chose, une position non. */
-        if (p->game[0]) {
-            char line[64];
-            if (p->score > 0) {
-                SDL_snprintf(line, sizeof line, "%s %d", p->game, (int)p->score);
-            } else {
-                SDL_snprintf(line, sizeof line, "%s", p->game);
-            }
-            const float sub = ns_maxf(scale * 0.7f, 1.0f);
-            const float sw = ns_sprite_text_width(line, sub);
-            ns_sprite_text(s, sx - sw * 0.5f, sy + th * 0.5f + 4.0f, sub, dim_f, line);
+         * « Bob — SNAKE 1200 » raconte quelque chose, une position non. */
+        if (line[0]) {
+            ns_sprite_text(s, bx + (bw - sw) * 0.5f, by + th + 8.0f, sub, dim_f, line);
         }
     }
 }
