@@ -607,3 +607,25 @@ target_link_libraries(ns_test_economie PRIVATE nineteen::games)
 nineteen_set_warnings(ns_test_economie)
 nineteen_apply_sanitizers(ns_test_economie)
 add_test(NAME economie COMMAND ns_test_economie)
+
+# --------------------------------------------------------------------------
+# Le Couperet — le mode competitif
+# --------------------------------------------------------------------------
+#
+# Il lie `nineteen::games` pour une raison qui n'est pas de commodite : le
+# tournoi d'equilibre NE SIMULE PAS les parties, il les JOUE. Les huit
+# autopilotes constituent au lancement un vivier de (duree, score) reellement
+# mesures, et le tournoi tire dedans. Une loi de probabilite inventee aurait
+# mesure l'equilibre d'un jeu qui n'existe pas.
+#
+# Il emporte aussi `room_economie.c` : les points du mode sont ceux du bareme
+# multiplies par un coefficient, et le bareme n'est PAS recopie ici. C'est le
+# meme refus de la double description qui a fait naitre `room_bareme.h`.
+add_executable(ns_test_couperet test_couperet.c
+    "${CMAKE_SOURCE_DIR}/room/room_couperet.c"
+    "${CMAKE_SOURCE_DIR}/room/room_economie.c")
+target_include_directories(ns_test_couperet PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_couperet PRIVATE nineteen::games)
+nineteen_set_warnings(ns_test_couperet)
+nineteen_apply_sanitizers(ns_test_couperet)
+add_test(NAME couperet COMMAND ns_test_couperet)

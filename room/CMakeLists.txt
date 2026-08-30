@@ -10,6 +10,7 @@ add_executable(nineteen
     room_economie.c
     room_pad.c
     room_poste.c
+    room_couperet.c
     room_presence.c
     room_credits.c
     room_sound.c
