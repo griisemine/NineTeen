@@ -250,6 +250,28 @@ const char *ns_footstep_label(ns_footstep k)
     return g_footstep_labels[k];
 }
 
+static const char *const g_screen_labels[] = { "", "tube", "plat" };
+
+const char *ns_screen_kind_label(ns_screen_kind k)
+{
+    if ((int)k < 0 || (int)k >= (int)(sizeof g_screen_labels / sizeof g_screen_labels[0])) return "";
+    return g_screen_labels[k];
+}
+
+/* Un nom inconnu vaut NONE et le DIT : une faute de frappe dans une description
+ * de salle est silencieuse par construction, et le prix est un écran qui perd
+ * son traitement sans que personne ne sache pourquoi. */
+static ns_screen_kind screen_kind_from_name(const char *name, const char *mat)
+{
+    if (!name || !name[0]) return NS_SCREEN_NONE;
+    for (int i = 1; i < (int)(sizeof g_screen_labels / sizeof g_screen_labels[0]); ++i) {
+        if (SDL_strcasecmp(name, g_screen_labels[i]) == 0) return (ns_screen_kind)i;
+    }
+    NS_WARN("matériau %s : espèce d'écran « %s » inconnue — attendu « tube » ou « plat »",
+            mat ? mat : "?", name);
+    return NS_SCREEN_NONE;
+}
+
 static ns_footstep footstep_from_name(const char *name)
 {
     if (!name || !name[0]) return NS_STEP_NONE;
@@ -519,6 +541,30 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
                 if (s->material_footstep[i] != NS_STEP_NONE) declared++;
             }
             NS_INFO("%d matériau(x) portent une classe de pas", declared);
+        }
+    }
+
+    /*
+     * L'ESPÈCE D'ÉCRAN de chaque matériau. Même forme que la table ci-dessus, et
+     * pour la même raison : la salle le déclare, le moteur ne le devine pas.
+     */
+    const ns_json_value *ecrans = ns_json_get(&doc, root, "materialScreens");
+    const int ecran_count = ns_json_array_count(&doc, ecrans);
+    if (ecran_count > 0) {
+        s->material_screen = (uint8_t *)ns_arena_alloc(
+            &s->arena, sizeof(uint8_t) * (size_t)ecran_count, _Alignof(uint8_t));
+        if (s->material_screen) {
+            int tubes = 0, plats = 0;
+            for (int i = 0; i < ecran_count; ++i) {
+                char name[16] = { 0 };
+                ns_json_string(&doc, ns_json_at(&doc, ecrans, i), name, sizeof name);
+                const ns_screen_kind k = screen_kind_from_name(name, NULL);
+                s->material_screen[i] = (uint8_t)k;
+                if (k == NS_SCREEN_TUBE) tubes++;
+                else if (k == NS_SCREEN_PLAT) plats++;
+            }
+            if (tubes || plats)
+                NS_INFO("écrans déclarés : %d tube(s), %d dalle(s) plate(s)", tubes, plats);
         }
     }
 

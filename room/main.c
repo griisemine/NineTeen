@@ -2222,19 +2222,32 @@ int main(int argc, char **argv)
      * mesure qui l'a fixée. Une dalle de borne fait 0,5333 m pour 512 px, soit
      * 960 texels par mètre (`salle.scene.json`, clé `screenWidth`). Le même
      * matériau habille ici deux surfaces bien plus grandes : l'écran du bar
-     * (1,70 m) et « tableau_semaine » (2,40 m). A 640 px c'était 376 et 267
+     * (1,78 m) et « tableau_semaine » (2,40 m). A 640 px c'était 360 et 267
      * texels par mètre — deux fois et demie à trois fois et demie plus grossier
      * qu'une borne, ce qui se voit dès qu'on s'approche du comptoir : le
      * lettrage y est en marches d'escalier alors que la même fonte est nette
      * sur une borne à la même distance.
      *
-     * 1280 x 640 porte l'écran du bar à 753 texels par mètre, soit 78 % d'une
-     * dalle de borne. C'est un DOUBLEMENT EXACT : `room_hud_draw_scoreboard`
-     * multiplie toutes ses cotes par `w / 640`, donc chaque coordonnée reste
-     * sur la même grille et aucune position ne se met à tomber entre deux
-     * texels. Coût mesuré : la cible passe de 819 Ko à 3,3 Mo, et le temps GPU
-     * de l'allée en palier medium ne bouge pas — le tableau est un remplissage
-     * de sprites, pas une passe d'éclairage.
+     * 2560 x 1280 porte l'écran du bar à 1438 texels par mètre, soit 1,50 fois
+     * une dalle de borne (960). Ce sont des DOUBLEMENTS EXACTS depuis 640 :
+     * `room_hud_draw_scoreboard` multiplie toutes ses cotes par `w / 640`, donc
+     * chaque coordonnée reste sur la même grille et aucune position ne se met à
+     * tomber entre deux texels.
+     *
+     * POURQUOI CE SECOND DOUBLEMENT, alors que 1280 rattrapait déjà l'essentiel :
+     * il ne se justifie PAS tout seul, il se justifie avec le filtre. Une dalle
+     * déclarée « plat » est désormais échantillonnée en LINÉAIRE et non en
+     * `nearest` — c'est ce qui la distingue d'un tube, dont la grille de texels
+     * doit rester visible. Or un filtre linéaire sur 1280 texels ADOUCIT le
+     * lettrage au lieu de le lisser : la fonte 5 x 7 y est dessinée à 4,4 texels
+     * par pixel de fonte, et l'interpolation mange les contre-formes. À 2560
+     * elle en a 8,8, les bords restent francs et le filtre ne fait plus que ce
+     * qu'on lui demande — supprimer les marches. Les deux changements se tiennent
+     * et n'ont pas de sens l'un sans l'autre.
+     *
+     * Coût mesuré : la cible passe de 3,3 Mo à 13,1 Mo, et le temps GPU de
+     * l'allée en palier medium ne bouge pas — le tableau est un remplissage de
+     * sprites, pas une passe d'éclairage.
      *
      * Ce que ça ne corrige PAS, et il faut le dire : de LOIN, le lettrage reste
      * sous le seuil de lisibilité du projet. Mesuré sur la vue « bar » (caméra

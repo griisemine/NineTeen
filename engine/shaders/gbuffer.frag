@@ -132,9 +132,16 @@ vec2 barrel(vec2 uv, float amount)
 void main()
 {
     vec2 uv = v_uv;
-    const bool is_screen = u_screen.w > 0.5;
+    /*
+     * L'ESPÈCE DE L'ÉCRAN, et non plus un booléen : 0 rien, 1 tube, 2 dalle
+     * plate. `ns_screen_kind` (ns_scene.h) porte la mesure qui a rendu la
+     * distinction nécessaire — le téléviseur du bar recevait le traitement de
+     * tube, et ses filets DROITS sortaient bombés de dix pixels.
+     */
+    const bool is_tube = u_screen.w > 0.5 && u_screen.w < 1.5;
+    const bool is_plat = u_screen.w > 1.5;
 
-    if (is_screen) {
+    if (is_tube) {
         uv = barrel(uv, u_screen.x);
         /*
          * Hors de la dalle après déformation, on est sur le cadre : du noir, pas
@@ -226,7 +233,48 @@ void main()
      */
     vec3 emissive = u_emissive.rgb * u_emissive.a * albedo.rgb;
 
-    if (is_screen) {
+    if (is_plat) {
+        /*
+         * LA DALLE PLATE : un téléviseur d'aujourd'hui, et rien de ce qui
+         * précède.
+         *
+         * Ce qui distingue un panneau moderne d'un tube n'est pas une question
+         * de degré, c'est une liste de choses qu'il N'A PAS : pas de courbure,
+         * pas de lignes de balayage, pas de triade de phosphore, pas de coins
+         * assombris. Les quatre sont donc absentes ici — le shader ne les
+         * atténue pas, il ne les calcule pas.
+         *
+         * Reste ce qu'il a EN PROPRE, et c'est la vitre. Un tube porte un verre
+         * bombé, gris, qui diffuse ce qu'il renvoie ; une dalle haut de gamme
+         * porte une glace plane. La différence se voit à une seule grandeur : la
+         * rugosité. À 0,06 — la valeur du tube — un néon se lit comme une tache
+         * de 30 cm ; à 0,035 il se lit comme le néon, avec ses bords. C'est ce
+         * reflet net qui fait dire « écran éteint » plutôt que « affiche
+         * sombre », et c'est la seule chose qu'on VOIT d'un panneau qui n'émet
+         * pas.
+         *
+         * MÉTAL À ZÉRO, contrairement au tube. Le tube force 0,35 pour forcer un
+         * reflet visible sur un verre gris : c'est un artifice, et il TEINTE le
+         * reflet de la couleur de la dalle, puisqu'un métal colore sa
+         * réflexion. Une glace est un diélectrique : sa réflexion à incidence
+         * normale vaut 4 % et elle est BLANCHE. Le modèle PBR pose déjà F0 =
+         * 0,04 pour un métal nul — il n'y a donc rien à forcer, il suffit de ne
+         * pas mentir.
+         */
+        roughness = mix(roughness, 0.035, u_screen.z);
+        metallic  = mix(metallic, 0.0, u_screen.z);
+
+        /*
+         * Le NOIR d'une dalle. Le tube garde 6 % de son image en albédo — un
+         * verre de tube éteint reste gris. Une dalle éteinte est plus noire que
+         * ça : 2 %. C'est ce qui donne au panneau son contraste, puisque tout ce
+         * qui n'est pas émis tombe au niveau du cadre.
+         */
+        albedo.rgb *= 0.02;
+
+        o_normal_rm = vec4(encodeOctahedral(N), roughness, metallic);
+        o_albedo_ao = vec4(albedo.rgb, occlusion);
+    } else if (is_tube) {
         /*
          * Lignes de balayage et masque de phosphore, EN COORDONNÉES DE TEXTURE
          * et non d'écran.

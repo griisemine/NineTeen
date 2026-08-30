@@ -157,11 +157,11 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
  * son seul appelant : `room_hud_draw_scoreboard` rapporte toutes ses cotes à
  * 640 (`u = w / 640`). Les deux nombres doivent donc rester un MULTIPLE ENTIER
  * de ce repère, et les écrire à deux endroits est la façon la plus sûre de les
- * voir diverger. Le choix de 1280 x 640 est mesuré dans `room/main.c`, à
+ * voir diverger. Le choix de 2560 x 1280 est mesuré dans `room/main.c`, à
  * l'endroit où la cible est créée.
  */
-#define ROOM_BAR_RT_W 1280u
-#define ROOM_BAR_RT_H  640u
+#define ROOM_BAR_RT_W 2560u
+#define ROOM_BAR_RT_H 1280u
 
 void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_seconds,
                               const char *my_name, const char *my_game,

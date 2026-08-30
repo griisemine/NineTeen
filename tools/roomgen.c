@@ -348,6 +348,10 @@ typedef struct rg_builder {
     bool          material_fit[RG_MAX_MATERIALS];
     /* Classe de pas, déclarée par le matériau. Vide = on ne marche pas dessus. */
     char          material_footstep[RG_MAX_MATERIALS][24];
+    /* Espèce d'écran, déclarée par le matériau : "tube", "plat", ou vide.
+     * Le moteur ne la devine plus — voir `ns_screen_kind` dans ns_scene.h, et la
+     * mesure du bombement qui a rendu cette clé nécessaire. */
+    char          material_screen[RG_MAX_MATERIALS][8];
     size_t        material_count;
 
     /* Racine des assets, pour résoudre `"model": "cc0/models/..."`. Elle est
@@ -3898,6 +3902,14 @@ static void parse_materials(rg_builder *b, const tool_json *doc, const tool_json
         b->material_fit[slot] = tool_json_get_bool(doc, e, "fit", false);
         tool_json_get_string(doc, e, "footstep", b->material_footstep[slot],
                              sizeof b->material_footstep[slot]);
+        tool_json_get_string(doc, e, "ecran", b->material_screen[slot],
+                             sizeof b->material_screen[slot]);
+        if (b->material_screen[slot][0]
+            && strcmp(b->material_screen[slot], "tube") != 0
+            && strcmp(b->material_screen[slot], "plat") != 0) {
+            tool_fatalf("matériau « %s » : ecran « %s » inconnu — « tube » ou « plat »",
+                        mat_name, b->material_screen[slot]);
+        }
     }
 }
 
@@ -4443,12 +4455,15 @@ static int clone_screen_material(rg_builder *b, int src, const char *cabinet)
     snprintf(src_name, sizeof src_name, "%s", b->material_names[src]);
     char src_step[24];
     snprintf(src_step, sizeof src_step, "%s", b->material_footstep[src]);
+    char src_screen[8];
+    snprintf(src_screen, sizeof src_screen, "%s", b->material_screen[src]);
 
     const size_t slot = b->material_count++;
     b->materials[slot] = b->materials[src];
     b->material_uv[slot] = b->material_uv[src];
     b->material_fit[slot] = b->material_fit[src];
     snprintf(b->material_footstep[slot], sizeof b->material_footstep[slot], "%s", src_step);
+    snprintf(b->material_screen[slot], sizeof b->material_screen[slot], "%s", src_screen);
     snprintf(b->material_names[slot], sizeof b->material_names[slot], "%.40s@%.20s",
              src_name, cabinet);
     return (int)slot;
@@ -5766,6 +5781,14 @@ static void write_scene_json(const tool_json *doc, const tool_json_value *root,
     for (size_t i = 0; i < b->material_count; ++i) {
         fprintf(f, "    \"%s\"%s\n",
                 b->material_footstep[i][0] ? b->material_footstep[i] : "",
+                (i + 1 < b->material_count) ? "," : "");
+    }
+    fprintf(f, "  ],\n");
+
+    fprintf(f, "  \"materialScreens\": [\n");
+    for (size_t i = 0; i < b->material_count; ++i) {
+        fprintf(f, "    \"%s\"%s\n",
+                b->material_screen[i][0] ? b->material_screen[i] : "",
                 (i + 1 < b->material_count) ? "," : "");
     }
     fprintf(f, "  ],\n");

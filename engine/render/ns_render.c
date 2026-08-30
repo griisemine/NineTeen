@@ -1561,14 +1561,51 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
              * entiers à chaque changement de matériau coûte trois mille
              * comparaisons par image : sous le bruit de mesure.
              */
-            bool is_screen = live_screen;
-            for (uint32_t k = 0; !is_screen && k < scene->cabinet_count; ++k) {
-                is_screen = (scene->cabinets[k].screen_material == b->material);
+            ns_screen_kind kind = NS_SCREEN_NONE;
+            if (scene->material_screen && b->material >= 0
+                && (uint32_t)b->material < scene->material_count) {
+                kind = (ns_screen_kind)scene->material_screen[b->material];
             }
+            if (kind == NS_SCREEN_NONE) {
+                /*
+                 * Rien de déclaré : on retombe sur ce que le moteur savait
+                 * déduire, et cette déduction vaut TUBE.
+                 *
+                 * C'est ce qui garde la salle de 2020 exactement comme avant —
+                 * elle n'a pas de clé `ecran` et ses dalles doivent continuer
+                 * de recevoir le tube. Le défaut corrigé n'est pas la déduction,
+                 * c'est qu'elle n'était pas RÉFUTABLE : le téléviseur du bar
+                 * n'avait aucun moyen de dire qu'il n'en était pas un.
+                 */
+                bool devine = live_screen;
+                for (uint32_t k = 0; !devine && k < scene->cabinet_count; ++k) {
+                    devine = (scene->cabinets[k].screen_material == b->material);
+                }
+                if (devine) kind = NS_SCREEN_TUBE;
+            }
+            const bool is_screen = (kind != NS_SCREEN_NONE);
             tex[1].texture = m ? texture_or(scene, m->normal_texture, scene->fallback_normal) : scene->fallback_normal.handle;
             tex[2].texture = m ? texture_or(scene, m->orm_texture, scene->fallback_orm) : scene->fallback_orm.handle;
             for (int k = 0; k < 3; ++k) tex[k].sampler = aniso;
-            if (live_screen) tex[0].sampler = ns_rhi_sampler(r, NS_SAMPLER_NEAREST_CLAMP);
+            /*
+             * LE FILTRE SUIT L'ESPÈCE DE L'ÉCRAN, et c'est la moitié de la
+             * différence entre un tube et une dalle plate.
+             *
+             * `nearest` sur un tube : un jeu en gros pixels filtré en linéaire
+             * devient une bouillie, et c'est justement la netteté qui fait
+             * « écran de borne ». La même règle appliquée à un téléviseur
+             * moderne produit l'inverse de ce qu'on veut — elle rend visible la
+             * grille de texels, c'est-à-dire exactement le défaut par lequel on
+             * reconnaît un vieil écran.
+             *
+             * `clamp` dans les deux cas : une dalle ne se répète pas, et un
+             * `repeat` sur un bord ramènerait le côté opposé de l'image.
+             */
+            if (live_screen) {
+                tex[0].sampler = ns_rhi_sampler(
+                    r, (kind == NS_SCREEN_PLAT) ? NS_SAMPLER_LINEAR_CLAMP
+                                                : NS_SAMPLER_NEAREST_CLAMP);
+            }
             SDL_BindGPUFragmentSamplers(pass, 0, tex, 3);
 
             material_ubo mu;
@@ -1610,7 +1647,18 @@ static void pass_gbuffer(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                 mu.screen[0] = rd->settings.screen_curvature;
                 mu.screen[1] = rd->settings.screen_scanlines;
                 mu.screen[2] = rd->settings.screen_glass;
-                mu.screen[3] = 1.0f;
+                /* L'ESPÈCE, et non plus un booléen : 1 tube, 2 dalle plate.
+                 * Le shader en fait deux traitements distincts, et un troisième
+                 * y tiendrait sans changer la taille de l'uniforme. */
+                mu.screen[3] = (float)kind;
+                if (kind == NS_SCREEN_PLAT) {
+                    /* Une dalle plate n'a NI courbure NI lignes. Les mettre à
+                     * zéro ici plutôt que dans le shader garde `barrel()` et le
+                     * masque de phosphore hors du chemin d'un téléviseur, même
+                     * si quelqu'un remonte un jour ces réglages pour les tubes. */
+                    mu.screen[0] = 0.0f;
+                    mu.screen[1] = 0.0f;
+                }
             }
             SDL_PushGPUFragmentUniformData(cmd, 0, &mu, sizeof mu);
 

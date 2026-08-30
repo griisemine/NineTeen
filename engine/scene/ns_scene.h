@@ -202,6 +202,40 @@ typedef enum ns_footstep {
 
 const char *ns_footstep_label(ns_footstep k);
 
+/*
+ * DE QUELLE ESPÈCE D'ÉCRAN s'agit-il ? Déclarée par la salle, jamais devinée.
+ *
+ * Le moteur savait dire « ceci est un écran » et rien de plus, et il en tirait
+ * un seul traitement : celui du TUBE — courbure en barillet, lignes de balayage,
+ * masque de phosphore, coins assombris. C'était juste pour dix-neuf bornes
+ * d'arcade et faux pour le téléviseur du bar, qui le recevait quand même.
+ *
+ * Le défaut était même ÉCRIT à côté du champ `scoreboard_material` de cette
+ * structure — « celles-ci reçoivent le traitement de tube, celui-là non » —
+ * alors que `ns_render.c` posait `is_screen = live_screen` et le lui donnait.
+ * Un commentaire qui décrit l'intention plutôt que le code est un défaut de
+ * plus, pas un demi-défaut.
+ *
+ * Ce que ça coûtait, MESURÉ sur une capture 1600x900 prise à 1,60 m de la dalle
+ * du bar (--camera=free --pos=0,1.503,5.40 --yaw=90) :
+ *
+ *   - les deux filets horizontaux du tableau, qui sont DROITS dans l'image
+ *     dessinée, sortaient bombés de 4,45 px vers le haut et 5,69 px vers le bas
+ *     sur une corde de 800 px. Un téléviseur plat dont les lignes s'incurvent
+ *     de dix pixels n'est pas un téléviseur plat ;
+ *   - le masque de phosphore compte 640 colonnes sur 1,70 m de dalle, soit
+ *     1,34 px de période à ce cadrage, et les lignes de balayage 480 sur 0,85 m,
+ *     soit 0,90 px. Les deux sont SOUS la limite d'échantillonnage : ce qu'ils
+ *     produisaient n'était pas un grain de tube, c'était du moiré.
+ */
+typedef enum ns_screen_kind {
+    NS_SCREEN_NONE = 0,   /* pas un écran : une surface ordinaire */
+    NS_SCREEN_TUBE,       /* le verre bombé d'une borne d'arcade */
+    NS_SCREEN_PLAT        /* une dalle plate : téléviseur, panneau d'affichage */
+} ns_screen_kind;
+
+const char *ns_screen_kind_label(ns_screen_kind k);
+
 typedef struct ns_cabinet {
     char    name[64];
     char    game[32];
@@ -334,6 +368,13 @@ typedef struct ns_scene {
      * pas — la salle de 2020, notamment, où l'on marche sur de la moquette par
      * défaut faute de mieux. */
     ns_footstep     *material_footstep;
+    /*
+     * L'espèce d'écran de chaque matériau, dans le même ordre, ou NULL quand la
+     * salle n'en déclare aucun — la salle de 2020, notamment. Un octet par
+     * matériau plutôt qu'un champ de `ns_material_gpu` : cette table est lue par
+     * le CPU au changement de lot, elle n'a rien à faire dans un tampon GPU.
+     */
+    uint8_t         *material_screen;
 
     ns_dust_zone     dust[NS_MAX_DUST_ZONES];
     uint32_t         dust_count;
@@ -357,6 +398,14 @@ typedef struct ns_scene {
      * Distinct des dalles de bornes : celles-ci reçoivent le traitement de
      * tube, celui-là non. Une dalle plate accrochée au mur d'un bar n'a ni
      * courbure ni lignes de balayage.
+     *
+     * CETTE PHRASE A ÉTÉ FAUSSE PENDANT TOUT CE TEMPS, et il faut le dire ici
+     * plutôt que la réécrire en silence : `ns_render.c` posait
+     * `is_screen = live_screen`, donc le seul fait de poser une cible vivante
+     * sur ce matériau lui donnait le tube — courbure comprise. Ce qui manquait
+     * n'était pas l'intention, c'était le MOYEN de la dire : le matériau
+     * déclare maintenant son espèce (`ns_screen_kind`, `materialScreens`), et
+     * ce champ-ci ne sert plus qu'à savoir OÙ envoyer l'image.
      */
     int32_t    scoreboard_material;
 

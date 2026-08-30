@@ -613,6 +613,20 @@
       "_": "Le plastique NOIR d'une borne : bandeau de marquee, panneau haut-parleurs, cadre d'ecran, porte a monnayeur. C'est 1,75 m2 mesures dans Blender, la DEUXIEME surface de la borne apres le caisson.\nIl etait a 0,34 de rugosite et 0,15 de metal, avec une texture pavee tous les 30 cm : a cette echelle et ce brillant, le bandeau au-dessus de l'ecran renvoyait une tole martelee luisante. Sur la reference c'est un plastique MAT, et c'est ce mat qui fait ressortir la dalle. 0,68 de rugosite, 0,03 de metal, pave a 16 cm : le grain devient un moletage de plastique injecte, il accroche encore un reflet rasant, il ne brille plus."
     },
     {
+      "name": "cadre_ecran",
+      "texture": "painted_panel.jpg",
+      "roughness": 0.3,
+      "metallic": 0.85,
+      "uvMetres": 0.12,
+      "baseColor": [
+        0.2,
+        0.2,
+        0.215,
+        1.0
+      ],
+      "_": "LE LISERE D'UN TELEVISEUR, et pourquoi il n'est pas « borne_noir ».\n« borne_noir » est un plastique injecte MAT — 0,68 de rugosite, 0,03 de metal — et c'est ce qu'il faut pour le bandeau d'une borne : c'est son mat qui fait ressortir la dalle. Le meme materiau sur le pourtour d'un televiseur donne un cadre de moniteur bon marche. Un panneau haut de gamme porte un chant d'aluminium anodise de moins d'un centimetre : ce qui le distingue est qu'il ACCROCHE la lumiere en un trait, la ou le plastique l'absorbe. D'ou 0,85 de metal et 0,30 de rugosite — un reflet allonge, pas une tache.\nMeme texture que les autres laques (painted_panel.jpg) : c'est le GRAIN qui est commun, pas la matiere. Pave a 12 cm, soit le double de la finesse de « borne_noir » (16 cm) sur un lisere qui fait 1 cm de large — en dessous, le motif ne se lit plus du tout sur le chant."
+    },
+    {
       "name": "borne_commande",
       "texture": "panneau_borne.png",
       "roughness": 0.58,
@@ -1105,15 +1119,17 @@
     {
       "name": "classement_fond",
       "texture": "background_classement.png",
-      "roughness": 0.4,
+      "roughness": 0.05,
       "fit": true,
       "emissive": [
         1.0,
-        0.9,
-        0.72
+        1.0,
+        1.0
       ],
-      "emissiveStrength": 1.6,
-      "_": "Le tableau derriere le comptoir. A 0,129 de reflectance sur 1,8 x 0,9 m, c'etait un TROU NOIR dans le mur du bar — la plus grande surface sombre du champ, juste sous l'enseigne. Un tableau de scores est retroeclaire : l'emissif est module par l'albedo texel par texel, donc le fond reste sombre et seul le lettrage s'allume."
+      "emissiveStrength": 1.9,
+      "_": "Le tableau derriere le comptoir. A 0,129 de reflectance sur 1,8 x 0,9 m, c'etait un TROU NOIR dans le mur du bar — la plus grande surface sombre du champ, juste sous l'enseigne. Un tableau de scores est retroeclaire : l'emissif est module par l'albedo texel par texel, donc le fond reste sombre et seul le lettrage s'allume.",
+      "ecran": "plat",
+      "_ecran": "« ecran »: « plat » — LA CLE QUI MANQUAIT, et le defaut qu'elle corrige a ete mesure.\nCe materiau est celui que le moteur PILOTE (cle « scoreboard » en tete de ce fichier) : une cible de rendu vivante lui est posee a chaque image. Or `ns_render.c` en deduisait « ceci est un ecran » et n'avait qu'un seul traitement d'ecran, celui du TUBE : courbure en barillet, lignes de balayage, masque de phosphore, coins assombris. Le televiseur du bar recevait donc le rendu d'une borne de 1985.\nMESURE, capture 1600x900 a 1,60 m de la dalle (--camera=free --pos=0,1.503,5.40 --yaw=90) : les deux filets horizontaux du tableau, DROITS dans l'image dessinee, sortaient bombes de 4,45 px vers le haut et 5,69 px vers le bas sur une corde de 800 px. Et le masque de phosphore compte 640 colonnes sur 1,70 m, soit 1,34 px de periode a ce cadrage, les lignes de balayage 480 sur 0,85 m soit 0,90 px : tous deux SOUS la limite d'echantillonnage, donc ce qu'ils produisaient n'etait pas un grain de tube mais du moire.\nL'emissif passe de (1 ; 0,9 ; 0,72) a du blanc : la teinte ambree etait celle d'un panneau retroeclaire au tungstene. Un panneau OLED est etalonne autour du blanc D65 et c'est a sa NEUTRALITE qu'on le reconnait a cote d'un neon. Force 1,6 -> 1,9 : la dalle du bar est la surface la plus lumineuse du mur nord, elle doit dominer l'enseigne qui la surplombe.\nRugosite 0,40 -> 0,05. Le shader la ramene de toute facon vers 0,035 pour une dalle plate, mais la valeur declaree doit dire la verite sur la matiere : c'est une glace, pas un carton mat."
     },
     {
       "name": "ciel",
@@ -4385,23 +4401,23 @@
           "chamfer": 0.006
         },
         {
-          "_": "Le cadre, 3 cm de bordure autour de la dalle. C'est la cote d'un televiseur d'aujourd'hui ; les 12 cm d'un cadre de borne auraient fait un moniteur des annees quatre-vingt, ce que le comptoir d'accueil n'est pas.",
+          "_": "Le cadre, et il ne fait plus que 10 mm de bordure autour de la dalle.\nIl en faisait 30, ce qui etait deja une correction — un cadre de borne en fait 120 et aurait donne un moniteur des annees quatre-vingt. Mais 30 mm est la cote d'un televiseur de 2012, pas d'un panneau d'aujourd'hui : les dalles haut de gamme actuelles ont un chant de 6 a 10 mm, et c'est cette finesse qu'on lit AVANT la marque. 10 mm est le haut de cette fourchette, choisi parce qu'en dessous le chanfrein de 3 mm mangerait le tiers du lisere.\nLA HAUTEUR NE BOUGE PAS et c'est elle qui contraint tout : le plan de travail est a y 1,048 et la tablette de l'enseigne descend a 2,013, donc le cadre tient 0,910 m entre 1,048 et 1,958. Amincir la bordure ne donne donc pas un ecran plus petit, il donne un ecran plus GRAND : la dalle passe de 0,85 a 0,89 de haut, donc de 1,70 a 1,78 de large au format 2:1, soit 1,99 m de diagonale. Le cadre passe de 1,76 a 1,80, ce qui est exactement la largeur du panneau qui flottait la avant tout ce travail : on retrouve son emprise, avec un meuble a la place.",
           "type": "box",
-          "material": "borne_noir",
+          "material": "cadre_ecran",
           "at": [
             0.0,
             1.048,
             0.117
           ],
           "size": [
-            1.76,
+            1.8,
             0.91,
             0.028
           ],
-          "chamfer": 0.004
+          "chamfer": 0.003
         },
         {
-          "_": "La dalle. « classement_fond » est le materiau que le moteur PILOTE — c'est la cle « scoreboard » en tete de ce fichier — et c'est pour ca qu'elle n'est pas une texture peinte. Un panel est centre sur son at et sa normale est en +Z local : a yaw 180 elle regarde la salle. 2 mm devant la face du cadre, assez pour qu'aucune profondeur ne se dispute le pixel.",
+          "_": "La dalle. « classement_fond » est le materiau que le moteur PILOTE — c'est la cle « scoreboard » en tete de ce fichier — et c'est pour ca qu'elle n'est pas une texture peinte. Un panel est centre sur son at et sa normale est en +Z local : a yaw 180 elle regarde la salle. 2 mm devant la face du cadre, assez pour qu'aucune profondeur ne se dispute le pixel.\n1,78 x 0,89 : le 2:1 EXACT de la cible de rendu, qui vaut desormais 2560 x 1280. Le rapport a ete garde a chaque changement de cote parce qu'il decide de la deformation du lettrage — 1,80 x 0,90 aurait etire les caracteres de 1,1 %, ce qui ne se voit pas, mais la regle qui l'interdit est la seule chose qui empeche le jour ou ce sera 22 %.\nDENSITE : 2560 texels sur 1,78 m font 1438 texels/m. Les dix-neuf dalles de bornes en font 960 (512 px sur 0,5333 m, cote de assets/blender/borne.py:196-197). Avant ce lot le tableau du bar en faisait 753 : c'etait la surface lumineuse la MOINS definie de la salle, un televiseur de 2024 moins net qu'une borne de 1985. Il est maintenant la plus nette, d'un facteur 1,50.",
           "type": "panel",
           "material": "classement_fond",
           "at": [
@@ -4410,8 +4426,8 @@
             0.133
           ],
           "size": [
-            1.7,
-            0.85
+            1.78,
+            0.89
           ]
         }
       ]
