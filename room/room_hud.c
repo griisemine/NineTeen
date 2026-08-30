@@ -641,6 +641,65 @@ static void group_number(char *out, size_t n, uint32_t v)
     out[o] = '\0';
 }
 
+/* Aligné à DROITE sur `x`. Un score se lit par la droite : c'est là que sont les
+ * unités, et c'est ce qui met les chiffres d'une colonne en regard les uns des
+ * autres quel que soit leur nombre. La version d'avant les posait à gauche, et
+ * un 980 tombait donc sous le premier chiffre d'un 12 400. */
+static void a_droite(ns_sprite *s, float x, float y, float scale,
+                     const float rgba[4], const char *text)
+{
+    ns_sprite_text(s, x - ns_sprite_text_width(text, scale), y, scale, rgba, text);
+}
+
+/*
+ * LE TABLEAU DU BAR, refait pour être LU.
+ *
+ * Le défaut, mesuré, et il était écrit dans `room/main.c` sans être corrigé :
+ * « de LOIN, le lettrage reste sous le seuil de lisibilité du projet. Mesuré sur
+ * la vue « bar » (caméra à 4,10 m) en 1400 x 875, un caractère du titre fait
+ * 8,4 px de haut quand le seuil relevé sur ce dépôt est 11. La définition n'y
+ * change rien : c'est la TAILLE DU LETTRAGE SUR LE PANNEAU qu'il faudrait
+ * revoir, pas le nombre de texels. »
+ *
+ * C'est ce qu'on fait ici. La capture le confirmait sans appel : depuis le
+ * comptoir, l'enseigne au néon au-dessus du panneau se lit, la petite borne de
+ * classement à trois mètres à droite se lit, et le grand écran entre les deux
+ * est une bouillie grise. Un téléviseur qu'on ne lit pas de la pièce où il est
+ * accroché n'est pas un téléviseur, quelle que soit sa dalle.
+ *
+ * LE CALCUL, puisqu'il décide de tout le reste. Un caractère de `scale` s
+ * mesure 7 s unités du repère 640 x 320, donc 7 s / 320 x 0,89 m sur une dalle
+ * haute de 0,89 m. Vu de 4,24 m avec un champ vertical de 62° sur 875 px, il
+ * fait 875 x (hauteur / 4,24) / (2 tan 31°) pixels :
+ *
+ *     scale   hauteur   pixels à 4,24 m
+ *      1,8    4,50 cm       6,0        (l'ancien pied de page)
+ *      2,2    5,50 cm       7,3        (les anciennes lignes)
+ *      2,4    6,00 cm       8,0        (les anciens titres)
+ *      2,6    6,50 cm       8,7
+ *      3,6    9,00 cm      12,0        (le bandeau)
+ *      4,0   10,00 cm      13,4        (les lignes)
+ *
+ * Le seuil est 11. Rien n'y était ; les lignes et le bandeau y sont maintenant.
+ * Le pied de page reste dessous, à 8,7, et c'est ASSUMÉ : il porte une consigne
+ * qu'on lit une fois en s'approchant, pas une donnée qu'on saisit en passant.
+ *
+ * CE QUE ÇA COÛTE, ET COMMENT ON LE PAIE. Du lettrage deux fois plus haut, c'est
+ * quatre fois moins de lignes : on passait huit jeux et six joueurs sur une
+ * seule image, en deux colonnes. On ne peut plus. Le panneau TOURNE donc — deux
+ * pages de quatre records, entrecoupées de la page « en direct » — et c'est ce
+ * que fait n'importe quel afficheur de hall. La règle qui justifiait les deux
+ * colonnes tient toujours et elle est même mieux servie : « c'est un tableau
+ * qu'on lit en passant devant le bar, et QUI TIENT LE RECORD DE QUOI est la
+ * question qu'on se pose de loin. »
+ *
+ * LE NOIR EST VRAI. Le fond était à (0,020 ; 0,026 ; 0,045) : sur une dalle
+ * désormais neutre et à 1,9 d'émissif, ça donnait un panneau bleu allumé de
+ * bout en bout, l'inverse exact de ce qui distingue un panneau haut de gamme.
+ * Il tombe à (0,003 ; 0,004 ; 0,008), c'est-à-dire éteint. Ce que le panneau
+ * rend à la salle, il le rend par son BANDEAU et par ses chiffres — comme un
+ * vrai afficheur, où la lumière vient de ce qui est écrit.
+ */
 void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_seconds,
                               const char *my_name, const char *my_game,
                               uint32_t my_score)
@@ -653,108 +712,135 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
      * permet d'en changer sans redessiner la mise en page. */
     const float u = w / 640.0f;
 
-    static const float bg[4]    = { 0.020f, 0.026f, 0.045f, 1.0f };
-    static const float rule[4]  = { 0.16f, 0.34f, 0.55f, 1.0f };
-    static const float title[4] = { 1.00f, 0.82f, 0.35f, 1.0f };
-    static const float live[4]  = { 0.45f, 1.00f, 0.62f, 1.0f };
-    static const float row[4]   = { 0.88f, 0.94f, 1.00f, 1.0f };
-    static const float dim[4]   = { 0.42f, 0.52f, 0.66f, 1.0f };
-    static const float me[4]    = { 1.00f, 0.90f, 0.45f, 1.0f };
+    static const float bg[4]    = { 0.003f, 0.004f, 0.008f, 1.0f };
+    static const float bande[4] = { 0.100f, 0.235f, 0.440f, 1.0f };
+    static const float rule[4]  = { 0.20f, 0.52f, 0.85f, 1.0f };
+    static const float clair[4] = { 0.95f, 0.98f, 1.00f, 1.0f };
+    static const float title[4] = { 1.00f, 0.80f, 0.30f, 1.0f };
+    static const float live[4]  = { 0.40f, 1.00f, 0.58f, 1.0f };
+    static const float row[4]   = { 0.90f, 0.95f, 1.00f, 1.0f };
+    static const float dim[4]   = { 0.45f, 0.55f, 0.68f, 1.0f };
+    static const float me[4]    = { 1.00f, 0.88f, 0.40f, 1.0f };
+    static const float eteint[4]= { 0.16f, 0.24f, 0.36f, 1.0f };
 
     ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
 
-    /* Le filet vertical qui sépare les deux moitiés. Sans lui, huit lignes de
-     * texte sur 1,70 m se lisent comme un seul bloc. */
-    ns_sprite_rect(s, 318.0f * u, 34.0f * u, 2.0f * u, 264.0f * u, rule);
-    ns_sprite_rect(s, 20.0f * u, 30.0f * u, 600.0f * u, 2.0f * u, rule);
-
-    centred(s, 160.0f * u, 8.0f * u, 2.4f * u, title, "MEILLEURS SCORES");
-    centred(s, 480.0f * u, 8.0f * u, 2.4f * u, live,  "EN DIRECT");
-
     /*
-     * À GAUCHE : le meilleur de chaque jeu, en pages de six.
-     *
-     * On montre le MEILLEUR de chaque jeu plutôt que le classement complet d'un
-     * seul : c'est un tableau qu'on lit en passant devant le bar, et « qui tient
-     * le record de quoi » est la question qu'on se pose de loin. Le détail d'un
-     * jeu est sur la borne de classement, qui est faite pour ça.
+     * QUATRE VOLETS, et l'alternance n'est pas décorative : « en direct » revient
+     * une fois sur deux. Un afficheur qui montrerait les records pendant douze
+     * secondes d'affilée laisserait quelqu'un qui traverse la salle sans jamais
+     * voir qu'il y est. Six secondes par volet : le temps de lire quatre lignes
+     * sans avoir à s'arrêter.
      */
-    int shown = 0;
-    const int per_page = 6;
-    const int total = ns_game_count();
-    const int pages = (total + per_page - 1) / per_page;
-    const int page = (pages > 1) ? (int)(time_seconds / 7.0) % pages : 0;
+    const int volet = (int)(time_seconds / 6.0) % 4;
+    const bool page_direct = (volet % 2) == 1;
+    const int  page_scores = volet / 2;          /* 0 puis 1 */
+    const int  par_page = 4;
 
-    for (int i = page * per_page; i < total && shown < per_page; ++i) {
-        const ns_game_api *api = ns_game_at(i);
-        if (!api) continue;
-        const float y = (48.0f + (float)shown * 38.0f) * u;
+    /* --- le bandeau : c'est lui qui éclaire, et lui qu'on lit en premier --- */
+    ns_sprite_rect(s, 0.0f, 0.0f, w, 58.0f * u, bande);
+    ns_sprite_rect(s, 0.0f, 58.0f * u, w, 3.0f * u, rule);
+    ns_sprite_text(s, 22.0f * u, 15.0f * u, 3.6f * u, clair,
+                   page_direct ? "EN DIRECT" : "MEILLEURS SCORES");
 
-        const ns_score_board *b = ns_scores_board(api->id, "normal");
-        const bool any = (b && b->count > 0);
-
-        ns_sprite_text(s, 26.0f * u, y, 2.2f * u, row, api->label);
-        if (any) {
-            char n[24];
-            group_number(n, sizeof n, b->entry[0].score);
-            ns_sprite_text(s, 150.0f * u, y, 2.2f * u, title, n);
-            /* Le nom, s'il y en a un. Un classement local est souvent anonyme,
-             * et une colonne de « --- » vaut mieux qu'une colonne absente : elle
-             * dit que la place existe et qu'elle est à prendre. */
-            ns_sprite_text(s, 236.0f * u, y, 1.8f * u, dim,
-                           b->entry[0].name[0] ? b->entry[0].name : "---");
-        } else {
-            ns_sprite_text(s, 150.0f * u, y, 2.2f * u, dim, "---");
-        }
-        shown++;
+    /* Où l'on en est dans le cycle. Quatre pastilles : sans elles, un panneau
+     * qui change tout seul donne l'impression d'avoir raté quelque chose. */
+    for (int i = 0; i < 4; ++i) {
+        ns_sprite_rect(s, (556.0f + (float)i * 20.0f) * u, 26.0f * u,
+                       12.0f * u, 6.0f * u, (i == volet) ? clair : eteint);
     }
 
-    /*
-     * À DROITE : qui est là, et à combien il en est.
-     *
-     * `ns_realtime_peers` ne rend RIEN quand le temps réel est éteint, ce qui
-     * est le cas par défaut — et c'est très bien. On affiche alors le joueur
-     * local seul, ce qui est la vérité de la salle : il y est seul.
-     */
-    ns_realtime_peer peer[8];
-    /* La date du lot ne sert à rien ici : ce tableau ne fait qu'écrire des
-     * noms, il n'interpole aucune position. */
-    const uint32_t n = ns_realtime_peers(peer, 8, NULL);
+    const float y0 = 78.0f, pas = 56.0f, ligne = 4.0f, menu_ = 2.6f;
+    const float droite = 618.0f;
 
-    int line = 0;
-    if (my_name && my_name[0]) {
-        const float y = (48.0f + (float)line * 38.0f) * u;
-        ns_sprite_text(s, 336.0f * u, y, 2.2f * u, me, my_name);
-        if (my_game && my_game[0]) {
-            char sc[24];
-            group_number(sc, sizeof sc, my_score);
-            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, my_game);
-            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, me, sc);
-        } else {
-            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, "dans la salle");
+    if (!page_direct) {
+        /*
+         * LE MEILLEUR DE CHAQUE JEU, quatre par page. On montre toujours le
+         * meilleur de chaque jeu plutôt que le classement complet d'un seul :
+         * le détail d'un jeu est sur la borne de classement, qui est faite pour
+         * ça.
+         */
+        const int total = ns_game_count();
+        int shown = 0;
+        for (int i = page_scores * par_page; i < total && shown < par_page; ++i) {
+            const ns_game_api *api = ns_game_at(i);
+            if (!api) continue;
+            const float y = (y0 + (float)shown * pas) * u;
+
+            const ns_score_board *b = ns_scores_board(api->id, "normal");
+            const bool any = (b && b->count > 0);
+
+            ns_sprite_text(s, 22.0f * u, y, ligne * u, row, api->label);
+            if (any) {
+                char n[24];
+                group_number(n, sizeof n, b->entry[0].score);
+                a_droite(s, droite * u, y, ligne * u, title, n);
+                /* Le nom, s'il y en a un. Un classement local est souvent
+                 * anonyme, et une colonne de « --- » vaut mieux qu'une colonne
+                 * absente : elle dit que la place existe et qu'elle est à
+                 * prendre. Posé sur la ligne de base des grands caractères,
+                 * plus 8 unités : deux corps différents alignés par le HAUT se
+                 * lisent comme un décalage. */
+                ns_sprite_text(s, 200.0f * u, y + 8.0f * u, menu_ * u, dim,
+                               b->entry[0].name[0] ? b->entry[0].name : "---");
+            } else {
+                a_droite(s, droite * u, y, ligne * u, dim, "---");
+            }
+            shown++;
         }
-        line++;
-    }
-    for (uint32_t i = 0; i < n && line < 6; ++i, ++line) {
-        const float y = (48.0f + (float)line * 38.0f) * u;
-        ns_sprite_text(s, 336.0f * u, y, 2.2f * u,
-                       peer[i].verified ? row : dim, peer[i].name);
-        if (peer[i].game[0]) {
-            char sc[24];
-            group_number(sc, sizeof sc, (uint32_t)(peer[i].score > 0 ? peer[i].score : 0));
-            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, peer[i].game);
-            ns_sprite_text(s, 566.0f * u, y, 2.2f * u, live, sc);
-        } else {
-            ns_sprite_text(s, 470.0f * u, y, 1.8f * u, dim, "dans la salle");
+        if (shown == 0) {
+            centred(s, 320.0f * u, 150.0f * u, ligne * u, dim, "AUCUN JEU");
         }
-    }
-    if (line == 0) {
-        centred(s, 480.0f * u, 140.0f * u, 2.0f * u, dim, "SALLE VIDE");
+    } else {
+        /*
+         * QUI EST LÀ, et à combien il en est.
+         *
+         * `ns_realtime_peers` ne rend RIEN quand le temps réel est éteint, ce
+         * qui est le cas par défaut — et c'est très bien. On affiche alors le
+         * joueur local seul, ce qui est la vérité de la salle : il y est seul.
+         */
+        ns_realtime_peer peer[8];
+        /* La date du lot ne sert à rien ici : ce tableau ne fait qu'écrire des
+         * noms, il n'interpole aucune position. */
+        const uint32_t n = ns_realtime_peers(peer, 8, NULL);
+
+        int line = 0;
+        if (my_name && my_name[0]) {
+            const float y = (y0 + (float)line * pas) * u;
+            ns_sprite_text(s, 22.0f * u, y, ligne * u, me, my_name);
+            if (my_game && my_game[0]) {
+                char sc[24];
+                group_number(sc, sizeof sc, my_score);
+                ns_sprite_text(s, 250.0f * u, y + 8.0f * u, menu_ * u, dim, my_game);
+                a_droite(s, droite * u, y, ligne * u, me, sc);
+            } else {
+                ns_sprite_text(s, 250.0f * u, y + 8.0f * u, menu_ * u, dim, "DANS LA SALLE");
+            }
+            line++;
+        }
+        for (uint32_t i = 0; i < n && line < par_page; ++i, ++line) {
+            const float y = (y0 + (float)line * pas) * u;
+            ns_sprite_text(s, 22.0f * u, y, ligne * u,
+                           peer[i].verified ? row : dim, peer[i].name);
+            if (peer[i].game[0]) {
+                char sc[24];
+                group_number(sc, sizeof sc, (uint32_t)(peer[i].score > 0 ? peer[i].score : 0));
+                ns_sprite_text(s, 250.0f * u, y + 8.0f * u, menu_ * u, dim, peer[i].game);
+                a_droite(s, droite * u, y, ligne * u, live, sc);
+            } else {
+                ns_sprite_text(s, 250.0f * u, y + 8.0f * u, menu_ * u, dim, "DANS LA SALLE");
+            }
+        }
+        if (line == 0) {
+            centred(s, 320.0f * u, 150.0f * u, 4.6f * u, dim, "SALLE VIDE");
+        }
     }
 
     /* Le bandeau du bas : ce qu'il faut faire pour y apparaître. Un tableau qui
-     * ne dit pas comment y entrer est une décoration. */
-    ns_sprite_rect(s, 20.0f * u, 292.0f * u, 600.0f * u, 2.0f * u, rule);
-    centred(s, 320.0f * u, 300.0f * u, 1.8f * u, dim,
-            "GLISSE UN JETON - E DEVANT UNE BORNE");
+     * ne dit pas comment y entrer est une décoration. Il reste sous le seuil de
+     * lisibilité à quatre mètres, et c'est assumé : c'est une consigne qu'on lit
+     * une fois en s'approchant, pas une donnée qu'on saisit en passant. */
+    ns_sprite_rect(s, 24.0f * u, 284.0f * u, 592.0f * u, 2.0f * u, rule);
+    centred(s, 320.0f * u, 296.0f * u, 2.6f * u, dim,
+            "UN JETON, PUIS E DEVANT UNE BORNE");
 }
