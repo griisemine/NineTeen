@@ -504,6 +504,20 @@ async function loadVersion() {
         // Les liens de téléchargement pointent vers la version publiée sur
         // GitHub : les paquets sont produits par l'intégration continue, le
         // serveur n'a pas à les héberger.
+        //
+        // MAIS SEULEMENT SI ELLE EXISTE, et c'est une mesure qui l'a imposé.
+        // Cette fonction bâtissait les trois liens à partir du seul numéro de
+        // version. Vérifié contre l'API GitHub : le dépôt répond 200,
+        // `releases/tags/v17.0.0` répond 404, et la liste des releases est
+        // vide. Les trois boutons « Télécharger » — ce pour quoi la page
+        // existe — étaient trois 404. Un bouton mort est pire qu'un bouton
+        // absent : il fait douter du reste de la page.
+        //
+        // C'est le SERVEUR qui sait, et pas le navigateur : interroger GitHub
+        // depuis chaque visiteur coûterait une requête par chargement pour une
+        // information qui ne change qu'aux versions, sur une API limitée à
+        // soixante appels par heure et par adresse.
+        const publiee = data.publiee === true;
         const base = "https://github.com/griisemine/NineTeen/releases/download/v" + data.version;
         const files = {
             windows: `Nineteen-${data.version}-windows-x64.zip`,
@@ -512,8 +526,22 @@ async function loadVersion() {
         };
         document.querySelectorAll("[data-dl]").forEach((el) => {
             const key = el.dataset.dl;
-            if (files[key]) el.href = `${base}/${files[key]}`;
+            if (!files[key]) return;
+            if (publiee) {
+                el.href = `${base}/${files[key]}`;
+                el.removeAttribute("aria-disabled");
+                el.classList.remove("btn-attente");
+                return;
+            }
+            // Ni `href`, ni rôle de lien : un lecteur d'écran ne doit pas
+            // annoncer « lien » sur ce qui n'en est pas un.
+            el.removeAttribute("href");
+            el.setAttribute("aria-disabled", "true");
+            el.classList.add("btn-attente");
+            el.textContent = "Bientôt";
         });
+        const attente = document.getElementById("note-attente");
+        if (attente) attente.hidden = publiee;
     } catch (err) {
         console.error("version", err);
     }

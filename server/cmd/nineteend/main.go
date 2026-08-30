@@ -136,6 +136,7 @@ func main() {
 		Logger:  logger,
 		Secure:  *secure,
 		Version: version,
+		Publiee: os.Getenv("NINETEEN_RELEASE_PUBLIEE") == "1",
 		Assets:  assets,
 	})
 
@@ -344,7 +345,35 @@ func staticHandler() (http.Handler, error) {
 		path := r.URL.Path
 		switch {
 		case strings.HasSuffix(path, ".css"), strings.HasSuffix(path, ".js"):
-			w.Header().Set("Cache-Control", "public, max-age=3600")
+			// LE SCRIPT ET LA FEUILLE REVALIDENT, ET C'EST UN DÉFAUT MESURÉ QUI
+			// L'A IMPOSÉ.
+			//
+			// Ils étaient à `max-age=3600`. Or `index.html` est en `no-cache` :
+			// après un déploiement, un visiteur de retour recevait le NOUVEAU
+			// document et l'ANCIEN script, pendant une heure. Ce n'est pas une
+			// hypothèse — c'est arrivé sur cette machine en ajoutant le drapeau
+			// « publiée » : le conteneur servait bien le nouveau `app.js`
+			// (vérifié au `curl`), et la page continuait d'exécuter l'ancien,
+			// même après un rechargement forcé.
+			//
+			// Une page dont le document et le script peuvent dater de deux
+			// versions différentes n'a aucun comportement défini. Et ces noms
+			// ne portent pas d'empreinte de contenu, donc rien ne les
+			// distingue d'une version à l'autre.
+			//
+			// `no-cache` ne veut pas dire « ne garde rien » mais « redemande
+			// avant de servir ». J'ai d'abord écrit ici que la revalidation
+			// coûterait un 304 sans corps, puis je l'ai mesurée : la réponse
+			// ne porte NI `Last-Modified` NI `ETag`. Les fichiers sont servis
+			// depuis un `embed.FS`, dont chaque entrée a une date de
+			// modification nulle, et `http.FileServer` n'émet alors aucun
+			// validateur. Le coût réel est donc le corps entier à chaque
+			// visite : 18 Kio de script et 24 Kio de feuille, une fois. C'est
+			// le prix qu'on paie, et il vaut mieux que la page cassée.
+			//
+			// Le média, lui, garde sa journée : il ne peut pas se contredire
+			// avec le document qui le nomme, et c'est là que sont les mégaoctets.
+			w.Header().Set("Cache-Control", "no-cache")
 		case strings.HasPrefix(path, "/media/"), strings.HasPrefix(path, "/img/"),
 			strings.HasPrefix(path, "/fonts/"):
 			// Le manifeste est l'exception dans son propre dossier : c'est lui

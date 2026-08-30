@@ -714,3 +714,21 @@ a:hover { color: #ffc862; }
     .topbar, .hero-plate, .hero-veil, .crt-scanlines, .modal { display: none; }
     body { background: #fff; color: #000; }
 }
+
+/*
+ * Un bouton QUI N'EST PAS UN LIEN. Il porte `aria-disabled` et n'a pas de
+ * `href` : ce n'est pas une décoration, c'est ce qui empêche un lecteur
+ * d'écran d'annoncer « lien » sur ce qui n'en est pas un, et le clavier de s'y
+ * arrêter pour rien. Le style ne fait que le montrer à l'œil aussi.
+ */
+.btn-attente {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--edge) 70%, transparent);
+    color: var(--muted);
+    cursor: default;
+}
+.btn-attente:hover,
+.btn-attente:focus-visible {
+    background: transparent;
+    color: var(--muted);
+}

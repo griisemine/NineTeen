@@ -43,6 +43,10 @@ type Server struct {
 	mux     *http.ServeMux
 	secure  bool // cookies marqués Secure : vrai dès que le service est en HTTPS
 	version string
+	// Le paquet de cette version est-il PUBLIE ? Voir handleVersion : sans ça,
+	// la page bâtissait trois liens de téléchargement vers une release qui
+	// n'existe pas.
+	publiee bool
 	assets  http.Handler
 }
 
@@ -51,6 +55,7 @@ type Config struct {
 	Logger  *slog.Logger
 	Secure  bool
 	Version string
+	Publiee bool
 	Assets  http.Handler
 }
 
@@ -61,6 +66,7 @@ func New(cfg Config) *Server {
 		mux:     http.NewServeMux(),
 		secure:  cfg.Secure,
 		version: cfg.Version,
+		publiee: cfg.Publiee,
 		assets:  cfg.Assets,
 	}
 	s.routes()
@@ -1056,9 +1062,22 @@ func (s *Server) handleGhost(w http.ResponseWriter, r *http.Request) {
 /* Divers                                                                     */
 /* ========================================================================== */
 
+// La version, ET si son paquet est publié.
+//
+// Le second champ existe parce que la page s'en passait : `app.js` bâtissait
+// trois liens vers `github.com/.../releases/download/v<version>/…` à partir du
+// seul numéro de version, en supposant que la release existe. Mesuré contre
+// l'API GitHub : le dépôt répond 200, `releases/tags/v17.0.0` répond 404, et la
+// liste des releases est vide. Les trois boutons « Télécharger » — la raison
+// d'être de la page — étaient donc trois 404.
+//
+// Faux par défaut, et c'est le sens sûr : un serveur qu'on lance sans rien dire
+// n'affirme pas qu'un paquet existe. Le jour où la release est publiée,
+// NINETEEN_RELEASE_PUBLIEE=1 rallume les boutons — une variable, pas un
+// redéploiement du site.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "version": s.version,
+		"ok": true, "version": s.version, "publiee": s.publiee,
 	})
 }
 

@@ -499,3 +499,45 @@ func TestVersionDuMediaSuitCMake(t *testing.T) {
 			"régénérer avec `python3 tools/site-media.py`", got, want)
 	}
 }
+
+// La page ne doit pas offrir un téléchargement qui n'existe pas.
+//
+// Elle le faisait : `app.js` bâtissait trois liens vers
+// `github.com/griisemine/NineTeen/releases/download/v<version>/…` à partir du
+// seul numéro de version, en supposant que la release existe. Mesuré contre
+// l'API GitHub le jour où ce test a été écrit : le dépôt répond 200,
+// `releases/tags/v17.0.0` répond 404, et la liste des releases est vide. Les
+// trois boutons « Télécharger » — ce pour quoi la page existe — étaient trois
+// 404, et un bouton mort fait douter du reste de la page.
+//
+// Le test ne va PAS interroger GitHub : un test qui dépend du réseau échoue
+// pour des raisons qui ne le regardent pas. Il vérifie la seule chose qui soit
+// à nous — que la page demande au serveur si la version est publiée, au lieu
+// de le supposer, et qu'elle a de quoi le dire quand la réponse est non.
+func TestLaPageNAffirmePasQuUnPaquetExiste(t *testing.T) {
+	js := string(lireAsset(t, "app.js"))
+	if !strings.Contains(js, "data.publiee") {
+		t.Error("app.js ne lit pas « publiee » : les liens de téléchargement " +
+			"sont donc bâtis sans savoir si la release existe")
+	}
+	// Les deux moitiés de la règle. « ne jamais poser de href » passerait la
+	// première seule, et le téléchargement cesserait d'exister.
+	if !strings.Contains(js, "el.removeAttribute(\"href\")") {
+		t.Error("app.js ne retire pas le href quand la version n'est pas publiée")
+	}
+	if !strings.Contains(js, "el.href = ") {
+		t.Error("app.js ne pose jamais de href : plus personne ne peut télécharger")
+	}
+	if !strings.Contains(js, "aria-disabled") {
+		t.Error("un bouton qui n'est plus un lien doit le dire à un lecteur d'écran")
+	}
+
+	html := string(lireAsset(t, "index.html"))
+	if !strings.Contains(html, `id="note-attente"`) {
+		t.Error("index.html n'a pas la note qui explique l'attente")
+	}
+	if !strings.Contains(html, "hidden") {
+		t.Error("la note d'attente doit être masquée par défaut : c'est app.js " +
+			"qui la découvre, une fois la réponse du serveur connue")
+	}
+}
