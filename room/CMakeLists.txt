@@ -24,12 +24,53 @@ target_include_directories(nineteen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 nineteen_set_warnings(nineteen)
 nineteen_apply_sanitizers(nineteen)
 
+# L'ADRESSE DU SERVEUR, CUITE DANS LE BINAIRE — et VIDE par défaut.
+#
+# Ce qu'elle permet : bâtir un paquet qui parle au bon serveur sans que le joueur
+# ait quoi que ce soit à régler.
+#
+#     cmake -B build -DNINETEEN_SERVER_URL=http://arcade.example:8080
+#
+# CE VIDE N'EST PAS UN OUBLI, c'est la règle du haut de `engine/net/ns_online.h` :
+# sans URL configurée, aucune socket n'est ouverte et le fil réseau ne démarre
+# même pas. Un dépôt cloné et bâti tel quel ne doit parler à personne. Y mettre
+# une valeur « pratique » ferait de chaque compilation par défaut une connexion
+# sortante que personne n'a demandée — et la promesse cesserait d'être une
+# promesse.
+#
+# C'est le maillon le plus FAIBLE de la chaîne : config, environnement et
+# `--server=` le battent, dans cet ordre. Le raisonnement est écrit une fois pour
+# toutes au-dessus de `ns_online_resolve_url` dans `engine/net/ns_online.h`.
+set(NINETEEN_SERVER_URL "" CACHE STRING
+    "URL par defaut du serveur de classement, cuite dans le binaire (vide = hors ligne)")
+
+# CE QUI NE SE COMPILE PAS, ET POURQUOI ON REFUSE.
+#
+#  * LE JETON (`NS_CFG_SERVER_TOKEN`). Un secret cuit dans un binaire distribué
+#    n'est pas un secret : `strings nineteen | grep -F <jeton>` le rend, sans
+#    outil, sans désassemblage, sur la machine de n'importe qui l'a téléchargé.
+#    Et il serait le MÊME pour tous les joueurs, donc irrévocable sans refaire un
+#    paquet. Le jeton reste ce qu'il est — une session, obtenue au lancement,
+#    propre à une personne — et il n'aura jamais de `-D`. La même réponse vaut
+#    pour tout mot de passe, clé d'API ou empreinte que quelqu'un voudrait
+#    « juste passer au build ».
+#
+#  * UN NOM DE SERVEUR (`NINETEEN_SERVER_NAME`). Refusé pour l'autre raison,
+#    celle du bloc lignes 37-59 de `engine/core/ns_config.h` : PERSONNE NE LE
+#    LIRAIT. Il n'y a pas un pixel de l'interface qui affiche un nom de serveur,
+#    donc la définition serait une clé sans lecteur — « une clé qu'on ne peut pas
+#    lire ne documente rien, elle laisse croire qu'un réglage existe ». Ce dépôt
+#    a déjà retiré deux clés pour ce motif exact, dont `network.serverUrl` lui-
+#    même, revenu seulement le jour où il a eu un lecteur. Le jour où un écran
+#    affichera le nom du serveur, la définition viendra avec, pas avant.
+#
 # Le jeu doit trouver ses assets qu'il tourne depuis l'arbre de build ou depuis
 # un paquet installé ; le chemin de build est transmis au compilateur et sert
 # de point de montage supplémentaire en développement.
 target_compile_definitions(nineteen PRIVATE
     NINETEEN_BUILD_ASSET_DIR="${NINETEEN_GEN_DIR}"
     NINETEEN_VERSION="${PROJECT_VERSION}"
+    NINETEEN_SERVER_URL="${NINETEEN_SERVER_URL}"
 )
 
 add_dependencies(nineteen nineteen_assets)

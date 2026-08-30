@@ -1,6 +1,7 @@
 /* ns_online.c — voir ns_online.h pour la règle qui prime sur tout le reste. */
 #include "ns_online.h"
 
+#include "ns_config.h"
 #include "ns_core.h"
 #include "ns_http.h"
 #include "ns_json.h"
@@ -507,6 +508,62 @@ static int SDLCALL worker(void *unused)
 }
 
 /* ==========================================================================
+ * D'ou vient l'adresse — voir ns_online.h pour l'ordre et ses raisons
+ * ========================================================================== */
+
+/* Une source vide, ou faite uniquement de blancs, compte pour absente. */
+static bool source_dit_quelque_chose(const char *s)
+{
+    if (!s) return false;
+    for (; *s; ++s) {
+        if (*s != ' ' && *s != '\t' && *s != '\r' && *s != '\n') return true;
+    }
+    return false;
+}
+
+ns_online_url ns_online_resolve_url(const char *compilee,
+                                    const char *config,
+                                    const char *environnement,
+                                    const char *ligne_commande)
+{
+    ns_online_url r;
+    r.url = NULL;
+    r.source = NS_ONLINE_SRC_AUCUNE;
+
+    /*
+     * Du plus FORT au plus faible, et on s'arrête au premier qui parle. Écrit
+     * dans ce sens-là exprès : l'ordre de préséance se lit alors directement
+     * dans l'ordre des lignes, et ajouter une source un jour, c'est insérer une
+     * ligne au bon endroit plutôt que de réviser une cascade de conditions.
+     */
+    if (source_dit_quelque_chose(ligne_commande)) {
+        r.url = ligne_commande; r.source = NS_ONLINE_SRC_LIGNE_COMMANDE;
+    } else if (source_dit_quelque_chose(environnement)) {
+        r.url = environnement;  r.source = NS_ONLINE_SRC_ENVIRONNEMENT;
+    } else if (source_dit_quelque_chose(config)) {
+        r.url = config;         r.source = NS_ONLINE_SRC_CONFIG;
+    } else if (source_dit_quelque_chose(compilee)) {
+        r.url = compilee;       r.source = NS_ONLINE_SRC_COMPILEE;
+    }
+    return r;
+}
+
+const char *ns_online_source_nom(ns_online_source source)
+{
+    switch (source) {
+    case NS_ONLINE_SRC_LIGNE_COMMANDE: return "--server=";
+    case NS_ONLINE_SRC_ENVIRONNEMENT:  return "NINETEEN_SERVER_URL";
+    case NS_ONLINE_SRC_CONFIG:         return "config " NS_CFG_SERVER_URL;
+    case NS_ONLINE_SRC_COMPILEE:       return "défaut compilé";
+    case NS_ONLINE_SRC_AUCUNE:         break;
+    }
+    /* Zéro veut dire « personne ne l'a dit » : un appelant qui construit sa
+     * configuration au `SDL_zero` tombe ici, et le journal ne doit pas lui
+     * inventer une origine. */
+    return "source non déclarée";
+}
+
+/* ==========================================================================
  * Cycle de vie
  * ========================================================================== */
 
@@ -526,11 +583,25 @@ bool ns_online_init(const ns_online_config *cfg)
          * probable.
          */
         SDL_snprintf(g.status, sizeof g.status, "hors ligne (verrouillé)");
-        NS_INFO("réseau : verrouillé par --offline, aucune connexion ne sera tentée");
+        /* On nomme quand même l'adresse qui a été VERROUILLÉE, et sa source.
+         * Sans ça, « --offline » et « pas d'URL » produisent le même silence,
+         * et l'on ne sait pas si le verrou a servi à quelque chose. */
+        if (cfg->server_url && cfg->server_url[0]) {
+            NS_INFO("réseau : verrouillé par --offline, aucune connexion ne sera "
+                    "tentée (« %s », de %s, est ignorée)",
+                    cfg->server_url, ns_online_source_nom(cfg->source));
+        } else {
+            NS_INFO("réseau : verrouillé par --offline, aucune connexion ne sera tentée");
+        }
         return false;
     }
     if (!cfg->server_url || !cfg->server_url[0]) {
-        NS_INFO("réseau : aucun serveur configuré, le classement restera local");
+        /* On dit OÙ chercher. Quatre sources muettes se ressemblent toutes, et
+         * quelqu'un qui vient de bâtir le dépôt n'a aucune raison de deviner
+         * laquelle il aurait dû remplir. */
+        NS_INFO("réseau : aucun serveur configuré, le classement restera local "
+                "(ni --server=, ni NINETEEN_SERVER_URL, ni « %s » en config, "
+                "ni défaut compilé -DNINETEEN_SERVER_URL)", NS_CFG_SERVER_URL);
         return false;
     }
 
@@ -557,7 +628,13 @@ bool ns_online_init(const ns_online_config *cfg)
 
     g.enabled = true;
     SDL_snprintf(g.status, sizeof g.status, "connexion...");
-    NS_INFO("réseau : actif sur « %s »%s", g.url,
+    /*
+     * LA SOURCE EST DANS LA LIGNE, et c'est le seul moyen de diagnostiquer
+     * « pourquoi ça parle au mauvais serveur ». Quatre endroits peuvent fournir
+     * l'adresse ; savoir lequel a gagné évite de relire les quatre.
+     */
+    NS_INFO("réseau : actif sur « %s » (source : %s)%s", g.url,
+            ns_online_source_nom(cfg->source),
             g.token[0] ? " (avec jeton)" : " (lecture seule)");
     return true;
 }

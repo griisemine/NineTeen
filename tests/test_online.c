@@ -9,8 +9,10 @@
  * ce que disait cette entête jusqu'ici :
  *
  *   ns_test_online
- *       découpage d'URL, verrou `--offline`, serveur mort. C'est ce que fait la
- *       CI, et ça ne demande rien.
+ *       découpage d'URL, ORDRE DE PRÉSÉANCE des quatre sources d'adresse,
+ *       verrou `--offline`, serveur mort. C'est ce que fait la CI, et ça ne
+ *       demande rien — pas même une socket, pour la partie préséance, qui est
+ *       du calcul pur.
  *
  *   ns_test_online <url>
  *       + le classement mondial, contre un serveur qui répond comme le vrai.
@@ -93,6 +95,131 @@ static void test_parse_url(void)
     CHECK(!ns_http_parse_url("http://:8080/x", host, sizeof host, &port,
                              path, sizeof path, err, sizeof err),
           "une URL sans hôte est refusée");
+}
+
+/*
+ * L'ORDRE DE PRESEANCE DES QUATRE SOURCES D'ADRESSE.
+ *
+ *   défaut compilé  <  config  <  environnement  <  --server=
+ *
+ * Pourquoi ça mérite un test plutôt qu'une relecture : la cascade est le genre
+ * de code qui a l'air juste dans les deux sens. Une inversion entre
+ * l'environnement et la config ne casse RIEN de visible — le jeu démarre, parle
+ * à un serveur, affiche un classement — elle envoie simplement les scores
+ * ailleurs. C'est exactement la panne muette que ce dépôt traque.
+ *
+ * Les seize combinaisons de présence/absence sont couvertes, et pas seulement
+ * les quatre cas « une seule source » : c'est le passage d'un niveau à l'autre
+ * qui se trompe, pas le niveau isolé.
+ */
+static void test_preseance_url(void)
+{
+    static const char *C = "http://compilee";   /* défaut cuit au build */
+    static const char *G = "http://config";     /* settings.cfg */
+    static const char *E = "http://environ";    /* NINETEEN_SERVER_URL */
+    static const char *L = "http://ligne";      /* --server= */
+
+    /* Les seize combinaisons, dans l'ordre du masque (bit 0 = compilée,
+     * 1 = config, 2 = environnement, 3 = ligne de commande). Le gagnant attendu
+     * est le bit le plus haut qui soit posé. */
+    for (int mask = 0; mask < 16; ++mask) {
+        const char *c = (mask & 1) ? C : NULL;
+        const char *g = (mask & 2) ? G : NULL;
+        const char *e = (mask & 4) ? E : NULL;
+        const char *l = (mask & 8) ? L : NULL;
+
+        const char *attendu_url = NULL;
+        ns_online_source attendu_src = NS_ONLINE_SRC_AUCUNE;
+        if (mask & 8)      { attendu_url = L; attendu_src = NS_ONLINE_SRC_LIGNE_COMMANDE; }
+        else if (mask & 4) { attendu_url = E; attendu_src = NS_ONLINE_SRC_ENVIRONNEMENT; }
+        else if (mask & 2) { attendu_url = G; attendu_src = NS_ONLINE_SRC_CONFIG; }
+        else if (mask & 1) { attendu_url = C; attendu_src = NS_ONLINE_SRC_COMPILEE; }
+
+        const ns_online_url r = ns_online_resolve_url(c, g, e, l);
+        if (attendu_url == NULL) {
+            CHECK(r.url == NULL, "combinaison %d : rien nulle part, aucune URL", mask);
+        } else {
+            CHECK(r.url != NULL && SDL_strcmp(r.url, attendu_url) == 0,
+                  "combinaison %d : « %s » l'emporte (obtenu « %s »)",
+                  mask, attendu_url, r.url ? r.url : "(null)");
+        }
+        CHECK(r.source == attendu_src,
+              "combinaison %d : la source retenue est « %s » (obtenu « %s »)",
+              mask, ns_online_source_nom(attendu_src), ns_online_source_nom(r.source));
+    }
+
+    /*
+     * LE CAS QUI COMPTE LE PLUS : les quatre vides. C'est le dépôt fraîchement
+     * cloné et bâti sans rien demander, et la promesse de ce fichier veut qu'il
+     * n'ouvre aucune socket. `""` et non NULL : c'est ce que rendent réellement
+     * `NINETEEN_SERVER_URL` non défini au build et `ns_config_get_str(…, "")`.
+     */
+    {
+        const ns_online_url r = ns_online_resolve_url("", "", NULL, NULL);
+        CHECK(r.url == NULL, "quatre sources vides : aucune URL, donc aucune socket");
+        CHECK(r.source == NS_ONLINE_SRC_AUCUNE, "et aucune source");
+        /* Et la chaîne vide ne doit jamais ressortir telle quelle : un appelant
+         * qui teste `url != NULL` et un autre qui teste `url[0]` doivent tomber
+         * d'accord. */
+        ns_online_config cfg;
+        SDL_zero(cfg);
+        cfg.server_url = r.url;
+        cfg.source = r.source;
+        CHECK(!ns_online_init(&cfg), "et ns_online_init refuse de démarrer");
+        ns_online_shutdown();
+    }
+
+    /* Une source faite de BLANCS compte pour absente : `NINETEEN_SERVER_URL=`
+     * dans un .env, ou `-e NINETEEN_SERVER_URL=" "`, ne doivent pas produire une
+     * URL d'un caractère qui échouerait plus loin sans dire d'où elle vient. */
+    {
+        const ns_online_url r = ns_online_resolve_url(C, "  ", " \t ", "");
+        CHECK(r.url != NULL && SDL_strcmp(r.url, C) == 0,
+              "les blancs ne comptent pas : le défaut compilé reste (« %s »)",
+              r.url ? r.url : "(null)");
+        CHECK(r.source == NS_ONLINE_SRC_COMPILEE, "et sa source est nommée comme telle");
+    }
+
+    /*
+     * `--offline` n'est PAS un cinquième niveau : il ne change pas la source
+     * retenue, il interdit d'en faire quoi que ce soit. Le vérifier ici plutôt
+     * que de le supposer — c'est ce qui garantit que le verrou tient QUELLE QUE
+     * SOIT la source, et pas seulement pour celle qu'on avait en tête.
+     */
+    for (int mask = 1; mask < 16; ++mask) {
+        const ns_online_url r = ns_online_resolve_url(
+            (mask & 1) ? C : NULL, (mask & 2) ? G : NULL,
+            (mask & 4) ? E : NULL, (mask & 8) ? L : NULL);
+        ns_online_config cfg;
+        SDL_zero(cfg);
+        cfg.server_url = r.url;
+        cfg.source = r.source;
+        cfg.locked = true;
+        CHECK(!ns_online_init(&cfg),
+              "combinaison %d : --offline verrouille, quelle que soit la source", mask);
+        CHECK(!ns_online_enabled(), "combinaison %d : et le réseau reste inactif", mask);
+        ns_online_shutdown();
+    }
+
+    /* Le nom de chaque source est imprimable et distinct : c'est ce que le
+     * journal de démarrage montre, et deux sources qui s'appelleraient pareil ne
+     * diagnostiqueraient rien. */
+    {
+        const ns_online_source tous[] = {
+            NS_ONLINE_SRC_AUCUNE, NS_ONLINE_SRC_COMPILEE, NS_ONLINE_SRC_CONFIG,
+            NS_ONLINE_SRC_ENVIRONNEMENT, NS_ONLINE_SRC_LIGNE_COMMANDE,
+        };
+        const int n = (int)(sizeof tous / sizeof tous[0]);
+        for (int i = 0; i < n; ++i) {
+            const char *ni = ns_online_source_nom(tous[i]);
+            CHECK(ni != NULL && ni[0] != '\0', "source %d : elle a un nom", (int)tous[i]);
+            for (int j = i + 1; j < n; ++j) {
+                CHECK(SDL_strcmp(ni, ns_online_source_nom(tous[j])) != 0,
+                      "sources %d et %d : des noms distincts (« %s »)",
+                      (int)tous[i], (int)tous[j], ni);
+            }
+        }
+    }
 }
 
 static void test_verrou_hors_ligne(void)
@@ -287,6 +414,7 @@ int main(int argc, char **argv)
     ns_log_set_level(NS_LOG_ERROR);
 
     test_parse_url();
+    test_preseance_url();
     test_verrou_hors_ligne();
     test_serveur_mort();
 

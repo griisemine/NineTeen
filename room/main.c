@@ -45,6 +45,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * L'adresse du serveur CUITE AU BUILD, par `-DNINETEEN_SERVER_URL=…`.
+ *
+ * Vide quand personne n'a rien demandé — voir le bloc qui l'explique dans
+ * `room/CMakeLists.txt` : un dépôt bâti tel quel n'ouvre aucune socket. Le repli
+ * ci-dessous existe pour que ce fichier compile aussi hors de son CMakeLists
+ * (un outil d'analyse, un `compile_commands.json` incomplet), et il vaut le même
+ * vide : il ne peut donc pas changer le comportement.
+ */
+#ifndef NINETEEN_SERVER_URL
+#define NINETEEN_SERVER_URL ""
+#endif
+
 typedef struct options {
     bool        headless;
     const char *env_path;   /* --env= : le fichier de reglages du personnage */
@@ -104,7 +117,18 @@ typedef struct options {
     int         demo_peers;
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
-    const char *server;      /* URL du classement en ligne, sinon la config */
+    const char *server;      /* --server= : le plus fort des quatre niveaux */
+    /*
+     * `NINETEEN_SERVER_URL` lue au LANCEMENT, gardée à part de `server` parce
+     * qu'elle ne pèse pas le même poids : elle bat la config, et `--server=` la
+     * bat. Les confondre reviendrait à ne plus pouvoir dire au journal laquelle
+     * a gagné, ce qui est tout l'objet de `ns_online_resolve_url`.
+     *
+     * C'est elle qui rend le jeu utilisable dans un conteneur ou derrière un
+     * `docker compose` SANS RECOMPILER — le défaut compilé, lui, demande une
+     * compilation par serveur.
+     */
+    const char *server_env;
     const char *input_log;   /* où déposer le journal d'entrées de la partie */
     const char *replay;      /* un journal d'entrées à rejouer, sans fenêtre */
     const char *duel_live;   /* « hôte:port,identifiant,place » : duel EN DIRECT */
@@ -165,7 +189,12 @@ static void print_usage(const char *exe)
         "  --journal-entrees=F  écrit les commandes de la partie dans F : une partie\n"
         "                       redevient reproductible, et un rapport de bug devient\n"
         "                       un fichier plutôt qu'un souvenir\n"
-        "  --server=URL         classement en ligne (http://hôte:port) ; sinon la config\n"
+        "  --server=URL         classement en ligne (http://hôte:port). C'est le plus\n"
+        "                       fort de quatre niveaux ; du plus faible au plus fort :\n"
+        "                       défaut compilé (-DNINETEEN_SERVER_URL au build) < config\n"
+        "                       < variable NINETEEN_SERVER_URL < cette option. Le\n"
+        "                       journal de démarrage DIT lequel a gagné. Les quatre\n"
+        "                       vides — le défaut — n'ouvrent aucune socket\n"
         "  --offline            verrou : aucune connexion, aucune mise en file\n"
         "  --temps-reel         présence dans la salle et duels (INERTE par défaut) ;\n"
         "                       demande un serveur, et se règle aussi dans Échap\n"
@@ -290,6 +319,13 @@ static void load_env_defaults(options *o)
         o->particles = ns_clampf((float)SDL_atof(v), 0.0f, 1.0f);
     if ((v = SDL_getenv("NINETEEN_OFFLINE")) != NULL)   o->offline = (SDL_atoi(v) != 0);
     if ((v = SDL_getenv("NINETEEN_NOM")) != NULL)       o->player = v;
+    /*
+     * L'adresse du serveur. Elle ne s'applique PAS ici : elle est mise de côté,
+     * et `ns_online_resolve_url` l'arbitre plus bas contre les trois autres
+     * sources. C'est la différence avec les réglages ci-dessus, qui n'en ont
+     * que deux et peuvent donc s'écraser sur place.
+     */
+    if ((v = SDL_getenv("NINETEEN_SERVER_URL")) != NULL) o->server_env = v;
 }
 
 static bool parse_options(int argc, char **argv, options *o)
@@ -2100,9 +2136,20 @@ int main(int argc, char **argv)
     {
         ns_online_config oc;
         SDL_zero(oc);
-        const char *url = opt.server ? opt.server
-                                     : ns_config_get_str(NS_CFG_SERVER_URL, "");
-        oc.server_url = url;
+        /*
+         * QUATRE sources, un seul arbitre. La cascade tenait autrefois en un
+         * `?:` sur deux niveaux ; à quatre, elle mérite d'être écrite ailleurs,
+         * testée pour elle-même (`tests/test_online.c`) et capable de DIRE d'où
+         * vient ce qu'elle a retenu. L'ordre et ses raisons sont dans
+         * `engine/net/ns_online.h`, au-dessus de `ns_online_resolve_url`.
+         */
+        const ns_online_url choix = ns_online_resolve_url(
+            NINETEEN_SERVER_URL,
+            ns_config_get_str(NS_CFG_SERVER_URL, ""),
+            opt.server_env,
+            opt.server);
+        oc.server_url = choix.url;
+        oc.source = choix.source;
         oc.token = ns_config_get_str(NS_CFG_SERVER_TOKEN, "");
         oc.locked = opt.offline;
         if (ns_online_init(&oc)) {

@@ -20,6 +20,12 @@
  * réservée depuis M1 que personne n'avait jamais lue, ou de `--server=`.
  * `--offline` verrouille par-dessus, et un test le vérifie.
  *
+ * Quatre sources pour une adresse, et il faut savoir laquelle a gagné
+ * -------------------------------------------------------------------
+ * Voir `ns_online_resolve_url` plus bas. La règle ci-dessus ne bouge pas d'un
+ * pouce : les quatre sources peuvent toutes être vides, et c'est le défaut d'un
+ * dépôt fraîchement cloné.
+ *
  * Tout se passe sur un fil
  * ------------------------
  * Une requête HTTP prend le temps qu'elle prend. La boucle de jeu ne l'attend
@@ -50,10 +56,104 @@ typedef struct ns_online_board {
     bool           fresh;      /* au moins une réponse reçue */
 } ns_online_board;
 
+/* ==========================================================================
+ * D'OU VIENT L'ADRESSE
+ *
+ * Quatre sources peuvent la fournir, et jusqu'ici le journal n'en nommait
+ * aucune : il disait « réseau : actif sur "http://…" » sans dire QUI l'avait
+ * décidé. C'est précisément l'information qui manque quand le jeu parle au
+ * mauvais serveur — on relit alors les quatre endroits à la main, sans savoir
+ * lequel a effectivement gagné, et un `settings.cfg` oublié dans le répertoire
+ * utilisateur peut battre en silence un `-DNINETEEN_SERVER_URL` posé au build.
+ *
+ * L'ORDRE, du plus faible au plus fort :
+ *
+ *   défaut compilé  <  config (settings.cfg)  <  environnement  <  --server=
+ *
+ * Pourquoi celui-là, source par source :
+ *
+ *  - Le DÉFAUT COMPILÉ est en bas parce que c'est le seul qu'on ne peut pas
+ *    changer sans refaire une compilation. Il est VIDE par défaut, et cette
+ *    valeur-là n'est pas négociable : un dépôt cloné et bâti sans rien demander
+ *    n'ouvre aucune socket. C'est la règle du haut de ce fichier, et elle prime
+ *    sur la commodité d'un défaut « utile ».
+ *
+ *  - L'ENVIRONNEMENT bat la CONFIG, et c'est le seul choix qui demande un
+ *    argument. `settings.cfg` vit dans le répertoire utilisateur : dans un
+ *    conteneur il n'existe pas, et sur une machine de développement il garde ce
+ *    qu'une session précédente y a laissé. Si la config gagnait, un
+ *    `docker run -e NINETEEN_SERVER_URL=…` serait ignoré SANS UN MOT le jour où
+ *    un fichier traîne — c'est-à-dire la panne muette que ce dépôt s'emploie à
+ *    supprimer. Dans l'autre sens le pire qui arrive est qu'une variable
+ *    d'environnement explicitement posée l'emporte, ce qui est ce qu'on a
+ *    demandé en la posant.
+ *
+ *  - La LIGNE DE COMMANDE garde le dernier mot, comme partout ailleurs ici
+ *    (`ns_env.h`, `.env.example`, `room/main.c`). C'est ce qui permet d'essayer
+ *    un serveur sans toucher ni fichier ni environnement.
+ *
+ * `--offline` n'est PAS dans cette échelle : c'est un verrou, pas une source.
+ * Il s'applique APRÈS, quelle que soit la source retenue, et `ns_online_init`
+ * refuse alors de démarrer le fil.
+ *
+ * Le jeton, lui, n'a que deux sources et n'en aura jamais de compilée : voir le
+ * bloc « CE QUI NE SE COMPILE PAS » de `room/CMakeLists.txt`.
+ * ========================================================================== */
+
+typedef enum ns_online_source {
+    NS_ONLINE_SRC_AUCUNE = 0,        /* les quatre sont vides : hors ligne */
+    NS_ONLINE_SRC_COMPILEE,          /* -DNINETEEN_SERVER_URL au build */
+    NS_ONLINE_SRC_CONFIG,            /* NS_CFG_SERVER_URL, settings.cfg */
+    NS_ONLINE_SRC_ENVIRONNEMENT,     /* NINETEEN_SERVER_URL au lancement */
+    NS_ONLINE_SRC_LIGNE_COMMANDE,    /* --server= */
+} ns_online_source;
+
+typedef struct ns_online_url {
+    /*
+     * Pointe DANS l'une des quatre chaînes reçues, sans copie : la fonction est
+     * pure et n'alloue rien. L'appelant doit donc garder ses chaînes en vie
+     * aussi longtemps qu'il se sert du résultat — ce qui est le cas naturel,
+     * elles viennent de `argv`, de l'environnement ou de la config.
+     *
+     * NULL quand aucune source ne dit rien, et jamais la chaîne vide : un
+     * appelant qui teste `url != NULL` et un autre qui teste `url[0]` doivent
+     * tomber d'accord.
+     */
+    const char      *url;
+    ns_online_source source;
+} ns_online_url;
+
+/*
+ * Choisit l'adresse, et dit d'où elle vient. N'ouvre rien, ne journalise rien,
+ * ne touche à aucun état : c'est du calcul pur, et c'est pour ça que
+ * `tests/test_online.c` peut en couvrir les seize combinaisons.
+ *
+ * Une source VIDE ou faite uniquement d'espaces compte pour absente. Le blanc
+ * est traité parce qu'il arrive vraiment : `NINETEEN_SERVER_URL=` dans un
+ * `.env`, ou un `docker run -e NINETEEN_SERVER_URL=" "`, produiraient sinon une
+ * URL d'un caractère qui échouerait plus loin, à un endroit qui ne saurait plus
+ * dire d'où elle vient.
+ */
+ns_online_url ns_online_resolve_url(const char *compilee,
+                                    const char *config,
+                                    const char *environnement,
+                                    const char *ligne_commande);
+
+/* Le nom de la source, tel que le journal de démarrage l'imprime. Jamais NULL,
+ * y compris pour une valeur d'énumération inattendue. */
+const char *ns_online_source_nom(ns_online_source source);
+
 typedef struct ns_online_config {
     const char *server_url;   /* NULL ou vide = hors ligne, aucune socket */
     const char *token;        /* jeton de session, ou NULL : lecture seule */
     bool        locked;       /* --offline : interdit tout, même avec une URL */
+    /*
+     * D'où vient `server_url`, pour que le journal de démarrage le DISE. Le
+     * laisser à zéro reste correct — `SDL_zero(cfg)` suffit toujours à
+     * construire une configuration valable — et le journal écrit alors
+     * « source non déclarée » plutôt que d'inventer une origine.
+     */
+    ns_online_source source;
 } ns_online_config;
 
 /*
