@@ -94,6 +94,36 @@ NINETEEN_LOG=json \
 | `NINETEEN_INSECURE_OK` | autorise une écoute **publique sans cookies `Secure`**. Le serveur refuse de démarrer dans ce cas, parce qu'un oubli de `-secure` sur une adresse joignable envoie le cookie de session en clair et que le seul symptôme serait l'absence d'un attribut que personne ne lit. L'écoute en boucle locale est exemptée — un navigateur ignore un cookie `Secure` reçu sur `http://`, donc l'exiger en développement rendrait la session impossible à établir. Le `docker-compose` fourni pose ce drapeau et dit pourquoi : dans un conteneur il FAUT écouter sur toutes les interfaces, et c'est la publication `127.0.0.1:8080:8080` qui borne l'exposition |
 | `NINETEEN_SECURE` | à définir derrière HTTPS : active les cookies `Secure` et HSTS |
 | `NINETEEN_LOG` | `text` ou `json` |
+| `NINETEEN_PUBLIC_URL` | l'adresse que **le jeu** doit viser, annoncée au joueur sur la page de téléchargement. Vide = rien n'est annoncé. Voir ci-dessous |
+| `NINETEEN_RELEASE_PUBLIEE` | à `1`, la page rallume ses trois boutons de téléchargement |
+| `NINETEEN_BIND`, `NINETEEN_PORT` | *(docker-compose seulement)* interface et port **publiés** sur l'hôte. Défaut `127.0.0.1` et `8080` : le service ne sort pas de la machine tant que personne ne l'a demandé |
+
+#### `NINETEEN_PUBLIC_URL` — l'adresse que le serveur annonce au joueur
+
+Elle ne se déduit **pas** de `NINETEEN_ADDR`. Le serveur écoute sur `:8080` *dans* le conteneur ;
+le monde le joint par la publication Docker, ou par un proxy, sur un tout autre nom. Seul
+l'exploitant sait laquelle est la bonne — et sans elle, la page livrait un binaire et aucun moyen
+de savoir quoi lui donner.
+
+Posée, elle sort par `GET /api/v1/version` et la page de téléchargement écrit la ligne complète
+sous le bouton :
+
+```
+nineteen --server=http://arcade.example:8080
+```
+
+**Elle doit être en `http`.** Le client refuse `https://` — `ns_http_parse_url` échoue
+explicitement, plutôt que de parler en clair sur un port TLS — donc annoncer une adresse `https`
+donnerait au joueur une URL que son jeu ne sait pas ouvrir. Le serveur contrôle la valeur au
+démarrage et **refuse de l'annoncer** si elle ne convient pas, en disant pourquoi :
+
+```
+level=ERROR msg="NINETEEN_PUBLIC_URL en https : le jeu ne sait pas l'ouvrir, rien ne sera annoncé"
+```
+
+Le reste du site, lui, n'a besoin de rien : `app.js` appelle l'API en relatif avec
+`credentials: "same-origin"`, donc il fonctionne sur n'importe quel hôte sans savoir son propre
+nom. `TestLeSiteNeSupposePasSonPropreHote` interdit qu'un `localhost` y revienne.
 
 Les identifiants ne sont jamais dans le code. Le dépôt d'origine les gardait en clair dans un
 fichier commité — ils sont donc encore dans l'historique git et **doivent être changés**.
@@ -168,20 +198,96 @@ curl -s -X POST http://localhost:8080/api/v1/auth/register \
 
 ### 2. Le jeu
 
-Deux clés dans le fichier de configuration — sous macOS
+#### Les quatre sources de l'adresse, et leur ordre
+
+L'URL peut venir de quatre endroits. Du plus **faible** au plus **fort** :
+
+| # | Source | Où | Change sans… |
+|---|---|---|---|
+| 1 | défaut compilé | `cmake -B build -DNINETEEN_SERVER_URL=http://arcade.example:8080` | — (il faut recompiler) |
+| 2 | configuration | `network.serverUrl` dans `settings.cfg` | recompiler |
+| 3 | environnement | `NINETEEN_SERVER_URL=http://…` au lancement | recompiler ni éditer un fichier utilisateur |
+| 4 | ligne de commande | `--server=http://…` | rien du tout |
+
+```
+défaut compilé  <  config  <  variable d'environnement  <  --server=
+```
+
+`--offline` (ou `NINETEEN_OFFLINE=1`) **n'est pas un cinquième niveau** : c'est un verrou. Il
+s'applique après, quelle que soit la source retenue, et le fil réseau ne démarre pas.
+
+**Pourquoi cet ordre-là.** Le défaut compilé est en bas parce que c'est le seul qu'on ne peut pas
+changer sans refaire une compilation : un paquet livré doit rester surchargeable. Et
+l'environnement bat la configuration parce que `settings.cfg` vit dans le répertoire utilisateur
+— il n'existe pas dans un conteneur, et sur une machine de développement il garde ce qu'une
+session précédente y a laissé. Si la config gagnait, un `docker run -e NINETEEN_SERVER_URL=…`
+serait ignoré **sans un mot** le jour où un fichier traîne. Dans l'autre sens, le pire qui arrive
+est qu'une variable explicitement posée l'emporte, ce qu'on a demandé en la posant.
+
+C'est le même ordre que pour tous les autres réglages du jeu (`nineteen.env`, `.env.example`) :
+la ligne de commande garde toujours le dernier mot.
+
+#### Le défaut compilé est **vide**, et ça ne changera pas
+
+```sh
+cmake -B build                                              # → aucune socket, jamais
+cmake -B build -DNINETEEN_SERVER_URL=http://arcade:8080     # → parle à ce serveur
+```
+
+Un dépôt cloné et bâti tel quel ne parle à personne. C'est la règle du haut de
+`engine/net/ns_online.h` : sans URL configurée, aucune socket n'est ouverte et le fil de travail
+ne démarre même pas.
+
+**Ce qui ne se compile pas, et pourquoi c'est refusé :**
+
+- **Le jeton** (`network.token`). Un secret cuit dans un binaire distribué n'en est pas un :
+  `strings nineteen | grep -F <jeton>` le rend, sans outil ni désassemblage, sur la machine de
+  quiconque l'a téléchargé. Il serait de surcroît le **même pour tous les joueurs**, donc
+  irrévocable sans refaire un paquet. Le jeton reste une session, obtenue au lancement, propre à
+  une personne. La même réponse vaut pour tout mot de passe ou clé d'API.
+- **Un nom de serveur** (`NINETEEN_SERVER_NAME`). Refusé pour l'autre raison : **personne ne le
+  lirait**. Aucun élément d'interface n'affiche un nom de serveur, donc ce serait une clé sans
+  lecteur — et ce dépôt en a déjà retiré deux pour ce motif exact, dont `network.serverUrl`
+  lui-même, revenu le jour où il a eu un lecteur. La définition viendra avec l'écran qui
+  l'affiche, pas avant.
+
+#### Le jeton
+
+Une seule clé, dans le fichier de configuration — sous macOS
 `~/Library/Application Support/recognizer/Nineteen/settings.cfg` :
 
 ```
-network.serverUrl = http://localhost:8080
 network.token = LE_SESSIONKEY
 ```
 
-`--server=URL` sur la ligne de commande l'emporte sur `network.serverUrl` ; le jeton, lui, n'a
-pas d'équivalent en ligne de commande. Le démarrage le dit :
+Il n'a **pas** d'équivalent en ligne de commande ni de défaut compilé, pour la raison ci-dessus.
+
+#### Le démarrage dit d'où vient l'adresse
+
+Avec quatre sources possibles, savoir laquelle a gagné est la seule façon de diagnostiquer
+« pourquoi ça parle au mauvais serveur ». La ligne le nomme :
 
 ```
-réseau : actif sur « http://localhost:8080 » (avec jeton)
-réseau : actif sur « http://localhost:8080 » (lecture seule)   ← jeton absent ou invalide
+réseau : actif sur « http://localhost:8090 » (source : --server=) (lecture seule)
+réseau : actif sur « http://localhost:8090 » (source : NINETEEN_SERVER_URL) (lecture seule)
+réseau : actif sur « http://localhost:8090 » (source : config network.serverUrl) (avec jeton)
+réseau : actif sur « http://localhost:8090 » (source : défaut compilé) (lecture seule)
+```
+
+Et quand il n'y en a aucune, il dit **où chercher** plutôt que de se taire :
+
+```
+réseau : aucun serveur configuré, le classement restera local (ni --server=,
+ni NINETEEN_SERVER_URL, ni « network.serverUrl » en config, ni défaut compilé
+-DNINETEEN_SERVER_URL)
+```
+
+Sous `--offline`, l'adresse verrouillée est nommée elle aussi — sinon « verrouillé » et « pas
+d'URL » produiraient le même silence, et l'on ne saurait pas si le verrou a servi :
+
+```
+réseau : verrouillé par --offline, aucune connexion ne sera tentée
+         (« http://localhost:8090 », de --server=, est ignorée)
 ```
 
 ### 3. Ce qui se passe, et dans quel ordre
