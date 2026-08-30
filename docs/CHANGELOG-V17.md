@@ -431,19 +431,171 @@ une absence d'option parce qu'on le comparait à son défaut ; corrigé, il
 1920×900 remplaçait la définition du joueur. Et `--autoplay`, qui n'a pas le
 droit de se classer, **ouvrait quand même un dossier sur le serveur**.
 
+## Un second lot après cette recette
+
+### L'écran du bar était rendu comme un tube d'arcade
+
+Le moteur savait dire « ceci est un écran » et rien de plus, et il en tirait un
+seul traitement : celui du **tube** — courbure en barillet, lignes de balayage,
+masque de phosphore, coins assombris. Juste pour dix-neuf bornes de 1985, faux
+pour le téléviseur du bar, qui le recevait quand même. Le défaut était **écrit**
+à côté du champ `scoreboard_material` — « celles-ci reçoivent le traitement de
+tube, celui-là non » — pendant que `ns_render.c` posait `is_screen = live_screen`
+et le lui donnait.
+
+Mesuré sur les deux filets horizontaux du tableau, qui sont **droits** dans
+l'image dessinée, capture 1600 × 900 à 1,60 m :
+
+| | avant | après |
+|---|---|---|
+| flèche du filet haut | −3,53 px | **0,00 px** |
+| flèche du filet bas | +5,69 px | **+0,65 px** |
+
+Le masque de phosphore comptait 640 colonnes sur 1,70 m, soit **1,34 px** de
+période à ce cadrage ; les lignes de balayage, **0,90 px**. Tous deux sous la
+limite d'échantillonnage : ce qu'ils produisaient n'était pas un grain de tube,
+c'était du moiré.
+
+Un matériau déclare désormais son **espèce** — `"ecran": "tube"` ou `"plat"`. Sans
+déclaration le moteur retombe sur l'ancienne déduction, qui vaut tube : la salle
+de 2020 ne bouge pas d'un texel. Ce que la dalle plate a en propre : rugosité
+0,035 au lieu de 0,06, **métal à zéro** là où le tube force 0,35 (un artifice qui
+teinte le reflet de la couleur de la dalle ; une glace est un diélectrique),
+albédo résiduel 2 % au lieu de 6 %, et échantillonnage **linéaire** au lieu de
+`nearest`.
+
+Le meuble suit : bordure de cadre 30 → **10 mm**, dalle 1,70 × 0,85 →
+**1,78 × 0,89** (1,99 m de diagonale), définition 753 → **1438 texels/m**, soit
+1,50 fois une dalle de borne contre 0,78 avant.
+
+### Le grand écran du bar était le seul texte illisible de la pièce
+
+Le défaut était écrit dans `room/main.c` sans être corrigé : « c'est la **taille
+du lettrage sur le panneau** qu'il faudrait revoir, pas le nombre de texels ».
+Depuis le comptoir, l'enseigne au néon **au-dessus** du panneau se lit, la petite
+borne de classement à trois mètres à droite se lit, et le grand écran entre les
+deux était une bouillie grise.
+
+Profil de luminance sur la vue « bar » en 1400 × 875 :
+
+| | avant | après |
+|---|---|---|
+| titre / bandeau | 10 px | **24 px** |
+| lignes de données | **inséparables** — une seule bande claire de 112 px, et elles le restent en montant le seuil | **15, 16, 15, 15 px**, séparées par 12 à 13 px de noir |
+
+Du lettrage deux fois plus haut, c'est quatre fois moins de lignes : le panneau
+**tourne** — deux pages de quatre records, entrecoupées de la page « en direct ».
+Et le noir est vrai : le fond passe de (0,020 ; 0,026 ; 0,045) à
+(0,003 ; 0,004 ; 0,008). Ce que le panneau rend à la salle, il le rend par son
+bandeau et par ses chiffres.
+
+### On jouait sur 8,4 % du cadre
+
+Debout sur l'ancre que la salle déclare, l'œil est à 0,870 m du centre de la
+dalle, qui fait 0,5333 × 0,300 m : elle occupait **8,4 % de l'aire du cadre**.
+`room/room_poste.{c,h}` avance le **point de vue** vers elle quand une partie
+tourne dedans — le corps ne bouge pas, c'est le partage que la troisième personne
+a établi, pris dans l'autre sens.
+
+Deux leviers, et il en faut deux : pour que la dalle tienne 58 % de la hauteur à
+62° de champ, il faudrait mettre l'œil à 0,455 m du verre, c'est-à-dire la tête
+dans le meuble. On avance de 0,277 m **et** on resserre le champ à 46°. Résultat
+mesuré en projetant les quatre coins de la dalle : **31,2 % de l'aire**, soit 3,7
+fois plus. Les deux nombres sont dans `nineteen.env` avec la table des cinq
+réglages essayés — c'est un arbitrage de mise en scène, il se règle sans
+recompiler.
+
+### Le panneau qui dit HARD et EASY ne disait rien
+
+Il pend au-dessus de l'allée centrale et c'est le **seul** signal spatial de la
+règle de difficulté. On y lisait deux rectangles vides, dans des couleurs
+qu'aucun spectateur ne peut relier à une consigne. La dette était écrite — « les
+glyphes de 2020 sont de la géométrie 3D que cette description ne sait pas
+produire : ils sont ici deux bandeaux de couleur inversée, **qui portent la même
+lecture** » — et c'était la seule affirmation vérifiable du bloc. La capture l'a
+réfutée.
+
+La description ne sait pas produire de glyphes ; le dépôt, si. Même outil et même
+recette que le bloc de secours du sas : `marqueeart` dessine une plaque
+rétroéclairée avec le mot en réserve, dans la fonte du jeu. Lettrage mesuré sur
+la vue « allee » en 1400 × 875 : **EASY 14 px, HARD 19 px**, pour un seuil de
+lisibilité relevé à 11.
+
+### Les appliques éclairaient l'intérieur d'un pilier
+
+Le modèle est une applique **double** — son maillage se sépare en deux grappes de
+1524 et 1526 sommets. La description ne posait qu'**une** bille, à l'origine du
+meuble, c'est-à-dire pile dans le vide entre les deux cages et 16 cm sous leur
+centre. Les cages restaient noires et une boule blanche flottait devant la
+platine.
+
+Trois corrections, et la première a révélé la troisième :
+
+- **deux ampoules**, une par cage, à la cote de la plus grande **sphère
+  inscrite** — on balaie l'intérieur au demi-millimètre et l'on retient le point
+  qui maximise la distance au sommet le plus proche : (±0,2160 ; +0,1350 ;
+  +0,2650), rayon libre 0,0603 m. Le centre de la boîte englobante est à 3,9 cm
+  de là et le contrôle de placement l'a refusé ;
+- **une ampoule est du verre.** Elle portait `painted_panel.jpg` pavé à 20 cm :
+  sur une bille de 9 cm on n'en voyait qu'un fragment étiré, et `texgen` en avait
+  tiré une carte de normales qui le mettait en relief — une croûte de chou-fleur
+  de 12,6 cm mesurée sur capture, pour un objet qui en déclare 9 ;
+- **les quatre appliques du mur sud étaient montées à l'envers**, cages pointant
+  dans le pilier. Le contrôle ne pouvait pas le voir tant que l'ampoule tombait
+  devant la platine ; mise là où elle doit être, la pénétration est devenue
+  mesurable et le build s'est arrêté dessus.
+
+### Trois lots livrés par agents, mesurés et fusionnés
+
+**De vrais installateurs.** `.dmg` avec `Nineteen.app` glissable (177 Mo,
+universel arm64 + x86_64) — monté, copié dans `/Applications`, **arbre de build
+masqué**, lancé : il charge ses assets depuis `Contents/Resources`. AppImage
+(164 Mio), `.deb` et `.tar.gz` construits dans un conteneur Ubuntu 22.04 (glibc
+2.35) ; le `.deb` s'installe par `apt` dans un conteneur nu, ne déclare que
+`libc6 (>= 2.34)`, et le binaire tourne depuis le `PATH` hors de tout arbre de
+build. L'installateur Windows NSIS est configuré et vérifié par un test
+(`paquets`) qui relit la configuration générateur par générateur — **rien n'a été
+exécuté sous Windows**, faute de makensis, de mingw et de wine ; c'est la CI qui
+le produira. Deux défauts trouvés en chemin : le jeu ne compilait pas sur
+glibc < 2.39 (`-std=c11` pose `__STRICT_ANSI__`, qui cache `getaddrinfo`), et les
+conditions de signature du workflow étaient toujours fausses.
+
+**L'URL du serveur à la compilation.** Préséance écrite, documentée et
+vérifiée : `défaut compilé < config < environnement < --server=`, avec `--offline`
+qui verrouille par-dessus. Le journal **dit d'où vient l'adresse**. Le défaut
+CMake reste vide et c'est vérifié : `strings` ne trouve aucune URL dans le
+binaire livré et le jeu redit « aucun serveur configuré ». Le jeton, lui, est
+refusé à la compilation par écrit — `strings` le rendrait chez quiconque a
+téléchargé le paquet, et il serait le même pour tous.
+
+**Frapper une borne.** Touche `F`, en partie comme hors partie. Geste en
+première et troisième personne, contrecoup de caméra, son synthétisé par
+`tools/stepgen`, et l'image de la dalle qui déraille. Durées mesurées : armé
+110 ms, aller 90 ms à **5,5 m/s** (un vrai coup de poing va de 5 à 9 m/s à
+l'impact), retour 300 ms. Le coup coûte ce qu'il doit coûter : pendant 500 ms la
+main est sur la machine et non sur les boutons, les commandes sont perdues et la
+partie continue.
+
+
 ---
 
-1. **Acheter les certificats** Developer ID (Apple) et Authenticode (Windows),
-   et brancher la signature dans CPack — sans quoi les deux systèmes avertissent
-   au premier lancement. **C'est le seul point qui bloque une vente au grand
-   public.**
-2. **Trancher `ASTEROID`** : renommer, ou assumer le risque par écrit.
-3. **Décider du sort de `legacy/`** avant d'ouvrir le dépôt : le purger, ou
+1. **Acheter les certificats** Developer ID (Apple) et Authenticode (Windows).
+   La signature est branchée et attend un secret ; sans elle macOS met en
+   quarantaine et Windows affiche SmartScreen. **C'est le seul point qui bloque
+   une vente au grand public.**
+2. **Publier une release et poser `NINETEEN_RELEASE_PUBLIEE=1`.** Le dépôt n'en
+   a aucune ; les trois boutons du site disent « Bientôt » et le resteront tant
+   que rien n'est publié. Les paquets, eux, sont prêts : un `.dmg` glissable,
+   une AppImage, un `.deb`, une archive, et l'installateur Windows que la CI
+   produit.
+3. **Trancher `ASTEROID`** : renommer, ou assumer le risque par écrit.
+4. **Décider du sort de `legacy/`** avant d'ouvrir le dépôt : le purger, ou
    garder le dépôt privé.
-4. **Décider quoi faire des 27 images sans origine** : les remplacer par du
+5. **Décider quoi faire des 27 images sans origine** : les remplacer par du
    dessin ou du CC0 comme les 21 autres, ou assumer le risque par écrit.
-5. **Décider si le relais chiffre** (TLS) avant d'ouvrir les duels au public.
+6. **Décider si le relais chiffre** (TLS) avant d'ouvrir les duels au public.
 
-**En l'état, le jeu est jouable, complet et déballable sans erreur bloquante.
-Ce qui empêche la vente n'est plus le contenu — c'est la signature (achat) et
-deux décisions de marque et de dépôt.**
+**En l'état, le jeu est jouable, complet, et il s'INSTALLE : trois formats
+vérifiés en les lançant depuis l'installation, arbre de build masqué. Ce qui
+empêche la vente n'est plus le contenu ni l'empaquetage — c'est la signature
+(un achat), une release à publier, et deux décisions de marque et de dépôt.**
