@@ -1,23 +1,33 @@
-# Paquets de release — un fichier par plateforme, attaché à la balise.
+# Paquets de release — un INSTALLATEUR par plateforme, attaché à la balise.
 #
 # Ce que ce workflow promet, et ce qu'il ne promet pas
 # ----------------------------------------------------
-# IL PROMET une archive autonome par plateforme, contenant le binaire et ses
-# assets dans la disposition exacte que `ns_paths` attend — celle qui a été
-# vérifiée en installant puis en lançant le jeu depuis l'arbre installé, avec
-# les assets du build masqués pour qu'aucun montage de développement ne puisse
-# le sauver.
+# IL PROMET, pour chacune des trois plateformes, le format que le système
+# d'exploitation attend — et non plus une archive à déballer à la main :
 #
-# IL NE PROMET PAS la signature par défaut. Un `.dmg` notarié demande un
-# certificat Apple Developer ID, un `.msi` signé un certificat Authenticode :
-# ce sont des secrets qui appartiennent à qui publie, pas au dépôt. Les étapes
-# de signature ne s'exécutent QUE si les secrets existent, et le paquet part
-# non signé sinon — en le disant dans le résumé du job plutôt qu'en échouant, et
-# surtout plutôt qu'en laissant croire le contraire.
+#   macOS    Nineteen-<v>-macOS-universal.dmg   un Nineteen.app à glisser dans
+#                                               Applications (arm64 + x86_64)
+#   Linux    Nineteen-<v>-x86_64.AppImage       chmod +x, puis on lance
+#            nineteen_<v>_amd64.deb             apt install ./…
+#            nineteen-<v>-linux-x86_64.tar.gz   à déballer où l'on veut
+#   Windows  Nineteen-<v>-windows-x64.exe       double-clic, SANS droits admin
+#
+# IL NE PROMET PAS la signature. Un `.dmg` notarié demande un certificat Apple
+# Developer ID, un `.exe` signé un certificat Authenticode : ce sont des secrets
+# qui appartiennent à qui publie, pas au dépôt. Les étapes de signature ne
+# s'exécutent QUE si les secrets existent, et le paquet part non signé sinon —
+# en le disant dans le résumé du job plutôt qu'en échouant, et surtout plutôt
+# qu'en laissant croire le contraire.
 #
 # Conséquence pour qui télécharge un paquet non signé : macOS le mettra en
 # quarantaine (Gatekeeper) et Windows affichera SmartScreen. C'est écrit dans
 # les notes de version, pas caché.
+#
+# AUCUNE DE CES ÉTAPES DE SIGNATURE N'A JAMAIS ÉTÉ EXÉCUTÉE : il n'existe pas de
+# certificat pour ce projet. Elles sont écrites d'après la documentation des
+# outils, pas d'après un essai. Le premier qui pose un certificat dans les
+# secrets doit s'attendre à les corriger, et c'est plus honnête de le dire ici
+# que de laisser croire qu'elles sont éprouvées.
 name: Release
 
 on:
@@ -33,72 +43,48 @@ permissions:
   contents: write
 
 jobs:
-  package:
-    name: Paquet (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { name: "Linux x64",       os: ubuntu-24.04,  preset: linux-x64,       extra_configure: "-DNINETEEN_SHADERCROSS=ON" }
-          - { name: "macOS universal", os: macos-14,      preset: macos-universal, extra_configure: "" }
-          - { name: "Windows x64",     os: windows-2022,  preset: windows-x64,     extra_configure: "" }
-
+  # ==========================================================================
+  # macOS — le .dmg
+  # ==========================================================================
+  macos:
+    name: Paquet macOS (.dmg)
+    runs-on: macos-14
+    # Les secrets sont recopiés au niveau du JOB, et pas seulement dans l'étape
+    # qui s'en sert. Un `if:` d'étape ne voit PAS les variables déclarées dans
+    # le `env:` de cette même étape : la condition de l'ancienne version
+    # (`env.MACOS_CERT_P12 != ''`) était donc toujours fausse, et l'étape de
+    # signature n'aurait pas tourné même avec un certificat en place.
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      # Les mêmes dépendances que la CI. Elles sont recopiées plutôt que
-      # partagées : un workflow de release qui dépend d'un autre fichier casse
-      # le jour où l'on touche à la CI sans y penser, et c'est le jour de la
-      # publication qu'on s'en aperçoit.
-      - name: Dépendances Linux
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            ninja-build glslang-tools \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
-            libwayland-dev wayland-protocols libdecor-0-dev \
-            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev \
-            mesa-vulkan-drivers
-
-      - name: Dépendances macOS
-        if: runner.os == 'macOS'
+      - name: Dépendances
         run: brew install ninja glslang
 
-      - name: Dépendances Windows
-        if: runner.os == 'Windows'
-        run: choco install --no-progress vulkan-sdk
-        shell: pwsh
-
       - name: Configuration
-        run: cmake --preset ${{ matrix.preset }} -DCMAKE_BUILD_TYPE=Release ${{ matrix.extra_configure }}
+        run: cmake --preset macos-universal -DCMAKE_BUILD_TYPE=Release
 
       - name: Compilation
-        run: cmake --build --preset ${{ matrix.preset }}
+        run: cmake --build --preset macos-universal
 
       # Un paquet issu d'un arbre dont les tests échouent n'a rien à faire dans
-      # une release. `core` tourne partout ; le rendu demande un GPU que les
-      # runners n'ont pas toujours.
-      - name: Tests hors rendu
-        run: ctest --preset ${{ matrix.preset }} -R "core|geo|shapes|scores|flappy|snake|tetris|demineur|asteroid|pacman|piano|shooter|menu|online"
+      # une release.
+      - name: Tests
+        run: ctest --preset macos-universal
 
-      - name: Archive
-        run: cpack --config build/${{ matrix.preset }}/CPackConfig.cmake -B build/${{ matrix.preset }}/paquets
-
-      # ------------------------------------------------------------------
-      # Signature — uniquement si les secrets existent
-      # ------------------------------------------------------------------
-      - name: Signature macOS
-        if: runner.os == 'macOS' && env.MACOS_CERT_P12 != ''
-        env:
-          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      # Le binaire est signé AVANT l'empaquetage : il part alors signé dans
+      # `Nineteen.app/Contents/MacOS/`. Ce n'est PAS une distribution notariée —
+      # celle-ci demande en plus `codesign` sur le bundle entier puis
+      # `notarytool submit` sur le .dmg. Ces deux étapes ne sont pas écrites
+      # parce qu'elles ne peuvent pas être essayées : elles seraient de la
+      # devinette dans un fichier qui prétend décrire ce qui se passe.
+      - name: Signature du binaire
+        if: env.MACOS_CERT_P12 != ''
         run: |
           echo "$MACOS_CERT_P12" | base64 --decode > /tmp/cert.p12
           security create-keychain -p actions build.keychain
@@ -109,48 +95,240 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
           codesign --force --options runtime --timestamp \
             --sign "$MACOS_SIGN_IDENTITY" \
-            build/${{ matrix.preset }}/bin/nineteen
+            build/macos-universal/bin/nineteen
           rm -f /tmp/cert.p12
 
-      - name: Signature Windows
-        if: runner.os == 'Windows' && env.WINDOWS_CERT_PFX != ''
-        env:
-          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      - name: Paquet
+        run: cpack --config build/macos-universal/CPackConfig.cmake -B build/macos-universal/paquets
+
+      # Le .dmg est monté et l'application relancée depuis le volume : c'est le
+      # seul moyen de savoir que le bundle est complet. `--help` suffit à
+      # prouver que le Mach-O démarre ; `--headless --screenshot` prouverait en
+      # plus que les assets sont là, mais demande un GPU que le runner n'a pas
+      # toujours — et un job de release ne doit pas échouer pour ça.
+      - name: Le .dmg s'ouvre et l'app démarre
+        run: |
+          set -eux
+          hdiutil attach build/macos-universal/paquets/*.dmg \
+            -mountpoint /tmp/dmg -readonly -nobrowse
+          ls -la /tmp/dmg
+          test -L /tmp/dmg/Applications
+          test -f /tmp/dmg/Nineteen.app/Contents/Info.plist
+          test -d /tmp/dmg/Nineteen.app/Contents/Resources/assets/scene
+          lipo -archs /tmp/dmg/Nineteen.app/Contents/MacOS/nineteen
+          /tmp/dmg/Nineteen.app/Contents/MacOS/nineteen --help | head -2
+          hdiutil detach /tmp/dmg
+
+      - name: Ce que contient ce paquet
+        run: |
+          {
+            echo "### macOS"
+            echo ""
+            ls -la build/macos-universal/paquets/*.dmg
+            echo ""
+            if [ -n "$MACOS_CERT_P12" ]; then
+              echo "Binaire signé (le bundle et le .dmg, eux, ne sont NI signés NI notariés)."
+            else
+              echo "**Paquet NON SIGNÉ** — aucun certificat dans les secrets du dépôt."
+              echo "macOS le mettra en quarantaine. C'est attendu, pas une panne."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nineteen-macos
+          path: build/macos-universal/paquets/*.dmg
+
+  # ==========================================================================
+  # Linux — AppImage, .deb, .tar.gz, construits DANS un conteneur 22.04
+  # ==========================================================================
+  #
+  # POURQUOI PAS DIRECTEMENT SUR LE RUNNER.
+  #
+  # Un binaire lié à la glibc ne tourne que sur une glibc au moins aussi
+  # récente. Construit sur `ubuntu-24.04`, il exigerait `glibc >= 2.39` et
+  # refuserait de démarrer sur Debian 12 ou Ubuntu 22.04 LTS — c'est-à-dire là
+  # où sont la moitié des postes — avec un message que personne ne sait lire.
+  # Le conteneur fixe cette version à 2.35 ; voir packaging/linux/Dockerfile.build.
+  #
+  # Et c'est EXACTEMENT la même image et le même script que ceux qui ont servi à
+  # vérifier les paquets Linux à la main : ce que la CI produit ici a déjà été
+  # installé et lancé ailleurs, ce qui n'est pas rien pour un job qu'on ne
+  # regarde qu'une fois par balise.
+  linux:
+    name: Paquets Linux (AppImage, .deb, .tar.gz)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Image de construction (Ubuntu 22.04, glibc 2.35)
+        run: docker build -f packaging/linux/Dockerfile.build -t nineteen-build:22.04 packaging/linux
+
+      # NINETEEN_TESTS=1 : la suite complète tourne DANS le conteneur, sur la
+      # même vieille glibc que le paquet. C'est là qu'un défaut de portabilité se
+      # voit — il s'en est trouvé un en écrivant ce workflow, voir
+      # cmake/CompilerWarnings.cmake.
+      - name: Compilation, tests et paquets
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src \
+            -e NINETEEN_TESTS=1 \
+            nineteen-build:22.04 sh packaging/linux/paquets.sh
+
+      # L'AppImage est relancée depuis le paquet fini, hors du conteneur qui
+      # l'a produite : sur le runner 24.04, donc sur une AUTRE glibc que celle
+      # de construction. C'est précisément la compatibilité qu'on cherche à
+      # prouver. `--appimage-extract-and-run` parce qu'un runner GitHub n'a pas
+      # FUSE — le joueur, lui, l'a.
+      - name: L'AppImage démarre sur une autre distribution
+        run: |
+          set -eux
+          chmod +x build/linux-x64/paquets/*.AppImage
+          ./build/linux-x64/paquets/Nineteen-*.AppImage \
+            --appimage-extract-and-run --help | head -2
+
+      # `apt install ./…deb` et non `dpkg -i` : c'est la commande que reçoit le
+      # joueur, et c'est la seule des deux qui résout les dépendances. Un .deb
+      # dont les Depends sont fausses échoue ICI plutôt que chez lui.
+      - name: Le .deb s'installe et le jeu se lance
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y ./build/linux-x64/paquets/nineteen_*.deb
+          dpkg -L nineteen | head -20
+          nineteen --help | head -2
+          test -f /usr/share/applications/nineteen.desktop
+          sudo apt-get remove -y nineteen
+
+      - name: Ce que contient ce paquet
+        run: |
+          {
+            echo "### Linux"
+            echo ""
+            ls -la build/linux-x64/paquets/
+            echo ""
+            echo "Dépendances déclarées par le .deb :"
+            dpkg-deb -f build/linux-x64/paquets/nineteen_*.deb Depends Recommends
+            echo ""
+            echo "Paquets NON SIGNÉS : ni le .deb ni l'AppImage ne portent de"
+            echo "signature. C'est attendu — aucune clé n'existe pour ce dépôt."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nineteen-linux
+          path: |
+            build/linux-x64/paquets/*.AppImage
+            build/linux-x64/paquets/*.deb
+            build/linux-x64/paquets/*.tar.gz
+
+  # ==========================================================================
+  # Windows — l'installateur NSIS
+  # ==========================================================================
+  #
+  # LE SEUL DES TROIS QUI N'AIT JAMAIS ÉTÉ ESSAYÉ AILLEURS QU'ICI. La machine de
+  # développement est un Mac sans makensis, sans mingw-w64 et sans wine : le
+  # `.exe` ne peut pas y être produit, et `cpack -G NSIS` s'y arrête avant même
+  # de lire la configuration (« Cannot find NSIS compiler makensis »). Ce qui a
+  # été vérifié depuis le Mac, c'est la CONFIGURATION, par le test `paquets`
+  # (packaging/verifier.cmake) : variables posées, icône qui a bien l'en-tête
+  # d'un .ico, licence sans un octet hors ASCII. Le reste se joue ici.
+  #
+  # `makensis` est préinstallé sur l'image `windows-2022` (NSIS 3.10, annoncé
+  # dans actions/runner-images, images/windows/Windows2022-Readme.md). Rien
+  # n'est donc à installer — mais si l'image change un jour, c'est le message
+  # « Cannot find NSIS compiler » qu'il faudra reconnaître.
+  windows:
+    name: Paquet Windows (.exe)
+    runs-on: windows-2022
+    env:
+      WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Dépendances
+        run: choco install --no-progress vulkan-sdk
+        shell: pwsh
+
+      - name: Configuration
+        run: cmake --preset windows-x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compilation
+        run: cmake --build --preset windows-x64
+
+      - name: Tests
+        run: ctest --preset windows-x64
+
+      - name: Signature du binaire
+        if: env.WINDOWS_CERT_PFX != ''
         shell: pwsh
         run: |
           [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx",
             [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
           & signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" `
             /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
-            "build/${{ matrix.preset }}/bin/nineteen.exe"
+            "build/windows-x64/bin/nineteen.exe"
+
+      - name: Installateur
+        run: cpack --config build/windows-x64/CPackConfig.cmake -B build/windows-x64/paquets
+
+      # L'installateur lui-même se signe APRÈS avoir été construit : c'est lui
+      # que SmartScreen inspecte, pas le jeu qu'il contient. Signer l'un sans
+      # l'autre ne sert à rien.
+      - name: Signature de l'installateur
+        if: env.WINDOWS_CERT_PFX != ''
+        shell: pwsh
+        run: |
+          & signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            (Get-Item build/windows-x64/paquets/*.exe).FullName
           Remove-Item "$env:TEMP\cert.pfx"
+
+      # `/S` installe sans interface. On vérifie ensuite que le jeu est là où
+      # l'installateur a promis de le mettre — dans le domaine de l'utilisateur,
+      # sans droits administrateur — et qu'il démarre. Un installateur qui
+      # produit un répertoire vide passerait sans ça.
+      - name: L'installateur s'exécute sans droits admin
+        shell: pwsh
+        run: |
+          $exe = (Get-Item build/windows-x64/paquets/*.exe).FullName
+          Start-Process -FilePath $exe -ArgumentList "/S" -Wait
+          $jeu = "$env:LOCALAPPDATA\Programs\nineteen\bin\nineteen.exe"
+          if (-not (Test-Path $jeu)) { throw "installe ailleurs que prevu : $jeu" }
+          & $jeu --help | Select-Object -First 2
+          Get-ChildItem "$env:LOCALAPPDATA\Programs\nineteen"
 
       - name: Ce que contient ce paquet
         shell: bash
         run: |
           {
-            echo "### ${{ matrix.name }}"
+            echo "### Windows"
             echo ""
-            ls -la build/${{ matrix.preset }}/paquets/ || true
+            ls -la build/windows-x64/paquets/*.exe
             echo ""
-            if [ -n "${{ secrets.MACOS_CERT_P12 }}${{ secrets.WINDOWS_CERT_PFX }}" ]; then
-              echo "Binaire signé."
+            if [ -n "$WINDOWS_CERT_PFX" ]; then
+              echo "Installateur et binaire signés."
             else
-              echo "**Paquet NON SIGNÉ** — aucun certificat n'est configuré dans les"
-              echo "secrets du dépôt. macOS le mettra en quarantaine, Windows"
-              echo "affichera SmartScreen. C'est attendu, pas une panne."
+              echo "**Paquet NON SIGNÉ** — aucun certificat dans les secrets du"
+              echo "dépôt. Windows affichera SmartScreen. C'est attendu."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: nineteen-${{ matrix.preset }}
-          path: build/${{ matrix.preset }}/paquets/nineteen-*
+          name: nineteen-windows
+          path: build/windows-x64/paquets/*.exe
 
+  # ==========================================================================
+  # La release
+  # ==========================================================================
   publier:
     name: Attacher à la release
-    needs: package
+    needs: [macos, linux, windows]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
@@ -166,16 +344,37 @@ jobs:
           body: |
             ## Nineteen ${{ github.ref_name }}
 
-            Déballer, puis lancer `bin/nineteen`. Les assets voyagent avec le
-            binaire ; il n'y a rien à installer et rien à configurer, et le jeu
-            n'ouvre aucune connexion tant qu'aucun serveur n'est configuré.
+            ### Installer
 
-            **Ces paquets ne sont pas signés** tant qu'aucun certificat n'est
-            fourni au dépôt. macOS mettra l'application en quarantaine
-            (« développeur non identifié ») et Windows affichera SmartScreen.
-            Sur macOS : clic droit → Ouvrir, ou
-            `xattr -dr com.apple.quarantine bin/nineteen`.
+            | Système | Fichier | Ce qu'on en fait |
+            |---|---|---|
+            | macOS 11+ | `Nineteen-*-macOS-universal.dmg` | Ouvrir, glisser **Nineteen** sur **Applications**. Universel : Apple Silicon et Intel. |
+            | Linux | `Nineteen-*-x86_64.AppImage` | `chmod +x Nineteen-*.AppImage` puis lancer. Rien à installer. |
+            | Debian / Ubuntu | `nineteen_*_amd64.deb` | `sudo apt install ./nineteen_*_amd64.deb` — le jeu apparaît dans le menu. |
+            | Linux, sans installer | `nineteen-*-linux-x86_64.tar.gz` | Déballer, lancer `bin/nineteen`. |
+            | Windows 10/11 | `Nineteen-*-windows-x64.exe` | Double-clic. **Aucun droit administrateur** : le jeu s'installe dans votre propre profil, avec un raccourci au menu Démarrer et un désinstalleur. |
 
-            Prérequis réels : un GPU Vulkan (Linux, Windows) ou Metal (macOS).
-            Une machine Windows sans pilote Vulkan ne lancera pas le jeu — voir
+            L'AppImage et le `.deb` sont construits sur **Ubuntu 22.04 (glibc
+            2.35)** : ils démarrent donc aussi sur Debian 12, Mint 21 et tout ce
+            qui est sorti depuis. Une construction sur une base plus récente
+            aurait exclu ces systèmes sans le dire.
+
+            ### Ces paquets ne sont pas signés
+
+            Tant qu'aucun certificat n'est fourni au dépôt, macOS mettra
+            l'application en quarantaine (« développeur non identifié ») et
+            Windows affichera SmartScreen.
+
+            - macOS : clic droit sur **Nineteen** → **Ouvrir**, puis confirmer.
+              Ou `xattr -dr com.apple.quarantine /Applications/Nineteen.app`.
+            - Windows : **Informations complémentaires** → **Exécuter quand même**.
+
+            ### Prérequis réels
+
+            Un GPU **Vulkan** (Linux, Windows) ou **Metal** (macOS). Une machine
+            Windows sans pilote Vulkan ne lancera pas le jeu : le binaire ne
+            contient pas de DXIL, donc SDL n'y choisira pas Direct3D 12. Voir
             `docs/JOUER.md`.
+
+            Le jeu n'ouvre aucune connexion tant qu'aucun serveur n'est
+            configuré, et n'a besoin d'aucun compte.
