@@ -1293,3 +1293,104 @@ void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float
     ns_sprite_rect(s, 0.0f, yb, w, large,
                    (const float[4]){ 0.62f, 0.68f, 0.78f, 0.34f * force });
 }
+
+void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
+                           float reste)
+{
+    if (!s || !c || c->phase != ROOM_CP_FINI || reste <= 0.0f) return;
+
+    static const float or_[4]   = { 1.00f, 0.84f, 0.36f, 1.0f };
+    static const float rouge[4] = { 1.00f, 0.42f, 0.34f, 1.0f };
+
+    uint8_t ordre[ROOM_CP_MAX_PLACES];
+    const int n = room_cp_classement_final(c, ordre);
+    if (n <= 0) return;
+
+    /* Le fondu de sortie, sur la dernière seconde seulement. Une page de
+     * verdict qui s'effacerait progressivement pendant dix secondes serait
+     * illisible pendant neuf. */
+    const float a = (reste < 1.0f) ? reste : 1.0f;
+
+    const float pw = 660.0f, ph = 62.0f + (float)n * 30.0f + 68.0f;
+    const float px = (ROOM_HUD_W - pw) * 0.5f;
+    const float py = (ROOM_HUD_H - ph) * 0.5f;
+    ns_sprite_rect(s, px, py, pw, ph, (const float[4]){ 0.03f, 0.02f, 0.02f, 0.90f * a });
+    ns_sprite_rect(s, px, py, pw, 3.0f, (const float[4]){ or_[0], or_[1], or_[2], a });
+    ns_sprite_rect(s, px, py + ph - 3.0f, pw, 3.0f, (const float[4]){ or_[0], or_[1], or_[2], a });
+
+    /*
+     * LE TITRE DIT CE QUI M'EST ARRIVÉ, pas ce qui s'est passé. « VOUS ÊTES
+     * TROISIÈME » vaut mieux que « MARQUISE GAGNE » pour les sept joueurs qui
+     * n'ont pas gagné, et ils sont sept sur huit.
+     */
+    int mon_rang = 0;
+    for (int r = 0; r < n; ++r) if (ordre[r] == moi) mon_rang = r + 1;
+
+    char t[96];
+    const bool gagne = (mon_rang == 1);
+    if (moi >= ROOM_CP_MAX_PLACES || mon_rang == 0) {
+        SDL_snprintf(t, sizeof t, "%s L'EMPORTE", nom_place(c, ordre[0]));
+    } else if (gagne) {
+        SDL_strlcpy(t, "DERNIER DEBOUT", sizeof t);
+    } else {
+        SDL_snprintf(t, sizeof t, "%d%s SUR %d", mon_rang,
+                     (mon_rang == 1) ? "er" : "e", n);
+    }
+    float titre[4] = { gagne ? or_[0] : 1.00f, gagne ? or_[1] : 0.94f,
+                       gagne ? or_[2] : 0.82f, a };
+    centred(s, ROOM_HUD_W * 0.5f, py + 18.0f, 4.4f, titre, t);
+
+    const float y0 = py + 62.0f;
+    for (int r = 0; r < n; ++r) {
+        const uint8_t i = ordre[r];
+        const room_cp_place *p = &c->place[i];
+        const float y = y0 + (float)r * 30.0f;
+        const bool cest_moi = (i == moi);
+
+        if (cest_moi) {
+            ns_sprite_rect(s, px + 12.0f, y - 4.0f, pw - 24.0f, 26.0f,
+                           (const float[4]){ 0.18f, 0.14f, 0.05f, a });
+        }
+        ns_sprite_rect(s, px + 24.0f, y, 8.0f, 18.0f,
+                       (const float[4]){ couleur_camp(p->camp)[0], couleur_camp(p->camp)[1],
+                                         couleur_camp(p->camp)[2], a });
+        SDL_snprintf(t, sizeof t, "%d", r + 1);
+        ns_sprite_text(s, px + 42.0f, y, 3.0f, (const float[4]){ C_DIM[0], C_DIM[1], C_DIM[2], a }, t);
+        ns_sprite_text(s, px + 74.0f, y, 3.0f,
+                       (const float[4]){ cest_moi ? or_[0] : C_TEXT[0],
+                                         cest_moi ? or_[1] : C_TEXT[1],
+                                         cest_moi ? or_[2] : C_TEXT[2], a },
+                       nom_place(c, i));
+
+        /*
+         * TROIS COLONNES ET PAS UNE DE PLUS : les points, les parties finies,
+         * les coupures encaissées. La troisième est celle qui manque partout
+         * ailleurs et c'est la plus parlante — « j'ai perdu deux parties parce
+         * qu'on m'a éteint la borne » explique un classement que les points
+         * seuls rendraient incompréhensible.
+         */
+        SDL_snprintf(t, sizeof t, "%d", p->points);
+        a_droite(s, px + 436.0f, y, 3.0f, (const float[4]){ C_TEXT[0], C_TEXT[1], C_TEXT[2], a }, t);
+        SDL_snprintf(t, sizeof t, "%d", p->parties);
+        a_droite(s, px + 528.0f, y, 2.6f, (const float[4]){ C_DIM[0], C_DIM[1], C_DIM[2], a }, t);
+        if (p->annulees > 0) {
+            SDL_snprintf(t, sizeof t, "-%d", p->annulees);
+            a_droite(s, px + 628.0f, y, 2.6f, (const float[4]){ rouge[0], rouge[1], rouge[2], a }, t);
+        }
+    }
+
+    /*
+     * Les libellés SOUS les colonnes, et raccourcis pour tenir dedans. Les
+     * trois s'écrivaient « POINTS », « PARTIES », « COUPES » à l'échelle 1,9 :
+     * quatre-vingts unités de large pour des colonnes espacées de quatre-vingts,
+     * donc collés bout à bout sans un pixel entre eux — la première capture
+     * rendait « POINTSPARTIES COUPES », qui ne se lit pas.
+     */
+    const float yf = y0 + (float)n * 30.0f + 8.0f;
+    const float dimf[4] = { C_DIM[0], C_DIM[1], C_DIM[2], a };
+    a_droite(s, px + 436.0f, yf, 1.8f, dimf, "PTS");
+    a_droite(s, px + 528.0f, yf, 1.8f, dimf, "FINIES");
+    a_droite(s, px + 628.0f, yf, 1.8f, dimf, "COUPEES");
+    centred(s, ROOM_HUD_W * 0.5f, yf + 26.0f, 2.4f,
+            (const float[4]){ C_KEY[0], C_KEY[1], C_KEY[2], a }, "F9  UNE AUTRE MANCHE");
+}

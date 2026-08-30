@@ -719,6 +719,25 @@ int32_t room_cp_vivants_camp(const room_couperet *c, uint8_t camp);
 int room_cp_classement(const room_couperet *c, uint8_t sortie[ROOM_CP_MAX_PLACES]);
 
 /*
+ * LE CLASSEMENT DE FIN DE MANCHE, qui n'est PAS le précédent.
+ *
+ * Dans un mode à élimination, l'ordre d'arrivée est l'ORDRE INVERSE DES
+ * SORTIES : le dernier debout est premier, celui sorti à la dernière lame est
+ * deuxième, et ainsi de suite. Les points ne départagent qu'à égalité de lame —
+ * ce qui n'arrive qu'entre des joueurs partis d'eux-mêmes, puisque le couperet
+ * n'en sort qu'un à la fois.
+ *
+ * Les deux fonctions existent parce que les deux questions existent. Pendant la
+ * manche, « qui mène » se lit sur les points : c'est ce que le tableau du bar
+ * montre, et c'est ce sur quoi on décide de s'engager ou pas. À la fin, « qui a
+ * gagné » se lit sur qui est resté. Les confondre donnerait un verdict où un
+ * joueur sorti à la première lame avec une grosse partie en banque passerait
+ * devant le survivant — c'est-à-dire un mode à élimination où l'élimination ne
+ * décide de rien.
+ */
+int room_cp_classement_final(const room_couperet *c, uint8_t sortie[ROOM_CP_MAX_PLACES]);
+
+/*
  * QUI TOMBERAIT SI LE COUPERET TOMBAIT MAINTENANT. `ROOM_CP_MAX_PLACES` si
  * personne — un seul camp debout, ou aucune place vivante.
  *

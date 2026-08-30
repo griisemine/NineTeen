@@ -263,6 +263,24 @@ void room_hud_draw_couperet(ns_sprite *s, const room_couperet *c, uint8_t moi,
  * second brouillage prolonge le premier sans que le motif doive resauter.
  */
 void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float phase);
+
+/*
+ * LE VERDICT — la page qu'on lit quand la manche est finie.
+ *
+ * Elle occupe le CENTRE, contrairement aux deux bandes de la manche, et c'est
+ * la seule chose qui change : il n'y a plus de partie à ne pas couvrir.
+ *
+ * Ce qu'elle porte, et pourquoi ces quatre choses-là. Une page de fin qui
+ * n'annoncerait que le vainqueur ne dirait rien à sept joueurs sur huit. Elle
+ * dit donc d'abord CE QUE J'AI FAIT — mon rang, mes points, mes parties, ce que
+ * j'ai encaissé de coupures — parce que c'est la seule information qui donne
+ * envie de recommencer, et c'est déjà le raisonnement écrit au-dessus de
+ * `last_rank` pour l'écran de fin de partie.
+ *
+ * `reste` est le temps qui lui reste à l'écran, en secondes ; il sert au fondu.
+ */
+void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
+                           float reste);
 void room_hud_draw_arene(ns_sprite *s, float w, float h, const room_couperet *c,
                          uint8_t moi, double time_seconds);
 

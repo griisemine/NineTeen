@@ -694,6 +694,36 @@ int room_cp_classement(const room_couperet *c, uint8_t sortie[ROOM_CP_MAX_PLACES
     return n;
 }
 
+int room_cp_classement_final(const room_couperet *c, uint8_t sortie[ROOM_CP_MAX_PLACES])
+{
+    if (!c || !sortie) return 0;
+    int n = 0;
+    for (int i = 0; i < c->places; ++i) if (c->place[i].occupee) sortie[n++] = (uint8_t)i;
+
+    /* Même tri par insertion et même stabilité que `room_cp_classement` : huit
+     * éléments, et deux places strictement à égalité gardent l'ordre des
+     * places. La clé, elle, est la lame qui les a sorties. */
+    for (int i = 1; i < n; ++i) {
+        const uint8_t x = sortie[i];
+        int j = i - 1;
+        while (j >= 0) {
+            const room_cp_place *pa = &c->place[sortie[j]];
+            const room_cp_place *px = &c->place[x];
+            /* `sortie_a` vaut -1 pour qui est encore debout : on le remplace
+             * par une lame plus tardive que toutes celles qui sont tombées,
+             * ce qui met le survivant en tête sans cas particulier. */
+            const int32_t la = (pa->sortie_a >= 0) ? pa->sortie_a : c->couperets + 1;
+            const int32_t lx = (px->sortie_a >= 0) ? px->sortie_a : c->couperets + 1;
+            const bool avant = (lx > la) || (lx == la && px->points > pa->points);
+            if (!avant) break;
+            sortie[j + 1] = sortie[j];
+            j--;
+        }
+        sortie[j + 1] = x;
+    }
+    return n;
+}
+
 bool room_cp_valide(const room_couperet *c)
 {
     if (!c) return false;

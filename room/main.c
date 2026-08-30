@@ -2123,6 +2123,13 @@ int main(int argc, char **argv)
     uint8_t cp_moi   = ROOM_CP_MAX_PLACES;
     uint8_t cp_cible = ROOM_CP_MAX_PLACES;
     bool    cp_actif = false;
+    /*
+     * LE VERDICT reste à l'écran quinze secondes après la fin. Un minuteur et
+     * non une touche à presser : une page de fin qu'il faut congédier bloque
+     * celui qui s'est levé de sa chaise, et une manche se termine souvent
+     * pendant qu'on regarde ailleurs.
+     */
+    float   cp_verdict = 0.0f;
     room_cp_ouvrir(&couperet, 2, false);
     if (opt.couperet > 0) {
         cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet, opt.player);
@@ -3334,6 +3341,7 @@ play_at_done: ;
                             cp_cible = ROOM_CP_MAX_PLACES;
                             NS_INFO("couperet : manche abandonnée");
                         } else {
+                            cp_verdict = 0.0f;
                             cp_moi = couperet_ouvrir(&couperet, opt.couperet
                                                      ? (uint8_t)opt.couperet
                                                      : ROOM_CP_MAX_PLACES,
@@ -4340,7 +4348,14 @@ play_at_done: ;
                         break;
                     }
                 }
-                if (couperet.phase == ROOM_CP_FINI) cp_actif = false;
+                if (couperet.phase == ROOM_CP_FINI && cp_actif) {
+                    cp_actif = false;
+                    cp_verdict = 15.0f;
+                }
+            }
+            if (cp_verdict > 0.0f) {
+                cp_verdict -= (float)clock.tick_seconds;
+                if (cp_verdict < 0.0f) cp_verdict = 0.0f;
             }
 
             if (in_game && !menu.open) {
@@ -4757,7 +4772,7 @@ play_at_done: ;
                  * de toute la salle, et sa raison d'être écrite est qu'on lève
                  * les yeux pour voir qui est en train de battre quoi.
                  */
-                if (cp_actif || couperet.phase == ROOM_CP_FINI) {
+                if (cp_actif || cp_verdict > 0.0f) {
                     room_hud_draw_arene(sprites, (float)ROOM_BAR_RT_W,
                                         (float)ROOM_BAR_RT_H, &couperet, cp_moi, now);
                 } else
@@ -5305,6 +5320,8 @@ play_at_done: ;
                 room_hud_draw(sprites, &hud);
                 if (cp_actif) {
                     room_hud_draw_couperet(sprites, &couperet, cp_moi, cp_cible, now);
+                } else if (cp_verdict > 0.0f) {
+                    room_hud_draw_verdict(sprites, &couperet, cp_moi, cp_verdict);
                 }
                 /*
                  * Les autres joueurs, quand le temps réel est actif. Dessinés
