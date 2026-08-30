@@ -105,11 +105,11 @@ static void test_verrous(void)
     CHECK(!ns_realtime_enabled(), "et il se déclare inactif");
 
     /* Et il ne rend rien, jamais : on le constate en demandant. */
-    ns_realtime_publish(1.0f, 0.0f, 2.0f, 0.5f, "borne-01", "dedale", 0);
+    ns_realtime_publish(1.0f, 0.0f, 2.0f, 0.5f, 1.63f, "borne-01", "dedale", 0);
     ns_realtime_request_ghosts("dedale", "normal");
     SDL_Delay(200);
     ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    CHECK(ns_realtime_peers(peers, NS_RT_MAX_PEERS) == 0,
+    CHECK(ns_realtime_peers(peers, NS_RT_MAX_PEERS, NULL) == 0,
           "aucun pair n'arrive sans serveur");
     ns_realtime_ghost_info gi[NS_RT_MAX_GHOSTS];
     CHECK(ns_realtime_ghosts(gi, NS_RT_MAX_GHOSTS) == 0,
@@ -406,7 +406,7 @@ static void test_presence(const char *url)
     CHECK(ns_realtime_enabled(), "le temps réel est actif");
     CHECK(true, "et il n'a demandé AUCUN compte pour ça");
 
-    ns_realtime_publish(1.5f, 0.0f, 2.5f, 0.75f, "borne-dedale", "dedale", 120);
+    ns_realtime_publish(1.5f, 0.0f, 2.5f, 0.75f, 1.63f, "borne-dedale", "dedale", 120);
 
     /* Le second joueur, par la porte d'à côté. */
     char purl[640];
@@ -439,7 +439,7 @@ static void test_presence(const char *url)
     uint32_t n = 0;
     for (int i = 0; i < 40 && n == 0; ++i) {
         SDL_Delay(250);
-        n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+        n = ns_realtime_peers(peers, NS_RT_MAX_PEERS, NULL);
     }
     CHECK(n >= 1, "le vrai client VOIT l'autre joueur (%u, statut : %s)",
           n, ns_realtime_status());
@@ -748,7 +748,7 @@ static void test_serveur_mort(void)
     /* On joue : la boucle de jeu ne doit rien attendre. */
     const uint64_t t0 = SDL_GetTicks();
     for (int i = 0; i < 200; ++i) {
-        ns_realtime_publish((float)i, 0.0f, 0.0f, 0.0f, "borne", "dedale", i);
+        ns_realtime_publish((float)i, 0.0f, 0.0f, 0.0f, 1.63f, "borne", "dedale", i);
     }
     const uint64_t dt = SDL_GetTicks() - t0;
     CHECK(dt < 100, "publier une position ne bloque JAMAIS (%llu ms pour 200 appels)",
@@ -756,7 +756,7 @@ static void test_serveur_mort(void)
 
     SDL_Delay(800);
     ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    CHECK(ns_realtime_peers(peers, NS_RT_MAX_PEERS) == 0,
+    CHECK(ns_realtime_peers(peers, NS_RT_MAX_PEERS, NULL) == 0,
           "aucun joueur fantôme n'apparaît quand le serveur est mort");
     CHECK(ns_realtime_peers_age_ms() == UINT32_MAX,
           "et l'âge de la présence dit qu'on n'a jamais rien reçu");

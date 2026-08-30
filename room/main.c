@@ -1067,7 +1067,7 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
 static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
 {
     ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS, NULL);
     if (n == 0) return;
 
     const ns_m4 view = ns_m4_look_at(cam->position,
@@ -1143,7 +1143,7 @@ static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
 static void draw_presence_roster(ns_sprite *s)
 {
     ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS, NULL);
     if (n == 0) return;
 
     const float title[4] = { 0.55f, 0.75f, 0.95f, 0.85f };
@@ -3053,8 +3053,11 @@ play_at_done: ;
             if (!here && cam.mode == ROOM_CAM_PLAYER) {
                 here = room_viewmodel_target(&scene, &cam);
             }
+            /* La hauteur d'oeil COURANTE, accroupissement compris : c'est elle
+             * qui permet aux autres de poser mes pieds au sol au lieu de les
+             * deviner. Voir `ns_realtime_peer.eye`. */
             ns_realtime_publish(cam.position.x, cam.position.y, cam.position.z,
-                                cam.yaw,
+                                cam.yaw, cam.eye_height,
                                 here ? here->name : "",
                                 (in_game && game_api) ? game_api->id
                                                       : (here ? here->game : ""),

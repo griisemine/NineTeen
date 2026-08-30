@@ -23,13 +23,16 @@
  * Quatre battements par seconde, c'est 35 cm entre deux positions connues, et
  * l'interpolation au rendu comble le reste sans qu'on voie de saut. La mesure
  * est dans `tests/test_duel.c` plutôt que dans une intention.
+ *
+ * `NS_RT_PERIOD_MS` et `NS_RT_STALE_MS` sont DÉCLARÉS DANS L'EN-TÊTE depuis que
+ * les pairs ont un corps : `room_presence.c` interpole sur la première et fond
+ * la sortie sur la seconde. Elles restent expliquées ici, à l'endroit où elles
+ * décident vraiment de quelque chose.
+ *
+ * La péremption : après quoi on cesse de croire ce qu'on sait des autres. Trois
+ * battements manqués — assez pour absorber une requête lente, trop peu pour
+ * laisser un joueur figé dans l'allée quand le serveur tombe.
  */
-#define NS_RT_PERIOD_MS   250u
-
-/* Après quoi on cesse de croire ce qu'on sait des autres. Trois battements
- * manqués : assez pour absorber une requête lente, trop peu pour laisser un
- * joueur figé dans l'allée quand le serveur tombe. */
-#define NS_RT_STALE_MS    3000u
 
 static struct {
     bool          enabled;
@@ -44,7 +47,7 @@ static struct {
     SDL_AtomicInt quit;
 
     /* --- Ma position, déposée par la boucle de jeu --- */
-    float         me_x, me_y, me_z, me_yaw;
+    float         me_x, me_y, me_z, me_yaw, me_eye;
     char          me_cabinet[NS_RT_SLUG];
     char          me_game[NS_RT_SLUG];
     int32_t       me_score;
@@ -149,7 +152,7 @@ static void make_client_id(char *out, size_t cap)
 static void beat_presence(void)
 {
     char nick[NS_RT_NAME], cab[NS_RT_SLUG], game[NS_RT_SLUG], cid[40];
-    float x, y, z, yaw;
+    float x, y, z, yaw, eye;
     int32_t score;
     bool leaving;
 
@@ -158,7 +161,7 @@ static void beat_presence(void)
     SDL_snprintf(cab, sizeof cab, "%s", g.me_cabinet);
     SDL_snprintf(game, sizeof game, "%s", g.me_game);
     SDL_snprintf(cid, sizeof cid, "%s", g.client_id);
-    x = g.me_x; y = g.me_y; z = g.me_z; yaw = g.me_yaw;
+    x = g.me_x; y = g.me_y; z = g.me_z; yaw = g.me_yaw; eye = g.me_eye;
     score = g.me_score;
     leaving = g.leaving;
     SDL_UnlockMutex(g.lock);
@@ -181,9 +184,9 @@ static void beat_presence(void)
     char body[768];
     const int len = SDL_snprintf(body, sizeof body,
         "{\"clientId\":\"%s\",\"nickname\":\"%s\","
-        "\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"yaw\":%.4f,"
+        "\"x\":%.3f,\"y\":%.3f,\"z\":%.3f,\"yaw\":%.4f,\"eye\":%.3f,"
         "\"cabinet\":\"%s\",\"game\":\"%s\",\"score\":%d%s}",
-        cid, nick_esc, (double)x, (double)y, (double)z, (double)yaw,
+        cid, nick_esc, (double)x, (double)y, (double)z, (double)yaw, (double)eye,
         cab_esc, game_esc, (int)score,
         leaving ? ",\"leaving\":true" : "");
 
@@ -227,11 +230,30 @@ static void beat_presence(void)
             SDL_zerop(p);
             ns_json_get_string(&doc, e, "nickname", p->name, sizeof p->name);
             if (!p->name[0]) continue;
+            ns_json_get_string(&doc, e, "clientId", p->id, sizeof p->id);
             p->verified = ns_json_get_bool(&doc, e, "verified", false);
             p->x   = ns_json_get_float(&doc, e, "x", 0.0f);
             p->y   = ns_json_get_float(&doc, e, "y", 0.0f);
             p->z   = ns_json_get_float(&doc, e, "z", 0.0f);
+            /*
+             * LE CAP, ET SON ABSENCE, qui ne se confondent pas.
+             *
+             * `ns_json_get_float` rend son repli aussi bien pour une clé absente
+             * que pour un cap réellement nul, et les deux ne veulent pas dire la
+             * même chose : le premier pair doit être tourné par son déplacement,
+             * le second regarde vraiment vers +X. On demande donc la CLÉ avant
+             * de lire sa valeur — c'est la seule façon de les séparer, et elle
+             * ne coûte qu'une recherche déjà faite par la lecture qui suit.
+             *
+             * Ce que ça achète : un pair d'une version antérieure au champ
+             * marche droit devant lui au lieu de glisser de côté en regardant
+             * l'est.
+             */
+            p->has_yaw = (ns_json_get(&doc, e, "yaw") != NULL);
             p->yaw = ns_json_get_float(&doc, e, "yaw", 0.0f);
+            /* Zéro = non publiée, ce qui est exactement ce que rend le repli.
+             * L'appelant pose alors sa propre hauteur d'œil. */
+            p->eye = ns_json_get_float(&doc, e, "eye", 0.0f);
             ns_json_get_string(&doc, e, "cabinet", p->cabinet, sizeof p->cabinet);
             ns_json_get_string(&doc, e, "game", p->game, sizeof p->game);
             p->score = (int32_t)ns_json_get_i64(&doc, e, "score", 0);
@@ -560,20 +582,21 @@ const char *ns_realtime_status(void)  { return g.status; }
  * Présence — l'interface de la boucle de jeu
  * ========================================================================== */
 
-void ns_realtime_publish(float x, float y, float z, float yaw,
+void ns_realtime_publish(float x, float y, float z, float yaw, float eye,
                          const char *cabinet, const char *game, int32_t score)
 {
     if (!g.enabled) return;
     SDL_LockMutex(g.lock);
-    g.me_x = x; g.me_y = y; g.me_z = z; g.me_yaw = yaw;
+    g.me_x = x; g.me_y = y; g.me_z = z; g.me_yaw = yaw; g.me_eye = eye;
     SDL_snprintf(g.me_cabinet, sizeof g.me_cabinet, "%s", cabinet ? cabinet : "");
     SDL_snprintf(g.me_game, sizeof g.me_game, "%s", game ? game : "");
     g.me_score = score;
     SDL_UnlockMutex(g.lock);
 }
 
-uint32_t ns_realtime_peers(ns_realtime_peer *out, uint32_t max)
+uint32_t ns_realtime_peers(ns_realtime_peer *out, uint32_t max, uint64_t *at_ms)
 {
+    if (at_ms) *at_ms = 0;
     if (!g.enabled || !out || !max) return 0;
 
     SDL_LockMutex(g.lock);
@@ -591,6 +614,9 @@ uint32_t ns_realtime_peers(ns_realtime_peer *out, uint32_t max)
     }
     uint32_t n = (g.peer_count < max) ? g.peer_count : max;
     for (uint32_t i = 0; i < n; ++i) out[i] = g.peer[i];
+    /* Sous le MÊME verrou que la table : c'est tout l'intérêt du paramètre.
+     * Voir `ns_realtime.h`. */
+    if (at_ms) *at_ms = g.peer_at_ms;
     SDL_UnlockMutex(g.lock);
     return n;
 }
