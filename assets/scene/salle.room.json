@@ -1507,10 +1507,8 @@
     },
     {
       "name": "ampoule_cage",
-      "texture": "painted_panel.jpg",
-      "roughness": 0.22,
+      "roughness": 0.08,
       "metallic": 0.0,
-      "uvMetres": 0.2,
       "baseColor": [
         1.0,
         0.88,
@@ -1523,7 +1521,7 @@
         0.56
       ],
       "emissiveStrength": 2.4,
-      "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible."
+      "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible.\nSANS TEXTURE, et c'est une correction. Elle portait `painted_panel.jpg` pave a 20 cm : sur une bille de 9 cm on ne voyait donc qu'un FRAGMENT du motif, etire, et `texgen` en avait tire une carte de normales qui le mettait en relief. Le resultat, mesure sur une capture a 0,71 m, etait une croute de chou-fleur de 12,6 cm de large la ou l'objet en declare 9. Une ampoule est du VERRE : lisse, uniforme, et ce qu'on en voit vient de ce qu'elle EMET, pas de ce qu'elle renvoie. Sans cle `texture`, roomgen pose -1 et le moteur retombe sur son blanc et sa normale plate : exactement ce qu'il faut. 0,08 de rugosite pour le reflet etroit d'une bulle de verre."
     },
     {
       "name": "neon_tube_bleu",
@@ -1944,8 +1942,8 @@
     {
       "name": "applique_entree",
       "at": [
-        5.64,
-        2.05,
+        5.785,
+        2.285,
         5.6
       ],
       "color": [
@@ -1965,7 +1963,8 @@
         ]
       },
       "_": "Les deux appliques du couloir. Elles etaient a z = 3,0 et 5,4 : la premiere tombait dans le hall a 0,6 m du pan coupe retabli, la seconde dans le couloir. Elles sont maintenant toutes deux sur la joue ouest du couloir (parement 5,284), a 5,6 et 8,0.",
-      "_c07": "La source suit sa cage, comme celle de `applique_sas` suit la sienne."
+      "_c07": "La source suit sa cage, comme celle de `applique_sas` suit la sienne.",
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
     },
     {
       "_": "La suspension du billard. Le coin ouest recevait 9 d'éclairement du plafonnier d'allée le plus proche, à 3,2 m : la table, les tabourets et le mur y étaient illisibles. Une table de billard a sa propre lampe, basse et chaude — c'est aussi ce qui la désigne comme un endroit où l'on va.",
@@ -1989,8 +1988,8 @@
       "_": "Suit sa cage. at (-6,900 ; 2,250 ; -0,210) -> (-6,864 ; 2,190 ; -0,100) : écart LOCAL inchangé, 1,8 cm devant la gueule de la cage — la source reste hors du luminaire, ce que `check_lights_not_enclosed` vérifie.",
       "name": "applique_technique",
       "at": [
-        -6.864,
-        2.19,
+        -6.617,
+        2.425,
         -0.1
       ],
       "color": [
@@ -2000,7 +1999,8 @@
       ],
       "intensity": 38.0,
       "range": 3.2,
-      "_c07": "DEPLACEE DE 61 CM, et pour une raison qui vaut d'etre ecrite : C-07 avait cesse de la signaler SANS qu'elle ait gagne un luminaire. Il mesure « de la geometrie de prop a moins de 40 cm », sans verifier a QUI elle appartient — et le troisieme tube au neon, pose sur le meme mur, passait a 31,5 cm d'elle. Un controle qui passe pour la mauvaise raison est pire qu'un controle qui echoue. Elle est donc allee dans la travee libre entre `pilier_ouest_2` et le tube, ou une vraie applique tient."
+      "_c07": "DEPLACEE DE 61 CM, et pour une raison qui vaut d'etre ecrite : C-07 avait cesse de la signaler SANS qu'elle ait gagne un luminaire. Il mesure « de la geometrie de prop a moins de 40 cm », sans verifier a QUI elle appartient — et le troisieme tube au neon, pose sur le meme mur, passait a 31,5 cm d'elle. Un controle qui passe pour la mauvaise raison est pire qu'un controle qui echoue. Elle est donc allee dans la travee libre entre `pilier_ouest_2` et le tube, ou une vraie applique tient.",
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
     },
     {
       "_": "Au-dessus de la borne de classement. C'est la première borne qu'on croise en descendant l'allée, et la seule qui donne envie de rejouer : elle mérite d'être vue avant d'être atteinte. Sans elle, la mesure donnait 28/10/5 de moyenne sur ce cadrage — un rectangle sombre dans le noir.",
@@ -2096,8 +2096,8 @@
       "_": "AUDIT P-03. La source suit son luminaire : elle eclairait le trottoir, a 1,11 m au-dela du parement interieur, pendant que le sas restait au noir.",
       "name": "applique_sas",
       "at": [
-        6.6,
-        2.06,
+        6.455,
+        2.285,
         8.2
       ],
       "color": [
@@ -2108,15 +2108,16 @@
       "intensity": 62.0,
       "range": 4.2,
       "radius": 0.1,
-      "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13)."
+      "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13).",
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
     },
     {
       "_": "Les quatre sources des appliques du mur sud. 48 et non 62 comme celle du couloir : elles sont quatre sur un mur de 14,4 m deja borde par les bancs et le tableau, et le sud etait la seule paroi du hall sans eclairage propre.",
       "name": "applique_sud",
       "at": [
         -4.782,
-        2.06,
-        -6.78
+        2.285,
+        -6.748
       ],
       "color": [
         1.0,
@@ -2133,7 +2134,8 @@
           0.0,
           0.0
         ]
-      }
+      },
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
     },
     {
       "name": "suspension_comptoir",
@@ -5982,7 +5984,8 @@
       "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
-      "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur."
+      "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur.",
+      "_platine": "DEFAUT MESURE, NON CORRIGE ICI — la platine FLOTTE a 23,6 cm du mur.\nIl l'etait aussi sur les quatre appliques du mur sud, ou il A ete corrige : leur cap etait en plus retourne, et les remettre a plat sur la face des piliers (z -7,013) reglait les deux d'un coup. Les deux appliques du couloir n'ont pas cette chance, pour la raison ci-dessous.\nLe commentaire ci-dessus dit « le modele deborde de 0,31 m vers l'arriere » et en tire ce recul. Mesure sur le maillage (3961 sommets) : le modele occupe Z 0,000 a 0,329 en repere LOCAL — il n'y a rien derriere son origine. La platine est le disque de 0,21 m qui occupe Z 0,000 a 0,033 ; le bras et les deux cages sont tous DEVANT. Le meuble ne deborde donc pas vers l'arriere, et la crainte qui a fait reculer l'applique — « a 5,30 la cage sortait de 11 cm dans la rue » — repose sur le meme signe inverse.\nCE QUE CA COUTE, vu sur une capture frontale a 0,80 m : la platine est eclairee des deux cotes par ses propres ampoules et rien ne la relie a la cloison.\nPOURQUOI CE N'EST PAS CORRIGE ICI : ramener l'origine au parement (5,284 et 6,953) fait echouer le controle des sorties — « applique_sas est a 0,33 m AU-DELA du parement interieur (0,13 m dehors) » — alors que le meuble, a ce cap, entre dans le couloir. Le controle et la mise en place ne sont pas d'accord sur le SENS du modele, et trancher demande d'ouvrir la convention de cap de roomgen pour les props « model », ce qui depasse ce lot. La cote a corriger est ecrite ici pour que le prochain n'ait pas a la remesurer : origine x = 5,284 pour l'entree, 6,953 pour le sas."
     },
     {
       "_": "LES QUATRE APPLIQUES DU MUR SUD, absentes. 2020 en a SIX : quatre au sud (sconce_02, .001, .002, .003 — x -4,782 / -1,653 / 1,652 / 4,809, z = -6,874) et deux a l'ouest, ces dernieres deja reprises a 0,03 et 0,67 m pres par « neon_mur_ouest ». Ampoule de 2,048 a 2,439 m.\nLe pas de 2020 n'est pas regulier (3,129 / 3,305 / 3,157) ; celui-ci l'est a 3,197, ce qui pose les quatre a 0,00 / 0,07 / 0,04 / 0,00 m de leurs originales. z = -6,90 : le parement sud est a -7,035 et le modele de cage sort de 0,135, comme « applique_sas » sur la joue du couloir.\nELLES SONT SUR LES PILIERS, et ce n'est pas un hasard de cote : les quatre x de 2020 (-4,782 / -1,653 / 1,652 / 4,809) sont ceux des quatre piliers engages du mur sud (-4,804 / -1,648 / 1,648 / 4,804), a 2 cm pres. Le pilier deborde de 2,2 cm devant le parement ; la cage de l'applique y entre. L'assemblage est donc declare : \"traverse\": [\"pilier_sud\"].",
@@ -5990,9 +5993,9 @@
       "at": [
         -4.782,
         2.15,
-        -6.9
+        -7.013
       ],
-      "yaw": 180.0,
+      "yaw": 0.0,
       "_pose": "Même cas que « applique_sas » : la platine du modèle est en +Z local, C-04 lit -1,00.",
       "pose": "libre",
       "repeat": {
@@ -6007,18 +6010,19 @@
       "material": "applique_cage",
       "traverse": [
         "pilier_sud"
-      ]
+      ],
+      "_audit_sud": "MONTEE A L'ENVERS, et c'est l'ampoule qui l'a dit. Elle etait a z = -6,900 avec un cap de 180 : la platine se tenait donc 11,3 cm DEVANT la face du pilier (-7,013) et les deux cages pointaient vers -Z, c'est-a-dire DANS le pilier « pilier_sud_1 » (x -5,047..-4,561, z -7,499..-7,013). Le luminaire eclairait l'interieur d'un poteau de beton.\nLe controle de placement ne pouvait pas le voir tant que l'ampoule etait une bille unique posee a l'origine du meuble : elle tombait devant la platine, hors du pilier. Des qu'elle a ete mise LA OU ELLE DOIT ETRE — dans les cages — la penetration est devenue mesurable et le build s'est arrete sur « le sommet (-4,567 ; 2,281 ; -7,127) est dans le solide de pilier_sud_1 ».\nCap 180 -> 0 et z -6,900 -> -7,013 : la platine est desormais A PLAT sur la face du pilier et les cages regardent la salle. C'est le meme defaut que les cinq captures « a 90 degres de leur sujet » du releve de 2020 : un cap pose au jugé, que personne n'avait de moyen de refuter."
     },
     {
-      "_": "Les quatre ampoules, 0,12 m DEVANT leur cage — une source enfermee s'eteint elle-meme.",
+      "_": "LES DEUX AMPOULES DE L'APPLIQUE, et pourquoi il en fallait deux.\nIl n'y en avait qu'UNE, posee a l'origine du meuble et 3 cm sous elle. Or le modele est une applique DOUBLE : son maillage se separe en deux grappes de 1667 et 1670 sommets, avec un vide de X -0,129 a +0,132 entre elles. La bille tombait donc pile dans ce vide — entre les deux cages, accrochee a rien, et 16 cm sous leur centre. Les deux cages restaient noires et une boule blanche flottait devant la platine. C'est le contraire exact de ce que le materiau annonce : « l'ampoule DANS la cage ».\nCOTE MESUREE COMME LA PLUS GRANDE SPHERE INSCRITE, et non comme un centre de boite : on balaie l'interieur de la cage au demi-millimetre et l'on retient le point qui MAXIMISE la distance au sommet le plus proche. Reponse : (+-0,2160 ; +0,1350 ; +0,2650), rayon libre 0,0603 m. Le centre de la boite englobante — (+-0,2153 ; +0,1305 ; +0,2265) — est a 3,9 cm de la, et le controle de placement l'a refuse : a ce point-la un barreau passe a moins de 45 mm. Une cage n'est pas une boite, son centre utile n'est pas le milieu de ses extremes.\nRayon 0,048 : un globe de 96 mm, la cote d'une ampoule d'applique industrielle, avec 12 mm de jeu jusqu'aux barreaux.\nLE PROP PREND LE REPERE DE SON LUMINAIRE : meme `at`, meme `yaw`, meme `repeat`. Les cotes ci-dessous sont donc celles du MODELE, directement, et elles valent pour les quatre appliques quel que soit leur cap — ce qui n'aurait pas ete le cas d'un decalage exprime en monde.",
       "name": "ampoule_sud",
       "at": [
         -4.782,
-        2.12,
-        -6.78
+        2.15,
+        -7.013
       ],
       "yaw": 0.0,
-      "_pose": "Une ampoule portée par sa cage. Elle n'est ni au sol, ni sur le dessus d'un meuble (elle est 12 cm DEVANT la cage, pas posée dessus), ni à moins de 3 cm d'un parement — C-03 la mesure à 22,3 cm du mur sud. C-03 n'a pas de cas « portée par » : c'est l'une des huit ampoules que le recensement de C-06 compte comme flottantes, et elles le sont toutes pour la même raison, écrite ici.",
+      "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "repeat": {
         "count": 4,
@@ -6030,18 +6034,36 @@
       },
       "parts": [
         {
+          "_": "cage cote -X du modele",
           "type": "sphere",
           "material": "ampoule_cage",
           "at": [
-            0,
-            0,
-            0
+            -0.216,
+            0.135,
+            0.265
           ],
-          "radius": 0.035,
-          "sides": 10,
-          "rings": 6
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
+        },
+        {
+          "_": "cage cote +X du modele",
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0.216,
+            0.135,
+            0.265
+          ],
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
         }
-      ]
+      ],
+      "traverse": [
+        "applique_sud"
+      ],
+      "_traverse": "L'AMPOULE EST DANS LA CAGE, et c'est exactement ce que le controle de penetration ne sait pas exprimer : il teste si un sommet est DANS LE SOLIDE de l'autre, et une cage est creuse. Tout objet correctement place a l'interieur d'un autre lui parait donc fautif. C'est le cas que l'audit avait deja repere sous le nom « porte par », et il se declare avec le meme mot que la poutre sur son pilier."
     },
     {
       "name": "suspension_comptoir",
@@ -6061,27 +6083,46 @@
     {
       "name": "ampoule_sas",
       "at": [
-        6.6,
-        2.12,
+        6.72,
+        2.15,
         8.2
       ],
-      "yaw": 0.0,
-      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "yaw": 90.0,
+      "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "parts": [
         {
+          "_": "cage cote -X du modele",
           "type": "sphere",
           "material": "ampoule_cage",
           "at": [
-            0,
-            0,
-            0
+            -0.216,
+            0.135,
+            0.265
           ],
-          "radius": 0.035,
-          "sides": 10,
-          "rings": 6
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
+        },
+        {
+          "_": "cage cote +X du modele",
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0.216,
+            0.135,
+            0.265
+          ],
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
         }
-      ]
+      ],
+      "_": "LES DEUX AMPOULES DE L'APPLIQUE, et pourquoi il en fallait deux.\nIl n'y en avait qu'UNE, posee a l'origine du meuble et 3 cm sous elle. Or le modele est une applique DOUBLE : son maillage se separe en deux grappes de 1667 et 1670 sommets, avec un vide de X -0,129 a +0,132 entre elles. La bille tombait donc pile dans ce vide — entre les deux cages, accrochee a rien, et 16 cm sous leur centre. Les deux cages restaient noires et une boule blanche flottait devant la platine. C'est le contraire exact de ce que le materiau annonce : « l'ampoule DANS la cage ».\nCOTE MESUREE COMME LA PLUS GRANDE SPHERE INSCRITE, et non comme un centre de boite : on balaie l'interieur de la cage au demi-millimetre et l'on retient le point qui MAXIMISE la distance au sommet le plus proche. Reponse : (+-0,2160 ; +0,1350 ; +0,2650), rayon libre 0,0603 m. Le centre de la boite englobante — (+-0,2153 ; +0,1305 ; +0,2265) — est a 3,9 cm de la, et le controle de placement l'a refuse : a ce point-la un barreau passe a moins de 45 mm. Une cage n'est pas une boite, son centre utile n'est pas le milieu de ses extremes.\nRayon 0,048 : un globe de 96 mm, la cote d'une ampoule d'applique industrielle, avec 12 mm de jeu jusqu'aux barreaux.\nLE PROP PREND LE REPERE DE SON LUMINAIRE : meme `at`, meme `yaw`, meme `repeat`. Les cotes ci-dessous sont donc celles du MODELE, directement, et elles valent pour les quatre appliques quel que soit leur cap — ce qui n'aurait pas ete le cas d'un decalage exprime en monde.",
+      "traverse": [
+        "applique_sas"
+      ],
+      "_traverse": "L'AMPOULE EST DANS LA CAGE, et c'est exactement ce que le controle de penetration ne sait pas exprimer : il teste si un sommet est DANS LE SOLIDE de l'autre, et une cage est creuse. Tout objet correctement place a l'interieur d'un autre lui parait donc fautif. C'est le cas que l'audit avait deja repere sous le nom « porte par », et il se declare avec le meme mot que la poutre sur son pilier."
     },
     {
       "_at": "AUDIT P-11. Elle etait POSEE AU-DESSUS de son abat-jour : la masse du luminaire va de 1,545 a 1,60, et l'ampoule commencait a 1,680 — huit centimetres plus haut, entre les deux chaines. Une sphere de prop est posee sur son `at.y` (geo_revolve ecrit sinf(a)*r0 + r0), ce qui n'avait pas ete pris en compte.",
@@ -6104,8 +6145,8 @@
             0
           ],
           "radius": 0.04,
-          "sides": 10,
-          "rings": 6
+          "sides": 16,
+          "rings": 10
         }
       ]
     },
@@ -6143,8 +6184,8 @@
             0
           ],
           "radius": 0.04,
-          "sides": 10,
-          "rings": 6
+          "sides": 16,
+          "rings": 10
         }
       ]
     },
@@ -7587,17 +7628,18 @@
           0.0,
           2.4
         ]
-      }
+      },
+      "_platine": "DEFAUT MESURE, NON CORRIGE ICI — la platine FLOTTE a 23,6 cm du mur.\nIl l'etait aussi sur les quatre appliques du mur sud, ou il A ete corrige : leur cap etait en plus retourne, et les remettre a plat sur la face des piliers (z -7,013) reglait les deux d'un coup. Les deux appliques du couloir n'ont pas cette chance, pour la raison ci-dessous.\nLe commentaire ci-dessus dit « le modele deborde de 0,31 m vers l'arriere » et en tire ce recul. Mesure sur le maillage (3961 sommets) : le modele occupe Z 0,000 a 0,329 en repere LOCAL — il n'y a rien derriere son origine. La platine est le disque de 0,21 m qui occupe Z 0,000 a 0,033 ; le bras et les deux cages sont tous DEVANT. Le meuble ne deborde donc pas vers l'arriere, et la crainte qui a fait reculer l'applique — « a 5,30 la cage sortait de 11 cm dans la rue » — repose sur le meme signe inverse.\nCE QUE CA COUTE, vu sur une capture frontale a 0,80 m : la platine est eclairee des deux cotes par ses propres ampoules et rien ne la relie a la cloison.\nPOURQUOI CE N'EST PAS CORRIGE ICI : ramener l'origine au parement (5,284 et 6,953) fait echouer le controle des sorties — « applique_sas est a 0,33 m AU-DELA du parement interieur (0,13 m dehors) » — alors que le meuble, a ce cap, entre dans le couloir. Le controle et la mise en place ne sont pas d'accord sur le SENS du modele, et trancher demande d'ouvrir la convention de cap de roomgen pour les props « model », ce qui depasse ce lot. La cote a corriger est ecrite ici pour que le prochain n'ait pas a la remesurer : origine x = 5,284 pour l'entree, 6,953 pour le sas."
     },
     {
       "name": "ampoule_entree",
       "at": [
-        5.64,
-        2.12,
+        5.52,
+        2.15,
         5.6
       ],
-      "yaw": 0.0,
-      "_pose": "Même cas que « ampoule_sud » : portée par son luminaire, sans support sous elle.",
+      "yaw": 270.0,
+      "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "repeat": {
         "count": 2,
@@ -7609,18 +7651,37 @@
       },
       "parts": [
         {
+          "_": "cage cote -X du modele",
           "type": "sphere",
           "material": "ampoule_cage",
           "at": [
-            0,
-            0,
-            0
+            -0.216,
+            0.135,
+            0.265
           ],
-          "radius": 0.035,
-          "sides": 10,
-          "rings": 6
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
+        },
+        {
+          "_": "cage cote +X du modele",
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0.216,
+            0.135,
+            0.265
+          ],
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
         }
-      ]
+      ],
+      "_": "LES DEUX AMPOULES DE L'APPLIQUE, et pourquoi il en fallait deux.\nIl n'y en avait qu'UNE, posee a l'origine du meuble et 3 cm sous elle. Or le modele est une applique DOUBLE : son maillage se separe en deux grappes de 1667 et 1670 sommets, avec un vide de X -0,129 a +0,132 entre elles. La bille tombait donc pile dans ce vide — entre les deux cages, accrochee a rien, et 16 cm sous leur centre. Les deux cages restaient noires et une boule blanche flottait devant la platine. C'est le contraire exact de ce que le materiau annonce : « l'ampoule DANS la cage ».\nCOTE MESUREE COMME LA PLUS GRANDE SPHERE INSCRITE, et non comme un centre de boite : on balaie l'interieur de la cage au demi-millimetre et l'on retient le point qui MAXIMISE la distance au sommet le plus proche. Reponse : (+-0,2160 ; +0,1350 ; +0,2650), rayon libre 0,0603 m. Le centre de la boite englobante — (+-0,2153 ; +0,1305 ; +0,2265) — est a 3,9 cm de la, et le controle de placement l'a refuse : a ce point-la un barreau passe a moins de 45 mm. Une cage n'est pas une boite, son centre utile n'est pas le milieu de ses extremes.\nRayon 0,048 : un globe de 96 mm, la cote d'une ampoule d'applique industrielle, avec 12 mm de jeu jusqu'aux barreaux.\nLE PROP PREND LE REPERE DE SON LUMINAIRE : meme `at`, meme `yaw`, meme `repeat`. Les cotes ci-dessous sont donc celles du MODELE, directement, et elles valent pour les quatre appliques quel que soit leur cap — ce qui n'aurait pas ete le cas d'un decalage exprime en monde.",
+      "traverse": [
+        "applique_entree"
+      ],
+      "_traverse": "L'AMPOULE EST DANS LA CAGE, et c'est exactement ce que le controle de penetration ne sait pas exprimer : il teste si un sommet est DANS LE SOLIDE de l'autre, et une cage est creuse. Tout objet correctement place a l'interieur d'un autre lui parait donc fautif. C'est le cas que l'audit avait deja repere sous le nom « porte par », et il se declare avec le meme mot que la poutre sur son pilier."
     },
     {
       "_": "La cage de `applique_technique`, qui n'en avait pas. Meme modele et meme materiau que ses deux soeurs du couloir ; 0,233 m du parement ouest, la cote de `applique_sas`.",
@@ -7639,27 +7700,46 @@
     {
       "name": "ampoule_technique",
       "at": [
-        -7.002,
-        2.26,
+        -6.882,
+        2.29,
         -0.1
       ],
-      "yaw": 0.0,
-      "_pose": "Suit sa cage dans le demi-tour et la descente, à position LOCALE inchangée (z local +0,12, dans la douille — c'est l'assemblage que `RG_OVERLAP_ASSEMBLY` déclare dans tools/roomgen.c). x -6,762 -> -7,002, z -0,210 -> -0,100, y 2,320 -> 2,260.",
+      "yaw": 270.0,
+      "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "parts": [
         {
+          "_": "cage cote -X du modele",
           "type": "sphere",
           "material": "ampoule_cage",
           "at": [
-            0,
-            0,
-            0
+            -0.216,
+            0.135,
+            0.265
           ],
-          "radius": 0.035,
-          "sides": 10,
-          "rings": 6
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
+        },
+        {
+          "_": "cage cote +X du modele",
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0.216,
+            0.135,
+            0.265
+          ],
+          "radius": 0.048,
+          "sides": 16,
+          "rings": 10
         }
-      ]
+      ],
+      "_": "LES DEUX AMPOULES DE L'APPLIQUE, et pourquoi il en fallait deux.\nIl n'y en avait qu'UNE, posee a l'origine du meuble et 3 cm sous elle. Or le modele est une applique DOUBLE : son maillage se separe en deux grappes de 1667 et 1670 sommets, avec un vide de X -0,129 a +0,132 entre elles. La bille tombait donc pile dans ce vide — entre les deux cages, accrochee a rien, et 16 cm sous leur centre. Les deux cages restaient noires et une boule blanche flottait devant la platine. C'est le contraire exact de ce que le materiau annonce : « l'ampoule DANS la cage ».\nCOTE MESUREE COMME LA PLUS GRANDE SPHERE INSCRITE, et non comme un centre de boite : on balaie l'interieur de la cage au demi-millimetre et l'on retient le point qui MAXIMISE la distance au sommet le plus proche. Reponse : (+-0,2160 ; +0,1350 ; +0,2650), rayon libre 0,0603 m. Le centre de la boite englobante — (+-0,2153 ; +0,1305 ; +0,2265) — est a 3,9 cm de la, et le controle de placement l'a refuse : a ce point-la un barreau passe a moins de 45 mm. Une cage n'est pas une boite, son centre utile n'est pas le milieu de ses extremes.\nRayon 0,048 : un globe de 96 mm, la cote d'une ampoule d'applique industrielle, avec 12 mm de jeu jusqu'aux barreaux.\nLE PROP PREND LE REPERE DE SON LUMINAIRE : meme `at`, meme `yaw`, meme `repeat`. Les cotes ci-dessous sont donc celles du MODELE, directement, et elles valent pour les quatre appliques quel que soit leur cap — ce qui n'aurait pas ete le cas d'un decalage exprime en monde.",
+      "traverse": [
+        "applique_technique"
+      ],
+      "_traverse": "L'AMPOULE EST DANS LA CAGE, et c'est exactement ce que le controle de penetration ne sait pas exprimer : il teste si un sommet est DANS LE SOLIDE de l'autre, et une cage est creuse. Tout objet correctement place a l'interieur d'un autre lui parait donc fautif. C'est le cas que l'audit avait deja repere sous le nom « porte par », et il se declare avec le meme mot que la poutre sur son pilier."
     }
   ],
   "_depart": "Le joueur entre par la porte du fond du couloir, descend les neuf metres du couloir et debouche dans le hall par la trouee du pan coupe nord-est — l'unique entree, comme en 2020. La position est celle des PIEDS : le moteur ajoute la hauteur d'oeil.",
