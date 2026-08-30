@@ -1460,6 +1460,45 @@
       "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible."
     },
     {
+      "name": "neon_tube_bleu",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.63,
+        0.8,
+        1.0,
+        1.0
+      ],
+      "roughness": 0.24,
+      "metallic": 0.0,
+      "uvMetres": 0.2,
+      "emissive": [
+        0.26,
+        0.6,
+        1.0
+      ],
+      "emissiveStrength": 1.1,
+      "_": "Le VERRE d'un tube au neon : il ne renvoie presque rien et il emet. La teinte d'emission est exactement celle de la source qu'il porte — un tube dont le verre serait d'une autre couleur que sa lumiere se remarque immediatement."
+    },
+    {
+      "name": "neon_tube_magenta",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        1.0,
+        0.6,
+        0.79,
+        1.0
+      ],
+      "roughness": 0.24,
+      "metallic": 0.0,
+      "uvMetres": 0.2,
+      "emissive": [
+        1.0,
+        0.2,
+        0.58
+      ],
+      "emissiveStrength": 1.1
+    },
+    {
       "name": "cabine_panneau",
       "texture": "painted_panel.jpg",
       "roughness": 0.36,
@@ -1776,34 +1815,15 @@
           0.0,
           3.6
         ]
-      }
-    },
-    {
-      "_": "RECETTE VISUELLE. Le bloc sanitaire n'avait QU'UNE lampe, « plafonnier_toilettes » a (9,80 ; -4,00), et elle est dans le bloc HOMMES. Le bloc FEMMES occupe x 9,00..11,85 et z -2,31..1,44 : son centre est a 4,0 m de cette lampe et son lavabo a 5,06 m, pour une portee de 4,40. La moitie nord des toilettes n'etait donc eclairee par AUCUN luminaire — elle ne vivait que de l'ambiante, ce qui est exactement le defaut que ce fichier reproche ailleurs aux lumieres sans lampe, pris a l'envers : une piece sans lumiere. Le joueur y va : le controle d'accessibilite compte le bloc dans les 118 m2 atteignables. Memes couleur, meme format de pave et meme portee que sa jumelle du sud, posee au centre du bloc et sous le plafond du hall, qui s'arrete a x = 11,10.",
-      "name": "plafonnier_toilettes_nord",
-      "at": [
-        10.2,
-        2.74,
-        -0.45
-      ],
-      "color": [
-        0.86,
-        0.94,
-        0.86
-      ],
-      "intensity": 120.0,
-      "range": 4.4,
-      "panelSize": [
-        0.9,
-        0.45
-      ]
+      },
+      "_c07": "SIGNALE PAR C-07, et la correction n'est pas celle qu'on croit. Une source `plafonnier_toilettes_nord` avait ete ajoutee a (10,20 ; -0,45) parce que la moitie nord du bloc n'etait eclairee par rien — mesure juste a l'epoque. Depuis, le `repeat` ci-dessous en pose DEUX : a z -4,0 et a z -0,4. La source ajoutee tombait donc a 40 cm de celle du repeat, et elle etait la seule des deux a n'avoir ni corps ni `ceilingPanel` — C-07 l'a vue parce qu'elle n'eclairait depuis aucun luminaire. Elle est retiree : ce n'etait pas une lampe manquante, c'etait une lampe en double."
     },
     {
       "name": "neon_mur_ouest",
       "at": [
         -6.95,
         2.58,
-        -4.0
+        -5.6
       ],
       "color": [
         0.26,
@@ -1818,18 +1838,19 @@
         "step": [
           0.0,
           0.0,
-          4.0
+          3.28
         ]
       },
       "_": "Accent froid sur base chaude — donc visible. Sur base froide il disparaissait.",
-      "_poste_19": "SPEC-ATMOSPHERE §3.5 (c). À 2,20 m avec un rayon de 0,55 il lavait LE MUR, deuxième plus grande surface du décor, en bleu : sur `travee_ouest` le mur kaki virait au vert-de-gris, seule lumière froide d'un décor dont le mandat dit « couleurs chaudes ». Remonté à 2,58 il éclaire la corniche (3,10) et le haut du mur, au-dessus de la cimaise (2,42) ; rayon 0,90 parce que c'est un TUBE et pas une ampoule ; intensité 24 parce que le bleu est la seule teinte froide de la salle. L'est reste à 40 : le magenta est chaud."
+      "_poste_19": "SPEC-ATMOSPHERE §3.5 (c). À 2,20 m avec un rayon de 0,55 il lavait LE MUR, deuxième plus grande surface du décor, en bleu : sur `travee_ouest` le mur kaki virait au vert-de-gris, seule lumière froide d'un décor dont le mandat dit « couleurs chaudes ». Remonté à 2,58 il éclaire la corniche (3,10) et le haut du mur, au-dessus de la cimaise (2,42) ; rayon 0,90 parce que c'est un TUBE et pas une ampoule ; intensité 24 parce que le bleu est la seule teinte froide de la salle. L'est reste à 40 : le magenta est chaud.",
+      "_c07": "DEUX CORRECTIONS, dont une que C-07 n'a pas vue parce qu'il ne la cherche pas.\nLe troisieme exemplaire tombait a z 4,0, ou le pan coupe nord-ouest a deja ramene le parement a x -5,653 : il eclairait DEPUIS LA RUE. Son jumeau de l'est tombait a z 6,0, c'est-a-dire dans le couloir d'entree et non sur le mur est. Les trois exemplaires partent maintenant de z -6 et couvrent -6, -2 et +2 — le mur ouest va de -7,135 a 2,539 et le mur est de -7,135 a 3,646 : les six y sont.\nEt ils ont un CORPS. C'etaient six sources sans le moindre triangle : une lumiere coloree qui sortait de rien, sur un mur nu. Voir le prop `tube_neon_ouest`."
     },
     {
       "name": "neon_mur_est",
       "at": [
         6.95,
         2.58,
-        -2.0
+        -5.6
       ],
       "color": [
         1.0,
@@ -1844,15 +1865,16 @@
         "step": [
           0.0,
           0.0,
-          4.0
+          3.28
         ]
       },
-      "_": "Le magenta, l'autre accent. Les deux tubes portent le « néon » que tu demandais ; ce n'est pas à eux d'éclairer la salle."
+      "_": "Le magenta, l'autre accent. Les deux tubes portent le « néon » que tu demandais ; ce n'est pas à eux d'éclairer la salle.",
+      "_c07": "Meme correction que `neon_mur_ouest` : le troisieme exemplaire etait dans le couloir."
     },
     {
       "name": "applique_entree",
       "at": [
-        5.35,
+        5.64,
         2.05,
         5.6
       ],
@@ -1872,7 +1894,8 @@
           2.4
         ]
       },
-      "_": "Les deux appliques du couloir. Elles etaient a z = 3,0 et 5,4 : la premiere tombait dans le hall a 0,6 m du pan coupe retabli, la seconde dans le couloir. Elles sont maintenant toutes deux sur la joue ouest du couloir (parement 5,284), a 5,6 et 8,0."
+      "_": "Les deux appliques du couloir. Elles etaient a z = 3,0 et 5,4 : la premiere tombait dans le hall a 0,6 m du pan coupe retabli, la seconde dans le couloir. Elles sont maintenant toutes deux sur la joue ouest du couloir (parement 5,284), a 5,6 et 8,0.",
+      "_c07": "La source suit sa cage, comme celle de `applique_sas` suit la sienne."
     },
     {
       "_": "La suspension du billard. Le coin ouest recevait 9 d'éclairement du plafonnier d'allée le plus proche, à 3,2 m : la table, les tabourets et le mur y étaient illisibles. Une table de billard a sa propre lampe, basse et chaude — c'est aussi ce qui la désigne comme un endroit où l'on va.",
@@ -1898,7 +1921,7 @@
       "at": [
         -6.9,
         2.25,
-        0.4
+        -0.21
       ],
       "color": [
         1.0,
@@ -1906,7 +1929,8 @@
         0.6
       ],
       "intensity": 38.0,
-      "range": 3.2
+      "range": 3.2,
+      "_c07": "DEPLACEE DE 61 CM, et pour une raison qui vaut d'etre ecrite : C-07 avait cesse de la signaler SANS qu'elle ait gagne un luminaire. Il mesure « de la geometrie de prop a moins de 40 cm », sans verifier a QUI elle appartient — et le troisieme tube au neon, pose sur le meme mur, passait a 31,5 cm d'elle. Un controle qui passe pour la mauvaise raison est pire qu'un controle qui echoue. Elle est donc allee dans la travee libre entre `pilier_ouest_2` et le tube, ou une vraie applique tient."
     },
     {
       "_": "Au-dessus de la borne de classement. C'est la première borne qu'on croise en descendant l'allée, et la seule qui donne envie de rejouer : elle mérite d'être vue avant d'être atteinte. Sans elle, la mesure donnait 28/10/5 de moyenne sur ce cadrage — un rectangle sombre dans le noir.",
@@ -6601,7 +6625,7 @@
       "at": [
         0.0,
         1.58,
-        -7.04
+        -7.03
       ],
       "yaw": 0.0,
       "parts": [
@@ -6648,7 +6672,8 @@
             0.1
           ]
         }
-      ]
+      ],
+      "_c05": "TROUVE PAR C-05, et personne ne l'avait mesure. La planche etait a z -7,040 : sa dalle vivante tombait 3 mm DERRIERE le parement du mur sud et son bandeau lumineux 1 mm derriere. Un panneau d'epaisseur nulle enterre dans un mur n'est pas a moitie visible, il est invisible — et c'est le tableau ou le moteur dessine le classement EN DIRECT. La cause est lisible dans le commentaire ci-dessous, qui place le parement a z -7,10 : il n'y est plus depuis que les moulures ont ete recalees sur le batiment reel, ou il vaut -7,035. A -7,030 la dalle est 7 mm en avant du parement et le bandeau 9 ; le cadre reste en retrait, encastre dans le mur, ce qui est son role."
     },
     {
       "name": "monnayeur",
@@ -7167,6 +7192,162 @@
           "radius": 0.024,
           "height": 0.624,
           "sides": 8
+        }
+      ]
+    },
+    {
+      "_": "LE CORPS DES SIX NEONS, que C-07 reclamait. `neon_mur_ouest` et `neon_mur_est` etaient six sources SANS UN TRIANGLE : de la lumiere bleue et magenta sortant d'un mur nu. Un tube de 1,90 m a 2 cm du parement, a la meme abscisse que sa source — qui reste 12 cm en avant, pour que le verre ne s'eclaire pas lui-meme par l'interieur.",
+      "name": "tube_neon_ouest",
+      "at": [
+        -7.07,
+        2.58,
+        -5.6
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          3.28
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_bleu",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.1,
+            1.9
+          ],
+          "chamfer": 0.012
+        }
+      ],
+      "_trame": "La trame suit les TRAVEES ENTRE PILIERS, pas une regle graduee. Les trois piliers engages de chaque mur long sont a z -3,963, -0,666 et +2,489 et font 0,486 de cote : ils laissent trois travees de 2,83, 2,81 et 2,67 m. Un tube de 1,90 tient dans chacune, centre a -5,60, -2,32 et +0,96 — un pas de 3,28. C'est le controle de recouvrement qui a impose la mesure : a la trame precedente, le troisieme tube traversait `pilier_ouest_2`."
+    },
+    {
+      "name": "tube_neon_est",
+      "at": [
+        7.07,
+        2.58,
+        -5.6
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          3.28
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.1,
+            1.9
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LES DEUX APPLIQUES DU COULOIR, que C-07 a nommees d'une phrase : « s'appelle applique et n'en a pas ». `applique_entree` posait deux sources a 1,24 et 1,38 m du premier triangle. Meme modele et meme materiau que `applique_sas`, en vis-a-vis sur la joue ouest.\nx 5,52 et non 5,30 : le modele deborde de 0,31 m vers l'arriere, et le parement de la joue ouest est a 5,284 — a 5,30 la cage sortait de 11 cm dans la rue, et le controle des sorties l'a dit avant qu'une capture ne le montre. 5,52 est le symetrique exact de `applique_sas`, qui est a 0,233 m de son propre parement.",
+      "name": "applique_entree",
+      "at": [
+        5.52,
+        2.15,
+        5.6
+      ],
+      "yaw": 270.0,
+      "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
+      "material": "applique_cage",
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      }
+    },
+    {
+      "name": "ampoule_entree",
+      "at": [
+        5.64,
+        2.12,
+        5.6
+      ],
+      "yaw": 0.0,
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      },
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.035,
+          "sides": 10,
+          "rings": 6
+        }
+      ]
+    },
+    {
+      "_": "La cage de `applique_technique`, qui n'en avait pas. Meme modele et meme materiau que ses deux soeurs du couloir ; 0,233 m du parement ouest, la cote de `applique_sas`.",
+      "name": "applique_technique",
+      "at": [
+        -6.882,
+        2.35,
+        -0.21
+      ],
+      "yaw": 90.0,
+      "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
+      "material": "applique_cage"
+    },
+    {
+      "name": "ampoule_technique",
+      "at": [
+        -6.762,
+        2.32,
+        -0.21
+      ],
+      "yaw": 0.0,
+      "parts": [
+        {
+          "type": "sphere",
+          "material": "ampoule_cage",
+          "at": [
+            0,
+            0,
+            0
+          ],
+          "radius": 0.035,
+          "sides": 10,
+          "rings": 6
         }
       ]
     }

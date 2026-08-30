@@ -1244,6 +1244,10 @@ typedef struct rg_named_pair {
 static const rg_named_pair RG_OVERLAP_ASSEMBLY[] = {
     { "lavabo_toilettes", "robinet_toilettes",
       "le robinet est monté dans la vasque (216 sommets sur 288)" },
+    /* Les trois cages ajoutees pour C-07 et leurs ampoules : une ampoule est DANS
+     * sa douille, c'est un assemblage et non une penetration. */
+    { "applique_technique", "ampoule_technique",
+      "l'ampoule est dans sa douille" },
     { "suspension_comptoir", "ampoule_comptoir",
       "l'ampoule est dans sa douille (0,00041 m³)" },
     { "suspension_salon", "ampoule_salon",
@@ -2065,9 +2069,6 @@ typedef struct rg_panel_debt {
 } rg_panel_debt;
 
 static const rg_panel_debt RG_PANEL_DEBT[] = {
-    { "tableau_semaine", 0.003f,
-      "le cadre est dans le mur sud et la planche 3 mm derrière son parement ; "
-      "son commentaire place le parement à z −7,10, où il n'est plus (−7,035)" },
 };
 #define RG_PANEL_DEBT_COUNT (sizeof RG_PANEL_DEBT / sizeof RG_PANEL_DEBT[0])
 
@@ -2569,29 +2570,8 @@ typedef struct rg_light_debt {
 } rg_light_debt;
 
 static const rg_light_debt RG_LIGHT_BODY_DEBT[] = {
-    /* Le pavé de faux plafond qui n'en est pas un : la lumière déclare son
-     * `panelSize` — 0,90 x 0,45 — mais pas `ceilingPanel`, si bien que
-     * `parse_ceilings` ne lui pose aucune dalle. Un mot manque. */
-    { "plafonnier_toilettes_nord", 0.73f,
-      "déclare « panelSize » sans « ceilingPanel » : aucune dalle lumineuse ne "
-      "lui est posée. Un seul mot à ajouter" },
 
-    /* Les six tubes. L'audit les dit « peut-être voulus nus — un tube caché
-     * derrière une corniche est un parti pris légitime. Mais il faut alors
-     * l'écrire ». C'est `"nu": true`, et personne ne l'a écrit. */
-    { "neon_mur_ouest_1", 1.26f, "tube bleu du mur ouest, aucun luminaire posé" },
-    { "neon_mur_ouest_2", 1.62f, "tube bleu du mur ouest, aucun luminaire posé" },
-    { "neon_mur_ouest_3", 1.73f, "tube bleu du mur ouest, aucun luminaire posé" },
-    { "neon_mur_est_1",   1.66f, "tube magenta du mur est, aucun luminaire posé" },
-    { "neon_mur_est_2",   0.74f, "tube magenta du mur est, aucun luminaire posé" },
-    { "neon_mur_est_3",   1.85f, "tube magenta du mur est, aucun luminaire posé" },
 
-    /* Les trois qui portent le nom d'un luminaire absent. Ce sont celles que
-     * l'audit désigne : « Deux d'entre elles s'appellent applique, une
-     * plafonnier : trois noms qui promettent un luminaire qui n'existe pas. » */
-    { "applique_entree_1", 1.39f, "s'appelle « applique » et n'en a pas" },
-    { "applique_entree_2", 1.24f, "s'appelle « applique » et n'en a pas" },
-    { "applique_technique", 1.40f, "s'appelle « applique » et n'en a pas" },
 
     /* La plus isolée de la salle : elle éclaire la borne de classement depuis
      * trois mètres de vide. */
