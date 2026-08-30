@@ -695,6 +695,94 @@ static bool bed_windows(const char *path, int rate, double window,
     return true;
 }
 
+/*
+ * LES TROIS JETONS ET LE COUP, tels qu'ILS SONT LIVRÉS.
+ *
+ * `tools/stepgen` vérifie déjà ses propres sorties et refuse d'écrire un
+ * fichier qui ne tient pas. Ce test-ci ne refait pas ce travail : il vérifie que
+ * les fichiers ARRIVENT — le jeu les charge par leur nom, et une chaîne de build
+ * qui cesserait de les produire rendrait les trois gestes muets sans que rien
+ * d'autre ne s'en aperçoive. C'est le même service que `test_footstep_bank`
+ * rend à la banque de pas.
+ *
+ * CE QUE CETTE MESURE NE PEUT PAS DIRE, et c'est le plus important
+ * ---------------------------------------------------------------
+ * Les passages par zéro établissent bien que les deux pièces qui TOMBENT sont
+ * trois fois plus brillantes que le coup de poing — 1 238 et 1 569 contre 407
+ * par seconde. Ils ne disent RIEN du jeton refusé, qui en compte 400, soit
+ * autant que le coup.
+ *
+ * Ce n'est pas une contradiction, c'est la limite de l'instrument : un
+ * croisement de zéro ne pèse rien par l'amplitude, et le compte est donc dominé
+ * par la résonance la plus basse et la plus longue — ici le clapet à 260 Hz,
+ * qui tient tout le fichier. `stepgen` mesure la même chose autrement, par le
+ * rapport de puissance entre deux bandes rapporté à celui d'un bruit blanc, et
+ * là le refus vaut 3,08 contre 0,45 au coup : sept fois plus brillant.
+ *
+ * On n'écrit donc PAS ici que le refus est brillant. On écrit ce que ce
+ * fichier-ci sait établir, et on nomme l'instrument qui sait le reste.
+ */
+static void test_jeton_bank(void)
+{
+    /* Les libellés sont sans accent, et pour une raison bête mais visible : le
+     * remplissage de `%-14s` compte des OCTETS, un « é » en vaut deux, et la
+     * colonne se décale d'un cran sur la seule ligne qui en porte un. */
+    static const struct { const char *file, *quoi; double ms; } jeton[3] = {
+        { "jeton_insere.wav", "dans la fente",  420.0 },
+        { "jeton_refuse.wav", "rendu au clapet", 220.0 },
+        { "jeton_bac.wav",    "dans le godet",  260.0 },
+    };
+
+    double coup_zcr = 0.0;
+    {
+        char p[768];
+        snprintf(p, sizeof p, "%s/assets/sounds/coup_borne.wav", g_dir);
+        if (!wav_measure(p, 48000, NULL, &coup_zcr, NULL)) {
+            CHECK(false, "le coup sur une borne est livré (%s)", p);
+            return;
+        }
+    }
+
+    double zcr[3] = { 0.0, 0.0, 0.0 };
+    for (int i = 0; i < 3; ++i) {
+        char p[768];
+        double peak = 0.0, seconds = 0.0;
+        snprintf(p, sizeof p, "%s/assets/sounds/%s", g_dir, jeton[i].file);
+        if (!wav_measure(p, 48000, &peak, &zcr[i], &seconds)) {
+            CHECK(false, "le jeton « %s » est livré (%s)", jeton[i].quoi, p);
+            continue;
+        }
+        printf("  jeton %-14s : %.0f ms, pic %.2f, %.0f passages/s\n",
+               jeton[i].quoi, seconds * 1000.0, peak, zcr[i]);
+
+        /* La durée est ce qui distingue le plus sûrement un fichier de son
+         * voisin sans rien mesurer d'acoustique : elle attrape un renommage ou
+         * une copie qui livrerait trois fois le même. */
+        CHECK(fabs(seconds * 1000.0 - jeton[i].ms) < 5.0,
+              "« %s » dure %.0f ms, attendu %.0f", jeton[i].file,
+              seconds * 1000.0, jeton[i].ms);
+        /* Un fichier normalisé, donc audible. Un pic effondré voudrait dire
+         * qu'on a livré du silence sous un nom correct. */
+        CHECK(peak > 0.60, "« %s » n'est pas muet (pic %.2f)", jeton[i].file, peak);
+    }
+
+    printf("  coup sur une borne : %.0f passages/s (référence)\n", coup_zcr);
+
+    /*
+     * LES DEUX PIÈCES QUI TOMBENT sont franchement plus brillantes que le
+     * poing, et c'est la seule comparaison que cet instrument autorise. Le
+     * facteur mesuré est de 3,0 et 3,9 ; le seuil est posé à 2,5, sous les deux
+     * et bien au-dessus de 1 — assez pour qu'un timbre retouché ne casse pas le
+     * build, pas assez pour laisser passer un fichier devenu sourd.
+     */
+    for (int i = 0; i < 3; ++i) {
+        if (i == 1) continue;   /* le refus : voir l'en-tête */
+        CHECK(zcr[i] > coup_zcr * 2.5,
+              "« %s » est bien plus brillant que le coup de poing "
+              "(%.0f contre %.0f passages/s)", jeton[i].file, zcr[i], coup_zcr);
+    }
+}
+
 static void test_ambience_beds(void)
 {
     static const struct { const char *file, *what; double max_ratio; } bed[3] = {
@@ -1235,6 +1323,7 @@ int main(int argc, char **argv)
     test_occlusion_attenuates_without_cutting();
     test_zone_reverb();
     test_footstep_bank();
+    test_jeton_bank();
     test_ambience_beds();
     test_room_walk();
     test_ambience_positions();
