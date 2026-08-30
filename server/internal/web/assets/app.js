@@ -146,48 +146,230 @@ async function loadGames() {
             gameSelect.append(option);
         }
 
-        // Le rail de bornes est rempli depuis la même source, pour qu'ajouter un
-        // jeu en base suffise à le faire apparaître sur le site.
-        const rail = document.getElementById("rail-jeux");
-        const seen = new Map();
-        for (const game of data.games) {
-            const key = game.name;
-            if (!seen.has(key)) seen.set(key, []);
-            seen.get(key).push(game.difficulty);
-        }
-        if (seen.size > 0) {
-            rail.replaceChildren();
-            for (const [name, difficulties] of seen) {
-                const item = document.createElement("li");
-                item.className = "cab";
-
-                const marquee = document.createElement("span");
-                marquee.className = "cab-marquee";
-                /* La police d'enseigne n'a pas de glyphe accentué : on retire les
-                   diacritiques pour ce seul libellé, comme le faisait la texture
-                   de marquee d'origine (demineur_font.jpg). */
-                marquee.textContent = name
-                    .normalize("NFD")
-                    .replace(/\p{Diacritic}/gu, "")
-                    .toUpperCase();
-
-                const meta = document.createElement("span");
-                meta.className = "cab-meta";
-                if (difficulties.length === 1 && difficulties[0] === "normal") {
-                    meta.textContent = "nouvelle borne";
-                    item.classList.add("is-new");
-                } else {
-                    meta.textContent = difficulties
-                        .map((d) => (d === "easy" ? "facile" : d === "hard" ? "difficile" : d))
-                        .join(" · ");
-                }
-                item.append(marquee, meta);
-                rail.append(item);
-            }
-        }
     } catch (err) {
         console.error("liste des jeux", err);
         // Le contenu de repli du HTML reste affiché : le site reste lisible.
+    }
+}
+
+/* ==========================================================================
+   Le média du site
+
+   Tout ce qui suit se construit depuis `/media/manifeste.json`, écrit par
+   `tools/site-media.py` en même temps que les fichiers eux-mêmes. C'est ce qui
+   empêche la page de mentir : elle a annoncé « quinze bornes » pendant deux
+   versions parce que le nombre était écrit ici à la main. Il n'y en a plus un
+   seul — la galerie fait la longueur de ce que le script a réellement produit,
+   qui fait lui-même la longueur de ce que la scène déclare.
+   ========================================================================== */
+
+/* Le visiteur qui a demandé moins d'animation. La requête est lue UNE fois et
+   relue si le réglage change en cours de visite. */
+const moinsDAnimation = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+/* La police d'enseigne (sega.ttf) n'a pas de glyphe accentué : on retire les
+   diacritiques pour ce seul libellé, comme le faisait la texture de marquee
+   d'origine (demineur_font.jpg). */
+function sansAccent(texte) {
+    return texte.normalize("NFD").replace(/\p{Diacritic}/gu, "").toUpperCase();
+}
+
+/* --- L'accueil ---------------------------------------------------------- */
+
+/*
+ * Sous `prefers-reduced-motion`, on ne se contente pas de mettre la vidéo en
+ * pause : on lui RETIRE ses sources. Une vidéo en pause a déjà demandé ses
+ * métadonnées, et selon le navigateur une partie du flux ; un visiteur qui a
+ * demandé moins d'animation n'a aucune raison de payer ça pour voir l'affiche
+ * fixe que le CSS lui montre à la place.
+ */
+function reglerAccueil() {
+    const video = document.getElementById("video-salle");
+    if (!video) return;
+
+    // Les sources sont relevées au premier passage, avant d'être éventuellement
+    // retirées : c'est ce qui permet de les remettre si le visiteur change
+    // d'avis en cours de route, sans recharger la page.
+    if (!reglerAccueil.sources) {
+        reglerAccueil.sources = [...video.querySelectorAll("source")].map(
+            (s) => [s.src, s.type]);
+    }
+
+    if (moinsDAnimation.matches) {
+        video.pause();
+        video.replaceChildren();
+        video.removeAttribute("autoplay");
+        video.load();          // annule le téléchargement en cours
+        return;
+    }
+
+    if (video.querySelector("source") === null) {
+        for (const [src, type] of reglerAccueil.sources) {
+            const source = document.createElement("source");
+            source.src = src;
+            source.type = type;
+            video.append(source);
+        }
+        video.load();
+        video.play().catch(() => {
+            /* Un navigateur peut refuser la lecture automatique même en sourdine.
+               L'affiche reste alors visible, ce qui est exactement le repli
+               voulu : on ne force rien et on n'affiche pas d'erreur. */
+        });
+    }
+}
+
+/* --- Les boucles de jeu ------------------------------------------------- */
+
+function construireBoucle(jeu) {
+    const item = document.createElement("li");
+    item.className = "loop";
+
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "loop-bouton";
+
+    const media = document.createElement("div");
+    media.className = "loop-media";
+
+    const affiche = document.createElement("img");
+    affiche.src = jeu.affiche_jpg;
+    affiche.alt = jeu.alt;
+    affiche.width = 640;
+    affiche.height = 360;
+    affiche.loading = "lazy";
+    affiche.decoding = "async";
+
+    // `preload="none"` : les huit boucles ne pèsent RIEN tant qu'on n'en
+    // regarde aucune. C'est ce qui permet d'en mettre huit sur une page.
+    const video = document.createElement("video");
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = "none";
+    video.setAttribute("aria-hidden", "true");
+    for (const [url, type] of [[jeu.webm, "video/webm"], [jeu.mp4, "video/mp4"]]) {
+        const source = document.createElement("source");
+        source.src = url;
+        source.type = type;
+        video.append(source);
+    }
+
+    media.append(affiche, video);
+
+    const corps = document.createElement("div");
+    corps.className = "loop-corps";
+    const nom = document.createElement("span");
+    nom.className = "loop-nom";
+    nom.textContent = sansAccent(jeu.nom);
+    const etat = document.createElement("span");
+    etat.className = "loop-etat";
+    etat.textContent = "lire";
+    corps.append(nom, etat);
+
+    bouton.append(media, corps);
+    // L'étiquette dit le jeu ET l'action : au clavier on entend « Lire la
+    // boucle de Démineur », pas « bouton ».
+    bouton.setAttribute("aria-label", `Lire la boucle de ${jeu.nom}`);
+    item.append(bouton);
+
+    let joue = false;
+    const demarrer = () => {
+        if (joue) return;
+        joue = true;
+        item.classList.add("is-playing");
+        etat.textContent = "en cours";
+        bouton.setAttribute("aria-label", `Arrêter la boucle de ${jeu.nom}`);
+        // `play()` rend une promesse rejetée si le navigateur refuse : on la
+        // rattrape, sinon la console se remplit d'erreurs non gérées.
+        video.play().catch(() => arreter());
+    };
+    const arreter = () => {
+        if (!joue) return;
+        joue = false;
+        item.classList.remove("is-playing");
+        etat.textContent = "lire";
+        bouton.setAttribute("aria-label", `Lire la boucle de ${jeu.nom}`);
+        video.pause();
+    };
+
+    bouton.addEventListener("click", () => (joue ? arreter() : demarrer()));
+
+    // Le survol et le focus ne lancent la boucle que si l'animation est la
+    // bienvenue. Le clic, lui, marche toujours : c'est une demande explicite.
+    const auPassage = (entre) => {
+        if (moinsDAnimation.matches) return;
+        entre ? demarrer() : arreter();
+    };
+    bouton.addEventListener("pointerenter", () => auPassage(true));
+    bouton.addEventListener("pointerleave", () => auPassage(false));
+    bouton.addEventListener("focus", () => auPassage(true));
+    bouton.addEventListener("blur", () => auPassage(false));
+
+    return item;
+}
+
+/* --- Les bornes --------------------------------------------------------- */
+
+function construireBorne(borne) {
+    const item = document.createElement("li");
+    item.className = "cab cab-photo";
+    if (borne.jeu === "leaderboard") item.classList.add("is-new");
+
+    const image = document.createElement("img");
+    image.src = borne.image;
+    image.alt = borne.alt;
+    image.width = 640;
+    image.height = 360;
+    image.loading = "lazy";
+    image.decoding = "async";
+
+    const corps = document.createElement("div");
+    corps.className = "cab-corps";
+
+    const slot = document.createElement("span");
+    slot.className = "cab-slot";
+    slot.textContent = `Borne ${String(borne.slot).padStart(2, "0")}`;
+
+    const marquee = document.createElement("span");
+    marquee.className = "cab-marquee";
+    marquee.textContent = sansAccent(borne.libelle);
+
+    const meta = document.createElement("span");
+    meta.className = "cab-meta";
+    meta.textContent = borne.jeu === "leaderboard" ? "classement" : borne.difficulte;
+
+    corps.append(slot, marquee, meta);
+    item.append(image, corps);
+    return item;
+}
+
+/* --- Chargement --------------------------------------------------------- */
+
+async function chargerMedia() {
+    const galerieJeux = document.getElementById("galerie-jeux");
+    const galerieBornes = document.getElementById("galerie-bornes");
+
+    let manifeste;
+    try {
+        manifeste = await api("/media/manifeste.json");
+    } catch (err) {
+        console.error("manifeste du média", err);
+        if (galerieJeux) {
+            galerieJeux.replaceChildren();
+            const vide = document.createElement("li");
+            vide.className = "loops-attente";
+            vide.textContent = "Les boucles de jeu ne sont pas disponibles.";
+            galerieJeux.append(vide);
+        }
+        return;
+    }
+
+    if (galerieJeux && Array.isArray(manifeste.jeux)) {
+        galerieJeux.replaceChildren(...manifeste.jeux.map(construireBoucle));
+    }
+    if (galerieBornes && Array.isArray(manifeste.bornes)) {
+        galerieBornes.replaceChildren(...manifeste.bornes.map(construireBorne));
     }
 }
 
@@ -339,6 +521,10 @@ async function loadVersion() {
 
 /* -------------------------------------------------------------- démarrage */
 
+reglerAccueil();
+moinsDAnimation.addEventListener("change", reglerAccueil);
+
+chargerMedia();
 loadGames().then(() => loadBoard(0));
 loadAccount();
 loadVersion();
