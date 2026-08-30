@@ -27,6 +27,24 @@ layout(set = 3, binding = 0) uniform Params {
     vec4 u_settings;   /* x : exposition de repli, y : intensité du halo, z : vignettage, w : grain */
     vec4 u_extra;      /* x : temps, y : saturation, z : aberration chromatique,
                         * w : 1 = employer l'exposition mesurée */
+    /*
+     * LA TEINTE ACHETEE. rgb : la couleur ; w : sa force, 0 = inerte.
+     *
+     * Elle existe pour un lot de la vitrine — « PLAQUE DOREE », 320 tickets,
+     * soit une trentaine de parties — qui promettait que « la salle vous passe
+     * en or » et ne faisait rien. Un lot paye qui ne change rien est le pire
+     * defaut qu'un jeu puisse avoir : il apprend au joueur que ses tickets ne
+     * valent rien.
+     *
+     * C'est une correction de teinte et non un filtre pose par-dessus : elle
+     * s'applique APRES le mapping de tons, sur une image deja bornee a [0,1],
+     * donc elle ne peut ni bruler les hautes lumieres ni ecraser les noirs. La
+     * cible est la LUMINANCE multipliee par la teinte — un or monochrome — et
+     * on melange vers elle. A force partielle, les ecrans de bornes gardent
+     * donc leur couleur propre : la salle vire a l'or, les jeux non, et c'est
+     * ce qui la garde jouable.
+     */
+    vec4 u_grade;
 };
 
 /*
@@ -80,6 +98,13 @@ void main()
      * rendu physique brut, néons obligent. */
     float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = mix(vec3(luma), color, u_extra.y);
+
+    /* La teinte achetee, avant le vignettage : elle fait partie de l'image, pas
+     * de l'optique. */
+    if (u_grade.w > 0.0) {
+        float gl = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = mix(color, gl * u_grade.rgb, clamp(u_grade.w, 0.0, 1.0));
+    }
 
     /* Vignettage : concentre le regard vers le centre. */
     float vignette = 1.0 - u_settings.z * r2 * 2.0;

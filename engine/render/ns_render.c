@@ -74,7 +74,8 @@ typedef struct ssao_ubo {
 
 typedef struct bloom_threshold_ubo { float settings[4]; } bloom_threshold_ubo;
 typedef struct bloom_blur_ubo      { float direction[4]; } bloom_blur_ubo;
-typedef struct tonemap_ubo         { float settings[4]; float extra[4]; } tonemap_ubo;
+typedef struct tonemap_ubo         { float settings[4]; float extra[4];
+                                     float grade[4]; } tonemap_ubo;
 typedef struct debug_ubo           { int32_t mode[4]; float scale[4]; } debug_ubo;
 
 typedef struct denoise_ubo { float step[4]; } denoise_ubo;
@@ -2304,6 +2305,10 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         u.extra[1] = rd->settings.saturation;
         u.extra[2] = rd->settings.chromatic_aberration;
         u.extra[3] = exposure_measured ? 1.0f : 0.0f;
+        u.grade[0] = rd->settings.grade_tint[0];
+        u.grade[1] = rd->settings.grade_tint[1];
+        u.grade[2] = rd->settings.grade_tint[2];
+        u.grade[3] = rd->settings.grade_strength;
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
         /* Le niveau de halo le plus flou porte l'essentiel du rayonnement ; les

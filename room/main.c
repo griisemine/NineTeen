@@ -1153,6 +1153,45 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
  * comportement lisible : on sait que quelqu'un est là sans voir à travers le
  * décor.
  */
+/*
+ * LA TEINTE ACHETEE, posee sur les reglages de rendu.
+ *
+ * « PLAQUE DOREE » coute 320 tickets — une trentaine de parties medianes — et
+ * promet que « la salle vous passe en or ». Elle ne faisait rien. Un lot paye
+ * qui ne change rien est le pire defaut qu'un jeu d'arcade puisse avoir : il
+ * apprend au joueur que ses tickets ne valent pas la peine d'etre gagnes, et
+ * c'est toute la boucle qui tombe avec.
+ *
+ * L'OR EST PARTIEL, ET C'EST LA MESURE QUI LE DIT. A pleine force la salle
+ * devient monochrome et les dix-neuf ecrans avec elle : on ne distingue plus
+ * une partie de demineur d'une partie de snake, et le lot rend le jeu MOINS
+ * jouable. A 0,38 la salle vire franchement — moquette, murs, bois — et les
+ * dalles, qui sont les surfaces les plus saturees et les plus lumineuses du
+ * champ, gardent leur couleur propre. On voit qu'on a paye, on voit encore ce
+ * qu'on joue.
+ *
+ * La teinte est un or CHAUD et non un jaune pur : (1,00 ; 0,78 ; 0,34) est la
+ * chromaticite d'un laiton poli, celle du bandeau du monnayeur. Un jaune pur
+ * aurait donne un filtre sepia, ce qui est l'inverse d'une recompense.
+ *
+ * Appelee juste avant CHAQUE envoi de reglages, y compris apres un changement
+ * de palier : `ns_render_settings_defaults` remet la structure a zero, donc
+ * poser la teinte une seule fois a l'ouverture la ferait disparaitre au premier
+ * F7. C'est pour ca que c'est une fonction et non une affectation.
+ */
+static void appliquer_teinte_achetee(ns_render_settings *rs)
+{
+    const room_eco *e = room_eco_salle();
+    if (e && room_eco_lot_acquis(e, ROOM_ECO_LOT_DOREE)) {
+        rs->grade_tint[0] = 1.00f;
+        rs->grade_tint[1] = 0.78f;
+        rs->grade_tint[2] = 0.34f;
+        rs->grade_strength = 0.38f;
+    } else {
+        rs->grade_strength = 0.0f;
+    }
+}
+
 static void draw_presence(ns_sprite *s, const room_presence *pr,
                           const ns_camera *cam, float aspect)
 {
@@ -1952,6 +1991,30 @@ int main(int argc, char **argv)
     room_eco_salle_ouvrir();
 
     /*
+     * LA TEINTE ACHETEE, POSEE ICI ET PAS AVANT — et c'est une mesure qui l'a
+     * dit. Je l'avais mise a la creation du renderer : la sonde y rendait
+     * « eco=0x1008e8660 acquis=0 » a 0,084 s, c'est-a-dire un portefeuille pas
+     * encore lu. Une capture d'un joueur qui POSSEDE la plaque doree sortait
+     * identique au dixieme de niveau pres a celle d'un joueur qui ne l'a pas.
+     * L'ordre est le seul defaut, et il ne se voit pas a la lecture.
+     *
+     * `teinte_active` suit ensuite l'etat d'une image a l'autre : l'envoi des
+     * reglages n'a lieu qu'au CHANGEMENT — a l'achat, dans la salle, sans
+     * relancer — parce que `ns_renderer_set_settings` reconstruit les cibles
+     * hors ecran et qu'un appel par image les rebatirait soixante fois par
+     * seconde.
+     */
+    bool teinte_active = false;
+    {
+        const room_eco *e0 = room_eco_salle();
+        teinte_active = e0 && room_eco_lot_acquis(e0, ROOM_ECO_LOT_DOREE);
+        if (teinte_active) {
+            appliquer_teinte_achetee(&rs);
+            ns_renderer_set_settings(rhi, renderer, &rs);
+        }
+    }
+
+    /*
      * Le classement en ligne, ACTIVABLE et jamais bloquant.
      *
      * Sans URL — le défaut — aucune socket n'est ouverte et le fil ne démarre
@@ -2722,6 +2785,18 @@ play_at_done: ;
     }
 
     while (running) {
+        /* La teinte achetee suit l'etat du portefeuille, et l'envoi n'a lieu
+         * qu'au changement : voir le commentaire a l'ouverture de l'economie. */
+        {
+            const room_eco *ec = room_eco_salle();
+            const bool veut = ec && room_eco_lot_acquis(ec, ROOM_ECO_LOT_DOREE);
+            if (veut != teinte_active) {
+                teinte_active = veut;
+                appliquer_teinte_achetee(&rs);
+                ns_renderer_set_settings(rhi, renderer, &rs);
+            }
+        }
+
         /*
          * CE QUE CETTE IMAGE A REÇU — clavier ET manette, dans les mêmes bits.
          *
@@ -2923,6 +2998,7 @@ play_at_done: ;
                     rs.render_scale = keep_scale;
                     if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
                     if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
+                    appliquer_teinte_achetee(&rs);
                     ns_renderer_set_settings(rhi, renderer, &rs);
                     settings_banner = 2.6f;
                     NS_INFO("qualité : %s", quality_name(rs.quality));
@@ -2937,6 +3013,7 @@ play_at_done: ;
                     float sc = rs.render_scale + 0.1f;
                     if (sc > 1.005f) sc = 0.5f;
                     rs.render_scale = sc;
+                    appliquer_teinte_achetee(&rs);
                     ns_renderer_set_settings(rhi, renderer, &rs);
                     settings_banner = 2.6f;
                     NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
@@ -3261,6 +3338,7 @@ play_at_done: ;
             menu.render_dirty = false;
             if (opt.exposure > 0.0f) rs.exposure = opt.exposure;
             if (opt.particles >= 0.0f) rs.particle_density = opt.particles;
+            appliquer_teinte_achetee(&rs);
             ns_renderer_set_settings(rhi, renderer, &rs);
             NS_INFO("réglages : %s, échelle %.2f", quality_name(rs.quality),
                     (double)rs.render_scale);

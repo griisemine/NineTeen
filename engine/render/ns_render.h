@@ -61,6 +61,16 @@ typedef struct ns_render_settings {
     float              vignette;
     float              grain;
     float              saturation;
+
+    /*
+     * LA TEINTE ACHETEE — voir `tonemap.frag`. Force 0, le defaut, la rend
+     * INERTE : aucune salle ne vire a l'or sans que quelqu'un l'ait payee.
+     * Elle est ici et non dans `room/` parce que c'est le renderer qui possede
+     * le mapping de tons, et qu'une correction de teinte appliquee ailleurs
+     * serait un second etage de traitement sur une image deja finie.
+     */
+    float              grade_tint[3];
+    float              grade_strength;
     float              chromatic_aberration;
     float              fog_density;
     float              fog_color[3];
