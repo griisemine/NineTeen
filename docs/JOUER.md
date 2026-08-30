@@ -525,22 +525,95 @@ observable — une partie sans secret de serveur n'est de toute façon pas mise 
 file — et il est là pour que la garantie soit exprimable dès maintenant plutôt
 que rajoutée après coup.
 
-## Installer, ou fabriquer un paquet
+## Installer
 
 Le jeu se lance très bien depuis l'arbre de build — c'est ce que fait tout le
-reste de cette page. Pour le donner à quelqu'un, il faut un paquet :
+reste de cette page. Pour le donner à quelqu'un, on prend le paquet de la page
+des versions, et **il n'y a rien à déballer** :
+
+| Système | Fichier | Ce qu'on en fait |
+|---|---|---|
+| macOS 11+ | `Nineteen-*-macOS-universal.dmg` | Ouvrir, glisser **Nineteen** sur **Applications**. Universel : Apple Silicon et Intel. |
+| Linux | `Nineteen-*-x86_64.AppImage` | `chmod +x`, puis lancer. Rien à installer. |
+| Debian / Ubuntu | `nineteen_*_amd64.deb` | `sudo apt install ./nineteen_*_amd64.deb` — le jeu apparaît dans le menu. |
+| Linux, sans installer | `nineteen-*-linux-x86_64.tar.gz` | Déballer, lancer `bin/nineteen`. |
+| Windows 10/11 | `Nineteen-*-windows-x64.exe` | Double-clic. **Aucun droit administrateur** : le jeu s'installe dans votre profil, avec un raccourci au menu Démarrer et un désinstalleur. |
+
+Jusqu'en 17.0.0 les trois plateformes recevaient un ZIP ou un TGZ. Il fallait
+deviner quel fichier lancer dans quel sous-répertoire, macOS refusait un binaire
+nu sorti d'une archive, et rien n'apparaissait dans aucun menu. Une archive
+autonome n'est pas un installateur.
+
+### Où va quoi, et pourquoi ce n'est pas au même endroit partout
+
+`ns_paths` cherche les assets dans **le répertoire que `SDL_GetBasePath()`
+rend** — et ce répertoire n'est pas le même selon la forme du paquet :
+
+| | binaire | assets et `nineteen.env` |
+|---|---|---|
+| macOS | `Nineteen.app/Contents/MacOS/nineteen` | `Nineteen.app/Contents/Resources/` |
+| Linux | `/usr/lib/nineteen/nineteen`, avec `/usr/bin/nineteen` en lien | `/usr/lib/nineteen/` |
+| Windows | `bin\nineteen.exe` | `bin\` |
+
+Sur macOS ce n'est **pas** `Contents/MacOS/`, contrairement au réflexe :
+`SDL_sysfilesystem.m:51` dit que `SDL_GetBasePath()` rend le répertoire
+`Resources` dès qu'il y a un `Info.plist`. Poser les assets à côté de
+l'exécutable les mettrait là où `ns_paths` ne regarde jamais — et le défaut ne
+se verrait **que** depuis le `.dmg`, parce que sur la machine de construction
+`NINETEEN_BUILD_ASSET_DIR` sauverait le lancement.
+
+Sur Linux ce n'est pas `bin/` non plus : un `.deb` s'installe sous `/usr`, et
+`bin/assets` y donnerait `/usr/bin/assets/`, un répertoire de données dans le
+répertoire du `PATH`. Le binaire vit donc dans `/usr/lib/nineteen/` avec ses
+assets, et `/usr/bin/nineteen` est un lien symbolique relatif vers lui — SDL
+résout `/proc/self/exe`, qui suit le lien.
+
+### Fabriquer les paquets soi-même
 
 ```sh
-cmake --preset linux-x64 -DCMAKE_BUILD_TYPE=Release
-cmake --build --preset linux-x64
-cpack --config build/linux-x64/CPackConfig.cmake -B build/linux-x64/paquets
+# macOS : le .dmg
+cmake --preset macos-universal -DCMAKE_BUILD_TYPE=Release
+cmake --build --preset macos-universal
+cpack --config build/macos-universal/CPackConfig.cmake -B build/macos-universal/paquets
+
+# Windows : l'installateur .exe (demande NSIS dans le PATH)
+cmake --preset windows-x64 -DCMAKE_BUILD_TYPE=Release
+cmake --build --preset windows-x64
+cpack --config build/windows-x64/CPackConfig.cmake -B build/windows-x64/paquets
+
+# Linux : .tar.gz, .deb et AppImage, DANS un conteneur Ubuntu 22.04
+docker build -f packaging/linux/Dockerfile.build -t nineteen-build:22.04 packaging/linux
+docker run --rm -v "$PWD:/src" -w /src nineteen-build:22.04 sh packaging/linux/paquets.sh
 ```
 
-Une archive par plateforme, autonome : `bin/nineteen` et `bin/assets/` côte à
-côte, ce qui est exactement la disposition que `ns_paths` cherche. Déballer et
-lancer, rien à installer, rien à configurer.
+Le conteneur n'est pas un caprice. Un binaire lié à la glibc ne tourne que sur
+une glibc **au moins aussi récente** : les symboles versionnés sont résolus au
+chargement, sans repli. Construite sur une base récente, l'AppImage exigerait
+`GLIBC_2.39` sans l'annoncer et refuserait de démarrer sur Debian 12 ou
+Ubuntu 22.04 LTS. Mesuré dans le conteneur : glibc 2.35, et un binaire qui
+n'exige que `GLIBC_2.34` — tout ce qui est sorti depuis octobre 2021.
 
-**Ce que ça pèse : 153 Mio compressés.** C'était 421 : les cartes de normales et
+`ldd` sur ce binaire ne trouve que `libm` et `libc` : SDL3 est lié
+statiquement, et ce qu'il utilise du système (X11, Wayland, ALSA, PulseAudio,
+Vulkan) il l'ouvre par `dlopen` au démarrage. C'est pour cette raison que le
+`.deb` déclare `Depends: libc6 (>= 2.34)` et **rien d'autre** : `dpkg-shlibdeps`
+lit les `NEEDED` de l'ELF, et un `dlopen` n'y figure pas. Ces
+bibliothèques-là sont en `Recommends`, et le jeu dit laquelle manque à
+l'exécution plutôt que de refuser de s'installer.
+
+### Ce que ça pèse, mesuré
+
+| Paquet | Taille |
+|---|---|
+| `.dmg` (macOS, universel) | 177 001 095 octets — pour 237,1 Mio de `Nineteen.app`, dont 227,6 Mio d'assets |
+| `.AppImage` | 171 432 456 octets |
+| `.deb` | 174 788 720 octets |
+| `.tar.gz` | 174 788 622 octets |
+
+Les chiffres Linux sont ceux du paquet **aarch64** construit sur la machine de
+développement ; le x86_64 sort de la CI, avec la même image et le même script.
+
+**Le contenu, lui, pèse 153 Mio compressés.** C'était 421 : les cartes de normales et
 d'ORM étaient écrites à la résolution de leur texture source, quelle qu'elle soit
 — jusqu'à 3840 x 2160 pour l'image d'un écran de jeu. Elles sont désormais
 plafonnées à 1024 de côté (`NINETEEN_MAX_MAP`), ce qui divise ces deux familles
@@ -559,17 +632,50 @@ Mac Apple Silicon. Le moteur le **vérifie** avant de créer la texture et le di
 s'il manque, plutôt que d'afficher du noir sans message. `-DNINETEEN_BC_MAPS=OFF`
 redonne des PNG si un jour une plateforme visée ne suit pas.
 
-**Vérifié plutôt qu'affirmé** : l'archive a été déballée et le jeu lancé depuis
-l'arbre déballé, **avec les assets du build masqués** pour qu'aucun montage de
-développement ne puisse le sauver. C'est ce test qui a montré que la règle
+### Vérifié plutôt qu'affirmé
+
+Chaque paquet a été **ouvert et lancé**, pas seulement produit.
+
+- Le `.dmg` a été monté, `Nineteen.app` copiée dans `/Applications`, **l'arbre
+  de build renommé** pour qu'aucun montage de développement ne puisse la sauver,
+  puis l'application lancée : elle a chargé
+  `/Applications/Nineteen.app/Contents/Resources/assets/scene/salle.gltf`,
+  438 426 sommets, et écrit sa capture. Relancée aussi par `open`, donc par
+  LaunchServices, donc par le chemin du double-clic.
+- L'AppImage a été relancée depuis le fichier fini : elle trouve ses assets et
+  son `nineteen.env` dans l'image montée.
+- Le `.deb` a été installé par `apt` dans un `ubuntu:22.04` nu, lancé depuis le
+  `PATH` hors de tout arbre de build, puis désinstallé sans rien laisser.
+- Le `.tar.gz` a été déballé dans le même conteneur et lancé par `bin/nineteen`,
+  c'est-à-dire par le lien relatif.
+
+C'est ce genre d'essai qui avait montré, à la version précédente, que la règle
 d'installation n'emportait que le binaire : `cmake --install` produisait un
 arbre sans une seule texture, et personne ne s'en apercevait parce que personne
 n'installait.
 
-La signature est affaire de certificats, donc de qui publie : le workflow
+**Ce qui n'est PAS vérifié, et il faut le savoir :** l'installateur Windows. La
+machine de développement est un Mac sans `makensis`, sans mingw-w64 et sans
+wine ; `cpack -G NSIS` s'y arrête avant même de lire la configuration. Ce qui
+est vérifié depuis le Mac, c'est la **configuration** — le test `paquets`
+(`packaging/verifier.cmake`) relit les réglages des quatre générateurs, vérifie
+que les fichiers désignés existent, que l'icône a bien l'en-tête d'un `.ico` et
+que la licence affichée par NSIS ne contient pas un octet hors ASCII. Le `.exe`
+lui-même sort du job Windows de la CI, qui l'installe et le lance.
+
+### La signature
+
+Affaire de certificats, donc de qui publie : le workflow
 `.github/workflows/release.yml` signe si les secrets existent et produit des
 paquets **non signés** sinon, en le disant. Un paquet non signé se télécharge et
 se lance, mais macOS le met en quarantaine et Windows affiche SmartScreen.
+
+- macOS : clic droit sur **Nineteen** → **Ouvrir**, ou
+  `xattr -dr com.apple.quarantine /Applications/Nineteen.app`.
+- Windows : **Informations complémentaires** → **Exécuter quand même**.
+
+Aucune de ces étapes de signature n'a jamais été exécutée : il n'existe pas de
+certificat pour ce projet.
 
 ## Régler la fluidité
 
