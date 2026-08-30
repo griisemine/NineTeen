@@ -250,33 +250,66 @@ static void draw_poi_prompt(ns_sprite *s, const room_hud_state *st)
         }
     }
 
+    /* CE QUE LE LOT CHANGE. Calcule ICI, avant la mise en page, parce qu'il
+     * fait partie de l'encombrement : c'est lui qui decide de la hauteur de la
+     * plaque, et c'est en le dessinant SOUS une plaque deja posee qu'il allait
+     * cogner le bandeau d'aide du bas. */
+    char sub[80];
+    sub[0] = '\0';
+    if (st->poi == NS_POI_PRIZES) {
+        const room_eco_lot l = room_eco_lot_en_vue(st->eco);
+        if (l != ROOM_ECO_LOT_COUNT) {
+            SDL_snprintf(sub, sizeof sub, "%s", room_eco_lot_quoi(l));
+            for (char *p = sub; *p; ++p) *p = (char)SDL_toupper((unsigned char)*p);
+        }
+    }
+
     const float scale = 3.0f;
+    const float sub_s = 2.0f;
     const float key_w = ns_sprite_text_width("E", scale);
     const float txt_w = ns_sprite_text_width(line, scale);
+    const float sub_w = sub[0] ? ns_sprite_text_width(sub, sub_s) : 0.0f;
     const float gap   = 14.0f;
     const float total = key_w + gap * 2.0f + txt_w;
-    const float h     = ns_sprite_text_height(scale) + 22.0f;
-    const float y     = ROOM_HUD_H * 0.76f;
-    const float x     = (ROOM_HUD_W - total) * 0.5f;
+    const float ligne = ns_sprite_text_height(scale);
+    const float sub_h = sub[0] ? (ns_sprite_text_height(sub_s) + 8.0f) : 0.0f;
+    const float larg  = ns_maxf(total + 44.0f, sub_w + 44.0f);
+    const float haut  = ligne + 22.0f + sub_h;
 
-    panel(s, x - 22.0f, y - 11.0f, total + 44.0f, h);
-    ns_sprite_rect(s, x - 7.0f, y - 5.0f, key_w + 14.0f,
-                   ns_sprite_text_height(scale) + 10.0f, C_KEY);
+    /*
+     * L'INVITE EST ANCREE EN BAS, ET CE N'EST PAS UN GOUT.
+     *
+     * Elle etait a 0,76 de la hauteur, avec l'effet du lot dessine SOUS elle.
+     * Mesure sur une capture prise a 1,4 m de la vitrine — c'est-a-dire a la
+     * distance ou l'on est quand on achete : la plaque tombait au milieu de la
+     * liste des lots et en cachait les deux dernieres lignes. Une invite qui
+     * annonce « PLAQUE DOREE » en couvrant la ligne « PLAQUE DOREE » de la
+     * liste demande de choisir sans voir.
+     *
+     * Deux corrections, et la seconde vient de la premiere. D'abord l'ancrage :
+     * le bas de la plaque se cale au-dessus du bandeau d'aide, quelle que soit
+     * sa hauteur. Ensuite l'effet du lot, qui REJOINT la plaque au lieu de
+     * pendre dessous — descendue au ras du bandeau, une sous-ligne exterieure
+     * s'imprimait par-dessus, ce que la premiere version de ce correctif a
+     * effectivement produit et ce qu'une capture a montre.
+     *
+     * Ce que ca deplace : le message d'economie etait juste dessous, a 0,86. Il
+     * monte a 0,19, sous le solde. C'est sa vraie place — « +14 TICKETS » est
+     * une NOTIFICATION, elle appartient au coin ou l'on suit son compte, pas au
+     * bas de l'ecran ou l'on agit.
+     */
+    const float y = ROOM_HUD_H * 0.925f - haut;
+    const float x = (ROOM_HUD_W - total) * 0.5f;
+
+    panel(s, (ROOM_HUD_W - larg) * 0.5f, y - 11.0f, larg, haut);
+    ns_sprite_rect(s, x - 7.0f, y - 5.0f, key_w + 14.0f, ligne + 10.0f, C_KEY);
     static const float dark[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
     ns_sprite_text(s, x, y, scale, dark, "E");
     ns_sprite_text(s, x + key_w + gap * 2.0f, y, scale, C_TEXT, line);
 
-    /* CE QUE LE LOT CHANGE, sous l'invite. Un prix sans effet annoncé ne se
-     * décide pas : c'est ce qui distingue une vitrine d'un distributeur. */
-    if (st->poi == NS_POI_PRIZES) {
-        const room_eco_lot l = room_eco_lot_en_vue(st->eco);
-        if (l != ROOM_ECO_LOT_COUNT) {
-            char sub[80];
-            SDL_snprintf(sub, sizeof sub, "%s", room_eco_lot_quoi(l));
-            for (char *p = sub; *p; ++p) *p = (char)SDL_toupper((unsigned char)*p);
-            centred(s, ROOM_HUD_W * 0.5f, y + h + 6.0f, 2.0f, C_DIM, sub);
-        }
-    }
+    /* Un prix sans effet annonce ne se decide pas : c'est ce qui distingue une
+     * vitrine d'un distributeur. */
+    if (sub[0]) centred(s, ROOM_HUD_W * 0.5f, y + ligne + 12.0f, sub_s, C_DIM, sub);
 }
 
 /*
@@ -295,9 +328,12 @@ static void draw_eco_message(ns_sprite *s, const room_hud_state *st)
     const float w = ns_sprite_text_width(st->eco_message, scale) + 44.0f;
     const float h = ns_sprite_text_height(scale) + 22.0f;
     const float x = (ROOM_HUD_W - w) * 0.5f;
-    /* 0,86 de la hauteur : sous l'invite des comptoirs (0,76) et sous le
-     * bandeau de réglages, qui se colle au bord bas. */
-    const float y = ROOM_HUD_H * 0.86f;
+    /* 0,19 de la hauteur : SOUS LE SOLDE, et non plus au bas de l'écran.
+     * « +14 TICKETS » dit ce que le compteur du coin vient de faire ; le mettre
+     * à l'autre bout de l'image obligeait à regarder deux endroits pour une
+     * seule information. Et le bas est désormais pris par l'invite des
+     * comptoirs, qui a dû descendre pour cesser de couvrir la vitrine. */
+    const float y = ROOM_HUD_H * 0.19f;
 
     const float bg[4] = { C_PANEL[0], C_PANEL[1], C_PANEL[2], C_PANEL[3] * a };
     const float fg[4] = { C_GOLD[0], C_GOLD[1], C_GOLD[2], a };

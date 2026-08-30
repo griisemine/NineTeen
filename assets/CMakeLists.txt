@@ -482,12 +482,23 @@ endforeach()
 # vitrine a lots qui affiche un avertissement d'epilepsie apprend au joueur que
 # ce meuble ne le concerne pas. L'avertissement reste accroche au mur, ou il
 # doit etre.
-set(POSTER_MOTIFS tournoi reglement jetons concert plan attention orbite records lots)
+#
+# `change` non plus n'est pas une affiche murale : c'est la facade du meuble
+# `monnayeur`, celui par lequel la boucle COMMENCE. Elle portait un aplat de
+# `jaune` — un rectangle de couleur, sans un mot. Vu en capture : le premier
+# objet eclaire qu'on rencontre en sortant du couloir, celui qui donne les
+# jetons sans lesquels rien ne se joue, n'annoncait ni son nom ni son tarif. Un
+# meuble muet n'est pas neutre, il est invisible. Panneau de 0,52 x 0,34 m, soit
+# 1,53:1 : paysage lui aussi.
+set(POSTER_MOTIFS tournoi reglement jetons concert plan attention orbite records
+                  lots change)
 foreach(motif IN LISTS POSTER_MOTIFS)
     set(_png "${GEN}/sideart/affiche_${motif}.png")
     set(_dim --width=820 --height=1024)
     if(motif STREQUAL "lots")
         set(_dim --width=1024 --height=480)
+    elseif(motif STREQUAL "change")
+        set(_dim --width=1024 --height=670)
     endif()
     add_custom_command(
         OUTPUT  "${_png}"
@@ -710,7 +721,11 @@ list(LENGTH _cc0_textures  _n_cc0)
 # Ce controle a fait exactement son travail sur ces deux lots : chaque planche
 # ajoutee sans le compte a arrete le build (« 92 pour 91 presentes »). C'est le
 # comportement voulu.
-math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 27")
+#   +1 `affiche_change`, la dixieme planche, qui est la facade du monnayeur.
+#   Elle ne remplace aucun fichier non plus : le meuble portait le materiau
+#   `jaune`, un aplat sans texture, qui reste employe ailleurs dans la salle.
+#
+math(EXPR ROOM_TEXTURE_COUNT "${_n_room} + ${_n_cc0} + 28")
 
 add_custom_command(
     OUTPUT  "${GEN}/scene/salle.gltf" "${GEN}/scene/salle.bin"

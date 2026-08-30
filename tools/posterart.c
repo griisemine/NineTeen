@@ -1573,6 +1573,62 @@ static void motif_lots(toile *t)
 }
 
 /* ==========================================================================
+ * MOTIF 10 — CHANGE. La face du monnayeur, lue dans l'économie.
+ * ==========================================================================
+ * Comme la vitrine, ce n'est pas une affiche : c'est la façade du meuble
+ * `monnayeur`, celui par lequel la boucle COMMENCE. Elle portait un aplat de
+ * `jaune` — un rectangle de couleur, sans un mot. Vu en capture à 1,7 m : le
+ * premier objet éclairé qu'on rencontre en sortant du couloir, celui qui donne
+ * les jetons sans lesquels rien ne se joue, ne dit ni son nom ni son tarif. Un
+ * meuble muet n'est pas neutre, il est invisible : on ne s'approche pas de ce
+ * qui n'annonce rien.
+ *
+ * ELLE EST EN PAYSAGE, comme la face de la vitrine et pour la même raison : le
+ * panneau du meuble fait 0,52 x 0,34 m, soit 1,53:1. Une planche portrait y
+ * serait étirée de 234 %.
+ *
+ * TROIS LIGNES, ET PAS UNE DE PLUS. Le nom, le tarif, la promesse. Les trois
+ * chiffres viennent de `room_bareme.h` : le coût d'une partie, le plancher
+ * d'accueil que le monnayeur complète gratuitement, et le taux de change des
+ * tickets. Aucun n'est écrit ici — c'est la règle que les cinq autres planches
+ * chiffrées suivent déjà, et c'est ce qui interdit à la façade d'annoncer un
+ * tarif que la caisse n'applique pas.
+ */
+static void motif_change(toile *t)
+{
+    const float W = (float)t->w, H = (float)t->h;
+    const float haut[3] = { 0.070f, 0.048f, 0.010f };
+    const float bas[3]  = { 0.024f, 0.014f, 0.004f };
+    fond_degrade(t, haut, bas);
+
+    /* Le halo, comme sur la vitrine : un distributeur s'éclaire de l'intérieur,
+     * sinon c'est une caisse peinte. */
+    for (int i = 26; i > 0; --i) {
+        p_anneau(t, W * 0.5f, H * 0.30f, 0.0f, W * 0.40f * (float)i / 26.0f,
+                 C_AMBRE, 0.007f);
+    }
+
+    p_cadre(t, 0.0f, 0.0f, W, H, H * 0.036f, C_AMBRE, 1.0f);
+
+    const float mx = W * 0.5f;
+    p_titre_c(t, "JETONS", mx, H * 0.085f,
+              cellule("JETONS", W * 0.52f, H * 0.240f), C_AMBRE, C_ENCRE);
+
+    char l[64];
+    snprintf(l, sizeof l, "%d JETON = 1 PARTIE", ROOM_ECO_COUT_PARTIE);
+    p_texte_c(t, l, mx, H * 0.430f,
+              cellule(l, W * 0.80f, H * 0.115f), C_BLANC, 1.0f);
+
+    snprintf(l, sizeof l, "SERVIS JUSQU'A %d, GRATUITS", ROOM_ECO_PLANCHER_ACCUEIL);
+    p_texte_c(t, l, mx, H * 0.610f,
+              cellule(l, W * 0.86f, H * 0.098f), C_CYAN, 1.0f);
+
+    snprintf(l, sizeof l, "OU %d TICKETS = 1 JETON", ROOM_ECO_TICKETS_PAR_JETON);
+    p_texte_c(t, l, mx, H * 0.780f,
+              cellule(l, W * 0.86f, H * 0.098f), C_CYAN, 1.0f);
+}
+
+/* ==========================================================================
  * Le programme
  * ========================================================================== */
 
@@ -1591,6 +1647,7 @@ static const motif_def g_motifs[] = {
     { "orbite",    "la reclame d'un jeu invente"              },
     { "records",   "le tableau des meilleurs scores"          },
     { "lots",      "la face de la vitrine, lue dans l'economie" },
+    { "change",    "la face du monnayeur, lue dans l'economie" },
 };
 
 static void ecrire(const toile *t, const char *chemin)
@@ -1656,6 +1713,7 @@ int main(int argc, char **argv)
     else if (strcmp(motif, "orbite") == 0)    motif_orbite(&t);
     else if (strcmp(motif, "records") == 0)   motif_records(&t);
     else if (strcmp(motif, "lots") == 0)      motif_lots(&t);
+    else if (strcmp(motif, "change") == 0)    motif_change(&t);
     else tool_fatalf("motif inconnu : « %s »", motif);
 
     finition(&t);

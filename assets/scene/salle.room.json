@@ -1183,6 +1183,19 @@
       "fit": true
     },
     {
+      "name": "affiche_change",
+      "_": "La FACADE DU MONNAYEUR, dessinee par `tools/posterart --motif=change` et non peinte : elle lit `room/room_bareme.h` a la construction, donc le tarif affiche sur le meuble est celui que la caisse applique. Le panneau portait `jaune`, un aplat sans un mot — le premier objet eclaire qu'on rencontre en sortant du couloir n'annoncait ni son nom ni son prix.",
+      "texture": "affiche_change.png",
+      "roughness": 0.46,
+      "fit": true,
+      "emissive": [
+        1.0,
+        0.86,
+        0.6
+      ],
+      "emissiveStrength": 0.55
+    },
+    {
       "name": "jaune",
       "texture": "painted_panel.jpg",
       "roughness": 0.38,
@@ -6936,9 +6949,9 @@
           "chamfer": 0.014
         },
         {
-          "_": "la facade, face locale +z",
+          "_": "la facade, face locale +z. Elle portait `jaune`, un aplat. « affiche_change » est dessinee par posterart et LIT le bareme : le meuble ne peut plus annoncer un tarif que la caisse n'applique pas. Emissive a 0,55 comme le bandeau, parce qu'un distributeur s'eclaire de l'interieur — c'est aussi ce qui le rend trouvable depuis la trouee du pan coupe, a 3,4 m.",
           "type": "panel",
-          "material": "jaune",
+          "material": "affiche_change",
           "at": [
             0.0,
             1.02,
