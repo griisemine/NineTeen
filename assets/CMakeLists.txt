@@ -1015,16 +1015,37 @@ add_custom_command(
 # de Tetris. Un glob sur son propre répertoire ne les prendrait pas, et le jeu
 # tournerait muet sur ses deux moments les plus forts. Ils sont donc copiés
 # explicitement, et renommés pour que `snake.c` les cherche à un seul endroit.
-file(GLOB SNAKE_ART   "${SRC_LEGACY}/games/2_snake/Textures/*.png")
-file(GLOB SNAKE_SOUND "${SRC_LEGACY}/games/2_snake/Sound/*.wav")
+#
+# ET UNE LISTE NOMMEE PLUTOT QU'UN GLOB. Le glob copiait les QUATORZE fichiers
+# du repertoire ; `snake.c` en lit HUIT. Un glob livre ce que personne n'a
+# nomme, et c'est ainsi qu'une image portant un filigrane « (C)123RF » s'est
+# retrouvee dans le paquet d'une autre borne — trois de ses fichiers n'etaient
+# meme pas affiches.
+#
+# Les six orphelins, et ce qu'ils sont : `chiffre.png` ne sert plus depuis que
+# le score s'ecrit avec la fonte du moteur (ses contre-formes faisaient 1,2 px
+# sur la dalle et tous les chiffres y etaient le meme rectangle blanc). Les cinq
+# autres — `appear`, `disapear`, `rainbow`, `slow`, et l'`explo` du repertoire —
+# sont les sons des POTIONS et de la bombe, que le portage n'a jamais branches :
+# l'interface d'un mini-jeu n'offre que trois crochets (`sound_blip`,
+# `sound_score`, `sound_die`) et Snake en emploie deux. Ce n'est donc pas un
+# defaut de copie mais un manque de JEU, ecrit ici pour qu'il se retrouve : les
+# sons existent, le jeu a les evenements, il manque un crochet.
+set(SNAKE_ART
+    "${SRC_LEGACY}/games/2_snake/Textures/backgroundSnake.png"
+    "${SRC_LEGACY}/games/2_snake/Textures/hud.png"
+    "${SRC_LEGACY}/games/2_snake/Textures/snake.png"
+    "${SRC_LEGACY}/games/2_snake/Textures/fruits.png"
+    "${SRC_LEGACY}/games/2_snake/Textures/anim.png"
+    "${SRC_LEGACY}/games/2_snake/Textures/basket.png")
+set(SNAKE_SOUND
+    "${SRC_LEGACY}/games/2_snake/Sound/get.wav")
 
 add_custom_command(
     OUTPUT "${GEN}/games/snake/.stamp"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/games/snake"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SNAKE_ART} "${GEN}/games/snake/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${SNAKE_SOUND} "${GEN}/games/snake/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${SRC_LEGACY}/games/7_asteroid/Sound/explo.wav" "${GEN}/games/snake/explo.wav"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${SRC_LEGACY}/games/5_tetris/Sound/gameover.wav" "${GEN}/games/snake/gameover.wav"
     COMMAND ${CMAKE_COMMAND} -E touch "${GEN}/games/snake/.stamp"
@@ -1221,7 +1242,10 @@ add_custom_command(
 # Le jalon dépend de CE FICHIER : la purge se rejoue exactement quand la liste
 # change, c'est-à-dire quand on retire quelque chose. Un `add_custom_target`
 # tournerait à chaque build et ne dirait jamais « rien à faire ».
+# Les six fichiers que le glob de Snake copiait sans que rien ne les lise.
 set(ASSETS_RETIRES
+    "games/snake/chiffre.png" "games/snake/appear.wav" "games/snake/disapear.wav"
+    "games/snake/explo.wav" "games/snake/rainbow.wav" "games/snake/slow.wav"
     # Les personnages de PAC-MAN et le repertoire de son ancien identifiant.
     "games/pacman"
     # L'ancien identifiant du jeu d'empilement.

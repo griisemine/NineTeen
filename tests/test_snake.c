@@ -36,6 +36,13 @@ static int g_failures = 0;
         }                                                                     \
     } while (0)
 
+/* La même vérification, mais dans une boucle de plusieurs milliers de tours :
+ * on compte le passage et on ne se plaint qu'une fois. */
+#define CHECK_SILENT(cond)                                                    \
+    do { if (!(cond)) { g_checks++; g_failures++;                             \
+             printf("ÉCHEC %s:%d — invariant rompu en cours de partie\n",     \
+                    __FILE__, __LINE__); return; } } while (0)
+
 #define STEP (1.0f / 120.0f)
 
 static void run(snake *g, float seconds)
@@ -129,37 +136,96 @@ static void test_vitesse_independante_du_pas(void)
 
 static void test_mort_contre_le_mur(void)
 {
+    /*
+     * LE MUR TUE, ET IL TUE TOUJOURS.
+     *
+     * 2020 écrit ce test-ci hors de toute condition d'invincibilité :
+     * `if (tooCloseFromWall(...)) done = 1;`. Le portage l'avait rangé derrière
+     * la même garde que la morsure, et accordait en plus huit secondes de
+     * sursis au coup d'envoi — donc l'arène n'avait pas de murs pendant les huit
+     * premières secondes. Le symptôme se lisait sur la courbe : une graine sur
+     * cinq quittait le terrain à 2,5 s, dérivait dans le vide, et mourait pile
+     * à la huitième seconde avec un score de zéro.
+     */
     snake g;
     snake_reset(&g, 5, false);
+    CHECK(g.invincible <= 0.0f, "aucun sursis au coup d'envoi (%.2f)", (double)g.invincible);
 
-    /* L'invincibilité de départ protège 8 s. On la laisse passer en tournant en
-     * rond au centre, sinon le serpent atteint le mur avant la fin du sursis. */
-    snake_hold(&g, false, true, false);
-    run(&g, 9.0f);
-    CHECK(g.phase != SNAKE_DEAD, "il survit à ses neuf premières secondes en tournant");
-    CHECK(g.invincible <= 0.0f, "l'invincibilité est retombée (%.2f)", (double)g.invincible);
-
-    /* Puis tout droit : le terrain fait 972 de haut, donc moins de 3 s suffisent
-     * pour atteindre un bord depuis n'importe où. */
+    /* Tout droit : la tête part du centre vers le haut, 486 px à 210 px/s. */
     snake_hold(&g, false, false, false);
-    run(&g, 6.0f);
-    CHECK(g.phase == SNAKE_DEAD, "il finit par se tuer contre un mur");
+    run(&g, 3.0f);
+    CHECK(g.phase == SNAKE_DEAD, "il se tue contre le mur du haut en moins de 3 s");
+
+    /* Et le sursis n'y change rien : c'est le point de la correction. */
+    snake i;
+    snake_reset(&i, 5, false);
+    i.invincible = 8.0f;
+    i.phase = SNAKE_PLAYING;
+    snake_hold(&i, false, false, false);
+    run(&i, 3.0f);
+    CHECK(i.phase == SNAKE_DEAD, "même invincible, le mur tue");
 }
 
-static void test_invincibilite_protege_puis_cesse(void)
+/*
+ * Allonge le corps À LA MAIN, en posant les segments en file derrière la tête.
+ *
+ * Le premier jet faisait grandir le serpent en le nourrissant, ce qui demandait
+ * de le faire vivre plusieurs secondes — donc de le faire tourner, donc de le
+ * faire se mordre : le montage mesurait la digestion et la manœuvre en croyant
+ * préparer une morsure. Ici la longueur est une donnée du test, pas un résultat.
+ */
+static void grow_to(snake *g, uint32_t want)
 {
-    /* Deux parties identiques, un seul paramètre changé : le temps. C'est la
-     * seule façon d'attribuer l'écart à ce qu'on prétend mesurer. */
+    if (want >= SNAKE_MAX_PARTS) want = SNAKE_MAX_PARTS - 1;
+    while (g->parts < want) {
+        const uint32_t k = g->parts;
+        g->part[k].x = g->part[k - 1].x;
+        g->part[k].y = g->part[k - 1].y + 5.0f;   /* SPEED_DECOMPOSITION */
+        g->part[k].radius = 0.0f;
+        g->parts++;
+    }
+}
+
+static void test_la_potion_est_une_vie(void)
+{
+    /*
+     * `nbPotion` DE 2020 NE SERT QU'À SURVIVRE À SA PROPRE QUEUE, et c'est le
+     * seul endroit où `NB_FRAME_INVINCIBILITY` est accordé :
+     *
+     *     if (frameUnkillable == 0 && hitboxTail(...)) {
+     *         if (nbPotion > 0) { nbPotion--; frameUnkillable = NB_FRAME_INVINCIBILITY; }
+     *         else done = 1;
+     *     }
+     *
+     * Le portage en avait fait un élargissement de la hitbox des FRUITS, ce qui
+     * lui donnait exactement l'effet inverse de celui prévu : elle faisait
+     * manger plus, donc grossir plus vite, donc mourir plus tôt. Elle rend
+     * maintenant ce qu'elle promet — une vie — et c'est elle qui autorise une
+     * partie longue.
+     */
     snake g;
     snake_reset(&g, 9, false);
-    snake_hold(&g, false, false, false);
-    run(&g, 2.0f);
-    /* Deux secondes tout droit ne peuvent pas atteindre le mur (420 px/2 s pour
-     * 486 px de demi-terrain), donc ce test ne dit rien tout seul — ce qu'il
-     * vérifie est que le compteur DESCEND et à la bonne vitesse. */
-    CHECK(fabsf(g.invincible - 6.0f) < 0.1f,
-          "l'invincibilité descend d'une seconde par seconde (%.2f)", (double)g.invincible);
+    g.phase = SNAKE_PLAYING;
+    grow_to(&g, SNAKE_PRE + (uint32_t)90);
+    CHECK(g.parts > SNAKE_PRE + 80u, "le corps est assez long pour se mordre (%u)", g.parts);
 
+    g.potions = 1;
+    /* Un segment planté sur la tête, au-delà des trente-cinq sautés. */
+    for (uint32_t k = SNAKE_PRE + 40u; k < SNAKE_PRE + 50u && k < g.parts; ++k) {
+        g.part[k].x = g.part[SNAKE_PRE].x;
+        g.part[k].y = g.part[SNAKE_PRE].y - 20.0f;
+    }
+    run(&g, 0.1f);
+    CHECK(g.phase != SNAKE_DEAD, "la potion encaisse la morsure");
+    CHECK(g.potions == 0, "et elle est dépensée (%d restante)", g.potions);
+    CHECK(fabsf(g.invincible - 8.0f) < 0.3f,
+          "elle paie les 8 s de NB_FRAME_INVINCIBILITY (%.2f)", (double)g.invincible);
+
+    /* Puis le compteur descend d'une seconde par seconde, et s'épuise. */
+    snake_hold(&g, false, true, false);
+    run(&g, 2.0f);
+    CHECK(fabsf(g.invincible - 6.0f) < 0.2f,
+          "l'invincibilité descend d'une seconde par seconde (%.2f)", (double)g.invincible);
     run(&g, 6.2f);
     CHECK(g.invincible <= 0.0f, "et elle s'épuise après 8 s (%.2f)", (double)g.invincible);
 }
@@ -179,9 +245,25 @@ static void test_mort_dans_sa_queue(void)
      *
      * On pose donc un segment à une distance connue de la tête, et on regarde.
      */
-    const float R = 35.0f;   /* BODY_DEATH_HITBOX */
+    /* Le rayon de morsure de 2020 : `2 * BODY_RADIUS - HITBOX_GENTILLE`, soit
+     * 37,67 px, et non les 35 de `BODY_DEATH_HITBOX`. */
+    const float R = 37.67f;
 
     /*
+     * `BODY_DEATH_HITBOX` EST UN NOMBRE DE SEGMENTS, PAS UNE DISTANCE.
+     *
+     * 2020 boucle `for (i = BODY_DEATH_HITBOX + SIZE_PRE_RADIUS; i < size; i++)`
+     * : les trente-cinq segments qui suivent la tête sont ignorés, soit 175 px
+     * de corps. Le portage l'avait lu comme un rayon et n'en sautait que treize
+     * — 65 px — ce qui interdisait tout demi-tour serré : le virage du serpent a
+     * un rayon de 54 px et décrit donc un arc de 169 px, trente-quatre segments,
+     * qu'un saut de treize déclare mortel.
+     *
+     * Ce test plante donc son segment APRÈS les trente-cinq sautés, et il doit
+     * d'abord faire grandir le serpent : à sa longueur de départ — trente
+     * segments — l'index n'existe même pas, et c'est correct. Un serpent neuf ne
+     * peut pas se mordre.
+     *
      * Deux précautions, apprises en écrivant :
      *
      * — on remplit PLUSIEURS index consécutifs, parce que chaque pas décale
@@ -191,19 +273,30 @@ static void test_mort_dans_sa_queue(void)
      *   de 5 px et qu'un tick à 120 Hz n'en parcourt que 1,75.
      */
     #define PLANT(g, X, Y)                                                     \
-        do { for (uint32_t k = 45; k < 56 && k < (g).parts; ++k) {             \
+        do { for (uint32_t k = SNAKE_PRE + 40u; k < SNAKE_PRE + 50u            \
+                                             && k < (g).parts; ++k) {          \
                  (g).part[k].x = (X); (g).part[k].y = (Y); } } while (0)
+
+    /* Un serpent NEUF ne peut pas se mordre : il est plus court que les
+     * trente-cinq segments sautés. C'est la règle, pas une tolérance. */
+    {
+        snake g;
+        snake_reset(&g, 11, false);
+        g.phase = SNAKE_PLAYING;
+        CHECK(g.parts <= SNAKE_PRE + (uint32_t)35,
+              "trente segments, c'est moins que les trente-cinq sautés (%u)", g.parts);
+    }
 
     /* Droit devant, à portée : ça tue. Le serpent part vers le HAUT. */
     {
         snake g;
         snake_reset(&g, 11, false);
-        g.invincible = 0.0f;
         g.phase = SNAKE_PLAYING;
-        CHECK(g.parts > 56, "le corps est assez long pour l'expérience (%u)", g.parts);
+        grow_to(&g, SNAKE_PRE + (uint32_t)90);
+        CHECK(g.parts > SNAKE_PRE + 80u, "le corps est assez long pour l'expérience (%u)", g.parts);
         PLANT(g, g.part[SNAKE_PRE].x, g.part[SNAKE_PRE].y - R * 0.7f);
         run(&g, 0.1f);
-        CHECK(g.phase == SNAKE_DEAD, "un segment à moins de 35 px de la tête la tue");
+        CHECK(g.phase == SNAKE_DEAD, "un segment à moins de 37,67 px de la tête la tue");
         CHECK(g.died, "et la mort est signalée");
     }
 
@@ -212,19 +305,21 @@ static void test_mort_dans_sa_queue(void)
     {
         snake g;
         snake_reset(&g, 11, false);
-        g.invincible = 0.0f;
         g.phase = SNAKE_PLAYING;
+        grow_to(&g, SNAKE_PRE + (uint32_t)90);
         PLANT(g, g.part[SNAKE_PRE].x + R * 8.0f, g.part[SNAKE_PRE].y);
         run(&g, 0.1f);
-        CHECK(g.phase != SNAKE_DEAD, "un segment à 280 px sur le côté ne tue pas");
+        CHECK(g.phase != SNAKE_DEAD, "un segment à 300 px sur le côté ne tue pas");
     }
 
-    /* Et pendant le sursis, rien ne tue — c'est ce qui laisse le temps de
-     * comprendre où l'on est. */
+    /* Et sous invincibilité — celle que paie une potion — la morsure ne tue
+     * pas. C'est la SEULE chose dont elle protège : voir le mur, à côté. */
     {
         snake g;
         snake_reset(&g, 11, false);
-        g.phase = SNAKE_PLAYING;      /* invincible reste à 8 s */
+        g.phase = SNAKE_PLAYING;
+        grow_to(&g, SNAKE_PRE + (uint32_t)90);
+        g.invincible = 8.0f;
         PLANT(g, g.part[SNAKE_PRE].x, g.part[SNAKE_PRE].y - R * 0.7f);
         run(&g, 0.1f);
         CHECK(g.phase != SNAKE_DEAD, "pendant l'invincibilité, se mordre ne tue pas");
@@ -360,47 +455,113 @@ static void test_le_bareme_correspond_au_score(void)
 static void test_hardcore_est_l_inverse(void)
 {
     /*
-     * LA règle qu'on casserait sans s'en rendre compte. En hardcore, manger un
-     * fruit COÛTE cinq fois sa valeur — le score vient des fruits qu'on laisse
-     * expirer. Le joueur automatique, lui, court après les fruits : en hardcore
-     * il doit donc faire PIRE que zéro, là où il marque en normal.
+     * LA règle qu'on casserait sans s'en rendre compte : en hardcore, manger un
+     * fruit COÛTE cinq fois sa valeur, et le score vient des fruits qu'on laisse
+     * expirer.
+     *
+     * Le premier jet la mesurait en comparant DEUX PILOTES — l'un et l'autre
+     * courant après les fruits — et concluait « en hardcore la même stratégie
+     * rapporte moins ». C'était vrai et sans portée : ça comparait deux façons
+     * de jouer contre la règle. La règle se teste sur elle-même, en posant un
+     * fruit à un endroit connu et en regardant ce qui sort.
      */
-    snake n, h;
-    snake_reset(&n, 31337u, false);
-    snake_reset(&h, 31337u, true);
+    {
+        /* Le même fruit, mangé dans les deux modes. */
+        snake n, h;
+        snake_reset(&n, 31337u, false);
+        snake_reset(&h, 31337u, true);
+        for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) { n.fruit[i].id = -1; h.fruit[i].id = -1; }
+        n.phase = h.phase = SNAKE_PLAYING;
+        /* La pomme vaut 107 : positive en normal, cinq fois négative en hardcore. */
+        const float hx = n.part[SNAKE_PRE].x, hy = n.part[SNAKE_PRE].y - 12.0f;
+        n.fruit[0] = (snake_fruit){ hx, hy, hx, hy, 5 /* POMME */, false, false, 0.1f, 1.0f };
+        h.fruit[0] = (snake_fruit){ hx, hy, hx, hy, 5, false, false, 0.1f, 1.0f };
+        /* En hardcore on part avec une réserve, sinon la perte est rognée à
+         * zéro — ce qui est l'autre règle, testée juste en dessous. */
+        h.score = 100000;
 
-    for (int i = 0; i < 120 * 45; ++i) {
-        snake_autopilot(&n); snake_tick(&n, STEP);
-        snake_autopilot(&h); snake_tick(&h, STEP);
+        run(&n, 0.1f);
+        run(&h, 0.1f);
+        CHECK(n.score > 0, "en normal, manger une pomme rapporte (%lld)", (long long)n.score);
+        CHECK(h.score < 100000, "en hardcore, manger la même pomme coûte (%lld)",
+              (long long)(h.score - 100000));
+        CHECK(h.score - 100000 == -5 * n.score,
+              "et il coûte exactement cinq fois ce qu'il rapporterait (%lld contre %lld)",
+              (long long)(h.score - 100000), (long long)n.score);
     }
 
-    CHECK(n.score > 0, "en normal, courir après les fruits rapporte (%lld)",
-          (long long)n.score);
-    CHECK(h.score < n.score,
-          "en hardcore, la même stratégie rapporte moins (%lld contre %lld)",
-          (long long)h.score, (long long)n.score);
-
-    /* Et le score exposé au classement ne descend jamais sous zéro : on ne doit
-     * rien à la salle en sortant. C'est aussi ce que fait le serveur. */
-    CHECK(g_snake_api.score(&h) == (h.score > 0 ? (uint32_t)h.score : 0u),
-          "le score exposé est borné à zéro (%u pour %lld)",
-          g_snake_api.score(&h), (long long)h.score);
-
-    /* Un fruit mangé en hardcore émet bien une valeur NÉGATIVE : c'est ce qui a
-     * obligé le serveur à accepter des bornes signées. */
-    snake m;
-    snake_reset(&m, 555u, true);
-    bool saw_negative = false;
-    for (int i = 0; i < 120 * 60 && !saw_negative; ++i) {
-        snake_autopilot(&m);
-        snake_tick(&m, STEP);
-        ns_game_events ev; SDL_zero(ev);
-        g_snake_api.events(&m, &ev);
-        if (ev.score && SDL_strcmp(ev.score_kind, "fruit") == 0 && ev.score_value < 0) {
-            saw_negative = true;
+    {
+        /*
+         * Le même fruit, laissé POURRIR en hardcore : il rapporte le quart.
+         *
+         * Le montage doit empêcher la cadence hardcore — une apparition toutes
+         * les deux dixièmes de seconde — de venir brouiller le compte. Les
+         * vingt-trois autres cases sont donc occupées par des PLUMES, qui valent
+         * zéro point : le terrain est plein, `spawn_fruit` ne trouve plus de
+         * place, et le seul fruit qui puisse bouger le score est la pomme.
+         */
+        snake h;
+        snake_reset(&h, 31337u, true);
+        h.phase = SNAKE_PLAYING;
+        for (int i = 1; i < SNAKE_MAX_FRUITS; ++i) {
+            const float px = 100.0f + 60.0f * (float)i, py = 100.0f;
+            h.fruit[i] = (snake_fruit){ px, py, px, py, 25 /* PLUME */, false, false, 0.0f, 1.0f };
         }
+        /* La pomme est déjà vieille : elle expire dans un dixième de seconde,
+         * bien avant les plumes, donc avant qu'une case ne se libère. */
+        h.fruit[0] = (snake_fruit){ 200.0f, 900.0f, 200.0f, 900.0f, 5 /* POMME */,
+                                    false, false, 6.9f, 1.0f };
+        const int64_t before = h.score;
+        run(&h, 0.3f);
+        /* La case est déjà reprise par un fruit neuf quand on regarde : c'est la
+         * règle du terrain jamais vide, qui rejoue aussitôt. On lit donc l'ÂGE,
+         * qui dit que ce n'est plus la même pomme. */
+        CHECK(h.fruit[0].age < 1.0f, "la pomme a pourri et la case a resservi (%.2f)",
+              (double)h.fruit[0].age);
+        CHECK(h.score - before == 26,
+              "elle rapporte le quart de ses 107 points, arrondi comme 2020 (%lld)",
+              (long long)(h.score - before));
     }
-    CHECK(saw_negative, "manger en hardcore émet une valeur négative");
+
+    /*
+     * ON NE DOIT RIEN À LA SALLE : le total ne passe pas sous zéro, et la
+     * VALEUR ÉMISE est rognée avec lui.
+     *
+     * C'est la seconde moitié qui compte. `runs.go` additionne les valeurs
+     * reçues et ne ramène le total à zéro qu'à la fin ; si le client écrêtait
+     * son total sans écrêter l'événement, les deux additions divergeraient et la
+     * partie serait refusée avec un « score incohérent » que rien ne laisse
+     * prévoir. On vérifie donc les deux ensemble, sur une partie entière.
+     */
+    {
+        snake h;
+        snake_reset(&h, 555u, true);
+        int64_t sum = 0;
+        bool saw_negative = false, saw_positive = false;
+        for (int i = 0; i < 120 * 120; ++i) {
+            snake_autopilot(&h);
+            snake_tick(&h, STEP);
+            ns_game_events ev; SDL_zero(ev);
+            g_snake_api.events(&h, &ev);
+            if (ev.score) {
+                sum += (SDL_strcmp(ev.score_kind, "bonus") == 0) ? 50 : ev.score_value;
+                if (ev.score_value < 0) saw_negative = true;
+                if (ev.score_value > 0) saw_positive = true;
+            }
+            CHECK_SILENT(h.score >= 0);
+            if (h.phase == SNAKE_DEAD) break;
+        }
+        CHECK(h.score >= 0, "le total interne ne descend jamais sous zéro (%lld)",
+              (long long)h.score);
+        CHECK(sum == h.score,
+              "la somme des valeurs émises vaut le total, écrêtage compris (%lld contre %lld)",
+              (long long)sum, (long long)h.score);
+        CHECK(saw_negative, "manger en hardcore émet une valeur négative");
+        CHECK(saw_positive, "et laisser pourrir en émet une positive");
+        CHECK(g_snake_api.score(&h) == (uint32_t)h.score,
+              "le score exposé est le total (%u pour %lld)",
+              g_snake_api.score(&h), (long long)h.score);
+    }
 }
 
 static void test_bornes_du_serveur(void)
@@ -436,8 +597,9 @@ int main(void)
     test_depart();
     test_rotation();
     test_vitesse_independante_du_pas();
-    test_invincibilite_protege_puis_cesse();
+
     test_mort_contre_le_mur();
+    test_la_potion_est_une_vie();
     test_mort_dans_sa_queue();
     test_digestion_allonge();
     test_determinisme();

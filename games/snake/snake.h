@@ -14,8 +14,39 @@
  * La table `FRUIT_PROPRIETES` des 25 fruits et 7 bonus, intégralement, dans son
  * ordre d'origine. Les cotes du terrain (1728 x 972 dans une fenêtre
  * 1920 x 1080), le rayon du corps, la mémoire des 100 positions passées, le
- * seuil d'allongement de 6,6, la hitbox de mort à 35, les 8 secondes
- * d'invincibilité, et le découpage des planches au pixel près.
+ * seuil d'allongement de 6,6, et le découpage des planches au pixel près.
+ *
+ * Quatre règles relues, et elles changent la partie
+ * -------------------------------------------------
+ * Le premier portage avait mal lu quatre choses ; chacune se voyait sur la
+ * courbe de recette, aucune ne se voyait dans le code.
+ *
+ * **`BODY_DEATH_HITBOX` compte des SEGMENTS.** `hitboxTail` boucle
+ * `for (i = BODY_DEATH_HITBOX + SIZE_PRE_RADIUS; ...)` : c'est le nombre de
+ * segments sautés derrière la tête, trente-cinq, et non un rayon de 35 px. Avec
+ * treize sautés, un demi-tour serré — qui décrit un arc de 169 px, trente-quatre
+ * segments — était mortel.
+ *
+ * **Le mur tue toujours.** 2020 le teste hors de toute invincibilité. Le
+ * portage l'avait rangé derrière la même garde que la morsure.
+ *
+ * **Il n'y a pas d'invincibilité de départ.** `frameUnkillable` part à zéro et
+ * ne se gagne qu'en dépensant une potion. Les huit secondes accordées au coup
+ * d'envoi ouvraient l'arène pendant huit secondes.
+ *
+ * **La potion est une VIE**, pas un aimant à fruits : `nbPotion` ne sert qu'à
+ * survivre à sa propre queue, et c'est elle qui paie les huit secondes.
+ *
+ * `nbFruits` n'est pas un quota
+ * -----------------------------
+ * C'est le nombre de fruits EN JEU. En normal, une tentative par seconde avec
+ * une chance sur `nbFruits` ; en hardcore, une tentative par IMAGE avec une
+ * chance sur `chance_spawn_hardcore` — soit cinq apparitions par seconde au
+ * départ et dix-huit à la fin de la rampe. Le portage lisait la constante de
+ * hardcore comme un nombre de secondes, un facteur trente, et ouvrait les cases
+ * au compteur de fruits mangés — lequel reste à zéro en hardcore, puisque
+ * manger l'y fait DESCENDRE. Le mode qui devait ensevelir le terrain sous les
+ * fruits en montrait un seul.
  *
  * Ce qui change, et pourquoi
  * --------------------------
@@ -37,6 +68,15 @@
  * du fruit, et le score vient des fruits qu'on laisse **expirer**. C'est la
  * règle la plus surprenante de 2020 ; elle est conservée, et c'est elle qui a
  * obligé le serveur à accepter des valeurs négatives (voir `runs.go`).
+ *
+ * **Mais la perte s'arrête à zéro.** `runs.go` applique déjà cette règle une
+ * fois, à la fin — « un score final négatif vaut zéro » — et le client la
+ * pratique maintenant à chaque bouchée, sur la VALEUR de l'événement pour que
+ * les deux additions restent la même. Sans elle, quatre minutes de hardcore
+ * finissaient entre −4 487 et −9 757 pour un affichage de zéro : un joueur qui
+ * comprenait la règle à la troisième bouchée devait rembourser dix mille points
+ * avant de revoir un point s'afficher. Et la règle est ÉCRITE À L'ÉCRAN pendant
+ * toute la partie, parce qu'un joueur de borne ne lit pas de notice.
  *
  * Aucun appel SDL hors `snake_art_load`, aucun état global, `snake_tick` à pas
  * constant : la partie est une structure qu'on avance. C'est ce qui la rend
@@ -135,7 +175,7 @@ typedef struct snake {
     float  past_x[SNAKE_REMIND], past_y[SNAKE_REMIND];
 
     snake_fruit fruit[SNAKE_MAX_FRUITS];
-    uint32_t    fruit_slots;      /* nbFruits : le nombre de cases ouvertes */
+    uint32_t    fruit_slots;      /* nbFruits de 2020 : les fruits EN JEU, relevé chaque pas */
     snake_fruit bonus;
 
     snake_dead  dead[SNAKE_MAX_DEAD];
@@ -176,7 +216,11 @@ typedef struct snake {
 
 /* Les planches de 2020, chargées une fois. */
 typedef struct snake_art {
-    ns_texture background, hud, body, fruits, anim, digits, basket;
+    /* `chiffre.png` n'est plus de la partie : ses contre-formes d'un pixel
+     * disparaissent sur la dalle d'une borne, et le score s'écrit maintenant
+     * avec la fonte de `ns_sprite`. Déclarer une planche qu'on ne lit pas
+     * donnerait une dépendance qui ment. */
+    ns_texture background, hud, body, fruits, anim, basket;
     bool ready;
 } snake_art;
 

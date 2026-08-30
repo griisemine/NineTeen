@@ -50,11 +50,19 @@ typedef struct pn_note {
     bool  hit, missed;
 } pn_note;
 
-/* Les fins possibles. Le texte vit à l'affichage, pas dans l'état. */
+/*
+ * Les fins possibles. Le texte vit à l'affichage, pas dans l'état.
+ *
+ * `PN_DONE` est une fin comme les autres du point de vue du moteur — la partie
+ * s'arrête, le journal se scelle, le score part au classement — mais c'est la
+ * BONNE : le morceau a été joué jusqu'au bout. Sans elle, le jeu n'avait pas de
+ * fin du tout, la partition bouclant en s'accélérant sans borne.
+ */
 typedef enum pn_fail {
     PN_FAIL_NONE = 0,
     PN_FAIL_WRONG_NOTE,      /* frapper une voie vide : la faute de commission */
-    PN_FAIL_TOO_MANY_MISSES  /* hardcore seulement */
+    PN_FAIL_TOO_MANY_MISSES,
+    PN_DONE                  /* le morceau est allé à son terme */
 } pn_fail;
 
 typedef struct piano {

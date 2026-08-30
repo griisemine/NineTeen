@@ -54,7 +54,26 @@
 /* CHANCE_SPAWN_BONUS = 12 * FPS images, soit toutes les douze secondes. */
 #define BONUS_PERIOD       12.0f
 
-/* Hardcore : la cadence part de 6 s et descend à 1,6 s en trois minutes. */
+/*
+ * Hardcore : `CHANCE_SPAWN_FRUIT_HARDCORE_INIT` 6 et `_MIN` 1,6, descendus en
+ * trois minutes — ET CE NE SONT PAS DES SECONDES.
+ *
+ * 2020 tire une fois par IMAGE : `rand() % (PRECISION_SPAWN * chance) <
+ * PRECISION_SPAWN`, soit une chance sur `chance` à chaque image. La cadence est
+ * donc de 30/6 = CINQ apparitions par seconde au départ, et de 30/1,6 = dix-huit
+ * et trois quarts à la fin de la rampe. L'intervalle moyen vaut `chance / 30`
+ * seconde, pas `chance` seconde.
+ *
+ * Le portage avait lu « 6 » comme six secondes — un facteur trente — et c'est ce
+ * qui a vidé le mode. Le hardcore de 2020 ENSEVELIT le terrain sous les fruits :
+ * c'est ce qui rend l'abstinence difficile, et donc ce qui en fait un jeu plutôt
+ * qu'une promenade. Mesuré avant correction, avec un pilote qui évite les
+ * fruits : quatre pilotes sur cinq ne mouraient pas en quatre minutes.
+ *
+ * La cadence reste ici un COMPTEUR et non un tirage par pas : à moyenne égale,
+ * un intervalle fixe est déterministe, ne consomme pas d'aléa et ne dépend pas
+ * de la fréquence de tick. Le lissage est la seule différence.
+ */
 #define HC_RATE_INIT        6.0f
 #define HC_RATE_MIN         1.6f
 #define HC_RATE_DURATION  180.0f
@@ -83,8 +102,6 @@
 
 /* --- les planches ---------------------------------------------------------- */
 #define CELL 64.0f                  /* FRUIT_DIM et BODY_DIM valent 64 x 64 */
-#define DIGIT_W 12.0f
-#define DIGIT_H 18.0f
 #define ANIM_FRAMES 4               /* NB_ANIM_SPAWN / NB_ANIM_DEATH */
 #define SPAWN_ANIM_TIME 0.4f        /* NB_FRAME_SPAWN_FRUIT = 12 images */
 #define DEATH_ANIM_TIME 0.4f
@@ -232,13 +249,14 @@ void snake_reset(snake *g, uint64_t seed, bool hard)
 
     clear_past(g);
     for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) g->fruit[i].id = -1;
-    g->fruit_slots = 1;
+    g->fruit_slots = 0;
     g->bonus.id = -1;
 
-    g->invincible = INVINCIBILITY;
-    g->fruit_timer = SPAWN_PERIOD;
+    /* Aucune invincibilité au coup d'envoi : `frameUnkillable` part à zéro dans
+     * 2020 et ne se gagne qu'en dépensant une potion. */
     g->bonus_timer = BONUS_PERIOD;
     g->hardcore_rate = HC_RATE_INIT;
+    g->fruit_timer = hard ? HC_RATE_INIT / FPS30 : SPAWN_PERIOD;
 }
 
 /* ==========================================================================
@@ -299,11 +317,19 @@ static int pick_fruit(snake *g, bool bonus_only)
     return bonus_only ? PLUME : FRAISE;
 }
 
+/* `nbFruits` de 2020 : le nombre de fruits EN JEU, pas un quota. */
+static uint32_t live_fruits(const snake *g)
+{
+    uint32_t n = 0;
+    for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) if (g->fruit[i].id >= 0) n++;
+    return n;
+}
+
 static void spawn_fruit(snake *g)
 {
     int slot = -1;
-    for (uint32_t i = 0; i < g->fruit_slots && i < SNAKE_MAX_FRUITS; ++i) {
-        if (g->fruit[i].id < 0) { slot = (int)i; break; }
+    for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) {
+        if (g->fruit[i].id < 0) { slot = i; break; }
     }
     if (slot < 0) return;
 
@@ -466,6 +492,29 @@ static void eat(snake *g, snake_fruit *f, bool is_bonus)
     int64_t gain = base * (f->giant ? GIANT_SCORE : 1);
     if (g->hard && id != POTION_JAUNE) gain *= RATIO_GET_FRUIT_HARDCORE;
 
+    /*
+     * ON NE DOIT RIEN À LA SALLE : la note ne descend pas sous zéro.
+     *
+     * `runs.go` applique déjà cette règle, mais UNE SEULE FOIS, à la fin :
+     * « un score final négatif vaut zéro ». Le total courant, lui, plongeait
+     * sans plancher, et `sn_score` le remontait à zéro pour l'affichage — ce qui
+     * cachait le trou au lieu de le combler. Mesuré sur cinq graines, quatre
+     * minutes de hardcore : le total brut finissait entre −4 487 et −9 757 pour
+     * un affichage de 0. Un joueur qui comprenait la règle à la troisième
+     * bouchée devait rembourser dix mille points avant de revoir un seul point
+     * s'afficher, c'est-à-dire jamais.
+     *
+     * L'écrêtage est fait ICI, sur la valeur de l'ÉVÉNEMENT, et pas sur le
+     * total : le serveur additionne les valeurs qu'on lui envoie, donc écrêter
+     * le total sans écrêter l'événement les ferait diverger et la partie serait
+     * refusée. En rognant la perte à ce que le joueur a en banque, les deux
+     * additions restent la même addition.
+     */
+    if (gain < 0 && g->score + gain < 0) gain = -g->score;
+
+    /* L'événement part même quand la perte a été rognée à zéro : c'est lui qui
+     * déclenche le son et la bulle. Un repas silencieux ne dirait rien au
+     * joueur, et c'est justement l'instant où il a besoin qu'on lui parle. */
     if (base != 0) {
         g->score += gain;
         popup(g, f->x, f->y, gain);
@@ -500,12 +549,6 @@ static void eat(snake *g, snake_fruit *f, bool is_bonus)
         default: break;
     }
 
-    /* Une case de plus s'ouvre de temps en temps : c'est ce qui fait qu'on
-     * finit avec un terrain couvert de fruits. */
-    if (!is_bonus && g->fruit_slots < SNAKE_MAX_FRUITS
-        && (int)g->fruits_eaten / 6 >= (int)g->fruit_slots) {
-        g->fruit_slots++;
-    }
     f->id = -1;
 }
 
@@ -513,23 +556,44 @@ static void eat(snake *g, snake_fruit *f, bool is_bonus)
  * La mort
  * ========================================================================== */
 
+/*
+ * `hitboxTail` de 2020, et il fallait relire ce que `BODY_DEATH_HITBOX` désigne.
+ *
+ * Ce n'est PAS un rayon : c'est le nombre de segments qu'on saute derrière la
+ * tête — `for(i = BODY_DEATH_HITBOX + SIZE_PRE_RADIUS; i < size; i++)`. Le
+ * portage l'avait lu comme une distance et n'en sautait que treize, soit 65 px
+ * de corps ; 2020 en saute trente-cinq, soit 175 px.
+ *
+ * L'écart décide de ce que le serpent peut faire. Son rayon de virage est de
+ * 54 px, donc un demi-tour serré décrit un arc de 169 px — trente-quatre
+ * segments. Avec treize sautés, ce demi-tour est mortel : le serpent ne peut
+ * plus faire volte-face dès qu'il dépasse la longueur de son propre virage, ce
+ * qui arrive au premier fruit. Avec trente-cinq, il le peut, et c'est de là que
+ * vient toute la marge de manœuvre d'une partie longue.
+ *
+ * Le rayon, lui, est `2 * BODY_RADIUS - HITBOX_GENTILLE` plus les deux rayons de
+ * digestion : quarante pixels moins la petite indulgence, pas trente-cinq secs.
+ */
 static bool hits_tail(const snake *g)
 {
     const snake_part *h = &g->part[SNAKE_PRE];
-    /* On saute les premiers segments : ils touchent la tête par construction. */
-    for (uint32_t i = SNAKE_PRE + MIN_BODY_PARTS + 8; i < g->parts; ++i) {
+    for (uint32_t i = SNAKE_PRE + (uint32_t)BODY_DEATH_HITBOX; i < g->parts; ++i) {
         const float dx = h->x - g->part[i].x, dy = h->y - g->part[i].y;
-        const float r = BODY_DEATH_HITBOX + g->part[i].radius;
+        const float r = 2.0f * BODY_RADIUS - HITBOX_GENTILLE + h->radius + g->part[i].radius;
         if (dx * dx + dy * dy < r * r) return true;
     }
     return false;
 }
 
+/* `tooCloseFromWall(tête, BODY_RADIUS + rayon − HITBOX_GENTILLE)`. Le portage
+ * employait un demi-rayon de corps, soit dix pixels : la tête entrait à moitié
+ * dans le mur avant de mourir, et une tête en pleine digestion, qui est plus
+ * grosse, y entrait davantage. */
 static bool hits_wall(const snake *g)
 {
     const snake_part *h = &g->part[SNAKE_PRE];
-    const float r = BODY_RADIUS * 0.5f;
-    return h->x < r || h->y < r || h->x > SNAKE_PLAY_W - r || h->y > SNAKE_PLAY_H - r;
+    const float d = BODY_RADIUS + h->radius - HITBOX_GENTILLE;
+    return h->x < d || h->y < d || h->x > SNAKE_PLAY_W - d || h->y > SNAKE_PLAY_H - d;
 }
 
 /* ==========================================================================
@@ -623,12 +687,47 @@ void snake_tick(snake *g, float dt)
         /* La collision se teste À CHAQUE PAS et pas une fois par image : à
          * grande vitesse le serpent parcourt plus que sa propre hitbox en une
          * image, et il traverserait sa queue sans la voir. */
-        if (g->phase == SNAKE_PLAYING && g->invincible <= 0.0f
-            && (hits_wall(g) || hits_tail(g))) {
+        if (g->phase != SNAKE_PLAYING) continue;
+
+        /*
+         * LE MUR TUE TOUJOURS, ET L'INVINCIBILITÉ NE VAUT QUE CONTRE LA QUEUE.
+         *
+         * 2020 écrit les deux tests séparément, et dans cet ordre :
+         *     if (tooCloseFromWall(tête, ...))            done = 1;
+         *     if (frameUnkillable == 0 && hitboxTail(...)) ... done = 1;
+         * Le portage les avait réunis derrière la même garde d'invincibilité, et
+         * comme il accordait EN PLUS huit secondes d'invincibilité au coup
+         * d'envoi, l'arène n'avait pas de murs pendant les huit premières
+         * secondes de chaque partie. Mesuré : sur cinq graines, une partie
+         * quittait le terrain à 2,5 s, dérivait cinq secondes dans le vide, et
+         * mourait pile à la huitième seconde avec un score de zéro.
+         */
+        if (hits_wall(g)) {
             g->phase = SNAKE_DEAD;
             g->died = true;
             g->dead_time = 0.0f;
             break;
+        }
+        if (g->invincible <= 0.0f && hits_tail(g)) {
+            /*
+             * LA POTION EST UNE VIE, pas un aimant.
+             *
+             * `nbPotion` de 2020 ne sert qu'ici : on en dépense une pour
+             * survivre à sa propre queue, et elle paie `NB_FRAME_INVINCIBILITY`
+             * — les huit secondes, qui n'existent QUE dans ce cas. Le portage
+             * en avait fait un élargissement de la hitbox des fruits, ce qui
+             * lui donnait l'effet inverse de celui prévu : la potion faisait
+             * grossir plus vite, donc mourir plus tôt.
+             */
+            if (g->potions > 0) {
+                g->potions--;
+                g->invincible = INVINCIBILITY;
+            } else {
+                g->phase = SNAKE_DEAD;
+                g->died = true;
+                g->dead_time = 0.0f;
+                break;
+            }
         }
     }
 
@@ -636,7 +735,10 @@ void snake_tick(snake *g, float dt)
 
     /* --- les fruits ----------------------------------------------------- */
     const float ttl = fruit_ttl(g);
-    const float head_r = BODY_RADIUS * (g->potions > 0 ? HITBOX_GENTILLE : HITBOX_SECURITY);
+    /* `hitboxFruit` de 2020 : rayon du fruit + BODY_RADIUS + rayon de la tête,
+     * le tout multiplié par `HITBOX_SECURITY`, qui vaut UN. La potion n'entre
+     * pas ici — voir la boucle de collision, c'est une vie. */
+    const float head_r = (BODY_RADIUS + g->part[SNAKE_PRE].radius) * HITBOX_SECURITY;
 
     for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) {
         snake_fruit *f = &g->fruit[i];
@@ -665,10 +767,7 @@ void snake_tick(snake *g, float dt)
         const float dx = f->x - g->part[SNAKE_PRE].x, dy = f->y - g->part[SNAKE_PRE].y;
         const float r = head_r + FRUIT_PROP[f->id][P_RADIUS]
                       * (f->giant ? (GIANT_SIZE / 24.0f) : 1.0f);
-        if (dx * dx + dy * dy < r * r) {
-            if (g->potions > 0) g->potions--;
-            eat(g, f, false);
-        }
+        if (dx * dx + dy * dy < r * r) eat(g, f, false);
     }
 
     if (g->bonus.id >= 0) {
@@ -684,18 +783,64 @@ void snake_tick(snake *g, float dt)
     }
 
     /* --- les apparitions ------------------------------------------------ */
+    /*
+     * `nbFruits` DE 2020, RESTAURÉ — et c'est la correction qui compte le plus.
+     *
+     * Le portage avait remplacé le nombre de fruits en jeu par un quota,
+     * `fruit_slots`, ouvert d'un cran tous les six fruits MANGÉS. En mode normal
+     * ça ne se voyait qu'à l'ouverture : un seul fruit sur un terrain de
+     * 1728 x 972 pendant les premières secondes, et la courbe le disait — zéro
+     * point à 6 s et à 12 s sur trois graines sur cinq.
+     *
+     * En hardcore, c'était une contradiction complète. Manger RETIRE cinq au
+     * compteur de fruits mangés (`FRUIT_EATEN_HARDCORE`), qui reste donc à zéro
+     * toute la partie : mesuré, `fruit_slots` valait 1 sur les cinq graines à
+     * la 240ᵉ seconde. Or c'est précisément le mode dont la cadence
+     * d'apparition s'accélère de 6 s à 1,6 s pour que le terrain SE COUVRE de
+     * fruits en train de pourrir — la seule source de points du mode. La
+     * cadence accélérée n'avait aucune case où poser quoi que ce soit : tout le
+     * dispositif était du code mort, et le joueur avait un point à regarder.
+     *
+     * 2020 ne compte pas de quota. `nbFruits` est le nombre de fruits VIVANTS,
+     * et deux règles s'appuient dessus :
+     *   * en normal, une tentative par seconde avec une chance sur `nbFruits` —
+     *     le terrain se régule tout seul, plus il est chargé moins il charge ;
+     *   * en hardcore, la tentative n'est PAS conditionnée : le terrain se
+     *     remplit jusqu'à ce que l'expiration l'équilibre.
+     *
+     * En normal l'équilibre se fait à trois ou quatre fruits, par la règle
+     * elle-même. En hardcore il se ferait bien plus haut, et c'est
+     * `SNAKE_MAX_FRUITS` — vingt-quatre — qui l'arrête : le terrain reste
+     * couvert du début à la fin, et le nombre est donc une RÈGLE de ce mode,
+     * pas seulement une capacité de tableau. 2020 réalloue sans limite ; s'y
+     * tenir demanderait un état qui grossit, ce que `games.h` interdit, et
+     * vingt-quatre fruits couvrent déjà le terrain.
+     */
+    const uint32_t live = live_fruits(g);
     g->fruit_timer -= dt;
     if (g->fruit_timer <= 0.0f) {
         if (g->hard) {
             /* La cadence s'accélère de 6 s à 1,6 s en trois minutes. */
             const float t = g->time / HC_RATE_DURATION;
             g->hardcore_rate = HC_RATE_INIT + (HC_RATE_MIN - HC_RATE_INIT) * ns_clampf(t, 0.0f, 1.0f);
-            g->fruit_timer = g->hardcore_rate;
+            /* `/ FPS30` : la constante de 2020 est une chance PAR IMAGE. */
+            g->fruit_timer = g->hardcore_rate / FPS30;
+            spawn_fruit(g);
         } else {
             g->fruit_timer = SPAWN_PERIOD;
+            if (ns_rng_below(&g->rng, live) == 0) spawn_fruit(g);
         }
-        spawn_fruit(g);
     }
+
+    /*
+     * LE TERRAIN N'EST JAMAIS VIDE. 2020 refait apparaître sur-le-champ le
+     * dernier fruit mangé ou pourri (`if (nbFruits == 1) spawnFruit(...)`, aux
+     * deux endroits où un fruit disparaît). Sans cette règle, manger le dernier
+     * fruit ouvre une seconde — six en hardcore — pendant laquelle il n'y a
+     * rien à faire, et c'est la moitié de l'ouverture.
+     */
+    if (live_fruits(g) == 0) spawn_fruit(g);
+    g->fruit_slots = live_fruits(g);
 
     g->bonus_timer -= dt;
     if (g->bonus_timer <= 0.0f) { g->bonus_timer = BONUS_PERIOD; spawn_bonus(g); }
@@ -722,7 +867,76 @@ void snake_tick(snake *g, float dt)
 
 /* ==========================================================================
  * Le joueur automatique
+ * ==========================================================================
+ * Il regarde DEVANT LUI avant de choisir, et c'est ce qui manquait.
+ *
+ * Le premier pilote ne connaissait que deux choses : le fruit le plus rentable
+ * et les quatre murs. Il ignorait son propre corps — donc il coupait dedans dès
+ * qu'il était assez long pour se rattraper. Mesuré sur cinq graines, les cinq
+ * morts étaient des morts en QUEUE, à 24,6 s de moyenne, avec un score arrêté à
+ * 590 : la courbe de recette décrivait alors le pilote, pas le jeu.
+ *
+ * La géométrie explique pourquoi c'était fatal, et pourquoi aucun réglage de
+ * marge n'y suffisait : le serpent tourne de `TURN_RATE` = 3,9 rad/s en avançant
+ * à 210 px/s, donc son rayon de virage est de 54 px et un tour complet coûte
+ * 338 px de trajectoire. Passé 68 segments — six fruits — il ne peut plus
+ * boucler un cercle sans se croiser. Un pilote qui vise en ligne droite meurt
+ * alors mécaniquement.
+ *
+ * Le pilote simule donc trois arcs — tourner à gauche, tout droit, tourner à
+ * droite — sur un peu plus d'une seconde, et garde celui qui va le plus loin
+ * sans rien toucher. Le corps est échantillonné un point sur quatre : les
+ * segments sont espacés de 5 px et la hitbox de mort en fait 35, donc un pas de
+ * 20 px ne peut pas passer entre deux points.
  * ========================================================================== */
+
+/* Les trois arcs, sur ~1,2 s : de quoi voir venir un mur à pleine vitesse. */
+#define AUTO_SAMPLES 12
+#define AUTO_HORIZON 1.2f
+#define AUTO_BODY_STRIDE 4
+/* Les segments juste derrière la tête touchent la trajectoire par construction :
+ * `hits_tail` en saute `BODY_DEATH_HITBOX`, on en saute autant. */
+#define AUTO_SKIP (SNAKE_PRE + (uint32_t)BODY_DEATH_HITBOX)
+
+/* Jusqu'où la tête peut aller sur cet arc avant de heurter un mur ou son corps.
+ * Le résultat est une DISTANCE, pas un booléen : entre deux directions qui
+ * finissent mal, celle qui laisse le plus de terrain laisse aussi le plus de
+ * temps pour qu'un fruit apparaisse ailleurs.
+ *
+ * `avoid_fruit` ajoute les fruits aux obstacles. C'est le mode HARDCORE : y
+ * manger coûte cinq fois la valeur du fruit, donc un fruit y est un mur. */
+static float arc_clearance(const snake *g, int dir, float step_len, bool avoid_fruit)
+{
+    float x = g->part[SNAKE_PRE].x, y = g->part[SNAKE_PRE].y, a = g->angle;
+    const float da = (float)dir * TURN_RATE * (AUTO_HORIZON / (float)AUTO_SAMPLES);
+    const float wall = BODY_RADIUS + 8.0f;
+
+    for (int s = 0; s < AUTO_SAMPLES; ++s) {
+        a += da;
+        x += cosf(a) * step_len;
+        y += sinf(a) * step_len;
+        const float gone = (float)(s + 1) * step_len;
+
+        if (x < wall || y < wall || x > SNAKE_PLAY_W - wall || y > SNAKE_PLAY_H - wall) return gone;
+
+        for (uint32_t i = AUTO_SKIP; i < g->parts; i += AUTO_BODY_STRIDE) {
+            const float dx = x - g->part[i].x, dy = y - g->part[i].y;
+            const float r = 2.0f * BODY_RADIUS + g->part[i].radius + 6.0f;
+            if (dx * dx + dy * dy < r * r) return gone;
+        }
+
+        if (avoid_fruit) {
+            for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) {
+                if (g->fruit[i].id < 0) continue;
+                const float dx = x - g->fruit[i].x, dy = y - g->fruit[i].y;
+                const float r = BODY_RADIUS + FRUIT_PROP[g->fruit[i].id][P_RADIUS]
+                              * (g->fruit[i].giant ? (GIANT_SIZE / 24.0f) : 1.0f);
+                if (dx * dx + dy * dy < r * r) return gone;
+            }
+        }
+    }
+    return AUTO_HORIZON * step_len * (float)AUTO_SAMPLES;
+}
 
 bool snake_autopilot(snake *g)
 {
@@ -730,25 +944,31 @@ bool snake_autopilot(snake *g)
 
     const snake_part *h = &g->part[SNAKE_PRE];
 
-    /* La cible : le fruit qui rapporte le plus par unité de distance. En
-     * hardcore manger coûte, donc il ne vise QUE les bonus — c'est le seul
-     * comportement qui fasse monter le score dans ce mode. */
-    float best_x = SNAKE_PLAY_W * 0.5f, best_y = SNAKE_PLAY_H * 0.5f;
-    float best_gain = -1.0f;
     /*
-     * Il court après les fruits DANS LES DEUX MODES, y compris en hardcore où
-     * c'est perdant. Ce n'est pas une étourderie : le rôle de ce pilote est
-     * d'exercer le code, pas de bien jouer — et faire courir la MÊME stratégie
-     * dans les deux modes est précisément ce qui montre que le hardcore est
-     * l'inverse du normal. Un pilote qui éviterait les fruits en hardcore
-     * n'exercerait jamais le chemin où manger coûte.
+     * IL JOUE LE MODE QU'ON LUI DONNE, et c'est la deuxième réparation de
+     * l'instrument.
+     *
+     * Le pilote courait après les fruits DANS LES DEUX MODES, en assumant que
+     * cela « exerçait le chemin où manger coûte ». C'était vrai, et c'était
+     * aussi la seule chose que la courbe de hardcore mesurait : un joueur qui
+     * fait exactement l'inverse de la règle. Elle ne pouvait donc rien dire de
+     * la question posée — le mode est-il jouable, et jusqu'où monte-t-il ?
+     *
+     * En hardcore il vise donc le large et traite les fruits comme des murs.
+     * Le chemin de la bouchée reste exercé : l'évitement n'est pas parfait, et
+     * la mesure montre qu'il mord encore régulièrement.
      */
-    for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) {
-        if (g->fruit[i].id < 0) continue;
-        const float dx = g->fruit[i].x - h->x, dy = g->fruit[i].y - h->y;
-        const float d = sqrtf(dx * dx + dy * dy) + 1.0f;
-        const float gain = (FRUIT_PROP[g->fruit[i].id][P_SCORE] + 10.0f) / d;
-        if (gain > best_gain) { best_gain = gain; best_x = g->fruit[i].x; best_y = g->fruit[i].y; }
+    float best_x = SNAKE_PLAY_W * 0.5f, best_y = SNAKE_PLAY_H * 0.5f;
+    if (!g->hard) {
+        /* La cible : le fruit qui rapporte le plus par unité de distance. */
+        float best_gain = -1.0f;
+        for (int i = 0; i < SNAKE_MAX_FRUITS; ++i) {
+            if (g->fruit[i].id < 0) continue;
+            const float dx = g->fruit[i].x - h->x, dy = g->fruit[i].y - h->y;
+            const float d = sqrtf(dx * dx + dy * dy) + 1.0f;
+            const float gain = (FRUIT_PROP[g->fruit[i].id][P_SCORE] + 10.0f) / d;
+            if (gain > best_gain) { best_gain = gain; best_x = g->fruit[i].x; best_y = g->fruit[i].y; }
+        }
     }
 
     /* Les murs priment sur la gourmandise : à moins de 150 px d'un bord on vise
@@ -760,14 +980,36 @@ bool snake_autopilot(snake *g)
         best_y = SNAKE_PLAY_H * 0.5f;
     }
 
-    const float want = atan2f(best_y - h->y, best_x - h->x);
-    float delta = want - g->angle;
+    float delta = atan2f(best_y - h->y, best_x - h->x) - g->angle;
     while (delta > NS_PI) delta -= 2.0f * NS_PI;
     while (delta < -NS_PI) delta += 2.0f * NS_PI;
+    const int wanted = (delta < -0.02f) ? -1 : ((delta > 0.02f) ? +1 : 0);
 
-    const bool left = delta < -0.02f, right = delta > 0.02f;
-    snake_hold(g, left, right, false);
-    return left || right;
+    /*
+     * Le choix : la direction voulue si elle est libre, sinon la plus dégagée.
+     *
+     * `step_len` suit la VITESSE COURANTE — un serpent qui a mangé du piment
+     * avance deux fois plus vite et doit donc regarder deux fois plus loin.
+     */
+    const float step_len = g->speed * FPS30 * (AUTO_HORIZON / (float)AUTO_SAMPLES);
+    const float full = AUTO_HORIZON * step_len * (float)AUTO_SAMPLES;
+
+    int dir = wanted;
+    const float clear_wanted = arc_clearance(g, wanted, step_len, g->hard);
+    if (clear_wanted < full) {
+        float best_clear = clear_wanted;
+        for (int cand = -1; cand <= 1; ++cand) {
+            if (cand == wanted) continue;
+            const float c = arc_clearance(g, cand, step_len, g->hard);
+            /* À dégagement égal on garde ce qu'on avait : sans ce départage,
+             * deux directions équivalentes se relaient d'un pas à l'autre et le
+             * serpent vibre sur place au lieu d'avancer. */
+            if (c > best_clear) { best_clear = c; dir = cand; }
+        }
+    }
+
+    snake_hold(g, dir < 0, dir > 0, false);
+    return dir != 0;
 }
 
 /* ==========================================================================
@@ -785,36 +1027,6 @@ static void blit(const ctx *c, const ns_texture *t, float x, float y, float w, f
     ns_sprite_quad(c->s, c->ox + x * c->scale, c->oy + y * c->scale,
                    w * c->scale, h * c->scale,
                    sx / tw, sy / th, (sx + sw) / tw, (sy + sh) / th, rgba);
-}
-
-static void draw_number(const ctx *c, const snake_art *a, int64_t value, float cx, float y,
-                        float scale)
-{
-    char buf[24];
-    const bool neg = value < 0;
-    uint64_t v = (uint64_t)(neg ? -value : value);
-    int n = 0;
-    do { buf[n++] = (char)('0' + (v % 10)); v /= 10; } while (v && n < 20);
-
-    const float dw = DIGIT_W * scale, dh = DIGIT_H * scale;
-    const float total = dw * (float)(n + (neg ? 1 : 0));
-    float x = cx - total * 0.5f;
-
-    if (neg) {
-        /* La planche n'a pas de signe moins : un trait le fait très bien. */
-        static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-        ns_sprite_texture(c->s, NULL);
-        ns_sprite_rect(c->s, c->ox + (x + dw * 0.2f) * c->scale,
-                       c->oy + (y + dh * 0.45f) * c->scale,
-                       dw * 0.6f * c->scale, dh * 0.12f * c->scale, white);
-        x += dw;
-    }
-    for (int i = n - 1; i >= 0; --i) {
-        const float d = (float)(buf[i] - '0');
-        blit(c, &a->digits, x, y, dw, dh, d * DIGIT_W, 0.0f, DIGIT_W, DIGIT_H,
-             DIGIT_W * 11.0f, DIGIT_H, NULL);
-        x += dw;
-    }
 }
 
 void snake_draw(ns_sprite *s, const snake *g, const snake_art *a,
@@ -977,41 +1189,73 @@ void snake_draw(ns_sprite *s, const snake *g, const snake_art *a,
              0.0f, bh - fill, bw, fill, bw, bh, NULL);
     }
 
-    /* Le score : les chiffres font 12 x 18 dans la planche, donc 26 x 40 px de
-     * repère à l'échelle 2,2 — soit 7 x 11 px sur la dalle 512 x 288 d'une
-     * borne, ce que la capture montrait comme une tache. Flappy dessine les
-     * MÊMES chiffres à 6,4 et se lit. 4,5 met le score de Snake au-dessus du
-     * seuil sans mordre sur le terrain. */
+    static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    static const float amber[4] = { 1.0f, 0.82f, 0.30f, 1.0f };
+
     /*
-     * UN CARTOUCHE SOUS LE SCORE.
+     * LE SCORE NE SORT PLUS DE `chiffre.png`, ET C'EST MESURÉ SUR LA PLANCHE.
      *
-     * Les chiffres sont blancs, le terrain est un vert clair : sur la dalle
-     * d'une borne, du blanc sur du vert à 190 de luminance ne se lit pas. Un
-     * fond sombre translucide donne au nombre le contraste que le terrain lui
-     * refuse, et il coûte un quad.
+     * Les chiffres de 2020 sont des pleins BLANCS cernés d'un trait sombre, et
+     * les contre-formes — le trou du zéro, celui du huit — font UN pixel de
+     * large dans un glyphe de douze. Grossis 4,5 fois puis ramenés sur la dalle
+     * d'une borne, qui divise le repère de 1920 par 3,75, ce pixel mesure
+     * 1,2 pixel de dalle : le trou disparaît et tous les chiffres deviennent le
+     * même rectangle blanc. La capture le montrait sans ambiguïté — le score se
+     * lisait « ▯▯4 », seul le quatre survivant, parce que son ouverture est
+     * diagonale et coupe le contour.
      *
-     * Et il descend à 96 : à 4,5 les chiffres font 81 px de haut, si bien qu'à
-     * 18 ils passaient sous le bord haut de la dalle — la capture les montrait
-     * coupés par le cadre du tube.
+     * Agrandir n'y pouvait rien : ce n'est pas une affaire de taille mais de
+     * rapport entre le trait et la contre-forme, et il ne change pas avec
+     * l'échelle. La fonte de `ns_sprite` a un trait d'un pixel sur une grille de
+     * 5 x 7, donc des contre-formes qui grossissent AVEC elle. C'est celle que
+     * la recette précédente a calibrée sur cette dalle : à `x 6`, un glyphe fait
+     * 11,2 px de dalle, exactement le seuil relevé. Le score est écrit à `x 8`.
+     *
+     * Le cartouche sombre reste : les chiffres sont clairs et le terrain est un
+     * vert à 190 de luminance.
      */
     {
         const int64_t shown = (int64_t)(g->score_shown
                                         + (g->score_shown < 0 ? -0.5f : 0.5f));
         char tmp[24];
         SDL_snprintf(tmp, sizeof tmp, "%lld", (long long)shown);
-        const float dw = DIGIT_W * 4.5f * (float)SDL_strlen(tmp);
-        const float pad = 22.0f;
+        const float sc = c.scale * 8.0f;
+        const float w = ns_sprite_text_width(tmp, sc);
+        const float h = ns_sprite_text_height(sc);
+        const float pad = 16.0f * c.scale;
+        const float x = c.ox + SNAKE_W * c.scale * 0.5f - w * 0.5f;
+        const float y = c.oy + 96.0f * c.scale;
         static const float plate[4] = { 0.04f, 0.10f, 0.03f, 0.62f };
         ns_sprite_texture(s, NULL);
-        ns_sprite_rect(s, c.ox + (SNAKE_W * 0.5f - dw * 0.5f - pad) * c.scale,
-                       c.oy + (96.0f - pad * 0.5f) * c.scale,
-                       (dw + pad * 2.0f) * c.scale,
-                       (DIGIT_H * 4.5f + pad) * c.scale, plate);
-        draw_number(&c, a, shown, SNAKE_W * 0.5f, 96.0f, 4.5f);
-    }
+        ns_sprite_rect(s, x - pad, y - pad * 0.5f, w + pad * 2.0f, h + pad, plate);
+        ns_sprite_text(s, x, y, sc, white, tmp);
 
-    static const float white[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    static const float amber[4] = { 1.0f, 0.82f, 0.30f, 1.0f };
+        /*
+         * EN HARDCORE, LA RÈGLE RESTE À L'ÉCRAN.
+         *
+         * Elle n'était affichée que pendant les six dixièmes de seconde de
+         * l'écran d'accueil. Or c'est la règle la plus contre-intuitive du
+         * paquet — manger COÛTE cinq fois la valeur du fruit — et un joueur de
+         * borne ne lit pas de notice : il attrape le manche et fonce sur le
+         * premier fruit. Une ligne sous le score coûte un quad et répond à la
+         * seule question que le mode pose.
+         */
+        if (g->hard) {
+            /* `x 6` et pas moins : c'est le seuil de lisibilité relevé sur la
+             * dalle — 11,2 px de haut. Et son cartouche, pour la même raison
+             * que le score : du texte clair sur ce vert ne se lit pas. */
+            static const float red[4] = { 1.0f, 0.55f, 0.45f, 1.0f };
+            const char *rule = "NE MANGE PAS - LAISSE POURRIR";
+            const float sc2 = c.scale * 6.0f;
+            const float w2 = ns_sprite_text_width(rule, sc2);
+            const float h2 = ns_sprite_text_height(sc2);
+            const float x2 = c.ox + SNAKE_W * c.scale * 0.5f - w2 * 0.5f;
+            const float y2 = y + h + pad * 1.6f;
+            ns_sprite_texture(s, NULL);
+            ns_sprite_rect(s, x2 - pad, y2 - pad * 0.5f, w2 + pad * 2.0f, h2 + pad, plate);
+            ns_sprite_text(s, x2, y2, sc2, red, rule);
+        }
+    }
 
     if (g->phase == SNAKE_READY) {
         const float sc = c.scale * 6.0f;
@@ -1056,7 +1300,6 @@ bool snake_art_load(ns_rhi *r, snake_art *a)
         ns_texture_load(r, &a->body,       "games/snake/snake.png",           true, false) &&
         ns_texture_load(r, &a->fruits,     "games/snake/fruits.png",          true, false) &&
         ns_texture_load(r, &a->anim,       "games/snake/anim.png",            true, false) &&
-        ns_texture_load(r, &a->digits,     "games/snake/chiffre.png",         true, false) &&
         ns_texture_load(r, &a->basket,     "games/snake/basket.png",          true, false);
     a->ready = ok;
     if (!ok) NS_WARN("snake : planches introuvables, le jeu tournera sans images");
@@ -1071,7 +1314,6 @@ void snake_art_free(ns_rhi *r, snake_art *a)
     ns_texture_destroy(r, &a->body);
     ns_texture_destroy(r, &a->fruits);
     ns_texture_destroy(r, &a->anim);
-    ns_texture_destroy(r, &a->digits);
     ns_texture_destroy(r, &a->basket);
     a->ready = false;
 }

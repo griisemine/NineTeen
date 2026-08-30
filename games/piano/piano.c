@@ -50,6 +50,47 @@ static const chart_row PN_CHART[] = {
 #define PN_COMBO_EVERY 10
 
 /* ==========================================================================
+ * LE MORCEAU A UNE FIN, ET LA RAMPE A UN PLAFOND
+ * ==========================================================================
+ * Ce qu'il y avait : `g->speed *= 1.08f` à chaque tour, sans borne, et des
+ * tours ajoutés tant qu'il fallait des notes. Écrit ainsi, la partition n'a pas
+ * de fin — elle a pire, elle a une fin qui arrive trop tôt : la durée d'un tour
+ * vaut 16,43 / 1,08^k seconde, et la somme de cette série CONVERGE, à
+ * 16,43 x 13,5 = 221,8 secondes. Le morceau infini se consomme donc en trois
+ * minutes et quarante secondes, après quoi la boucle en ajoute un par pas,
+ * c'est-à-dire cent vingt par seconde.
+ *
+ * La mesure le dit sans détour, borne difficile, cinq graines identiques :
+ * vitesse 1,73 à 11 s, 6,39 à 111 s, 2 587 à 171 s, 207 949 à 191 s. À cette
+ * vitesse une mesure de 600 px dure sept microsecondes et les notes descendent
+ * à quatre-vingt-sept millions de pixels par seconde : l'écran ne montre plus
+ * rien, et le score continue de monter. Il sextuplait entre la 120ᵉ et la
+ * 240ᵉ seconde, ce qui ne mesurait plus une adresse mais une endurance.
+ *
+ * Deux bornes, donc, et elles se justifient l'une l'autre :
+ *
+ * `PN_SPEED_MAX` — la vitesse plafonne. Elle vaut ce que la LECTURE permet, et
+ * ce nombre-là se calcule : la note parcourt les 864 px qui séparent le haut de
+ * l'écran de la ligne de frappe à `420 x vitesse` px/s, ce qui laisse
+ * 2,06 / vitesse seconde pour la voir venir et bouger le manche. À cinq, il
+ * reste 0,41 s — au-dessus du temps de réaction, et à peine. Au-delà on ne
+ * demande plus de jouer, on demande de deviner.
+ *
+ * `PN_LOOPS` — le morceau fait quatorze tours et s'arrête. Un jeu d'arcade
+ * finit, et celui-ci finissait par épuisement du joueur ou jamais. Quatorze
+ * tours font une centaine de secondes sur la borne ordinaire et une
+ * soixantaine sur la difficile, qui démarre déjà lancée.
+ *
+ * `PN_SPEED_STEP` passe de 1,08 à 1,18 pour la même raison qu'il y a un
+ * plafond : avec 8 % par tour, la partition met deux minutes à doubler et le
+ * morceau se terminerait avant d'avoir été difficile. À 18 %, le plafond arrive
+ * au dixième tour et les quatre derniers se jouent au maximum.
+ * ========================================================================== */
+#define PN_SPEED_STEP 1.18f
+#define PN_SPEED_MAX  5.0f
+#define PN_LOOPS      14u
+
+/* ==========================================================================
  * La partition, dépliée
  * ========================================================================== */
 
@@ -85,10 +126,8 @@ static void extend_chart(piano *g)
     g->note_count = keep;
 
     g->loops++;
-    /* +8 % par tour : au dixième la partition va deux fois plus vite. C'est ce
-     * qui fait qu'une partie finit, et donc qu'un score veut dire quelque
-     * chose. */
-    g->speed *= 1.08f;
+    g->speed *= PN_SPEED_STEP;
+    if (g->speed > PN_SPEED_MAX) g->speed = PN_SPEED_MAX;
     build_chart(g, last_end + 0.35f, g->speed);
 }
 
@@ -136,6 +175,7 @@ static const char *fail_text(pn_fail why)
     switch (why) {
         case PN_FAIL_WRONG_NOTE:      return "FAUSSE NOTE";
         case PN_FAIL_TOO_MANY_MISSES: return "TROP DE NOTES MANQUEES";
+        case PN_DONE:                 return "MORCEAU TERMINE";
         case PN_FAIL_NONE:            break;
     }
     return "";
@@ -226,13 +266,30 @@ void piano_tick(piano *g, float dt)
         }
     }
 
-    /* Faut-il rallonger la partition ? On regarde la dernière note connue. */
+    /*
+     * Faut-il rallonger la partition ? On regarde la dernière note connue — et
+     * on s'arrête au quatorzième tour, parce que le morceau a une longueur.
+     */
     float last = 0.0f;
     for (uint32_t i = 0; i < g->note_count; ++i) {
         const float end = g->note[i].start;
         if (end > last) last = end;
     }
-    if (last < g->time + 3.0f) extend_chart(g);
+    if (last < g->time + 3.0f && g->loops + 1u < PN_LOOPS) extend_chart(g);
+
+    /*
+     * LE MORCEAU EST FINI quand le dernier tour est écrit ET que sa dernière
+     * note est passée. On attend la fenêtre de frappe : sans ce délai, la note
+     * finale serait comptée manquée à l'instant même où l'on pouvait encore la
+     * jouer, et une partie parfaite se terminerait sur un oubli.
+     */
+    if (g->loops + 1u >= PN_LOOPS && g->time > last + PN_WINDOW) {
+        g->phase = PN_DEAD;
+        g->dead_time = 0.0f;
+        g->died = true;
+        g->fail_reason = PN_DONE;
+        return;
+    }
 
     /*
      * Laisser passer trop de notes termine la partie — dans LES DEUX modes.
@@ -300,8 +357,23 @@ void piano_draw(ns_sprite *s, const piano *g, const piano_art *a,
     const float board_w = lane_w * PN_LANES;
     const float ox = (logical_w - board_w) * 0.5f;
     const float hit_y = logical_h * 0.80f;
-    /* Les notes descendent : `PN_PX_PER_SECOND` px/s à l'échelle de l'écran. */
-    const float px_per_s = PN_PX_PER_SECOND * base * g->speed;
+    /*
+     * LE DÉFILEMENT NE SUIT PAS LE TEMPO, ET C'ÉTAIT À L'ENVERS.
+     *
+     * Il valait `PN_PX_PER_SECOND * base * g->speed` : plus la partition
+     * accélérait, plus les notes descendaient vite, donc moins on en voyait à la
+     * fois. La distance entre le haut de l'écran et la ligne de frappe est fixe
+     * — 864 px dans le repère de 1920 — si bien que le temps de lecture valait
+     * 2,06 / vitesse seconde et fondait avec elle. Capture à la 60ᵉ seconde,
+     * vitesse 3,4 : UNE note à l'écran, et des voies vides le reste du temps.
+     *
+     * Une partition plus rapide doit montrer PLUS de notes, pas moins : c'est
+     * ainsi qu'on voit venir la difficulté au lieu de la subir. Le défilement
+     * garde donc l'allure de la première mesure et n'en bouge plus — 2,06 s de
+     * lecture, quel que soit le tempo — et c'est la DENSITÉ qui monte. Au
+     * plafond de `PN_SPEED_MAX`, six notes sont à l'écran au lieu d'une.
+     */
+    const float px_per_s = PN_PX_PER_SECOND * base;
 
     static const float LANE[PN_LANES][4] = {
         { 0.94f, 0.32f, 0.36f, 1.0f },
@@ -345,6 +417,21 @@ void piano_draw(ns_sprite *s, const piano *g, const piano_art *a,
         SDL_snprintf(line, sizeof line, "COMBO %u", g->combo);
         ns_sprite_text(s, 30.0f * base, 104.0f * base, base * 5.0f, amber, line);
     }
+    /*
+     * OÙ L'ON EN EST DU MORCEAU.
+     *
+     * Le morceau fait quatorze tours et s'arrête ; le dire est la moitié de ce
+     * que la borne d'à côté vend. Un joueur qui ignore qu'il y a une fin joue
+     * jusqu'à ce qu'il rate, un joueur qui voit « 7/14 » joue pour finir — et
+     * c'est la seule différence entre un exercice et une partie.
+     */
+    {
+        /* « SUR » et pas une barre oblique : sur la dalle d'une borne, la barre
+         * de la fonte 5 x 7 se confond avec le chiffre un. */
+        SDL_snprintf(line, sizeof line, "TOUR %u SUR %u", g->loops + 1u, (unsigned)PN_LOOPS);
+        ns_sprite_text(s, 30.0f * base, 174.0f * base, base * 5.0f, white, line);
+    }
+
     /* Les oublis restants. On ne les montre qu'une fois le premier commis :
      * avant, c'est du bruit ; après, c'est le compte à rebours qui dit qu'on
      * joue sa partie. Une limite qu'on ne voit pas venir est arbitraire. */
@@ -367,8 +454,12 @@ void piano_draw(ns_sprite *s, const piano *g, const piano_art *a,
         ns_sprite_rect(s, 0.0f, logical_h * 0.30f, logical_w, logical_h * 0.40f, veil);
         const float sc = base * 8.0f;
         const char *why = fail_text(g->fail_reason);
+        /* Le morceau terminé s'écrit en VERT : c'est la fin qu'on vient
+         * chercher, et elle ne doit pas ressembler aux deux autres. */
+        static const float green[4] = { 0.42f, 0.94f, 0.52f, 1.0f };
         ns_sprite_text(s, (logical_w - ns_sprite_text_width(why, sc)) * 0.5f,
-                       logical_h * 0.37f, sc, amber, why);
+                       logical_h * 0.37f, sc,
+                       (g->fail_reason == PN_DONE) ? green : amber, why);
         const float sc2 = base * 4.6f;
         SDL_snprintf(line, sizeof line, "%u NOTES   MEILLEUR COMBO %u", g->hits, g->best_combo);
         ns_sprite_text(s, (logical_w - ns_sprite_text_width(line, sc2)) * 0.5f,

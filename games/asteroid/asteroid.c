@@ -97,7 +97,32 @@ enum {
     B_COUNT
 };
 static const int CHANCE_BONUS[B_COUNT] = { 1, 2, 1, 3, 4, 1, 10, 6, 2, 4, 4, 4, 4 };
-static const int BONUS_POINT[3] = { 500, 1500, 5000 };
+/* `PROBA_BONUS 4` : un astéroïde sur quatre porte un bonus. */
+#define PROBA_BONUS 4
+/*
+ * LES BONUS DE POINTS SE COMPTENT EN CAILLOUX, ET LEURS TROIS PALIERS SE
+ * RESSERRENT.
+ *
+ * 2020 les écrit `{500, 1500, 5000}` à côté de cailloux qui valent cinquante :
+ * un ramassage chanceux pesait cent fois un caillou cassé. C'est la moitié de
+ * ce que la recette a relevé comme « la variance pèse plus que l'adresse » —
+ * mesuré sur douze graines, 59 % du score total venait des ramassages, et une
+ * graine finissait à 5 290 quand sa voisine finissait à 230 pour un jeu
+ * identique.
+ *
+ * L'unité devient donc la valeur du caillou courant. Elle monte avec la
+ * difficulté comme celle des cailloux, si bien que les bonus ne deviennent pas
+ * dérisoires en fin de partie, ce qu'une constante aurait fait.
+ *
+ * Et le rapport entre les trois paliers passe de 1:3:10 à 1:2:3. Le 1:3:10 de
+ * 2020 décrit une économie où l'on casse des centaines de cailloux ; ici une
+ * partie en casse SIX À DIX, et dans une somme de dix termes un dixième terme
+ * qui vaut dix fois les autres n'est pas un bonus, c'est la partie. Les deux
+ * réglages ont été mesurés sur les cinq mêmes graines : à 1:3:10 le rapport
+ * entre la meilleure et la pire partie vaut 3,43, à 1:2:4 il vaut 2,13, à 1:2:3
+ * il vaut 1,96. La recette partait de 3,25.
+ */
+static const int BONUS_POINT_ROCKS[3] = { 1, 2, 3 };
 #define NB_TIR_MAX              3
 static const float ANGLE_TIR_MULTIPLE[NB_TIR_MAX][NB_TIR_MAX] = {
     { 0.0f, 0.0f, 0.0f },
@@ -112,9 +137,7 @@ static const float ANGLE_TIR_MULTIPLE[NB_TIR_MAX][NB_TIR_MAX] = {
 #define BOUCLIER_DUREE             8.0f
 #define AMMO_GRANT                 (1.0f / 3.0f)
 #define MAX_RATIO_AMMO             0.7f
-#define CHANCE_SPAWN_PICKUP        8.0f      /* une chance par 8 s */
 #define DIST_WALL_PICKUP         140.0f
-#define DIST_VAISS_PICKUP         70.0f
 
 /* ==========================================================================
  * Aides
@@ -132,9 +155,44 @@ static float wrap_angle(float a)
     return a;
 }
 
+/*
+ * LA VARIÉTÉ D'UN ASTÉROÏDE NE SE TIRE PAS AU SORT : ELLE SE LIT SUR L'HORLOGE.
+ *
+ * `SCORE_ASTEROID` va de 50 à 500 selon `kind`, et le portage écrivait
+ * `r->kind = ns_rng_below(&g->rng, NB_ASTE_TEXTURES)` — un dé à six faces.
+ * Deux cailloux de même taille, cassés du même nombre de coups, valaient donc
+ * l'un dix fois l'autre, au hasard. C'est la moitié de ce que la recette a
+ * relevé comme « la variance pèse plus que l'adresse » : sur douze graines, le
+ * rapport points-par-caillou allait de 116 à 263.
+ *
+ * 2020 ne tire rien. `asteroid.c` calcule la variété, aux trois endroits où
+ * elle sert, par la même ligne :
+ *
+ *     skinAste = (int)((difficulte_pere - START_DIFFICULTE)
+ *                      / (MAX_DIFF / NB_ASTE_TEXTURES));
+ *
+ * C'est-à-dire par la DIFFICULTÉ qu'avait la partie quand le caillou est
+ * apparu — une grandeur qui monte avec le temps, identique pour tout le monde
+ * au même instant. La variété n'est donc pas une loterie, c'est un cadran :
+ * plus on tient, plus les cailloux valent cher. Rendue ainsi, la valeur d'un
+ * caillou récompense la durée, qui est ce que le joueur produit.
+ *
+ * `MAX_DIFF / NB_ASTE_TEXTURES` vaut 40/6 = 6,67, et la difficulté monte de
+ * 0,081 par seconde : le premier palier tombe à la 82ᵉ seconde, le deuxième à
+ * la 164ᵉ. Une partie courte ne voit que des cailloux à 50.
+ */
+static int rock_kind_for(float difficulty)
+{
+    int k = (int)((difficulty - START_DIFFICULTE)
+                  / (MAX_DIFF / (float)NB_ASTE_TEXTURES));
+    if (k < 0) k = 0;
+    if (k > NB_ASTE_TEXTURES - 1) k = NB_ASTE_TEXTURES - 1;
+    return k;
+}
+
 /* Le score d'un astéroïde : sa variété donne la base, sa taille le quartier.
- * C'est la formule de 2020, et c'est elle qui fait qu'un petit fragment d'une
- * variété rare vaut plus qu'un gros caillou commun. */
+ * C'est la formule de 2020, et c'est elle qui fait qu'un fragment vaut moins que
+ * le caillou dont il sort. */
 int64_t asteroid_rock_score(const ast_rock *r)
 {
     const float d = r->radius * 2.0f;
@@ -213,8 +271,27 @@ static void spawn_rock(asteroid *g)
         r->radius = d * 0.5f;
         r->hp = PV_BASE * (d / MAX_ASTEROID_SIZE) * diff;
         if (r->hp < 0.3f) r->hp = 0.3f;
-        r->kind = (int)ns_rng_below(&g->rng, NB_ASTE_TEXTURES);
+        r->kind = rock_kind_for(diff);
         r->spin = frandf(&g->rng, -3.0f, 3.0f);
+        /*
+         * UN CAILLOU SUR QUATRE PORTE UN BONUS — `PROBA_BONUS 4` de 2020, et
+         * c'est le second morceau de la variance.
+         *
+         * Le portage faisait apparaître les bonus sur une HORLOGE, un toutes
+         * les huit secondes, où que soit le joueur et quoi qu'il fasse. Mesuré
+         * sur douze graines : cinquante-neuf pour cent du score total venait de
+         * ces ramassages, dont trois valent 500, 1 500 ou 5 000 points tirés au
+         * sort. La majorité du score d'Asteroid ne dépendait donc pas de la
+         * partie. Un tirage à 5 000 triplait un score de base de 2 000.
+         *
+         * 2020 marque le caillou À L'APPARITION et délivre le bonus quand on le
+         * DÉTRUIT. Le nombre de bonus d'une partie est alors proportionnel au
+         * nombre de cailloux cassés, c'est-à-dire à ce que le joueur a fait. La
+         * valeur d'un bonus reste tirée — c'est la table de 2020 — mais on en
+         * ramasse d'autant plus qu'on joue bien, et la moyenne se resserre
+         * d'elle-même.
+         */
+        r->bonus = (ns_rng_below(&g->rng, PROBA_BONUS) == 0);
         r->alive = true;
         return;
     }
@@ -244,11 +321,17 @@ static void split_rock(asteroid *g, const ast_rock *src)
         r->radius = d * 0.5f;
         r->hp = src->hp * 0.5f;
         if (r->hp < 0.2f) r->hp = 0.2f;
+        /* Le fragment garde la variété du père — `difficulte_pere` est copiée
+         * telle quelle par `asteroid_cpy` — et ne porte pas de bonus : 2020
+         * consomme celui du père au moment de la casse. */
         r->kind = src->kind;
+        r->bonus = false;
         r->spin = frandf(&g->rng, -4.0f, 4.0f);
         r->alive = true;
     }
 }
+
+static void drop_pickup(asteroid *g, float x, float y);
 
 static void kill_rock(asteroid *g, ast_rock *r)
 {
@@ -257,6 +340,7 @@ static void kill_rock(asteroid *g, ast_rock *r)
     g->pend_rock += pts;
     g->rocks_killed++;
     r->alive = false;
+    if (r->bonus) { r->bonus = false; drop_pickup(g, r->x, r->y); }
     split_rock(g, r);
 }
 
@@ -303,7 +387,8 @@ static void grant_bonus(asteroid *g, int b)
         case B_POINT_PETIT:
         case B_POINT_MOYEN:
         case B_POINT_GRAND: {
-            const int64_t pts = BONUS_POINT[b - B_POINT_PETIT];
+            const int64_t unit = SCORE_ASTEROID[rock_kind_for(g->difficulty)];
+            const int64_t pts = unit * BONUS_POINT_ROCKS[b - B_POINT_PETIT];
             g->score += pts;
             g->pend_bonus += pts;
             break;
@@ -322,22 +407,28 @@ static void grant_bonus(asteroid *g, int b)
     }
 }
 
-static void spawn_pickup(asteroid *g)
+/*
+ * Le bonus TOMBE DU CAILLOU qu'on vient de casser, à sa place.
+ *
+ * 2020 l'applique directement au vaisseau, sans objet à ramasser
+ * (`if (bonus && !done) recoit_bonus(...)`). On garde l'objet — il fait bouger
+ * le vaisseau, ce qui est du jeu, et c'est par lui que le pilote automatique
+ * exerce l'armement — mais on garde de 2020 ce qui compte : son ORIGINE. Un
+ * bonus vient d'un caillou détruit, donc leur nombre suit ce que le joueur a
+ * fait, et non une horloge.
+ *
+ * La position est rentrée dans le terrain : un bonus largué par un caillou mort
+ * au ras du bord serait inatteignable, le vaisseau rebondissant sur les murs.
+ */
+static void drop_pickup(asteroid *g, float x, float y)
 {
     for (int i = 0; i < AST_MAX_PICKUPS; ++i) {
         if (g->pickup[i].alive) continue;
-        for (int attempt = 0; attempt < 8; ++attempt) {
-            const float x = frandf(&g->rng, DIST_WALL_PICKUP, AST_W - DIST_WALL_PICKUP);
-            const float y = frandf(&g->rng, DIST_WALL_PICKUP, AST_H - DIST_WALL_PICKUP);
-            const float dx = x - g->ship_x, dy = y - g->ship_y;
-            if (dx * dx + dy * dy < DIST_VAISS_PICKUP * DIST_VAISS_PICKUP) continue;
-            g->pickup[i].x = x;
-            g->pickup[i].y = y;
-            g->pickup[i].bonus = roll_bonus(g);
-            g->pickup[i].life = 12.0f;
-            g->pickup[i].alive = true;
-            return;
-        }
+        g->pickup[i].x = ns_clampf(x, DIST_WALL_PICKUP, AST_W - DIST_WALL_PICKUP);
+        g->pickup[i].y = ns_clampf(y, DIST_WALL_PICKUP, AST_H - DIST_WALL_PICKUP);
+        g->pickup[i].bonus = roll_bonus(g);
+        g->pickup[i].life = 12.0f;
+        g->pickup[i].alive = true;
         return;
     }
 }
@@ -398,6 +489,7 @@ static void detonate_nuke(asteroid *g)
         g->score += pts;
         g->pend_rock += pts;
         g->rocks_killed++;
+        if (g->rock[i].bonus) { g->rock[i].bonus = false; drop_pickup(g, g->rock[i].x, g->rock[i].y); }
         g->rock[i].alive = false;   /* la bombe ne fragmente pas : elle efface */
     }
 }
@@ -427,7 +519,6 @@ void asteroid_reset(asteroid *g, uint64_t seed, bool hard)
     g->difficulty = START_DIFFICULTE;
     g->spawn_period = VITESSE_SPAWN_INIT;
     g->spawn_timer = 1.0f;
-    g->pickup_timer = CHANCE_SPAWN_PICKUP;
 
     /*
      * Un champ de DÉPART, comme `FRAME_INIT_SPAWN` et les trois `coord_spawn`
@@ -559,6 +650,18 @@ void asteroid_tick(asteroid *g, float dt)
      * survie. Une règle de remplissage n'a pas à créer des astéroïdes là où la
      * cadence n'en prévoit aucun.
      */
+    /*
+     * LE PLANCHER RESTE À DEUX, ET C'EST UNE MESURE QUI L'A DÉCIDÉ.
+     *
+     * L'hypothèse était qu'un champ plus fourni ferait converger le score : avec
+     * six à dix cailloux cassés par partie, le hasard de chacun pèse plus que
+     * leur somme. Elle a été essayée à trois, quatre et cinq, sur les cinq mêmes
+     * graines, et elle est FAUSSE sur les deux tableaux à la fois — le rapport
+     * entre la meilleure et la pire partie monte de 3,4 à 4,9 puis à 8,1, et la
+     * mort avance de 57,5 s à 44,6 puis à 39,0. Le champ plus chargé tue le
+     * pilote avant qu'il n'ait le temps de casser davantage : on perd les deux
+     * grandeurs qu'on voulait gagner. Deux reste.
+     */
     if (asteroid_live_rocks(g) < 2
         && g->spawn_timer > 2.0f && g->spawn_timer <= g->spawn_period) {
         g->spawn_timer = 2.0f;
@@ -591,11 +694,6 @@ void asteroid_tick(asteroid *g, float dt)
             g->wave = g->rocks_killed / 20u;
             g->pend_wave++;
         }
-    }
-    g->pickup_timer -= dt;
-    if (g->pickup_timer <= 0.0f) {
-        spawn_pickup(g);
-        g->pickup_timer = CHANCE_SPAWN_PICKUP;
     }
 
     /* --- les astéroïdes --- */

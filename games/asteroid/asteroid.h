@@ -12,6 +12,24 @@
  * douze secondes à six et demie, et les **cinq types de missiles** avec leurs
  * tables de fréquence, de vitesse, de dégâts, de rayon et de durée.
  *
+ * Deux règles que le portage avait remplacées par des dés
+ * -------------------------------------------------------
+ * **La variété d'un astéroïde se lit sur l'horloge.** `SCORE_ASTEROID` va de 50
+ * à 500 selon elle, et 2020 la calcule par
+ * `(difficulte_pere - START_DIFFICULTE) / (MAX_DIFF / NB_ASTE_TEXTURES)`, la
+ * difficulté de la partie au moment de l'apparition. Le portage la tirait au
+ * sort : deux cailloux identiques valaient l'un dix fois l'autre.
+ *
+ * **Un bonus sort d'un caillou.** `PROBA_BONUS` vaut 4 : un astéroïde sur quatre
+ * en porte un, délivré quand on le casse. Le portage en posait un toutes les
+ * huit secondes, quoi que fasse le joueur — 59 % du score d'une partie ne
+ * dépendait donc pas de la partie. L'objet à ramasser est gardé, parce qu'il
+ * fait bouger le vaisseau ; son origine redevient celle de 2020.
+ *
+ * Les trois paliers de `BONUS_POINT` gardent leur place mais pas leur écart :
+ * 1:3:10 décrit une économie où l'on casse des centaines de cailloux, quand une
+ * partie d'ici en casse six à dix. Voir `asteroid.c`, le chiffre est mesuré.
+ *
  * L'enveloppe du terrain
  * ----------------------
  * Les astéroïdes entrent par les bords et **traversent** ; le vaisseau, lui,
@@ -65,6 +83,10 @@ typedef struct ast_rock {
     int   kind;          /* 0..5 : la variété, donc le score de base */
     float frozen;        /* secondes de gel restantes */
     bool  alive;
+    /* `PROBA_BONUS` de 2020 : un caillou sur quatre en porte un, et il tombe
+     * quand on le casse. C'est ce qui attache le nombre de bonus au jeu plutôt
+     * qu'à une horloge — voir `spawn_rock`. */
+    bool  bonus;
 } ast_rock;
 
 typedef struct ast_shot_t {
@@ -112,7 +134,6 @@ typedef struct asteroid {
     ast_pickup pickup[AST_MAX_PICKUPS];
 
     float spawn_timer, spawn_period;
-    float pickup_timer;
     float difficulty;        /* START_DIFFICULTE, monte avec le temps */
     uint32_t wave;
 

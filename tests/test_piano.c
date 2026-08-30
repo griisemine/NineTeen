@@ -224,6 +224,61 @@ static void test_la_partition_boucle_et_accelere(void)
     CHECK(g.hits > 20, "et le joueur automatique tient (%u notes)", g.hits);
 }
 
+/*
+ * LA RAMPE A UN PLAFOND, ET LE MORCEAU A UNE FIN.
+ *
+ * Ce qu'on mesure ici est ce qui manquait : la vitesse montait de 8 % par tour
+ * sans borne, et comme la durée d'un tour vaut 16,43 / vitesse, la SÉRIE DES
+ * DURÉES CONVERGE — un morceau infini consommé en trois minutes et quarante.
+ * Relevé sur la borne difficile avant correction : vitesse 6,39 à 111 s,
+ * 2 587 à 171 s, 207 949 à 191 s, moment où les notes descendent à
+ * quatre-vingt-sept millions de pixels par seconde et où l'écran ne montre plus
+ * rien pendant que le score continue de monter.
+ */
+static void test_le_morceau_a_une_fin(void)
+{
+    for (int hard = 0; hard < 2; ++hard) {
+        piano g;
+        piano_reset(&g, 1, hard != 0);
+        piano_press(&g, NS_GAME_ACTION);
+
+        float t = 0.0f, top = 0.0f;
+        int64_t score_at_death = 0;
+        bool done = false;
+        for (int i = 0; i < 120 * 400 && !done; ++i) {
+            piano_autopilot(&g);
+            piano_tick(&g, STEP);
+            t += STEP;
+            if (g.speed > top) top = g.speed;
+            if (g.phase == PN_DEAD) { done = true; score_at_death = g.score; }
+        }
+        CHECK(done, "%s : la partie se termine (%.1f s)",
+              hard ? "difficile" : "ordinaire", (double)t);
+        CHECK(g.fail_reason == PN_DONE,
+              "%s : et elle se termine par le MORCEAU, pas par une faute",
+              hard ? "difficile" : "ordinaire");
+        CHECK(top <= 5.01f, "%s : la vitesse plafonne (%.2f)",
+              hard ? "difficile" : "ordinaire", (double)top);
+        CHECK(t > 40.0f && t < 180.0f,
+              "%s : elle dure le temps d'une partie d'arcade (%.1f s)",
+              hard ? "difficile" : "ordinaire", (double)t);
+
+        /* Et le score a un PLAFOND : quatorze tours de dix notes à cinq points,
+         * plus un palier de combo tous les dix. Un jeu d'arcade se gagne, il ne
+         * s'endure pas. */
+        CHECK(score_at_death == 14 * 10 * 5 + 14 * 25,
+              "%s : la partie parfaite vaut exactement 1 050 (%lld)",
+              hard ? "difficile" : "ordinaire", (long long)score_at_death);
+
+        /* Le morceau fini, plus rien ne bouge : ni score, ni tours. */
+        const uint32_t loops = g.loops;
+        for (int i = 0; i < 120 * 20; ++i) piano_tick(&g, STEP);
+        CHECK(g.score == score_at_death && g.loops == loops,
+              "%s : et il ne se passe plus rien après la fin",
+              hard ? "difficile" : "ordinaire");
+    }
+}
+
 /* La borne « hard » démarre lancée, et trois oublis y terminent la partie. */
 static void test_le_hardcore(void)
 {
@@ -368,6 +423,7 @@ int main(void)
     test_l_oubli_ne_tue_pas();
     test_ne_rien_jouer_finit_par_tuer();
     test_la_partition_boucle_et_accelere();
+    test_le_morceau_a_une_fin();
     test_le_hardcore();
     test_le_journal_vaut_le_score();
     test_la_fin_est_annoncee();

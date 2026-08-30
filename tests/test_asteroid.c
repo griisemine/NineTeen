@@ -33,6 +33,12 @@ static int g_failures = 0;
         }                                                                     \
     } while (0)
 
+/* La même vérification, mais dans une boucle : on ne se plaint qu'une fois. */
+#define CHECK_SILENT(cond)                                                    \
+    do { if (!(cond)) { g_checks++; g_failures++;                             \
+             printf("ÉCHEC %s:%d — invariant rompu dans la boucle\n",         \
+                    __FILE__, __LINE__); return; } } while (0)
+
 #define STEP (1.0f / 120.0f)
 
 /* L'écart entre deux angles, modulo 2π. */
@@ -127,6 +133,131 @@ static void test_le_bareme_des_asteroides(void)
     CHECK(asteroid_rock_score(&rare) > asteroid_rock_score(&common),
           "un petit fragment rare (%lld) vaut plus qu'un gros commun (%lld)",
           (long long)asteroid_rock_score(&rare), (long long)asteroid_rock_score(&common));
+}
+
+/*
+ * LA VARIÉTÉ D'UN CAILLOU NE SE TIRE PAS AU SORT.
+ *
+ * `SCORE_ASTEROID` va de 50 à 500 selon la variété, et le portage l'obtenait
+ * par `ns_rng_below(6)` : deux cailloux de même taille, cassés du même nombre
+ * de coups, valaient l'un dix fois l'autre au hasard. 2020 la calcule, aux
+ * trois endroits où elle sert, par
+ * `(difficulte_pere - START_DIFFICULTE) / (MAX_DIFF / NB_ASTE_TEXTURES)` — la
+ * difficulté au moment de l'apparition, donc l'horloge de la partie.
+ *
+ * Ce test le mesure par le seul chemin observable : deux parties menées à des
+ * instants différents doivent donner des variétés DIFFÉRENTES et CROISSANTES,
+ * et deux cailloux apparus au même instant la même.
+ */
+static void test_la_variete_suit_la_difficulte(void)
+{
+    /*
+     * On fixe la difficulté et on demande une apparition : c'est le seul chemin
+     * qui isole la règle. La faire monter en JOUANT ne marche pas — le vaisseau
+     * immobile se fait percuter avant la 82ᵉ seconde et la difficulté s'arrête
+     * avec la partie, ce que le premier jet de ce test a mesuré sans le voir.
+     */
+    static const struct { float diff; int want; } CAS[] = {
+        { 1.01f,  0 },   /* START_DIFFICULTE : la variété la plus commune */
+        { 7.00f,  0 },   /* juste sous le premier palier, 1,01 + 6,67 */
+        { 8.00f,  1 },
+        { 15.00f, 2 },
+        { 35.00f, 5 },
+        { 40.00f, 5 },   /* MAX_DIFF : on plafonne, on ne déborde pas */
+    };
+
+    for (size_t c = 0; c < sizeof CAS / sizeof CAS[0]; ++c) {
+        asteroid g;
+        asteroid_reset(&g, 4242u, false);
+        g.phase = AST_PLAYING;
+        for (int i = 0; i < AST_MAX_ROCKS; ++i) g.rock[i].alive = false;
+        g.difficulty = CAS[c].diff;
+        g.spawn_timer = 0.001f;
+        asteroid_tick(&g, STEP);
+
+        int seen = -1;
+        for (int i = 0; i < AST_MAX_ROCKS; ++i) {
+            if (!g.rock[i].alive) continue;
+            if (seen < 0) seen = g.rock[i].kind;
+            CHECK_SILENT(g.rock[i].kind == seen);
+        }
+        CHECK(seen == CAS[c].want,
+              "à difficulté %.2f la variété vaut %d (%d attendu)",
+              (double)CAS[c].diff, seen, CAS[c].want);
+    }
+
+    /* Et elle ne dépend pas de la graine : c'est une horloge, pas un dé. Deux
+     * parties de graines DIFFÉRENTES, à la même difficulté, donnent la même. */
+    asteroid a, b;
+    asteroid_reset(&a, 111u, false);
+    asteroid_reset(&b, 999u, false);
+    int ka = -1, kb = -1;
+    for (int i = 0; i < AST_MAX_ROCKS; ++i) {
+        if (a.rock[i].alive && ka < 0) ka = a.rock[i].kind;
+        if (b.rock[i].alive && kb < 0) kb = b.rock[i].kind;
+    }
+    CHECK(ka == kb && ka == 0,
+          "deux graines différentes donnent la même variété au départ (%d et %d)", ka, kb);
+}
+
+/*
+ * LES BONUS SORTENT DES CAILLOUX, PAS D'UNE HORLOGE.
+ *
+ * Le portage en posait un toutes les huit secondes où que soit le joueur : sur
+ * douze graines, 59 % du score total venait de ces ramassages, dont trois
+ * valaient 500, 1 500 ou 5 000 points tirés au sort. La majorité du score ne
+ * dépendait donc pas de la partie. `PROBA_BONUS 4` de 2020 marque un caillou
+ * sur quatre à l'apparition et délivre le bonus quand on le DÉTRUIT.
+ */
+static void test_les_bonus_sortent_des_cailloux(void)
+{
+    /* Un vaisseau qui ne tire pas ne casse rien, donc ne ramasse rien — quelle
+     * que soit la durée. C'est la propriété que l'horloge rendait fausse. */
+    asteroid g;
+    asteroid_reset(&g, 7u, false);
+    asteroid_press(&g, NS_GAME_ACTION);
+    int seen = 0;
+    for (int i = 0; i < 120 * 60 && g.phase != AST_DEAD; ++i) {
+        asteroid_tick(&g, STEP);
+        for (int k = 0; k < AST_MAX_PICKUPS; ++k) if (g.pickup[k].alive) seen++;
+    }
+    CHECK(g.rocks_killed == 0, "le vaisseau immobile ne casse rien (%u)", g.rocks_killed);
+    CHECK(seen == 0, "et aucun bonus n'apparaît de lui-même");
+
+    /* Un caillou marqué largue son bonus À SA PLACE quand il meurt. */
+    asteroid h;
+    asteroid_reset(&h, 7u, false);
+    h.phase = AST_PLAYING;
+    for (int i = 0; i < AST_MAX_ROCKS; ++i) SDL_zero(h.rock[i]);
+    for (int i = 0; i < AST_MAX_PICKUPS; ++i) SDL_zero(h.pickup[i]);
+    h.rock[0].alive = true;
+    h.rock[0].bonus = true;
+    h.rock[0].x = 800.0f; h.rock[0].y = 500.0f;
+    h.rock[0].radius = 10.0f;    /* sous TAILLE_MIN_SPLIT : il ne se fragmente pas */
+    h.rock[0].hp = 0.1f;
+    /* Le vaisseau juste dessous, canon vers le haut. L'écran fait descendre les
+     * y, donc « vers le haut » est un angle NÉGATIF. */
+    h.ship_x = 800.0f; h.ship_y = 620.0f;
+    h.ship_angle = -1.5707963f;
+    bool held[NS_GAME_BUTTON_COUNT];
+    SDL_zero(held);
+    held[NS_GAME_ACTION] = true;
+    asteroid_hold(&h, held);
+    /* Le champ est vide : la règle de remplissage voudrait en poser d'autres.
+     * On garde le compteur d'apparition hors de son cycle, comme le fait déjà
+     * `test_le_tir_normal_est_inepuisable`. */
+    h.spawn_timer = 1000.0f;
+    for (int i = 0; i < 120 * 2 && h.rocks_killed == 0; ++i) asteroid_tick(&h, STEP);
+
+    CHECK(h.rocks_killed >= 1, "le caillou marqué est bien détruit (%u)", h.rocks_killed);
+    int dropped = -1;
+    for (int k = 0; k < AST_MAX_PICKUPS; ++k) if (h.pickup[k].alive) dropped = k;
+    CHECK(dropped >= 0, "et il a largué son bonus");
+    if (dropped >= 0) {
+        CHECK(h.pickup[dropped].x == 800.0f && h.pickup[dropped].y == 500.0f,
+              "à l'endroit où le caillou est mort (%.0f, %.0f)",
+              (double)h.pickup[dropped].x, (double)h.pickup[dropped].y);
+    }
 }
 
 /* La physique du vaisseau : la rotation monte par une rampe de neuf images, la
@@ -545,6 +676,8 @@ int main(void)
 {
     test_depart();
     test_le_bareme_des_asteroides();
+    test_la_variete_suit_la_difficulte();
+    test_les_bonus_sortent_des_cailloux();
     test_les_rampes();
     test_la_deceleration();
     test_le_vaisseau_rebondit();
