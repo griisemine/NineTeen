@@ -128,6 +128,32 @@ typedef struct room_menu_ctx {
     int                *window_w;
     int                *window_h;
     bool               *fullscreen;
+
+    /*
+     * CE QUI A ETE TOUCHE DANS LE MENU, et pourquoi ces deux drapeaux existent.
+     *
+     * Les trois champs ci-dessus partent de l'etat REEL du jeu qui tourne,
+     * ligne de commande comprise — c'est voulu, et explique juste au-dessus :
+     * lancer avec `--width=1280 --fullscreen` et lire « 1600 x 900, NON »
+     * ferait douter de tout l'ecran. Mais `room_menu_persist` les ECRIVAIT
+     * ensuite dans `settings.cfg`, et la consequence est mesuree : une seule
+     * capture lancee avec `--width=1920 --height=900` remplacait definitivement
+     * la definition que le joueur avait choisie. Une option de ligne de
+     * commande est un choix POUR CETTE FOIS ; elle ne doit pas devenir une
+     * preference gardee. C'est le meme defaut que celui de `--width` pris pour
+     * une absence d'option, une couche plus loin : un etat de session confondu
+     * avec un reglage.
+     *
+     * Les deux drapeaux sont separes parce que les deux lignes le sont : basculer
+     * le plein ecran ne doit pas emporter avec lui une definition imposee par la
+     * ligne de commande.
+     *
+     * UN POINTEUR NUL VAUT « PAS TOUCHE », donc « ne pas ecrire ». C'est le sens
+     * sur : un appelant qui oublie le drapeau perd la persistance — visible et
+     * benin — la ou le defaut inverse reecrit en silence le reglage du joueur.
+     */
+    bool               *window_size_touched;
+    bool               *fullscreen_touched;
 } room_menu_ctx;
 
 void room_menu_open(room_menu *m);

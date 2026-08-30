@@ -366,6 +366,7 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
             if (next >= RES_COUNT) next = 0;
             *ctx->window_w = g_resolutions[next].w;
             *ctx->window_h = g_resolutions[next].h;
+            if (ctx->window_size_touched) *ctx->window_size_touched = true;
             m->window_dirty = true;
             /* Le rendu N'EST PAS à réappliquer : les cibles hors écran suivent
              * la taille de la fenêtre à l'image suivante, comme elles le font
@@ -378,6 +379,7 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
              * sur une valeur qui n'en a que deux, et exiger « droite pour oui »
              * serait une règle de plus à deviner. */
             *ctx->fullscreen = !*ctx->fullscreen;
+            if (ctx->fullscreen_touched) *ctx->fullscreen_touched = true;
             m->window_dirty = true;
             return false;
         case MI_VOL_MASTER:   bus_step(NS_BUS_MASTER, dir);   return false;
@@ -517,11 +519,24 @@ void room_menu_persist(const room_menu_ctx *ctx)
      * doit pas avoir à repasser `--temps-reel` à chaque lancement. */
     if (ctx->realtime) ns_config_set_bool(NS_CFG_REALTIME, *ctx->realtime);
 
-    /* La fenêtre. `main.c` relit ces trois clés au démarrage depuis toujours ;
-     * ce qui manquait, c'était quelqu'un pour les écrire. */
-    if (ctx->window_w)   ns_config_set_int(NS_CFG_WINDOW_W, *ctx->window_w);
-    if (ctx->window_h)   ns_config_set_int(NS_CFG_WINDOW_H, *ctx->window_h);
-    if (ctx->fullscreen) ns_config_set_bool(NS_CFG_FULLSCREEN, *ctx->fullscreen);
+    /*
+     * La fenêtre. `main.c` relit ces trois clés au démarrage depuis toujours ;
+     * ce qui manquait, c'était quelqu'un pour les écrire — et il écrivait TROP.
+     *
+     * On n'écrit que ce que le JOUEUR a changé ici. Les trois valeurs reflètent
+     * l'état réel du jeu, ligne de commande comprise ; les persister sans
+     * distinction faisait qu'une capture lancée avec `--width=1920 --height=900`
+     * remplaçait la définition gardée. Voir les deux drapeaux dans
+     * `room_menu.h` : un pointeur nul vaut « pas touché ».
+     */
+    if (ctx->window_w && ctx->window_h
+        && ctx->window_size_touched && *ctx->window_size_touched) {
+        ns_config_set_int(NS_CFG_WINDOW_W, *ctx->window_w);
+        ns_config_set_int(NS_CFG_WINDOW_H, *ctx->window_h);
+    }
+    if (ctx->fullscreen && ctx->fullscreen_touched && *ctx->fullscreen_touched) {
+        ns_config_set_bool(NS_CFG_FULLSCREEN, *ctx->fullscreen);
+    }
     if (ns_audio_ready()) {
         ns_config_set_float(NS_CFG_VOL_MASTER,   ns_audio_bus_volume(NS_BUS_MASTER));
         ns_config_set_float(NS_CFG_VOL_MUSIC,    ns_audio_bus_volume(NS_BUS_MUSIC));

@@ -2105,8 +2105,21 @@ int main(int argc, char **argv)
     int  menu_win_w = win_w;
     int  menu_win_h = win_h;
     bool menu_fullscreen = rhi_desc.fullscreen;
+    /*
+     * ... mais ce que le menu MONTRE et ce qu'il GARDE sont deux choses.
+     *
+     * Ces deux drapeaux ne passent a vrai que si le joueur change la ligne
+     * lui-meme. Sans eux, `room_menu_persist` ecrivait la valeur affichee, donc
+     * celle de la ligne de commande : mesure sur cette machine, une capture
+     * lancee avec `--width=1920 --height=900` laissait « window.width = 1920 »
+     * dans `settings.cfg`, et la definition choisie par le joueur etait perdue
+     * sans qu'il ait ouvert le menu.
+     */
+    bool menu_win_touched = false;
+    bool menu_fullscreen_touched = false;
     room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult, &menu_realtime,
-                               &menu_win_w, &menu_win_h, &menu_fullscreen };
+                               &menu_win_w, &menu_win_h, &menu_fullscreen,
+                               &menu_win_touched, &menu_fullscreen_touched };
     if (opt.menu) {
         room_menu_open(&menu);
         /* Une ligne hors bornes ne surligne rien et ne se répare jamais :

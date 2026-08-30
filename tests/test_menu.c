@@ -44,7 +44,7 @@ static int menu_item_count(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
     for (int i = 1; i <= 64; ++i) {
         room_menu_input(&m, &ctx, ROOM_MENU_DOWN);
@@ -67,7 +67,7 @@ static void test_navigation(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
 
     /* Fermé, le menu ignore tout : une touche pressée pendant la partie ne doit
      * pas déplacer un curseur invisible. */
@@ -92,7 +92,7 @@ static void test_quality_preserves_the_other_rows(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Ligne 1 : l'échelle. Deux crans vers le bas. */
@@ -142,7 +142,7 @@ static void test_bounds(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     go_to(&m, &ctx, 1);
@@ -175,7 +175,7 @@ static void test_buttons(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
     const int n = menu_item_count();
 
     room_menu_open(&m);
@@ -221,7 +221,7 @@ static void test_room_levels(void)
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
     bool realtime = false;
-    const room_menu_ctx ctx = { &rs, &sens, &realtime, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, &realtime, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Visées par leur LIBELLÉ, et non par arithmétique sur le nombre de lignes.
@@ -298,12 +298,137 @@ static void test_room_levels(void)
           (double)room_sound_get_level(ROOM_LEVEL_TONE));
 }
 
+/*
+ * CE QUE LE MENU GARDE, ET CE QU'IL NE DOIT PAS GARDER.
+ *
+ * Les trois champs de fenêtre du contexte partent de l'état RÉEL du jeu, ligne
+ * de commande comprise — c'est voulu, et documenté dans `room_menu.h`. Mais
+ * `room_menu_persist` les écrivait sans distinction, et la conséquence était
+ * mesurable sur le binaire : une capture lancée avec `--width=1920
+ * --height=900` laissait « window.width = 1920 » dans `settings.cfg`, effaçant
+ * la définition choisie par le joueur — qui n'avait jamais ouvert le menu.
+ *
+ * Ce test tient les DEUX moitiés de la règle. Une seule des deux ne suffit
+ * pas : « n'écrit jamais » passerait aussi bien, et le réglage cesserait
+ * d'exister.
+ */
+static void test_persist_fenetre(void)
+{
+    ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
+    float sens = 1.0f;
+    int  w = 1920, h = 900;          /* ce que la ligne de commande a imposé */
+    bool fs = true;                  /* idem, par `--fullscreen` */
+    bool w_touched = false, fs_touched = false;
+    const room_menu_ctx ctx = { &rs, &sens, NULL, &w, &h, &fs,
+                                &w_touched, &fs_touched };
+
+    /* --- moitié 1 : sans geste du joueur, rien ne s'écrit ------------------ */
+    ns_config_init("menu-fenetre-test.cfg");
+    ns_config_set_int(NS_CFG_WINDOW_W, 1280);
+    ns_config_set_int(NS_CFG_WINDOW_H, 720);
+    ns_config_set_bool(NS_CFG_FULLSCREEN, false);
+
+    room_menu_persist(&ctx);
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == 1280,
+          "une définition imposée en ligne de commande ne remplace pas celle "
+          "qui est gardée (%d)", ns_config_get_int(NS_CFG_WINDOW_W, 0));
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_H, 0) == 720,
+          "…sur les deux axes (%d)", ns_config_get_int(NS_CFG_WINDOW_H, 0));
+    CHECK(ns_config_get_bool(NS_CFG_FULLSCREEN, true) == false,
+          "…et `--fullscreen` ne coche pas la case pour toujours");
+
+    /* --- moitié 2 : après un geste dans le menu, ça s'écrit ---------------- */
+    room_menu m; memset(&m, 0, sizeof m);
+    room_menu_open(&m);
+    const int row_def = room_menu_row("DEFINITION");
+    const int row_fs  = room_menu_row("PLEIN ECRAN");
+    CHECK(row_def >= 0 && row_fs == row_def + 1,
+          "les lignes « DEFINITION » et « PLEIN ECRAN » existent et se suivent "
+          "(%d, %d)", row_def, row_fs);
+
+    go_to(&m, &ctx, row_def);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(w_touched, "changer la définition lève le drapeau");
+    CHECK(m.window_dirty, "…et demande à la fenêtre de suivre");
+    const int chosen_w = w, chosen_h = h;
+    CHECK(chosen_w != 1920 || chosen_h != 900,
+          "…et la valeur a bougé (%d x %d)", chosen_w, chosen_h);
+    /* …et PAS l'autre. Sans cette ligne, un code qui lève les deux drapeaux
+     * d'un seul geste passait le test : mesuré, cette mutation-là ne faisait
+     * tomber aucune assertion. C'est pourtant le défaut d'origine sous un autre
+     * geste — changer la définition emporterait un plein écran imposé par la
+     * ligne de commande. */
+    CHECK(!fs_touched, "…et ne lève pas celui du plein écran");
+
+    go_to(&m, &ctx, row_fs);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(fs_touched, "basculer le plein écran lève l'autre drapeau");
+    CHECK(fs == false, "…et bascule bien");
+
+    /*
+     * LA CONFIGURATION EST SEMÉE D'UNE VALEUR QUE LE MENU NE PEUT PAS CHOISIR,
+     * et c'est la mutation qui l'a exigé.
+     *
+     * Ce test posait 1280 x 720 dans la première moitié et vérifiait ensuite
+     * que la valeur écrite valait celle du menu. Or, partant d'une définition
+     * hors liste, le premier cran atterrit sur la PREMIÈRE case — qui est
+     * précisément 1280 x 720. Les deux nombres coïncidaient, et un
+     * `room_menu_persist` qui n'écrivait RIEN passait le test : mesuré, la
+     * mutation « ne jamais écrire » ne faisait tomber aucune assertion.
+     * 800 x 600 n'est dans aucune case, donc seule une écriture réelle peut
+     * l'effacer.
+     */
+    ns_config_set_int(NS_CFG_WINDOW_W, 800);
+    ns_config_set_int(NS_CFG_WINDOW_H, 600);
+    ns_config_set_bool(NS_CFG_FULLSCREEN, true);
+    CHECK(chosen_w != 800 && chosen_h != 600,
+          "la valeur semée n'est pas celle que le menu vient de choisir "
+          "(%d x %d)", chosen_w, chosen_h);
+
+    room_menu_persist(&ctx);
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == chosen_w,
+          "ce que le joueur a choisi est écrit (%d au lieu de %d)",
+          ns_config_get_int(NS_CFG_WINDOW_W, 0), chosen_w);
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_H, 0) == chosen_h,
+          "…sur les deux axes (%d au lieu de %d)",
+          ns_config_get_int(NS_CFG_WINDOW_H, 0), chosen_h);
+    CHECK(ns_config_get_bool(NS_CFG_FULLSCREEN, true) == false,
+          "…et le plein écran aussi");
+
+    /*
+     * Les deux drapeaux sont SÉPARÉS : toucher l'un ne doit pas faire écrire
+     * l'autre. Sans ça, basculer le plein écran emporterait avec lui une
+     * définition imposée par la ligne de commande — le défaut d'origine, sous
+     * un autre geste.
+     */
+    int  w2 = 640, h2 = 360;
+    bool fs2 = false;
+    bool w2_touched = false, fs2_touched = true;
+    const room_menu_ctx ctx2 = { &rs, &sens, NULL, &w2, &h2, &fs2,
+                                 &w2_touched, &fs2_touched };
+    ns_config_set_int(NS_CFG_WINDOW_W, 1600);
+    room_menu_persist(&ctx2);
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == 1600,
+          "un geste sur le plein écran n'emporte pas la définition (%d)",
+          ns_config_get_int(NS_CFG_WINDOW_W, 0));
+
+    /* Un pointeur de drapeau NUL vaut « pas touché » : c'est le sens sûr, et
+     * c'est ce que font les sept autres contextes de ce fichier. */
+    const room_menu_ctx ctx3 = { &rs, &sens, NULL, &w2, &h2, &fs2, NULL, NULL };
+    room_menu_persist(&ctx3);
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == 1600,
+          "un drapeau nul n'écrit rien (%d)",
+          ns_config_get_int(NS_CFG_WINDOW_W, 0));
+
+    ns_config_shutdown();
+}
+
 static void test_persist(const char *dir)
 {
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_HIGH);
     rs.render_scale = 0.75f;
     float sens = 1.85f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
 
     room_sound_set_level(ROOM_LEVEL_STEPS, 0.45f);
     room_sound_set_level(ROOM_LEVEL_TONE, 0.20f);
@@ -398,7 +523,7 @@ static void test_credits(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
 
     const int row = room_menu_row("CREDITS");
     CHECK(row >= 0, "la ligne « CREDITS » existe dans le menu");
@@ -482,6 +607,7 @@ int main(int argc, char **argv)
     test_room_levels();
     test_credits();
     test_persist(argc > 1 ? argv[1] : ".");
+    test_persist_fenetre();
     ns_paths_shutdown();
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
