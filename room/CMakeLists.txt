@@ -8,6 +8,7 @@ add_executable(nineteen
     room_attract.c
     room_menu.c
     room_pad.c
+    room_presence.c
     room_credits.c
     room_sound.c
     room_door.c

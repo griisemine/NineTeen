@@ -533,3 +533,23 @@ add_test(NAME rejeu-cli
                  -DJOURNAL=${CMAKE_CURRENT_SOURCE_DIR}/data/rejeu-demineur.txt
                  -DCMAKE_CURRENT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/check_replay_cli.cmake)
+
+# LES CORPS DES AUTRES JOUEURS : l'interpolation, le cap, la phase de marche, la
+# disparition, et ce que fait le module d'une entrée absurde.
+#
+# `room_presence.c` se compile ici comme `room_camera.c` et `room_door.c` : ce
+# sont des fichiers de JEU, pas de moteur, et les descendre dans `engine/` pour
+# pouvoir les tester reviendrait à déplacer du code pour arranger un build.
+#
+# Ni GPU, ni fenêtre, ni fichier, ni réseau. C'est possible parce que le module
+# reçoit les cotes du personnage en flottants au lieu d'aller les lire sur le
+# modèle — voir `room_presence_config` — et parce qu'il travaille sur des
+# positions DATÉES plutôt que sur une horloge : le test fait avancer le temps
+# lui-même, donc une disparition à trois secondes se vérifie en une milliseconde.
+add_executable(ns_test_presence test_presence.c
+    "${CMAKE_SOURCE_DIR}/room/room_presence.c")
+target_include_directories(ns_test_presence PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_presence PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_presence)
+nineteen_apply_sanitizers(ns_test_presence)
+add_test(NAME presence COMMAND ns_test_presence)
