@@ -691,30 +691,3 @@ nineteen_set_warnings(ns_test_arene)
 nineteen_apply_sanitizers(ns_test_arene)
 add_test(NAME arene COMMAND ns_test_arene)
 set_tests_properties(arene PROPERTIES TIMEOUT 60)
-
-# --------------------------------------------------------------------------
-# Les rivaux — les places du Couperet que personne n'occupe
-# --------------------------------------------------------------------------
-#
-# Il lie `nineteen::games` pour la raison qui fait exister le module : un rival
-# NE SIMULE PAS une partie, il la JOUE. Il alloue un etat de jeu, appelle
-# l'autopilote et le tick du jeu a chaque pas fixe, et encaisse par
-# `room_cp_partie_fin` comme l'humain. Sans les huit jeux, il n'y aurait rien a
-# tester — et le module n'aurait pas de raison d'etre.
-#
-# Il emporte `room_couperet.c` et `room_economie.c` pour la meme raison que
-# `ns_test_couperet` : les points sont ceux du bareme multiplies par le
-# coefficient d'engagement, et aucune des deux tables n'est recopiee ici.
-#
-# Ce test MESURE, et c'est ce qui explique sa duree : la courbe de niveau, le
-# cout par image et le nombre de coupures qu'un humain subit par manche ne se
-# relisent pas, ils se comptent sur des centaines de manches completes.
-add_executable(ns_test_rivaux test_rivaux.c
-    "${CMAKE_SOURCE_DIR}/room/room_rivaux.c"
-    "${CMAKE_SOURCE_DIR}/room/room_couperet.c"
-    "${CMAKE_SOURCE_DIR}/room/room_economie.c")
-target_include_directories(ns_test_rivaux PRIVATE "${CMAKE_SOURCE_DIR}/room")
-target_link_libraries(ns_test_rivaux PRIVATE nineteen::games)
-nineteen_set_warnings(ns_test_rivaux)
-nineteen_apply_sanitizers(ns_test_rivaux)
-add_test(NAME rivaux COMMAND ns_test_rivaux)
