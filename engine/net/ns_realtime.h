@@ -75,6 +75,23 @@
 #define NS_RT_SLUG        32
 #define NS_RT_ID          40   /* un UUID textuel tient dans 37 */
 
+/*
+ * LE RYTHME ET LA PÉREMPTION, sortis du .c parce qu'ils ne concernent plus le
+ * seul transport.
+ *
+ * Les deux valeurs vivaient en `#define` privés dans `ns_realtime.c`, ce qui
+ * était juste tant que personne d'autre n'en avait besoin. Depuis que les pairs
+ * ont un CORPS, `room/room_presence.c` doit connaître les deux : la période
+ * borne l'interpolation entre deux positions reçues, la péremption borne le
+ * fondu de sortie. Les recopier là-bas en aurait fait deux constantes libres de
+ * diverger de celle qui décide vraiment.
+ *
+ * Ce qu'elles valent et pourquoi est écrit en tête de `ns_realtime.c`, à
+ * l'endroit du battement.
+ */
+#define NS_RT_PERIOD_MS   250u
+#define NS_RT_STALE_MS    3000u
+
 typedef struct ns_realtime_config {
     /*
      * Le second verrou. Faux — le défaut — signifie : aucune présence n'est
@@ -109,10 +126,50 @@ const char *ns_realtime_status(void);
  * ========================================================================== */
 
 typedef struct ns_realtime_peer {
+    /*
+     * L'identifiant de client du pair — celui que le serveur renvoie déjà dans
+     * chaque ligne de présence, et que personne ne lisait.
+     *
+     * Il devient nécessaire du jour où un pair a un CORPS : suivre un corps d'un
+     * battement au suivant demande de le RECONNAÎTRE, et le pseudo ne suffit
+     * pas. Deux « Anonyme » — le nom par défaut, donc le cas le plus probable
+     * dans une salle publique — échangeraient leur trajectoire, leur cap et leur
+     * phase de marche à chaque battement.
+     *
+     * Rien de nouveau n'est publié pour autant : c'est un champ déjà émis par le
+     * serveur, tiré au hasard à chaque démarrage et sans aucun privilège (voir
+     * `make_client_id`).
+     */
+    char    id[NS_RT_ID];
     char    name[NS_RT_NAME];
     bool    verified;              /* le serveur répond du pseudo */
-    float   x, y, z;
+    float   x, y, z;               /* la position de l'ŒIL, telle qu'on la publie */
     float   yaw;
+    /*
+     * La hauteur d'œil au-dessus des PIEDS, en mètres.
+     *
+     * `y` est la position de la caméra et non celle du sol : c'est ce que
+     * `ns_realtime_publish` a toujours reçu, et en changer le sens ferait
+     * flotter en l'air, pour tous les autres, le joueur d'une version
+     * antérieure. Poser un corps demande pourtant les pieds, et `y - eye` les
+     * donne EXACTEMENT — accroupi compris, ce qu'une constante de hauteur debout
+     * ne saurait pas faire : le personnage accroupi s'enfoncerait de trente-neuf
+     * centimètres dans la moquette.
+     *
+     * Zéro veut dire « ce pair ne la publie pas » : c'est alors à l'appelant de
+     * poser son repli. Voir `room_presence_config.eye_default`.
+     */
+    float   eye;
+    /*
+     * Vrai si le pair a VRAIMENT publié un cap.
+     *
+     * Sans ce drapeau, un pair d'une version antérieure au champ `yaw` serait
+     * indiscernable d'un pair qui regarde droit vers +X : les deux donnent
+     * `yaw == 0`. Le premier doit être orienté par son DÉPLACEMENT, le second ne
+     * doit surtout pas l'être. C'est l'absence de la clé dans le JSON qui les
+     * sépare, et elle ne se lit qu'ici.
+     */
+    bool    has_yaw;
     char    cabinet[NS_RT_SLUG];   /* la borne devant laquelle il se tient */
     char    game[NS_RT_SLUG];      /* ce qu'il y joue, ou vide */
     int32_t score;
@@ -122,8 +179,12 @@ typedef struct ns_realtime_peer {
  * Dépose MA position. Retour immédiat, sans réseau : le fil la publiera au
  * prochain battement. Appelable à chaque image sans y penser — seule la
  * dernière valeur compte, et c'est justement ce qu'on veut d'une position.
+ *
+ * `eye` est la hauteur d'œil au-dessus des pieds : c'est elle qui permet aux
+ * autres de poser mon corps SUR le sol plutôt que de deviner de combien
+ * descendre sous ma caméra.
  */
-void ns_realtime_publish(float x, float y, float z, float yaw,
+void ns_realtime_publish(float x, float y, float z, float yaw, float eye,
                          const char *cabinet, const char *game, int32_t score);
 
 /*
@@ -133,8 +194,16 @@ void ns_realtime_publish(float x, float y, float z, float yaw,
  * rendre l'adresse interne obligerait l'appelant à tenir un verrou pendant tout
  * son rendu. Seize joueurs de quelques dizaines d'octets se recopient pour
  * rien du tout.
+ *
+ * `at_ms`, s'il n'est pas nul, reçoit la DATE de ce lot — `SDL_GetTicks` au
+ * moment où la réponse est arrivée. Elle sort par le MÊME verrou que la table,
+ * et c'est ce qui la rend utilisable : la relire par `ns_realtime_peers_age_ms`
+ * juste après aurait laissé le fil de travail glisser un nouveau lot entre les
+ * deux appels, et daté les positions de l'un avec l'heure de l'autre. C'est de
+ * cette date que `room_presence` tire son interpolation, et c'est aussi elle qui
+ * lui dit qu'un lot est NOUVEAU plutôt qu'une relecture du même.
  */
-uint32_t ns_realtime_peers(ns_realtime_peer *out, uint32_t max);
+uint32_t ns_realtime_peers(ns_realtime_peer *out, uint32_t max, uint64_t *at_ms);
 
 /*
  * L'âge de la dernière réponse de présence, en millisecondes, ou UINT32_MAX si

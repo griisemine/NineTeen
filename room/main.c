@@ -36,6 +36,7 @@
 #include "room_hud.h"
 #include "room_menu.h"
 #include "room_pad.h"
+#include "room_presence.h"
 #include "room_sound.h"
 #include "room_viewmodel.h"
 
@@ -73,6 +74,21 @@ typedef struct options {
      * plus rien vouloir dire de différent.
      */
     int         realtime;   /* -1 : la config décide ; 0 : non ; 1 : oui */
+    /*
+     * COMBIEN DE PAIRS FABRIQUÉS, sans serveur ni socket. Zéro — le défaut —
+     * n'en fabrique aucun, et le code de démonstration ne s'exécute pas.
+     *
+     * Il faut ça pour REGARDER les corps des autres joueurs : les voir demande
+     * trois ou quatre personnes connectées à la même seconde, ce qu'aucune
+     * capture et aucune machine d'intégration continue ne peut réunir. Les
+     * échantillons entrent par le même chemin que ceux du réseau — voir
+     * `room_presence_demo` — donc ce qui est photographié est bien ce qui sera
+     * rendu, et non un rendu de démonstration à côté.
+     *
+     * Il n'ouvre RIEN : il ne lève aucun des deux verrous du temps réel, et
+     * `ns_realtime` ne sait pas qu'il existe.
+     */
+    int         demo_peers;
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* URL du classement en ligne, sinon la config */
@@ -136,6 +152,10 @@ static void print_usage(const char *exe)
         "  --temps-reel         présence dans la salle et duels (INERTE par défaut) ;\n"
         "                       demande un serveur, et se règle aussi dans Échap\n"
         "  --no-temps-reel      force l'inverse, quel que soit le réglage gardé\n"
+        "  --pairs-demo=N       peuple l'allée de N marcheurs FABRIQUÉS (0 à 16),\n"
+        "                       sans serveur ni la moindre socket : c'est ce qui\n"
+        "                       permet de photographier des corps qui marchent.\n"
+        "                       INERTE par défaut (N = 0)\n"
         "  --menu[=N]           ouvre le menu de réglages (ligne N) : pour les captures\n"
         "  --no-hud             pas d'affichage : la scène seule, pour les captures\n"
         "\n"
@@ -349,6 +369,11 @@ static bool parse_options(int argc, char **argv, options *o)
             o->realtime = 1;
         } else if (SDL_strcmp(a, "--no-temps-reel") == 0) {
             o->realtime = 0;
+        } else if (SDL_strncmp(a, "--pairs-demo=", 13) == 0) {
+            /* Borné à ce que la présence sait rapporter : au-delà, les corps
+             * supplémentaires seraient rejetés plus bas sans rien dire. */
+            const int n = SDL_atoi(a + 13);
+            o->demo_peers = (n < 0) ? 0 : (n > NS_RT_MAX_PEERS ? NS_RT_MAX_PEERS : n);
         } else if (SDL_strcmp(a, "--offline") == 0) {
             o->offline = true;
         } else if (SDL_strcmp(a, "--no-hud") == 0) {
@@ -1040,34 +1065,48 @@ static const ns_game_api *load_game(ns_rhi *rhi, ns_sprite *sprites, const char 
 
 
 /*
- * LES AUTRES JOUEURS, dessinés dans la salle.
+ * LES ÉTIQUETTES DES AUTRES JOUEURS, au-dessus de leur tête.
  *
- * Un avatar SIMPLE ET HONNÊTE plutôt qu'un personnage raté
- * -------------------------------------------------------
- * Ce qu'on dessine est une plaque au nom du joueur, posée à sa position, avec
- * la borne devant laquelle il se tient et son score en cours. Pas un bonhomme.
+ * CE QUI A CHANGÉ, et pourquoi l'étiquette reste
+ * ----------------------------------------------
+ * Elle était TOUT ce qu'un pair avait : une plaque à son nom flottant à
+ * hauteur de tête, et rien en dessous. Le commentaire d'alors expliquait qu'il
+ * n'existait aucun modèle de personnage dans ce dépôt. Il en existe un depuis —
+ * celui que le joueur porte en troisième personne — et les pairs le portent
+ * maintenant aussi : voir `room_presence.h` et la boucle de rendu.
  *
- * Ce n'est pas un renoncement, c'est le constat que le projet a déjà fait pour
- * lui-même : il n'existe aucun modèle de personnage dans ce dépôt — on n'a que
- * des bras en vue subjective — et la scène est un tampon de géométrie CUIT au
- * build, sans chemin pour y ajouter un maillage animé à l'exécution. Fabriquer
- * une silhouette à la va-vite donnerait un pantin qui glisse dans l'allée, ce
- * qui est moins lisible qu'une étiquette et beaucoup plus laid.
+ * L'étiquette n'est donc plus l'avatar, elle est ce qui le NOMME, et c'est
+ * pour ça qu'elle reste. Un corps qui marche dit qu'il y a quelqu'un ; il ne dit
+ * pas que c'est Ada, ni qu'elle est à 1 200 sur Tetris. C'est cette phrase-là
+ * qui rend une salle d'arcade vivante, et aucun maillage ne la remplace.
  *
- * Une plaque, en revanche, répond exactement à la question qu'on se pose en
- * entrant dans une salle d'arcade : QUI est là, et à QUELLE borne. Elle est
- * dessinée dans la couche 2D, par-dessus la scène, donc sans toucher au rendu.
+ * SA HAUTEUR EST MESURÉE, elle ne l'était pas
+ * -------------------------------------------
+ * Elle était posée à `y + 1,75 m`. Deux erreurs dans un seul nombre : 1,75 était
+ * écrit à la main pour un personnage qui fait 1,82 m, et surtout `y` est la
+ * position de l'ŒIL du pair et non celle de ses pieds — l'étiquette montait donc
+ * à trois mètres quarante du sol, sous un plafond qui en fait 2,92. Elle est
+ * maintenant posée sur les PIEDS que `room_presence` calcule, plus la hauteur du
+ * modèle telle que `ns_skin_rest_height` la mesure.
  *
- * Ce qu'elle ne fait pas : elle n'est pas occultée par les murs. Un joueur
- * derrière une cloison se voit à travers. C'est faux, et c'est assumé — le test
- * d'occultation demanderait un lancer de rayon par joueur et par image contre le
- * BVH, pour cacher une étiquette. La salle fait une seule pièce ouverte : le cas
- * est rare, et la corriger coûterait plus qu'elle ne gêne.
+ * CE QU'ELLE NE FAIT TOUJOURS PAS : elle n'est pas occultée par les murs. Un
+ * joueur derrière une cloison voit son nom à travers. C'est faux, et c'est
+ * assumé — le test d'occultation demanderait un lancer de rayon par joueur et
+ * par image contre le BVH, pour cacher une étiquette. La salle fait une seule
+ * pièce ouverte : le cas est rare, et la corriger coûterait plus qu'elle ne gêne.
+ *
+ * LE CORPS, LUI, L'EST — et c'est bien ce qu'on veut. Il ne passe pas par cette
+ * couche 2D mais par la passe des personnages, qui CHARGE la profondeur de la
+ * scène et teste contre elle (`enable_depth_test`, `LOADOP_LOAD` sur la
+ * profondeur, dans `ns_render.c`). Un pair derrière une borne est donc caché par
+ * la borne, seul son nom flotte au-dessus — ce qui est exactement le
+ * comportement lisible : on sait que quelqu'un est là sans voir à travers le
+ * décor.
  */
-static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
+static void draw_presence(ns_sprite *s, const room_presence *pr,
+                          const ns_camera *cam, float aspect)
 {
-    ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    const uint32_t n = pr ? pr->body_count : 0;
     if (n == 0) return;
 
     const ns_m4 view = ns_m4_look_at(cam->position,
@@ -1085,11 +1124,20 @@ static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
     const float unverified[4] = { 0.85f, 0.78f, 0.45f, 0.95f };
 
     for (uint32_t i = 0; i < n; ++i) {
-        const ns_realtime_peer *p = &peers[i];
+        const room_presence_body *p = &pr->body[i];
 
-        /* À hauteur de tête : une étiquette au niveau du sol se lit mal et se
-         * confond avec les bornes. */
-        const ns_v3 world = ns_v3_make(p->x, p->y + 1.75f, p->z);
+        /*
+         * L'étiquette S'EFFACE AVEC LE CORPS. Le fondu de sortie porte sur les
+         * deux, sinon un nom resterait seul en l'air pendant deux secondes et
+         * demie au-dessus de personne — ce qui est précisément le clignotement
+         * qu'on cherchait à éviter, déplacé d'une couche.
+         */
+        const float fade = ns_clampf(p->opacity, 0.0f, 1.0f);
+        if (fade <= 0.01f) continue;
+
+        /* Sur la TÊTE, à une hauteur que `room_presence` tire de la mesure du
+         * modèle plutôt que d'une cote écrite à la main. */
+        const ns_v3 world = ns_v3_make(p->feet.x, p->label_y, p->feet.z);
         const ns_v4 clip = ns_m4_mul_v4(vp, ns_v4_from_v3(world, 1.0f));
         if (clip.w <= 0.0001f) continue;          /* derrière la caméra */
 
@@ -1112,10 +1160,18 @@ static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
         const float tw = ns_sprite_text_width(p->name, scale);
         const float th = ns_sprite_text_height(scale);
 
+        /* Les trois teintes reprises telles quelles, alpha multiplié par le
+         * fondu : c'est le même effacement que le corps, pas un second. */
+        const float name_src[4] = { p->verified ? white[0] : unverified[0],
+                                    p->verified ? white[1] : unverified[1],
+                                    p->verified ? white[2] : unverified[2],
+                                    (p->verified ? white[3] : unverified[3]) * fade };
+        const float back_f[4] = { back[0], back[1], back[2], back[3] * fade };
+        const float dim_f[4]  = { dim[0],  dim[1],  dim[2],  dim[3]  * fade };
+
         ns_sprite_rect(s, sx - tw * 0.5f - 6.0f, sy - th * 0.5f - 4.0f,
-                       tw + 12.0f, th + 8.0f, back);
-        ns_sprite_text(s, sx - tw * 0.5f, sy - th * 0.5f, scale,
-                       p->verified ? white : unverified, p->name);
+                       tw + 12.0f, th + 8.0f, back_f);
+        ns_sprite_text(s, sx - tw * 0.5f, sy - th * 0.5f, scale, name_src, p->name);
 
         /* Ce qu'il fait, sous son nom. C'est ça qui rend la salle vivante :
          * « Bob — TETRIS 1200 » raconte quelque chose, une position non. */
@@ -1128,7 +1184,7 @@ static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
             }
             const float sub = ns_maxf(scale * 0.7f, 1.0f);
             const float sw = ns_sprite_text_width(line, sub);
-            ns_sprite_text(s, sx - sw * 0.5f, sy + th * 0.5f + 4.0f, sub, dim, line);
+            ns_sprite_text(s, sx - sw * 0.5f, sy + th * 0.5f + 4.0f, sub, dim_f, line);
         }
     }
 }
@@ -1140,10 +1196,9 @@ static void draw_presence(ns_sprite *s, const ns_camera *cam, float aspect)
  * la salle même quand on leur tourne le dos. Les deux répondent à deux
  * questions différentes, et c'est pour ça qu'il y a les deux.
  */
-static void draw_presence_roster(ns_sprite *s)
+static void draw_presence_roster(ns_sprite *s, const room_presence *pr)
 {
-    ns_realtime_peer peers[NS_RT_MAX_PEERS];
-    const uint32_t n = ns_realtime_peers(peers, NS_RT_MAX_PEERS);
+    const uint32_t n = pr ? pr->body_count : 0;
     if (n == 0) return;
 
     const float title[4] = { 0.55f, 0.75f, 0.95f, 0.85f };
@@ -1164,10 +1219,11 @@ static void draw_presence_roster(ns_sprite *s)
 
     for (uint32_t i = 0; i < n; ++i) {
         char line[64];
-        if (peers[i].game[0]) {
-            SDL_snprintf(line, sizeof line, "%s - %s", peers[i].name, peers[i].game);
+        if (pr->body[i].game[0]) {
+            SDL_snprintf(line, sizeof line, "%s - %s",
+                         pr->body[i].name, pr->body[i].game);
         } else {
-            SDL_snprintf(line, sizeof line, "%s", peers[i].name);
+            SDL_snprintf(line, sizeof line, "%s", pr->body[i].name);
         }
         ns_sprite_text(s, x, y, scale, name, line);
         y += lh;
@@ -2038,6 +2094,49 @@ int main(int argc, char **argv)
                     ns_skin_can_crouch(personnage) ? "calé" : "IMPOSSIBLE, il restera debout");
         }
     }
+
+    /*
+     * LES CORPS DES AUTRES JOUEURS.
+     *
+     * Les cinq valeurs viennent des MÊMES mesures que le personnage du joueur —
+     * la foulée que porte la caméra, la durée du cycle, la pose de passage, la
+     * hauteur au repos mise à l'échelle, la hauteur d'œil debout. Les recopier à
+     * la main dans `room_presence` en aurait fait cinq constantes libres de
+     * dériver de celles qui décident vraiment ; les passer par une structure les
+     * garde à une seule source, et laisse le module se vérifier sans charger le
+     * modèle.
+     *
+     * Sans personnage chargé, la configuration reste nulle et aucun corps ne
+     * sortira : la salle retombe exactement sur les étiquettes d'avant.
+     */
+    room_presence presence;
+    {
+        room_presence_config pcfg;
+        SDL_zero(pcfg);
+        if (personnage) {
+            pcfg.stride      = room_camera_stride(&cam);
+            pcfg.cycle       = ns_skin_duration(personnage);
+            pcfg.stand_time  = ns_skin_stand_time(personnage);
+            pcfg.height      = ns_skin_rest_height(personnage) * echelle_perso;
+            pcfg.eye_default = cam.eye_height_stand;
+        }
+        room_presence_init(&presence, &pcfg);
+    }
+
+    /*
+     * LE TABLEAU DES CORPS DE L'IMAGE, alloué une fois pour toutes.
+     *
+     * Trente-six kilo-octets — dix-sept poses de 2 160 — hors de la boucle de
+     * rendu plutôt que dedans : le remplir coûte ce qu'il coûte, mais le
+     * réserver soixante fois par seconde sur la pile n'apporterait rien.
+     */
+    ns_character_draw poses[NS_MAX_CHARACTERS];
+    uint32_t          poses_n = 0;
+
+    /* `--pairs-demo=` a-t-il déjà déposé son battement d'amorçage. Voir là où
+     * il est déposé : sans lui, une capture courte photographie le fondu
+     * d'entrée au lieu des corps. */
+    bool demo_amorce = false;
 
     room_attract *attract = SDL_getenv("NINETEEN_NO_ATTRACT")
                           ? NULL : room_attract_create(rhi, &scene);
@@ -3090,13 +3189,79 @@ play_at_done: ;
             if (!here && cam.mode == ROOM_CAM_PLAYER) {
                 here = room_viewmodel_target(&scene, &cam);
             }
+            /* La hauteur d'œil COURANTE, accroupissement compris : c'est elle
+             * qui permet aux autres de poser mes pieds au sol au lieu de les
+             * deviner. Voir `ns_realtime_peer.eye`. */
             ns_realtime_publish(cam.position.x, cam.position.y, cam.position.z,
-                                cam.yaw,
+                                cam.yaw, cam.eye_height,
                                 here ? here->name : "",
                                 (in_game && game_api) ? game_api->id
                                                       : (here ? here->game : ""),
                                 (in_game && game_api && game)
                                     ? (int32_t)game_api->score(game) : 0);
+        }
+
+        /*
+         * LES CORPS DES AUTRES, ALIMENTÉS.
+         *
+         * Deux sources possibles et une seule route : le réseau, ou les
+         * marcheurs fabriqués de `--pairs-demo=`. Les seconds entrent par le
+         * MÊME appel que les premiers, ce qui est tout l'intérêt — ce qu'une
+         * capture montre est alors ce qu'un vrai pair produira, et non un rendu
+         * de démonstration écrit à côté qui aurait sa propre vérité.
+         *
+         * `room_presence_sample` est idempotent : un lot déjà intégré ne fait
+         * rien. On peut donc l'appeler à chaque image sans se demander si une
+         * réponse est arrivée.
+         *
+         * LA DÉMONSTRATION REMPLACE LE RÉSEAU quand les deux sont demandés, et
+         * ce n'est pas un oubli : mélanger seize marcheurs fabriqués aux vrais
+         * pairs donnerait une salle dont on ne saurait plus dire qui est réel.
+         * Le drapeau sert à photographier et à mettre au point ; il ne sert pas
+         * à se faire de la compagnie pendant une vraie partie.
+         */
+        if (opt.demo_peers > 0) {
+            /*
+             * Un lot fabriqué au rythme du réseau, pas à celui de l'écran.
+             * Fabriquer soixante lots par seconde ferait de l'interpolation un
+             * calcul sans objet, et la capture ne montrerait plus le chemin que
+             * les vrais pairs empruntent — c'est-à-dire pas le chemin qu'on
+             * cherche à vérifier.
+             */
+            const uint64_t now = SDL_GetTicks();
+            const uint64_t beat = (now / NS_RT_PERIOD_MS) * NS_RT_PERIOD_MS;
+            ns_realtime_peer fake[NS_RT_MAX_PEERS];
+
+            /*
+             * L'AMORÇAGE : on rejoue le battement PRÉCÉDENT avant le premier.
+             *
+             * Sans lui, les marcheurs naissent à la première image et y sont
+             * donc en plein fondu d'entrée. Une capture de huit images ne dure
+             * pas les 250 ms qu'il faut pour le finir : les quatre corps
+             * sortaient à demi transparents, ce qui n'est le rendu de rien du
+             * tout. Deux lots plutôt qu'un leur donnent aussi un SEGMENT à
+             * interpoler dès la première image, donc un cap déduit et une phase
+             * de marche justes tout de suite.
+             */
+            if (!demo_amorce) {
+                demo_amorce = true;
+                const uint64_t before = (beat > NS_RT_PERIOD_MS)
+                                      ? beat - NS_RT_PERIOD_MS : 0;
+                const uint32_t n0 = room_presence_demo(fake, NS_RT_MAX_PEERS,
+                                                       (uint32_t)opt.demo_peers,
+                                                       (double)before * 0.001);
+                room_presence_sample(&presence, fake, n0, before);
+            }
+
+            const uint32_t nf = room_presence_demo(fake, NS_RT_MAX_PEERS,
+                                                   (uint32_t)opt.demo_peers,
+                                                   (double)beat * 0.001);
+            room_presence_sample(&presence, fake, nf, beat);
+        } else if (ns_realtime_enabled()) {
+            ns_realtime_peer peers[NS_RT_MAX_PEERS];
+            uint64_t at_ms = 0;
+            const uint32_t np = ns_realtime_peers(peers, NS_RT_MAX_PEERS, &at_ms);
+            room_presence_sample(&presence, peers, np, at_ms);
         }
 
         /*
@@ -3647,6 +3812,18 @@ play_at_done: ;
             const ns_camera render_cam = room_camera_resolve(&cam, &scene.bvh, (float)clock.alpha);
 
             /*
+             * TOUS LES CORPS DE L'IMAGE : le joueur, puis les pairs.
+             *
+             * Un seul tableau et un seul appel au rendu, parce que c'est le même
+             * maillage pour tout le monde et qu'il ne monte au GPU qu'une fois —
+             * voir `NS_MAX_CHARACTERS`, qui mesure ce que chaque corps ajoute.
+             * Le compteur est remis à zéro à chaque image : un corps qui n'est
+             * pas réinscrit disparaît, ce qui est exactement ce qu'on veut d'un
+             * joueur qui s'en va.
+             */
+            poses_n = 0;
+
+            /*
              * LA POSE DU PERSONNAGE.
              *
              * Sa phase d'animation vient de la DISTANCE PARCOURUE, pas du temps
@@ -3823,10 +4000,61 @@ play_at_done: ;
                  */
                 d.opacity = room_camera_actor_opacity(&cam,
                                 room_camera_third_arm(&cam, (float)clock.alpha));
-                ns_renderer_set_character(renderer, &d);
-            } else {
-                ns_renderer_set_character(renderer, NULL);
+                poses[poses_n++] = d;
             }
+
+            /*
+             * LES PAIRS, POSÉS COMME LE JOUEUR — le même maillage, le même
+             * cycle, le même angle d'avant mesuré.
+             *
+             * Ce qui les distingue tient en une ligne : leur instant de cycle
+             * vient de `room_presence`, qui l'a déduit de la distance qu'ils ont
+             * réellement parcourue, tandis que celui du joueur vient de la
+             * distance que la caméra a mesurée. Les deux répondent à la même
+             * règle — la phase suit la distance — depuis deux sources
+             * différentes, parce qu'on ne connaît d'un pair que des positions.
+             *
+             * Ils sont posés MÊME EN PREMIÈRE PERSONNE, et même en caméra libre :
+             * c'est le joueur qu'on ne dessine pas quand il est dans sa propre
+             * tête, pas les autres. Un pair reste un objet du monde.
+             *
+             * Aucune allure n'est appliquée : on ne sait pas si un pair est
+             * accroupi (`eye` le dirait, mais son cycle serait tout de même celui
+             * d'une marche debout), et le balancement de repos demanderait une
+             * phase de respiration par pair pour un mouvement de deux
+             * centimètres à trois mètres. La pose de passage, elle, est bien là :
+             * un pair à l'arrêt se rassemble au lieu de rester en grand écart.
+             */
+            if (personnage) {
+                const uint32_t nb = room_presence_step(&presence, SDL_GetTicks(),
+                                                       (float)clock.frame_seconds);
+                for (uint32_t i = 0; i < nb && poses_n < NS_MAX_CHARACTERS; ++i) {
+                    const room_presence_body *pb = &presence.body[i];
+
+                    ns_character_draw pd;
+                    SDL_zero(pd);
+                    pd.visible = true;
+                    pd.joint_count = ns_skin_joint_count(personnage);
+                    ns_skin_pose_allure(personnage, pb->cycle_time, NULL, pd.joint,
+                                        NS_MAX_CHARACTER_JOINTS);
+
+                    const float th = ns_skin_forward_angle(personnage) - pb->yaw;
+                    const ns_quat pq = ns_quat_from_axis(ns_v3_make(0.0f, 1.0f, 0.0f), th);
+                    pd.model = ns_m4_trs(pb->feet, pq, ns_v3_splat(echelle_perso));
+
+                    pd.tint[0] = pd.tint[1] = pd.tint[2] = 1.0f;
+                    pd.roughness = 0.72f;
+                    pd.metallic = 0.0f;
+                    /* Le fondu d'entrée et de sortie, calculé une fois par
+                     * `room_presence` et porté aussi par l'étiquette : les deux
+                     * s'effacent ensemble ou l'un survit à l'autre. */
+                    pd.opacity = pb->opacity;
+                    poses[poses_n++] = pd;
+                }
+            }
+
+            ns_renderer_set_characters(renderer, poses, poses_n);
+
             /* Les bras : posés par room_viewmodel, jamais en caméra libre. */
             room_viewmodel_pose(&vmstate, &cam, (float)clock.alpha, &viewmodel);
             /*
@@ -3916,12 +4144,15 @@ play_at_done: ;
                  * est plus visible, donc une plaque posée dans la salle n'aurait
                  * plus rien à désigner.
                  */
-                if (ns_realtime_enabled()) {
+                /* Les marcheurs fabriqués ont droit aux mêmes étiquettes que les
+                 * vrais : sans elles, la capture ne montrerait qu'une moitié de
+                 * ce qu'un pair produit. */
+                if (ns_realtime_enabled() || opt.demo_peers > 0) {
                     if (!fullscreen_game) {
-                        draw_presence(sprites, &render_cam,
+                        draw_presence(sprites, &presence, &render_cam,
                                       (h > 0) ? (float)w / (float)h : 1.777f);
                     }
-                    draw_presence_roster(sprites);
+                    draw_presence_roster(sprites, &presence);
                     /* Le tableau du duel, quand il y en a un : son score, le
                      * sien, et lequel des deux est devant. */
                     if (in_game && duel.running) {

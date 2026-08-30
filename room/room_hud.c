@@ -511,7 +511,9 @@ void room_hud_draw_scoreboard(ns_sprite *s, float w, float h, double time_second
      * local seul, ce qui est la vérité de la salle : il y est seul.
      */
     ns_realtime_peer peer[8];
-    const uint32_t n = ns_realtime_peers(peer, 8);
+    /* La date du lot ne sert à rien ici : ce tableau ne fait qu'écrire des
+     * noms, il n'interpole aucune position. */
+    const uint32_t n = ns_realtime_peers(peer, 8, NULL);
 
     int line = 0;
     if (my_name && my_name[0]) {

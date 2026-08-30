@@ -454,9 +454,18 @@ type Peer struct {
 	Y        float32 `json:"y"`
 	Z        float32 `json:"z"`
 	Yaw      float32 `json:"yaw"`
-	Cabinet  string  `json:"cabinet"`
-	Game     string  `json:"game"`
-	Score    int32   `json:"score"`
+	// Eye — la hauteur de l'œil au-dessus des pieds, en mètres.
+	//
+	// `Y` est la position de la CAMÉRA, pas celle du sol : c'est ce que le
+	// client publie depuis le premier jour. Les pieds sont donc `Y - Eye`, et
+	// c'est ce dont un client a besoin depuis que les pairs ont un corps à
+	// poser. Zéro signifie « ce client ne la publie pas » — voir la migration
+	// 0004, qui explique pourquoi c'est une colonne de plus et non un
+	// changement de sens de `Y`.
+	Eye     float32 `json:"eye"`
+	Cabinet string  `json:"cabinet"`
+	Game    string  `json:"game"`
+	Score   int32   `json:"score"`
 }
 
 // TouchPresence écrit la position d'un client et renvoie celle des AUTRES.
@@ -472,13 +481,14 @@ type Peer struct {
 func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl time.Duration) ([]Peer, error) {
 	const upsert = `
 		INSERT INTO presence (client_id, player_id, nickname, verified,
-		                      x, y, z, yaw, cabinet, game, score, seen_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+		                      x, y, z, yaw, eye, cabinet, game, score, seen_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
 		ON CONFLICT (client_id) DO UPDATE SET
 		    player_id = EXCLUDED.player_id,
 		    nickname  = EXCLUDED.nickname,
 		    verified  = EXCLUDED.verified,
 		    x = EXCLUDED.x, y = EXCLUDED.y, z = EXCLUDED.z, yaw = EXCLUDED.yaw,
+		    eye       = EXCLUDED.eye,
 		    cabinet   = EXCLUDED.cabinet,
 		    game      = EXCLUDED.game,
 		    score     = EXCLUDED.score,
@@ -486,7 +496,7 @@ func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl 
 
 	if _, err := s.pool.Exec(ctx, upsert,
 		p.ClientID, playerID, truncate(p.Nickname, 24), p.Verified,
-		p.X, p.Y, p.Z, p.Yaw,
+		p.X, p.Y, p.Z, p.Yaw, p.Eye,
 		truncate(p.Cabinet, 32), truncate(p.Game, 32), p.Score); err != nil {
 		return nil, fmt.Errorf("présence : %w", err)
 	}
@@ -495,7 +505,7 @@ func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl 
 	// plutôt qu'interpolée dans le SQL : `make_interval` prend un paramètre,
 	// une concaténation prendrait une injection.
 	const list = `
-		SELECT client_id, nickname, verified, x, y, z, yaw, cabinet, game, score
+		SELECT client_id, nickname, verified, x, y, z, yaw, eye, cabinet, game, score
 		FROM presence
 		WHERE client_id <> $1
 		  AND seen_at > now() - make_interval(secs => $2)
@@ -512,7 +522,8 @@ func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl 
 	for rows.Next() {
 		var q Peer
 		if err := rows.Scan(&q.ClientID, &q.Nickname, &q.Verified,
-			&q.X, &q.Y, &q.Z, &q.Yaw, &q.Cabinet, &q.Game, &q.Score); err != nil {
+			&q.X, &q.Y, &q.Z, &q.Yaw, &q.Eye,
+			&q.Cabinet, &q.Game, &q.Score); err != nil {
 			return nil, err
 		}
 		peers = append(peers, q)

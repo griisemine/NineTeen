@@ -742,9 +742,13 @@ type presenceRequest struct {
 	Y        float32 `json:"y"`
 	Z        float32 `json:"z"`
 	Yaw      float32 `json:"yaw"`
-	Cabinet  string  `json:"cabinet"`
-	Game     string  `json:"game"`
-	Score    int32   `json:"score"`
+	// La hauteur d'œil au-dessus des pieds. Absente d'un client d'avant la
+	// migration 0004 : elle vaut alors zéro, et c'est le client qui reçoit —
+	// et non le serveur — qui décide de son repli. Voir `room_presence_config`.
+	Eye     float32 `json:"eye"`
+	Cabinet string  `json:"cabinet"`
+	Game    string  `json:"game"`
+	Score   int32   `json:"score"`
 	// Le client s'en va proprement. Le TTL suffirait, mais un joueur qui quitte
 	// la salle ne devrait pas y rester douze secondes de plus.
 	Leaving bool `json:"leaving,omitempty"`
@@ -800,6 +804,7 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		Y:        safeCoord(req.Y),
 		Z:        safeCoord(req.Z),
 		Yaw:      safeCoord(req.Yaw),
+		Eye:      safeEye(req.Eye),
 		Cabinet:  sanitizeShort(req.Cabinet, 32),
 		Game:     sanitizeShort(req.Game, 32),
 		Score:    req.Score,
@@ -1221,6 +1226,26 @@ func safeCoord(v float32) float32 {
 	}
 	if f < -limit {
 		return -limit
+	}
+	return v
+}
+
+// safeEye borne la hauteur d'œil publiée.
+//
+// Elle n'est pas une coordonnée et ne se borne pas comme une coordonnée : c'est
+// une hauteur de corps, et les valeurs recevables tiennent dans un intervalle
+// étroit qu'on connaît. Zéro et les valeurs négatives veulent dire « non
+// publiée » — un œil sous les pieds n'existe pas —, et le client qui reçoit
+// pose alors son propre repli. Le plafond de trois mètres est le plafond de la
+// salle (2,92 m) arrondi au-dessus : au-delà, la valeur ne décrit plus personne
+// qui puisse s'y tenir debout.
+func safeEye(v float32) float32 {
+	f := float64(v)
+	if math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+		return 0
+	}
+	if f > 3.0 {
+		return 3.0
 	}
 	return v
 }

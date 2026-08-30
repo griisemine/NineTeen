@@ -172,7 +172,49 @@ void         ns_renderer_destroy(ns_rhi *r, ns_renderer *rd);
 #define NS_MAX_CHARACTER_JOINTS 32
 
 /*
- * Ce qu'il faut pour dessiner le personnage à une image donnée : où il est, et
+ * COMBIEN DE CORPS À LA FOIS, et le calcul qui donne ce nombre-là.
+ *
+ * Dix-sept : le joueur, plus les seize pairs que `NS_RT_MAX_PEERS` autorise. Ce
+ * n'est donc pas un plafond, c'est la borne du réseau recopiée — le rendu
+ * n'écarte aucun pair que la présence aurait accepté. Le moteur ne peut pas
+ * inclure `ns_realtime.h` (il ne dépend pas de son propre réseau), d'où la
+ * valeur écrite ici et la raison écrite avec.
+ *
+ * CE QUE ÇA COÛTE, MESURÉ plutôt qu'estimé
+ * ----------------------------------------
+ * Le maillage ne monte au GPU QU'UNE FOIS — c'est le même personnage pour tout
+ * le monde. Ce qui se répète par corps et par image, c'est :
+ *
+ *   * un bloc d'uniformes de sommet de 2 176 octets — 16 flottants de
+ *     `view_proj`, 16 de `model`, puis 32 matrices d'os de 64 octets, soit
+ *     2 048 octets à elles seules. C'est ce que `character_vs_ubo` mesure
+ *     aujourd'hui, pour UN personnage ;
+ *   * un bloc d'uniformes de fragment de 80 octets ;
+ *   * un `SDL_DrawGPUIndexedPrimitives` de 4 672 triangles — le compte du
+ *     modèle livré, relevé au chargement.
+ *
+ * À dix-sept corps : 544 matrices d'os par image (34 816 octets de matrices),
+ * 36 992 octets d'uniformes de sommet, 1 360 de fragment, 17 appels de dessin et
+ * 79 424 triangles.
+ *
+ * POURQUOI PAS DE TAMPON DE STOCKAGE, et c'est la question qu'il fallait poser
+ * ----------------------------------------------------------------------------
+ * Parce que rien ne déborde. Le budget qui s'appliquait déjà est celui d'un
+ * push d'uniformes PAR APPEL — 4 Kio sur Metal — et 2 176 octets passent
+ * dessous avec le même confort qu'avant : dix-sept corps, ce sont dix-sept
+ * pushes de 2 176 octets, pas un push de 37 Kio. Le total par image n'est
+ * borné par rien d'autre que la bande passante, et 36 Kio devant les mégaoctets
+ * de G-buffer que la même image écrit ne se mesurent pas.
+ *
+ * Un tampon de stockage aurait permis un dessin instancié — un seul appel — et
+ * c'est la bonne réponse à un problème qu'on n'a pas. Le coût réel est MESURÉ
+ * dans `pass_character` : seize corps ajoutent 0,65 ms à une image qui en prend
+ * 24,3, soit 2,7 %. On ne réécrit pas le chemin d'uniformes pour ça.
+ */
+#define NS_MAX_CHARACTERS 17
+
+/*
+ * Ce qu'il faut pour dessiner UN personnage à une image donnée : où il est, et
  * comment son squelette est plié.
  *
  * Séparé du maillage, qui ne change jamais et monte au GPU une fois. C'est le
@@ -202,8 +244,9 @@ typedef struct ns_character_draw {
      *
      * Zéro par `SDL_zero` ne veut pas dire « invisible » par accident : c'est
      * `visible` qui décide, et une pose montée sans toucher ce champ serait
-     * effacée. Le remplir est donc OBLIGATOIRE — `room/main.c` le fait, et il
-     * n'y a qu'un appelant.
+     * effacée. Le remplir est donc OBLIGATOIRE — `room/main.c` le fait pour le
+     * joueur comme pour chaque pair, et c'est aussi par lui que passe le fondu
+     * de sortie d'un joueur qui se tait.
      */
     float opacity;
 } ns_character_draw;
@@ -234,8 +277,27 @@ void ns_renderer_set_screen(ns_renderer *rd, int32_t material, SDL_GPUTexture *t
  */
 bool ns_renderer_upload_character(ns_rhi *r, ns_renderer *rd, const struct ns_skin *skin);
 
-/* La pose de l'image courante. `NULL` ou `visible = false` : rien n'est dessiné. */
-void ns_renderer_set_character(ns_renderer *rd, const ns_character_draw *draw);
+/*
+ * LES POSES DE L'IMAGE COURANTE — au PLURIEL, et c'est ce qui donne un corps aux
+ * autres joueurs.
+ *
+ * L'appel était au singulier tant qu'il n'y avait qu'un personnage à poser. Il
+ * n'y en a plus un : le joueur en troisième personne, et les pairs que la
+ * présence rapporte. Un tableau plutôt qu'un appel répété parce que le rendu
+ * ouvre UNE SEULE passe et lie le maillage UNE SEULE fois pour tout le monde ;
+ * n'y varient que la matrice de modèle et les matrices d'os.
+ *
+ * `draw` à NULL ou `count` à zéro : rien n'est dessiné, exactement comme avant.
+ * Au-delà de `NS_MAX_CHARACTERS` le surplus est ignoré en silence — la borne
+ * vaut déjà celle du réseau, et un appelant qui la dépasse s'est trompé de
+ * tableau, pas de nombre de joueurs.
+ *
+ * Les entrées dont `visible` est faux ou dont l'opacité est nulle sont sautées
+ * sans coûter un triangle : c'est par là que passe le fondu de sortie d'un pair
+ * qui se tait.
+ */
+void ns_renderer_set_characters(ns_renderer *rd, const ns_character_draw *draw,
+                                uint32_t count);
 
 /*
  * Déclare les zones de poussière. Passer `count = 0` éteint le système.
