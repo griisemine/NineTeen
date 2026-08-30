@@ -913,7 +913,7 @@ static uint64_t duel_live_open(duel_ghost *d, const char *spec,
 }
 
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
-                      uint64_t seed, bool hard, duel_ghost *duel)
+                      uint64_t seed, bool hard, bool demo, duel_ghost *duel)
 {
     const char *difficulty = hard ? "hard" : "normal";
 
@@ -941,8 +941,28 @@ static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
      * du dépôt. Prétendre plus serait faux, et interdire le billet en mode sans
      * écran rendrait au passage la chaîne en ligne invérifiable ici.
      */
+    /*
+     * UNE PARTIE DE DEMONSTRATION NE PREND PAS DE BILLET, et il a fallu mesurer
+     * le serveur pour s'en apercevoir.
+     *
+     * `finish_run` refuse depuis toujours d'envoyer une partie d'`--autoplay` :
+     * ce n'est pas un joueur, et le classement mondial merite encore moins
+     * qu'un robot y figure. Mais on lui prenait quand meme un billet en
+     * DEMARRANT, c'est-a-dire une ligne creee sur le serveur qui ne recevrait
+     * jamais son journal. Deux ont ete comptees sur une pile Docker reelle.
+     * Un robot qui n'a pas le droit de se classer n'a pas de raison d'ouvrir
+     * un dossier.
+     *
+     * Et ca corrige un second defaut, celui-la sur les CAPTURES : le billet
+     * REMPLACE la graine par celle du serveur. Le commentaire ci-dessus dit que
+     * la garantie exacte est « une capture hors ligne est reproductible ». Avec
+     * un serveur configure, la meme commande `--game= --autoplay` rendait deux
+     * images differentes. La garantie devient : une capture de demonstration est
+     * reproductible, serveur ou non.
+     */
     ns_online_ticket ticket;
-    const bool ticketed = ns_online_take_ticket(api->id, difficulty, &ticket);
+    const bool ticketed = !demo
+                       && ns_online_take_ticket(api->id, difficulty, &ticket);
     if (ticketed) seed = (uint64_t)ticket.seed;
 
     api->reset(game, seed, hard);
@@ -2562,7 +2582,7 @@ int main(int argc, char **argv)
              * s'attend pas — mais il sera là pour la suivante, et `--autoplay`
              * en enchaîne. */
             ns_online_prefetch_ticket(game_api->id, "normal");
-            start_run(game_api, game, runlog, seed, game_hard, &duel);
+            start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
             run_ms = 0;
             run_tick = 0; pending_press = 0;
             in_game = true;
@@ -2647,7 +2667,7 @@ int main(int argc, char **argv)
             }
             game_hard = hard;
             ns_online_prefetch_ticket(game_api->id, hard ? "hard" : "normal");
-            start_run(game_api, game, runlog, 20240418, hard, &duel);
+            start_run(game_api, game, runlog, 20240418, hard, opt.autoplay, &duel);
             run_ms = 0;
             run_tick = 0; pending_press = 0;
             in_game = true;
@@ -2713,7 +2733,7 @@ play_at_done: ;
                  * partie, donc la capture reste rejouable à l'identique.
                  */
                 const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
-                start_run(game_api, game, runlog, seed, game_hard, &duel);
+                start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                 run_ms = 0;
             run_tick = 0; pending_press = 0;
                 run_tick = 0; pending_press = 0;
@@ -3181,7 +3201,7 @@ play_at_done: ;
                     if (room_eco_salle_offre()) room_eco_salle_refuser();
                     if (opt.autoplay || room_eco_salle_jeton()) {
                         const uint64_t seed = room_eco_salle_graine(game_api->id);
-                        start_run(game_api, game, runlog, seed, game_hard, &duel);
+                        start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                         run_ms = 0;
                         run_tick = 0; pending_press = 0;
                     }
@@ -3249,7 +3269,7 @@ play_at_done: ;
                 if (room_eco_salle_accepter()) {
                     game_hard = true;
                     const uint64_t seed = room_eco_salle_graine(game_api->id);
-                    start_run(game_api, game, runlog, seed, game_hard, &duel);
+                    start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                     run_ms = 0;
                     run_tick = 0; pending_press = 0;
                 }
@@ -3320,7 +3340,7 @@ play_at_done: ;
                      * l'horloge à haute résolution. Voir `room_economie.h`. */
                     const uint64_t seed = room_eco_salle_graine(near->game);
                     game_hard = hard;
-                    start_run(game_api, game, runlog, seed, hard, &duel);
+                    start_run(game_api, game, runlog, seed, hard, opt.autoplay, &duel);
                     run_ms = 0;
                     run_tick = 0; pending_press = 0;
                     in_game = true;
@@ -4020,7 +4040,7 @@ play_at_done: ;
                     if (game_api->dead(game, &dead_time) && dead_time > 1.5f) {
                         demo_seed = demo_seed * 6364136223846793005ull
                                   + 1442695040888963407ull;
-                        start_run(game_api, game, runlog, demo_seed, game_hard, &duel);
+                        start_run(game_api, game, runlog, demo_seed, game_hard, opt.autoplay, &duel);
                         run_ms = 0;
                         run_tick = 0;
                         pending_press = 0;
