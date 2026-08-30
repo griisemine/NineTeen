@@ -542,6 +542,28 @@ async function loadVersion() {
         });
         const attente = document.getElementById("note-attente");
         if (attente) attente.hidden = publiee;
+
+        // L'ADRESSE À DONNER AU JEU, écrite telle qu'on la tape.
+        //
+        // Elle vient du SERVEUR (`NINETEEN_PUBLIC_URL`) et non de
+        // `window.location` : les deux coïncident en développement et divergent
+        // dès qu'un proxy TLS est devant. Le site est joint en `https://`, que
+        // le client du jeu refuse explicitement d'ouvrir — bâtir la ligne à
+        // partir de l'origine de la page donnerait donc au joueur une URL que
+        // son jeu ne sait pas lire, sur le déploiement même où l'aide compte le
+        // plus. Le serveur est le seul à connaître son adresse joignable.
+        //
+        // `textContent`, comme partout ici : cette valeur vient de la
+        // configuration, mais rien sur cette page n'entre en HTML.
+        const noteServeur = document.getElementById("note-serveur");
+        const ligneServeur = document.getElementById("ligne-serveur");
+        const adresse = typeof data.serveur === "string" ? data.serveur : "";
+        if (noteServeur && ligneServeur) {
+            ligneServeur.textContent = "nineteen --server=" + adresse;
+            // Rien à annoncer : on cache le bloc plutôt que de montrer une
+            // ligne à trou. Un serveur lancé sans rien dire n'affirme rien.
+            noteServeur.hidden = adresse === "";
+        }
     } catch (err) {
         console.error("version", err);
     }
