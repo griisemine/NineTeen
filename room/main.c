@@ -5754,7 +5754,11 @@ play_at_done: ;
                 if (cp_actif) {
                     room_hud_draw_couperet(sprites, &couperet, cp_moi, cp_cible, now);
                 } else if (cp_verdict > 0.0f) {
-                    room_hud_draw_verdict(sprites, &couperet, cp_moi, cp_verdict);
+                    uint8_t tenues = 0;
+                    for (uint8_t pl = 0; pl < ROOM_CP_MAX_PLACES; ++pl) {
+                        if (room_rv_tenue(&rivaux, pl)) tenues |= (uint8_t)(1u << pl);
+                    }
+                    room_hud_draw_verdict(sprites, &couperet, cp_moi, tenues, cp_verdict);
                 }
                 /*
                  * Les autres joueurs, quand le temps réel est actif. Dessinés

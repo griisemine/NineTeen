@@ -397,6 +397,19 @@ float room_cp_periode(void);
     X(LEURRE,     3,   0, 0, "LEURRE",     "renvoie la prochaine attaque")
 
 /*
+ * L'INVERSION N'EST JAMAIS ACHETÉE PAR UN RIVAL, et c'est mesuré : sur cent
+ * manches, les rivaux prennent le brouillage, la plaque et le leurre, jamais
+ * elle. La raison est arithmétique — elle coûte le double du brouillage, et un
+ * rival subit les deux de la même façon, parce que `room_rivaux` modélise l'un
+ * comme l'autre en faisant jouer sa victime au taux du débutant.
+ *
+ * SON PRIX N'EST DONC PAS RÉGLÉ PAR CETTE MESURE, et il ne peut pas l'être :
+ * un manche inversé et une image brouillée ne coûtent pas la même chose à une
+ * MAIN. Personne n'a chiffré ce que coûte le second, et un autopilote ne peut
+ * pas le dire — il n'a pas de main. Deux fusibles est un jugement sur des
+ * humains ; il attend la première partie jouée à plusieurs pour être confirmé
+ * ou démenti, et il vaut mieux l'écrire que de le faire passer pour une mesure.
+ *
  * LE BLINDAGE ET LE LEURRE SE TIENNENT, ILS NE S'ÉCOULENT PAS — et c'est le
  * réglage qui a le plus changé de nature au cours de la mise au point.
  *

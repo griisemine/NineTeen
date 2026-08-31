@@ -1295,7 +1295,7 @@ void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float
 }
 
 void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
-                           float reste)
+                           uint8_t rivaux, float reste)
 {
     if (!s || !c || c->phase != ROOM_CP_FINI || reste <= 0.0f) return;
 
@@ -1369,6 +1369,14 @@ void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
          * qu'on m'a éteint la borne » explique un classement que les points
          * seuls rendraient incompréhensible.
          */
+        /* La marque du rival : discrète, à droite du nom, et seulement ici. Le
+         * raisonnement est au-dessus de la déclaration. */
+        if (rivaux & (1u << i)) {
+            ns_sprite_text(s, px + 74.0f + ns_sprite_text_width(nom_place(c, i), 3.0f) + 12.0f,
+                           y + 3.0f, 1.8f,
+                           (const float[4]){ C_DIM[0], C_DIM[1], C_DIM[2], a * 0.8f },
+                           "MACHINE");
+        }
         SDL_snprintf(t, sizeof t, "%d", p->points);
         a_droite(s, px + 436.0f, y, 3.0f, (const float[4]){ C_TEXT[0], C_TEXT[1], C_TEXT[2], a }, t);
         SDL_snprintf(t, sizeof t, "%d", p->parties);

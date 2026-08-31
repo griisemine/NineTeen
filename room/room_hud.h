@@ -279,8 +279,21 @@ void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float
  *
  * `reste` est le temps qui lui reste à l'écran, en secondes ; il sert au fondu.
  */
+/*
+ * `rivaux` est un masque : un bit par place tenue par un adversaire local.
+ *
+ * IL N'EST LU QUE PAR LE VERDICT, jamais pendant la manche, et c'est un
+ * arbitrage assumé entre deux exigences qui se contredisent. Marquer les
+ * rivaux en direct tuerait ce qui fait vivre le mode — on ne joue pas contre
+ * « BOT 3 », on joue contre MARQUISE qui vient de vous couper le courant. Ne
+ * jamais le dire serait mentir sur qui était là.
+ *
+ * On le dit donc APRÈS, sur la page de fin : la manche s'est jouée sans que la
+ * question se pose, et le joueur apprend en la relisant qui était une personne.
+ * C'est ce que fait une salle d'arcade réelle quand on relève la tête.
+ */
 void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
-                           float reste);
+                           uint8_t rivaux, float reste);
 void room_hud_draw_arene(ns_sprite *s, float w, float h, const room_couperet *c,
                          uint8_t moi, double time_seconds);
 
