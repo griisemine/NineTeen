@@ -170,6 +170,21 @@
  * 2 318 points, ce qui divise son rendement par deux. C'est la seule raison
  * pour laquelle la moyenne descend encore de moitié à 95 %.
  *
+ * CE QUE ÇA DONNE SUR UNE MANCHE ENTIÈRE, qui est la seule chose qui compte :
+ * la table ci-dessus mesure des parties isolées, pas des manches avec leurs
+ * couperets et leurs coupures. `tests/test_rivaux.c` fait donc jouer quatre
+ * chevronnés contre quatre débutants, cent vingt manches, la parité des places
+ * alternée d'une manche à l'autre pour que le rang du siège ne décide de rien :
+ *
+ *     le chevronné gagne 102 manches sur 120 (85 %)
+ *     et marque 1,91 fois les points du débutant
+ *
+ * Le rapport de points (x1,91) est plus fort que ce que la table annonce
+ * (x2,0 sur la moyenne des seize bornes, 0,198 contre 0,097) : les deux
+ * concordent. Le débutant TERMINE pourtant deux fois et demie plus de parties
+ * (1 432 contre 590) — il meurt plus vite, ce qui est exactement la même chose
+ * dite autrement.
+ *
  * LE TIRAGE EST DÉTERMINISTE. Chaque rival porte un splitmix64 semé par sa
  * graine ; le pas est sauté quand le tirage tombe sous le seuil du niveau. Deux
  * machines qui rejouent la même manche voient donc le même rival rater les
@@ -185,10 +200,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* `games.h` traîne SDL derrière lui ; ce fichier n'a besoin que du nom du type.
- * Qui veut déréférencer l'API du jeu inclut `games.h` de son côté — c'est déjà
- * le cas de `room/main.c` et du test. */
+/* `games.h` et `ns_scene.h` traînent SDL derrière eux ; ce fichier n'a besoin
+ * que du nom des types. Qui veut les déréférencer les inclut de son côté —
+ * c'est déjà le cas de `room/main.c` et du test. */
 struct ns_game_api;
+struct ns_scene;
 
 #define ROOM_RV_NIVEAUX(X)                 \
     X(CHEVRONNE,   0, "chevronne")         \
@@ -266,41 +282,64 @@ typedef enum room_rv_conduite {
  * 3. LES FUSIBLES — et le plaisir de jeu, qui est une contrainte MESURÉE
  * ==========================================================================
  *
- * La politique de départ était celle de `tests/test_couperet.c:une_manche` : se
- * blinder quand on joue, couper le meilleur adversaire dès qu'on a les quatre
- * fusibles. Elle est volontairement simpliste — elle sert à MESURER l'équilibre,
- * pas à jouer — et branchée telle quelle sur sept rivaux elle donne, mesuré sur
- * 200 manches de huit places dont une humaine qui ne dépense jamais rien :
+ * LE PROTOCOLE DE MESURE, d'abord, parce que tout ce paragraphe en dépend.
+ * `tests/test_rivaux.c` joue CENT manches complètes de huit places : sept
+ * rivaux et un humain piloté par le test, à plein régime, QUI NE DÉPENSE JAMAIS
+ * UN FUSIBLE. C'est le pire cas — un joueur qui ne se couvre pas — et deux
+ * profils sont mesurés, le pressé qui enchaîne les bornes courtes et l'engagé
+ * qui reste trois minutes sur aplomb. Mesure du 2026-08-31.
  *
- *     4,60 coupures subies par l'humain et par manche
+ * LA POLITIQUE DE DÉPART était celle de `tests/test_couperet.c:une_manche` : se
+ * blinder quand on joue, couper le meilleur adversaire vivant dès qu'on a les
+ * quatre fusibles, à n'importe quel moment. Elle est volontairement simpliste —
+ * elle sert à MESURER l'équilibre, pas à jouer.
  *
- * C'est-à-dire une partie annulée toutes les 68 secondes. Personne ne joue à
- * ça. Trois changements, et le troisième est celui qui compte :
+ * Trois politiques ont été jouées, cent manches chacune :
  *
- *   1. ON NE FRAPPE QUE DANS LA FENÊTRE D'AVANT-LAME (les 3 dernières secondes
- *      avant le couperet). Ce n'est pas un adoucissement : c'est le seul moment
- *      où une coupure change quelque chose. Éteindre une borne trente secondes
- *      avant la lame laisse à la victime le temps d'en rallumer une ; l'éteindre
- *      trois secondes avant lui retire sa défense au moment du verdict. La
- *      politique devient donc à la fois plus douce ET plus dangereuse.
+ *     politique                      humain   humain   coupures   dont
+ *                                    pressé   engagé   la salle   décisives
+ *     naïve (celle du tournoi)        1,57     0,68      13,3      15 %
+ *     + fenêtre d'avant-lame          1,00     0,67      11,0      13 %
+ *     + on ne frappe que plus haut    0,91     0,67      10,8      12 %
+ *
+ * Une coupure DÉCISIVE est celle dont la victime est prise par la lame du même
+ * cycle : c'est la seule façon de chiffrer si une coupure a servi à quelque
+ * chose.
+ *
+ * CE QUE JE CROYAIS, ET CE QUE LA MESURE DIT. J'attendais de la fenêtre
+ * d'avant-lame qu'elle rende la politique « plus douce ET plus dangereuse » :
+ * moins de coupures, mais mieux placées, puisqu'une borne éteinte trente
+ * secondes avant le verdict se rallume alors qu'une borne éteinte trois
+ * secondes avant ne se rallume pas. LA MESURE NE LE CONFIRME PAS. La part des
+ * coupures décisives ne bouge pas (15 % puis 13 % puis 12 %, soit le bruit) :
+ * la fenêtre n'affûte pas la coupure, elle en supprime un tiers, uniformément.
+ * Ce qui reste vrai est le seul chiffre qui compte pour le joueur — l'humain
+ * passe de 1,57 à 0,91 partie annulée par manche de cinq minutes, soit une
+ * toutes les 346 secondes au lieu d'une toutes les 201.
+ *
+ * LES DEUX RÈGLES SONT DONC GARDÉES POUR LEUR EFFET, PAS POUR MON EXPLICATION :
+ *
+ *   1. ON NE FRAPPE QUE DANS LA FENÊTRE D'AVANT-LAME (`ROOM_RV_FENETRE_S`,
+ *      3 secondes). C'est elle qui fait le travail : -36 % de coupures subies.
  *   2. ON NE FRAPPE QUE PLUS HAUT QUE SOI — un adversaire dont la valeur devant
  *      le couperet dépasse la sienne. Frapper celui qu'on devance déjà ne
- *      rapproche personne de la victoire, et c'est ce qui faisait pleuvoir les
- *      coupures sur un humain en difficulté.
- *   3. LA CIBLE EST LE MENEUR, pas un joueur au hasard. Sept rivaux qui visent
- *      tous le même dos concentrent leurs coupures sur une place et une seule —
- *      et `room_cp_agir` refuse d'éteindre une borne déjà éteinte, donc les six
- *      autres gardent leurs fusibles au lieu de les jeter sur une place morte.
+ *      rapproche personne de la victoire. Effet mesuré : -9 % de plus, ce qui
+ *      est petit et va dans le bon sens.
  *
- * Mesure après les trois changements, même protocole, 200 manches :
+ * LE SEUIL DU PROPRIÉTAIRE — deux ou trois coupures par manche au plus — est
+ * tenu par les trois politiques, y compris la naïve. Il n'a donc pas fallu
+ * sauver le mode ; il a fallu vérifier qu'il n'y avait rien à sauver, ce qui
+ * n'est pas la même chose et ne se sait qu'en comptant. Le contrôle qui garde
+ * ce seuil reste dans le test, parce que la prochaine politique, elle, pourrait
+ * le franchir.
  *
- *     1,49 coupure subie par l'humain et par manche (contre 4,60)
- *     et 2,79 quand cet humain est le MEILLEUR joueur de la salle
- *
- * Un joueur ordinaire perd donc une partie et demie par manche de cinq
- * minutes ; celui qui domine en perd trois, ce qui est exactement le prix de la
- * tête et ce que le mode doit faire payer. Le seuil que le propriétaire a fixé
- * — deux ou trois — est tenu dans les deux cas.
+ * L'HUMAIN ENGAGÉ EST À PEINE VISÉ (0,67 par manche contre 0,91 pour le pressé)
+ * et c'est un résultat inattendu qui mérite d'être dit : il passe la manche avec
+ * une énorme partie en cours, donc une énorme valeur devant la lame, donc il est
+ * la cible désignée de tout le monde. Il subit pourtant MOINS de coupures — parce
+ * qu'il n'est vulnérable que quand un rival a réuni quatre fusibles dans les
+ * trois secondes d'une fenêtre, alors que le pressé offre une borne allumée à
+ * chaque fenêtre de la manche. S'engager protège du couperet ET du sabotage.
  *
  * LE RESTE DE LA POLITIQUE, en une phrase chacun :
  *
@@ -312,16 +351,31 @@ typedef enum room_rv_conduite {
  *   - LE SURPLUS PART EN BROUILLAGE (1). Un rival qui a de quoi couper ET
  *     davantage brouille le meneur hors fenêtre plutôt que de dormir sur son
  *     magot : des fusibles jamais dépensés sont des fusibles qui n'ont rien fait.
- *   - EN ÉQUIPES, ON BLINDE LE PORTEUR. Si un coéquipier vivant joue, n'est pas
- *     couvert et vaut plus que soi, on paie sa plaque avant la sienne. C'est le
- *     rôle de soutien que l'en-tête du Couperet décrit comme « un CHOIX de
- *     dépense » ; il fallait que quelqu'un dans la salle le joue.
+ *   - EN ÉQUIPES, ON BLINDE LE PORTEUR, ET LE SPECTRE FINANCE. Si un coéquipier
+ *     vivant joue, n'est pas couvert et vaut plus que soi, on paie sa plaque
+ *     avant la sienne ; et un spectre, qu'aucune plaque ne protège plus, donne
+ *     ses fusibles à un vivant jusqu'à la parité — les deux camps gagnent le
+ *     même fusible à chaque lame, mais seul celui qui joue gagne aussi au temps
+ *     de jeu. C'est le rôle de soutien que l'en-tête du Couperet décrit comme
+ *     « un CHOIX de dépense » ; il fallait que quelqu'un dans la salle le joue.
+ *     Mesuré sur douze manches en équipes : 53 plaques posées sur un coéquipier
+ *     et 36 relais depuis la tombe.
+ *   - L'INVERSION N'EST JAMAIS ACHETÉE. Elle coûte deux fusibles là où le
+ *     brouillage en coûte un, et sur un rival les deux ont exactement le même
+ *     effet (voir juste en dessous). Payer double pour le même effet serait un
+ *     défaut, pas une nuance. Contre un HUMAIN c'est probablement faux — un
+ *     manche inversé ne se compare pas à une dalle brouillée — mais personne
+ *     n'a mesuré ce que ça coûte à une main, et ce module ne fait pas semblant
+ *     de le savoir.
  *
  * LE BROUILLAGE ET L'INVERSION FONCTIONNENT CONTRE UN RIVAL, et ce n'était pas
  * acquis : `games.h` n'a pas de manche à inverser ni de dalle à brouiller pour
  * un joueur automatique. Un rival subissant l'un des deux monte donc son taux
- * de saut au niveau DÉBUTANT tant que l'effet dure (-51 % de rendement, mesuré
- * plus haut). C'est une convention, et elle est déclarée comme telle — mais
+ * de saut au niveau DÉBUTANT tant que l'effet dure (-51 % de rendement sur la
+ * table ci-dessus). Mesuré en situation, une place brouillée en permanence
+ * pendant deux minutes marque 37 points contre 78 sans brouillage, soit un peu
+ * plus de la moitié. C'est une convention, et elle est déclarée comme telle —
+ * mais
  * l'absence de convention en serait une autre, bien pire : les deux actions les
  * moins chères du mode n'auraient AUCUN effet sur sept joueurs sur huit, le
  * joueur l'apprendrait en trois manches, et il conclurait à juste titre que les
@@ -347,23 +401,37 @@ typedef enum room_rv_conduite {
  * ==========================================================================
  *
  * Sept rivaux à 120 Hz font 840 pas de jeu par seconde en plus de celui du
- * joueur. Mesuré par `tests/test_rivaux.c`, machine Apple Silicon, build
- * `macos-universal` en -O2, sur une manche entière :
+ * joueur. Mesuré par `tests/test_rivaux.c` sur cinq manches entières, machine
+ * Apple Silicon, build `macos-universal` en -O2, le 2026-08-31 :
  *
- *     3,3 us par image pour les sept rivaux réunis
+ *     de 1,1 à 3,2 us par pas de 120 Hz pour les sept rivaux réunis
  *
- * soit 0,04 % du budget d'une image à 120 Hz (8 333 us). Le pas de jeu coûte
- * 0,45 us en moyenne sur les huit jeux, et sept pas font 3,2 us : la boucle des
- * rivaux n'ajoute rien de mesurable à ce que coûtent les jeux eux-mêmes.
+ * ET C'EST UNE FOURCHETTE, PAS UN CHIFFRE, parce que six exécutions du même
+ * test sur la même machine ont rendu 1,10 / 1,84 / 2,04 / 2,21 / 3,18 / 3,23 :
+ * un facteur trois, qui est celui de la charge de la machine et non celui du
+ * code. Publier la moyenne de ces six-là ferait croire à une précision qui
+ * n'existe pas. Ce qui est solide est la BORNE HAUTE.
+ *
+ * Le module joue exactement un pas par image à cette cadence, donc ce chiffre
+ * EST le coût par image : au pire 0,04 % du budget d'une image à 120 Hz
+ * (8 333 us), et 390 us par seconde de manche.
+ *
+ * Le contrôle croisé explique la borne haute : un pas de jeu coûte 0,45 us en
+ * moyenne sur les huit jeux (mesuré à part, sur 38 millions de pas), donc sept
+ * rivaux qui jouent tous en même temps coûtent 3,2 us — exactement le haut de
+ * la fourchette. Le bas est ce que ça donne quand une place sur deux est en
+ * pause entre deux parties ou déjà spectre.
  *
  * IL N'Y A DONC AUCUNE RAISON DE LES FAIRE TOURNER PLUS LENTEMENT, et c'est la
  * conclusion qui compte : la solution honnête à un coût trop élevé aurait été
- * un pas plus grand pour les rivaux, annoncé ici. Elle n'a pas eu à être prise.
+ * un pas plus grand pour les rivaux, annoncé ici. Elle n'a pas eu à être prise,
+ * et le test refuse tout dépassement du centième du budget d'image.
  *
  * LA MÉMOIRE, elle, se voit : chaque rival garde un bloc à la taille du PLUS
  * GROS état de jeu du dépôt (snake, 31 000 octets), pour ne pas réallouer entre
- * deux parties. Huit places font 248 Kio, alloués à l'ouverture du salon et
- * rendus par `room_rv_fermer`.
+ * deux parties. Huit places font 248 Kio, alloués par `ns_alloc` — donc comptés
+ * dans le bilan de fuites que `room/main.c` imprime en sortant — et rendus par
+ * `room_rv_fermer`.
  *
  * ==========================================================================
  * 6. CE QUE CE FICHIER NE FAIT PAS
@@ -379,6 +447,84 @@ typedef enum room_rv_conduite {
  * Couperet par `room_cp_avancer`. C'est ce qui permet à `tests/test_rivaux.c`
  * de faire jouer deux cents manches complètes en quelques secondes.
  */
+
+/*
+ * ==========================================================================
+ * 3 bis. LES BORNES RÉELLES — où le rival se tient
+ * ==========================================================================
+ *
+ * La salle fait déjà tourner dix-neuf démos d'autopilote, une par dalle
+ * (`room_attract.h`) : c'est ce qui l'éclaire. Pendant une manche, ces démos
+ * peuvent devenir des JOUEURS — on voit Kenza jouer dedale sur la borne d'en
+ * face, on voit son score monter, et on décide de lui couper le courant. La
+ * salle avait déjà construit la mise en scène ; il ne manquait que le nom.
+ *
+ * CE QUE LA SALLE OFFRE VRAIMENT, relevé dans `assets/scene/salle.room.json`
+ * (clé `cabinets`, champs `game` et `difficulty`, `hard` valant
+ * `difficulty == "hard"` comme dans `room_attract.c`) :
+ *
+ *     envol     normal 1   hard 1        dedale    normal 3   hard 0
+ *     aplomb    normal 1   hard 1        piano     normal 3   hard 0
+ *     asteroid  normal 1   hard 1
+ *     demineur  normal 1   hard 1        + une borne « leaderboard »,
+ *     snake     normal 1   hard 1          qui n'est pas un jeu porté
+ *     shooter   normal 1   hard 1
+ *
+ * Dix-neuf bornes, dix-huit jouables, QUATORZE des seize lignes de
+ * `ROOM_CP_DUREES` présentes. DEUX MANQUENT : dedale difficile et piano
+ * difficile n'existent nulle part dans la salle — les six bornes de ces deux
+ * jeux sont toutes déclarées `normal`. Un rival ne les joue donc jamais dès
+ * qu'une table de bornes est déclarée, et c'est la bonne réponse : il ne peut
+ * pas jouer sur une machine qui n'est pas là.
+ *
+ * DOUZE LIGNES SUR QUATORZE N'ONT QU'UNE SEULE BORNE. Deux rivaux qui
+ * choisissent le même jeu au même régime ne peuvent donc pas y jouer tous les
+ * deux — ce qui est exactement la règle que le module appliquait déjà avant de
+ * connaître les bornes, pour une raison d'ambiance : quatre pressés sur le même
+ * démineur ne font pas une salle. La contrainte physique et la règle d'ambiance
+ * se rejoignent, et c'est la table qui tranche maintenant.
+ *
+ * Reste dix-huit bornes pour huit places : il y en a toujours assez. Si une
+ * salle en déclarait moins que de places, un rival sans machine libre ATTEND
+ * plutôt que de jouer nulle part — c'est ce que ferait un humain devant une
+ * allée pleine.
+ *
+ * COMBIEN DE BORNES S'ALLUMENT VRAIMENT : mesuré, SEPT sur dix-huit au fil
+ * d'une manche de huit rivaux. Pas dix-huit, et il faut le dire avant que
+ * quelqu'un l'espère : toutes les conduites classent les bornes sur le même
+ * rendement affiché, donc tout le monde veut les mêmes machines et les onze
+ * autres gardent leur démo. La salle reste éclairée pareil — `room_attract` ne
+ * s'arrête pas — mais la manche se joue dans un coin de l'allée, et c'est une
+ * conséquence du barème, pas un défaut de ce module.
+ *
+ * Ce chiffre était de CINQ avant qu'un rival privé de sa machine préférée
+ * accepte d'en prendre une autre plutôt que d'attendre ; le raisonnement est
+ * dans `commencer`.
+ *
+ * LA TABLE EST INJECTÉE, elle n'est pas lue. Même motif que
+ * `room_presence_config`, qui reçoit les cotes du personnage plutôt que d'aller
+ * les chercher sur le modèle : le module reste vérifiable sans scène, sans
+ * fichier et sans GPU, et `tests/test_rivaux.c` peut lui décrire une salle
+ * imaginaire pour éprouver les cas que la vraie n'a pas. `room_rv_bornes_scene`
+ * est le raccourci pour la vraie salle, et il tient en dix lignes.
+ *
+ * LES PLANCHES NE SONT PAS ICI, et c'est délibéré. `art_load` demande un
+ * `ns_rhi` ; le module deviendrait intestable sans GPU, et la salle aurait DEUX
+ * caches des mêmes huit planches puisque `room_attract.c:art_for` en tient déjà
+ * un. Ce qui est publié est l'API du jeu et son état — de quoi appeler
+ * `api->draw(sprite, etat, art, w, h)` avec la planche que la salle a déjà.
+ */
+
+#define ROOM_RV_BORNES 32     /* la salle en déclare dix-neuf ; on prend large */
+
+typedef struct room_rv_borne {
+    int32_t index;              /* l'indice dans `ns_scene.cabinets` */
+    char    jeu[ROOM_CP_JEU];
+    bool    hard;
+} room_rv_borne;
+
+/* Les trois fonctions qui vont avec sont déclarées plus bas, avec le reste du
+ * salon : elles prennent un `room_rivaux`, qui n'existe pas encore ici. */
 
 /* Le seuil de saut d'un niveau, en pour mille. */
 int         room_rv_saut_pour_mille(room_rv_niveau n);
@@ -399,14 +545,18 @@ typedef struct room_rival {
     uint64_t graine;            /* ce qui rend ce rival reproductible */
     uint64_t alea;              /* l'état courant du tirage */
 
-    const struct ns_game_api *api;  /* la borne en cours, NULL entre deux */
+    const struct ns_game_api *api;  /* le jeu en cours, NULL entre deux */
     void    *etat;                  /* le bloc d'état du jeu */
     bool     hard;
+    int32_t  borne;             /* la borne où il se tient, -1 s'il n'y en a pas */
     int64_t  score_vu;          /* le dernier score poussé au Couperet */
     float    pause;             /* secondes avant d'insérer le jeton suivant */
 
     int32_t  parties;           /* parties terminées par CE rival */
-    int32_t  coupures;          /* coupures qu'il a payées */
+    int32_t  coupures;          /* bornes qu'il a réellement éteintes — une
+                                 * attaque absorbée par une plaque n'en est pas
+                                 * une, et `room_cp_agir_issue` fait la
+                                 * différence que `room_cp_agir` jette */
 } room_rival;
 
 typedef struct room_rivaux {
@@ -414,6 +564,10 @@ typedef struct room_rivaux {
     uint64_t   graine;
     float      horloge;         /* secondes reçues depuis l'ouverture */
     int64_t    pas;             /* pas fixes déjà joués */
+
+    room_rv_borne borne[ROOM_RV_BORNES];
+    int           nbornes;      /* 0 = aucune salle déclarée */
+    int32_t       reservee;     /* la borne du joueur, -1 si aucune */
 } room_rivaux;
 
 /* ==========================================================================
@@ -431,6 +585,30 @@ void room_rv_ouvrir(room_rivaux *r, uint64_t graine);
 
 /* Rend la mémoire des états de jeu. Sans effet sur un banc déjà fermé. */
 void room_rv_fermer(room_rivaux *r);
+
+/*
+ * Déclare les bornes que la salle offre, et rend combien ont été retenues.
+ * Une table vide — ou jamais déclarée — rend le module à son comportement sans
+ * salle : les rivaux jouent, mais ne se tiennent nulle part et
+ * `room_rv_borne_de` répond -1. Le raisonnement est en section 3 bis.
+ */
+int room_rv_bornes(room_rivaux *r, const room_rv_borne *table, int n);
+
+/* Le même, depuis la scène : les bornes dont le jeu est PORTÉ, `hard` valant
+ * `difficulty == "hard"` comme dans `room_attract.c`. La borne du tableau des
+ * scores n'est pas un jeu porté, donc elle n'entre pas. */
+int room_rv_bornes_scene(room_rivaux *r, const struct ns_scene *scene);
+
+/*
+ * La borne où se tient le joueur, que personne ne doit lui prendre. `-1` s'il
+ * n'en occupe aucune.
+ *
+ * Un rival déjà installé n'en est PAS chassé : il finit sa partie et s'en va.
+ * L'expulser en cours de partie détruirait un travail qu'aucune règle du mode
+ * n'autorise à détruire — la coupure est la seule action qui le fasse, et elle
+ * coûte quatre fusibles.
+ */
+void room_rv_reserver(room_rivaux *r, int32_t borne);
 
 /*
  * Assoit un rival sur une place libre du salon. Faux si la place est prise, si
@@ -497,5 +675,26 @@ room_rv_conduite room_rv_conduite_de(const room_rivaux *r, uint8_t place);
  */
 const struct ns_game_api *room_rv_api(const room_rivaux *r, uint8_t place);
 const void               *room_rv_etat(const room_rivaux *r, uint8_t place);
+
+/*
+ * OÙ CE RIVAL SE TIENT — l'indice dans `ns_scene.cabinets`, `-1` s'il n'est
+ * devant aucune machine.
+ *
+ * Il n'y est que TANT QU'IL JOUE. Entre deux parties il rend la borne, et
+ * l'écran retombe sur sa démo pendant une à trois secondes : c'est ce que fait
+ * une vraie borne quand son joueur s'éloigne, et ça évite qu'une machine reste
+ * réservée à quelqu'un qui n'y est pas.
+ */
+int32_t room_rv_borne_de(const room_rivaux *r, uint8_t place);
+
+/*
+ * QUI EST À CETTE BORNE — `ROOM_CP_MAX_PLACES` si personne.
+ *
+ * C'est la fonction qui permet de viser en se PLANTANT DEVANT LA MACHINE plutôt
+ * qu'en faisant défiler une liste : la borne qu'on regarde désigne sa place,
+ * donc sa cible. Une liste de huit pseudos demande de savoir qui est qui ; une
+ * machine devant soi ne demande rien.
+ */
+uint8_t room_rv_place_a_la_borne(const room_rivaux *r, int32_t borne);
 
 #endif /* NS_ROOM_RIVAUX_H */

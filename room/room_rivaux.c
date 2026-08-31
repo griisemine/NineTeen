@@ -13,6 +13,7 @@
 
 #include "games.h"
 #include "ns_core.h"
+#include "ns_scene.h"
 
 #include <string.h>
 
@@ -165,7 +166,80 @@ void room_rv_ouvrir(room_rivaux *r, uint64_t graine)
      * exactement ce qu'on veut en test et jamais ce qu'on veut en jeu. On la
      * garde telle quelle : c'est l'appelant qui sait laquelle des deux il
      * demande. */
-    r->graine = graine;
+    r->graine   = graine;
+    r->reservee = -1;
+    for (int i = 0; i < ROOM_CP_MAX_PLACES; ++i) r->place[i].borne = -1;
+}
+
+/* ==========================================================================
+ * Les bornes de la salle
+ * ========================================================================== */
+
+int room_rv_bornes(room_rivaux *r, const room_rv_borne *table, int n)
+{
+    if (!r) return 0;
+    r->nbornes = 0;
+    if (!table || n <= 0) return 0;
+
+    for (int i = 0; i < n && r->nbornes < ROOM_RV_BORNES; ++i) {
+        if (table[i].index < 0 || table[i].jeu[0] == '\0') continue;
+        r->borne[r->nbornes] = table[i];
+        r->nbornes++;
+    }
+    return r->nbornes;
+}
+
+int room_rv_bornes_scene(room_rivaux *r, const struct ns_scene *scene)
+{
+    if (!r) return 0;
+    r->nbornes = 0;
+    if (!scene) return 0;
+
+    for (uint32_t i = 0; i < scene->cabinet_count && r->nbornes < ROOM_RV_BORNES; ++i) {
+        const ns_cabinet *cab = &scene->cabinets[i];
+        /* Une borne dont le jeu n'est pas porté n'en est pas une pour nous — la
+         * salle en a une qui affiche le tableau des scores, et « pas encore
+         * porté » reste un état normal, comme le dit `room_attract.h`. */
+        if (!ns_game_find(cab->game)) continue;
+
+        room_rv_borne *b = &r->borne[r->nbornes++];
+        b->index = (int32_t)i;
+        SDL_snprintf(b->jeu, sizeof b->jeu, "%s", cab->game);
+        /* La MÊME lecture que `room_attract.c` : `hard` vaut « difficulty vaut
+         * hard », et rien d'autre. Deux lectures différentes de la même clé
+         * mettraient deux régimes sur la même machine. */
+        b->hard = (strcmp(cab->difficulty, "hard") == 0);
+    }
+    return r->nbornes;
+}
+
+void room_rv_reserver(room_rivaux *r, int32_t borne)
+{
+    if (!r) return;
+    r->reservee = borne;
+}
+
+/* La borne libre qui porte ce jeu à ce régime, `-1` s'il n'y en a pas. Le
+ * tirage sert quand il y en a plusieurs : dedale et piano en ont trois chacune,
+ * et toujours prendre la première ferait des deux autres du décor. */
+static int32_t borne_libre(const room_rivaux *r, const char *jeu, bool hard,
+                           uint64_t *alea)
+{
+    int32_t candidats[ROOM_RV_BORNES];
+    int n = 0;
+
+    for (int i = 0; i < r->nbornes; ++i) {
+        const room_rv_borne *b = &r->borne[i];
+        if (b->hard != hard || strcmp(b->jeu, jeu) != 0) continue;
+        if (b->index == r->reservee) continue;
+        bool prise = false;
+        for (int k = 0; k < ROOM_CP_MAX_PLACES; ++k) {
+            if (r->place[k].tenue && r->place[k].borne == b->index) { prise = true; break; }
+        }
+        if (!prise) candidats[n++] = b->index;
+    }
+    if (n == 0) return -1;
+    return candidats[alea ? (int)(tirer(alea) % (uint64_t)n) : 0];
 }
 
 void room_rv_fermer(room_rivaux *r)
@@ -176,6 +250,7 @@ void room_rv_fermer(room_rivaux *r)
         r->place[i].etat = NULL;
         r->place[i].api  = NULL;
         r->place[i].tenue = false;
+        r->place[i].borne = -1;
     }
 }
 
@@ -191,6 +266,7 @@ bool room_rv_asseoir(room_rivaux *r, room_couperet *c, uint8_t place, uint8_t ca
     room_rival *v = &r->place[place];
     const room_rival neuf = { 0 };
     *v = neuf;
+    v->borne = -1;
 
     /*
      * LA GRAINE D'UN RIVAL EST CELLE DU BANC MÊLÉE À SA PLACE, et pas un
@@ -257,18 +333,36 @@ void room_rv_regler(room_rivaux *r, uint8_t place, room_rv_niveau n, room_rv_con
  * Le choix de la borne
  * ========================================================================== */
 
-/* Vrai si quelqu'un joue DÉJÀ exactement cette borne. Un rival ne se met pas
- * derrière une machine occupée — c'est la règle d'une salle d'arcade, et c'est
- * accessoirement ce qui empêche quatre pressés de jouer le même démineur au
- * même instant devant un joueur qui regarde. */
-static bool borne_occupee(const room_couperet *c, const char *jeu, bool hard)
+/*
+ * Y a-t-il UNE MACHINE pour ce jeu à ce régime, et est-elle libre ?
+ *
+ * Deux réponses selon que la salle a déclaré ses bornes ou non, et elles disent
+ * la même chose pour deux raisons différentes :
+ *
+ *   - AVEC une table, c'est la question physique : la salle a-t-elle une borne
+ *     qui porte ce jeu, et personne n'est-il déjà dessus ? C'est elle qui
+ *     interdit dedale difficile et piano difficile, que la salle ne porte nulle
+ *     part, et qui interdit à deux rivaux le seul démineur normal du couloir.
+ *   - SANS table, c'est la règle d'ambiance : personne ne joue déjà exactement
+ *     ça. Quatre pressés sur le même démineur ne font pas une salle, et un test
+ *     n'a pas de scène à charger pour s'en apercevoir.
+ *
+ * La table est passée sans tirage ici : on demande s'il EXISTE une place libre,
+ * pas laquelle. Tirer à ce stade consommerait de l'aléa pour des lignes qu'on
+ * n'a pas retenues, et deux rivaux qui examinent le tableau dans un ordre
+ * différent verraient des suites différentes.
+ */
+static bool ligne_libre(const room_rivaux *r, const room_couperet *c,
+                        const char *jeu, bool hard)
 {
+    if (r->nbornes > 0) return borne_libre(r, jeu, hard, NULL) >= 0;
+
     for (int i = 0; i < c->places; ++i) {
         const room_cp_place *p = &c->place[i];
         if (!p->occupee || !p->vivante || p->jeu[0] == '\0') continue;
-        if (p->hard == hard && strcmp(p->jeu, jeu) == 0) return true;
+        if (p->hard == hard && strcmp(p->jeu, jeu) == 0) return false;
     }
-    return false;
+    return true;
 }
 
 /*
@@ -282,7 +376,8 @@ static bool borne_occupee(const room_couperet *c, const char *jeu, bool hard)
  * classement et n'a pas à être connue ici.
  */
 static bool choisir(const room_rivaux *r, const room_couperet *c, uint8_t place,
-                    const ns_game_api **api_out, bool *hard_out, bool libre_seulement)
+                    const ns_game_api **api_out, bool *hard_out,
+                    bool libre_seulement, bool selon_conduite)
 {
     const room_rival *v = &r->place[place];
     const float periode = room_cp_periode();
@@ -308,8 +403,9 @@ static bool choisir(const room_rivaux *r, const room_couperet *c, uint8_t place,
             if (!plus_courte || duree < courte_duree) {
                 plus_courte = api; courte_hard = hard; courte_duree = duree;
             }
-            if (libre_seulement && borne_occupee(c, api->id, hard)) continue;
+            if (libre_seulement && !ligne_libre(r, c, api->id, hard)) continue;
 
+            if (selon_conduite)
             switch ((room_rv_conduite)v->conduite) {
             case ROOM_RV_PRESSE:
                 if (duree >= periode) continue;
@@ -329,7 +425,8 @@ static bool choisir(const room_rivaux *r, const room_couperet *c, uint8_t place,
         }
     }
 
-    if (!choix && (room_rv_conduite)v->conduite == ROOM_RV_HORLOGER) {
+    if (!choix && selon_conduite &&
+        (room_rv_conduite)v->conduite == ROOM_RV_HORLOGER) {
         choix = plus_courte; choix_hard = courte_hard;
     }
     if (!choix) return false;
@@ -357,10 +454,40 @@ static void commencer(room_rivaux *r, room_couperet *c, uint8_t place)
     const ns_game_api *api = NULL;
     bool hard = false;
 
-    if (!choisir(r, c, place, &api, &hard, true) &&
-        !choisir(r, c, place, &api, &hard, false)) {
+    /*
+     * TROIS TENTATIVES, ET LA DEUXIÈME EST CELLE QUI FAIT VIVRE LA SALLE.
+     *
+     * 1. sa conduite, sur une machine libre. C'est ce qu'il veut.
+     * 2. N'IMPORTE QUELLE MACHINE LIBRE, au meilleur rendement affiché. Sans
+     *    cette ligne, un pressé dont les quatre bornes de moins de quarante-cinq
+     *    secondes sont toutes prises reste planté : mesuré sur une manche de
+     *    huit rivaux dans une salle de dix-huit bornes, CINQ bornes servaient de
+     *    toute la manche, contre SEPT avec cette ligne. Un joueur devant une
+     *    allée occupée ne reste pas planté — il joue autre chose, et c'est
+     *    précisément ce que sa conduite lui coûte.
+     * 3. sa conduite sans regarder qui est où, pour le cas où la salle n'a
+     *    déclaré aucune borne : il n'y a alors rien à partager.
+     */
+    if (!choisir(r, c, place, &api, &hard, true,  true) &&
+        !choisir(r, c, place, &api, &hard, true,  false) &&
+        !choisir(r, c, place, &api, &hard, false, true)) {
         v->pause = pause_tiree(v);
         return;
+    }
+
+    /*
+     * LA MACHINE, quand la salle en a déclaré. Le repli du choix ci-dessus peut
+     * rendre une ligne dont toutes les bornes sont prises : dans ce cas le rival
+     * ATTEND, il ne joue pas dans le vide. Une salle qui déclarerait moins de
+     * bornes que de places produirait donc des joueurs qui font la queue, ce qui
+     * est exactement ce que fait un humain devant une allée pleine — et ce que
+     * la salle livrée ne produit jamais, avec ses dix-huit bornes jouables pour
+     * huit places.
+     */
+    int32_t borne = -1;
+    if (r->nbornes > 0) {
+        borne = borne_libre(r, api->id, hard, &v->alea);
+        if (borne < 0) { v->pause = pause_tiree(v); return; }
     }
 
     /*
@@ -380,6 +507,7 @@ static void commencer(room_rivaux *r, room_couperet *c, uint8_t place)
 
     v->api      = api;
     v->hard     = hard;
+    v->borne    = borne;
     v->score_vu = 0;
     room_cp_partie_debut(c, place, api->id, hard);
 }
@@ -423,6 +551,7 @@ static void un_pas(room_rivaux *r, room_couperet *c, uint8_t place, float pas)
      */
     if (v->api && (!p->vivante || p->jeu[0] == '\0')) {
         v->api = NULL;
+        v->borne = -1;
         v->score_vu = 0;
         v->pause = pause_tiree(v);
     }
@@ -464,6 +593,7 @@ static void un_pas(room_rivaux *r, room_couperet *c, uint8_t place, float pas)
         (void)room_cp_partie_fin(c, place, score);
         v->parties++;
         v->api = NULL;
+        v->borne = -1;
         v->score_vu = 0;
         v->pause = pause_tiree(v);
     }
@@ -552,9 +682,18 @@ static void depenser(room_rivaux *r, room_couperet *c, uint8_t place)
      *    secondes avant, elle retire sa défense au moment où elle compte. */
     if (c->prochain <= ROOM_RV_FENETRE_S) {
         if (cible < ROOM_CP_MAX_PLACES &&
-            moi->fusibles >= room_cp_action_cout(ROOM_CP_COUPURE) &&
-            room_cp_agir(c, place, cible, ROOM_CP_COUPURE)) {
-            v->coupures++;
+            moi->fusibles >= room_cp_action_cout(ROOM_CP_COUPURE)) {
+            /*
+             * `room_cp_agir_issue` PLUTÔT QUE `room_cp_agir`, pour une seule
+             * raison : l'enveloppe rend vrai dès que l'action a eu lieu, plaque
+             * encaissée comprise. Un compteur qui appelle « coupure » une
+             * attaque absorbée par un blindage ment sur le seul chiffre que ce
+             * champ existe pour donner — combien de bornes ce rival a
+             * réellement éteintes.
+             */
+            room_cp_issue issue = ROOM_CP_REFUSEE;
+            (void)room_cp_agir_issue(c, place, cible, ROOM_CP_COUPURE, &issue);
+            if (issue == ROOM_CP_PASSEE) v->coupures++;
         }
         return;
     }
@@ -674,4 +813,19 @@ const void *room_rv_etat(const room_rivaux *r, uint8_t place)
 {
     if (!room_rv_tenue(r, place)) return NULL;
     return r->place[place].api ? r->place[place].etat : NULL;
+}
+
+int32_t room_rv_borne_de(const room_rivaux *r, uint8_t place)
+{
+    if (!room_rv_tenue(r, place)) return -1;
+    return r->place[place].api ? r->place[place].borne : -1;
+}
+
+uint8_t room_rv_place_a_la_borne(const room_rivaux *r, int32_t borne)
+{
+    if (!r || borne < 0) return ROOM_CP_MAX_PLACES;
+    for (uint8_t i = 0; i < ROOM_CP_MAX_PLACES; ++i) {
+        if (r->place[i].tenue && r->place[i].api && r->place[i].borne == borne) return i;
+    }
+    return ROOM_CP_MAX_PLACES;
 }

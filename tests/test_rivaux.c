@@ -281,6 +281,12 @@ typedef struct bilan {
      * n'y a aucune raison qu'une politique de dépense y échappe. */
     int32_t achats[ROOM_CP_ACTION_COUNT];
     int32_t absorbe, renvoye;
+
+    /* Combien de lames sont tombées sur une place COUPÉE PENDANT LE MÊME CYCLE.
+     * C'est la seule façon de chiffrer si une coupure a servi à quelque chose :
+     * une borne éteinte trente secondes avant le verdict se rallume, une borne
+     * éteinte juste avant retire sa défense au moment où elle compte. */
+    int32_t coupures_decisives;
 } bilan;
 
 /*
@@ -290,9 +296,9 @@ typedef struct bilan {
  * est pilotée par le test et ne dépense jamais rien. `regler` reçoit le banc
  * juste après le remplissage, pour imposer niveaux et conduites.
  */
-static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
-                         void (*regler)(room_rivaux *, int), int arg,
-                         bilan *out, bool chronometrer)
+static void jouer_manche_pas(uint64_t graine, uint8_t hum, bool hum_longue,
+                             void (*regler)(room_rivaux *, int), int arg,
+                             bilan *out, bool chronometrer, float pas_image)
 {
     room_couperet c;
     room_rivaux   r;
@@ -312,23 +318,25 @@ static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
     bool valide = true;
     double ns_total = 0.0;
     int32_t achats[ROOM_CP_ACTION_COUNT];
-    int32_t absorbe = 0, renvoye = 0;
+    int32_t absorbe = 0, renvoye = 0, decisives = 0;
+    bool    coupe_ce_cycle[ROOM_CP_MAX_PLACES];
     memset(achats, 0, sizeof achats);
+    memset(coupe_ce_cycle, 0, sizeof coupe_ce_cycle);
 
-    int gardefou = (int)(ROOM_CP_MANCHE_MAX_S / PAS_IMAGE) + 16;
+    int gardefou = (int)(ROOM_CP_MANCHE_MAX_S / pas_image) + 16;
     while (c.phase == ROOM_CP_COURSE && gardefou-- > 0) {
         if (chronometrer) {
             struct timespec t0, t1;
             clock_gettime(CLOCK_MONOTONIC, &t0);
-            room_rv_avancer(&r, &c, PAS_IMAGE);
+            room_rv_avancer(&r, &c, pas_image);
             clock_gettime(CLOCK_MONOTONIC, &t1);
             ns_total += (double)(t1.tv_sec - t0.tv_sec) * 1e9 +
                         (double)(t1.tv_nsec - t0.tv_nsec);
         } else {
-            room_rv_avancer(&r, &c, PAS_IMAGE);
+            room_rv_avancer(&r, &c, pas_image);
         }
-        if (avec_humain) hum_pas(&h, &c, PAS_IMAGE);
-        room_cp_avancer(&c, PAS_IMAGE);
+        if (avec_humain) hum_pas(&h, &c, pas_image);
+        room_cp_avancer(&c, pas_image);
         if (!room_cp_valide(&c)) valide = false;
 
         /* Le journal se vide à chaque image, comme la salle le fera : il ne
@@ -337,9 +345,16 @@ static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
         room_cp_evenement e;
         while (room_cp_prendre(&c, &e)) {
             if (e.type == ROOM_CP_EVT_ACTION && e.valeur >= 0 &&
-                e.valeur < ROOM_CP_ACTION_COUNT) achats[e.valeur]++;
-            else if (e.type == ROOM_CP_EVT_ABSORBE) absorbe++;
+                e.valeur < ROOM_CP_ACTION_COUNT) {
+                achats[e.valeur]++;
+                if (e.valeur == ROOM_CP_COUPURE && e.b < ROOM_CP_MAX_PLACES)
+                    coupe_ce_cycle[e.b] = true;
+            } else if (e.type == ROOM_CP_EVT_ABSORBE) absorbe++;
             else if (e.type == ROOM_CP_EVT_RENVOYE) renvoye++;
+            else if (e.type == ROOM_CP_EVT_COUPERET) {
+                if (e.a < ROOM_CP_MAX_PLACES && coupe_ce_cycle[e.a]) decisives++;
+                memset(coupe_ce_cycle, 0, sizeof coupe_ce_cycle);
+            }
         }
 
         for (int i = 0; i < 8; ++i) {
@@ -367,6 +382,7 @@ static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
     out->valide       = valide;
     out->absorbe      = absorbe;
     out->renvoye      = renvoye;
+    out->coupures_decisives = decisives;
     memcpy(out->achats, achats, sizeof achats);
     /*
      * LE COÛT SE RAPPORTE AU PAS DE SIMULATION, pas à l'image du test : le
@@ -379,6 +395,17 @@ static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
 
     if (avec_humain) hum_fermer(&h);
     room_rv_fermer(&r);
+}
+
+
+/* Le pas d'image ordinaire. La variante ci-dessus n'existe que pour le contrôle
+ * de découpage du test de déterminisme. */
+static void jouer_manche(uint64_t graine, uint8_t hum, bool hum_longue,
+                         void (*regler)(room_rivaux *, int), int arg,
+                         bilan *out, bool chronometrer)
+{
+    jouer_manche_pas(graine, hum, hum_longue, regler, arg, out, chronometrer,
+                     PAS_IMAGE);
 }
 
 /* ==========================================================================
@@ -520,6 +547,153 @@ static void test_equipes(void)
 }
 
 /* ==========================================================================
+ * 3 ter. LES BORNES — un rival se tient devant une vraie machine
+ * ========================================================================== */
+
+/*
+ * UNE SALLE DE TEST, ET CE N'EST PAS LA SALLE LIVRÉE.
+ *
+ * Elle en a la FORME, relevée dans `assets/scene/salle.room.json` et écrite
+ * dans l'en-tête : douze lignes à une seule borne, deux lignes à trois bornes
+ * (dedale et piano en régime normal), et deux lignes du tableau des durées qui
+ * n'existent nulle part — dedale difficile et piano difficile. C'est cette
+ * forme, et pas les indices, qui met les règles à l'épreuve : une machine
+ * unique qu'on ne peut pas partager, une machine en trois exemplaires qu'il
+ * faut savoir répartir, et un jeu qu'aucun meuble ne porte.
+ *
+ * La vraie table, elle, vient de `room_rv_bornes_scene` et n'est recopiée nulle
+ * part — c'est tout l'intérêt de l'injection.
+ */
+static int salle_de_test(room_rv_borne *t, int max)
+{
+    static const char *const solos[] = { "envol", "aplomb", "asteroid",
+                                         "demineur", "snake", "shooter" };
+    int n = 0;
+    for (unsigned i = 0; i < sizeof solos / sizeof solos[0]; ++i) {
+        for (int h = 0; h < 2 && n < max; ++h) {
+            t[n].index = n;
+            snprintf(t[n].jeu, sizeof t[n].jeu, "%s", solos[i]);
+            t[n].hard = (h != 0);
+            n++;
+        }
+    }
+    for (int k = 0; k < 3 && n < max; ++k) {
+        t[n].index = n; snprintf(t[n].jeu, sizeof t[n].jeu, "dedale");
+        t[n].hard = false; n++;
+    }
+    for (int k = 0; k < 3 && n < max; ++k) {
+        t[n].index = n; snprintf(t[n].jeu, sizeof t[n].jeu, "piano");
+        t[n].hard = false; n++;
+    }
+    return n;
+}
+
+static void test_bornes(void)
+{
+    printf("\n-- les bornes : qui se tient devant quelle machine --\n");
+
+    room_rv_borne table[ROOM_RV_BORNES];
+    const int nb = salle_de_test(table, ROOM_RV_BORNES);
+    CHECK(nb == 18, "la salle de test déclare %d bornes au lieu de dix-huit", nb);
+
+    const int32_t reservee = 3;   /* la machine du joueur : personne n'y touche */
+
+    room_couperet c;
+    room_rivaux   r;
+    room_cp_ouvrir(&c, 8, false);
+    room_rv_ouvrir(&r, 0x50FAu);
+    CHECK(room_rv_bornes(&r, table, nb) == nb, "la table de bornes est refusée");
+    room_rv_reserver(&r, reservee);
+    (void)room_rv_remplir(&r, &c);
+    room_cp_lancer(&c, 0x50FAu);
+
+    bool vues[ROOM_RV_BORNES];
+    memset(vues, 0, sizeof vues);
+    int  sans_machine = 0, collisions = 0, reservee_prise = 0, inverse_faux = 0;
+    int  jeu_absent = 0;
+
+    int gardefou = (int)(ROOM_CP_MANCHE_MAX_S / PAS_IMAGE) + 16;
+    while (c.phase == ROOM_CP_COURSE && gardefou-- > 0) {
+        room_rv_avancer(&r, &c, PAS_IMAGE);
+        room_cp_avancer(&c, PAS_IMAGE);
+
+        for (uint8_t i = 0; i < 8; ++i) {
+            const int32_t b = room_rv_borne_de(&r, i);
+            const bool joue = (c.place[i].jeu[0] != '\0');
+            if (joue && b < 0) { sans_machine++; continue; }
+            if (b < 0) continue;
+
+            vues[b] = true;
+            if (b == reservee) reservee_prise++;
+            /* La borne dit la place, et la place dit la borne : c'est ce qui
+             * permettra de viser en se plantant devant la machine. */
+            if (room_rv_place_a_la_borne(&r, b) != i) inverse_faux++;
+            for (uint8_t k = (uint8_t)(i + 1u); k < 8; ++k) {
+                if (room_rv_borne_de(&r, k) == b) collisions++;
+            }
+            /*
+             * La machine porte bien ce qu'on joue dessus — vérifié SEULEMENT
+             * quand la place joue encore. Un couperet ou une coupure éteint la
+             * borne dans `room_cp_avancer`, et le rival ne l'apprend qu'au pas
+             * suivant : pendant une image, sa machine est celle d'une partie
+             * qui vient d'être annulée. C'est le prix de deux modules qui ne
+             * partagent pas la même horloge, et c'est 1/120 de seconde.
+             */
+            if (joue && (strcmp(table[b].jeu, c.place[i].jeu) != 0 ||
+                         table[b].hard != c.place[i].hard)) jeu_absent++;
+        }
+    }
+
+    int occupees = 0;
+    for (int i = 0; i < nb; ++i) if (vues[i]) occupees++;
+    printf("   %d bornes distinctes occupées sur %d au fil de la manche :",
+           occupees, nb);
+    for (int i = 0; i < nb; ++i) {
+        if (vues[i]) printf(" %s%s", table[i].jeu, table[i].hard ? "-hard" : "");
+    }
+    printf("\n");
+
+    CHECK(sans_machine == 0,
+          "%d fois un rival a joué sans être devant une machine", sans_machine);
+    CHECK(collisions == 0, "%d fois deux rivaux ont pris la même borne", collisions);
+    CHECK(reservee_prise == 0,
+          "%d fois un rival s'est mis à la machine du joueur", reservee_prise);
+    CHECK(inverse_faux == 0,
+          "%d fois la borne et la place ne se désignaient pas l'une l'autre",
+          inverse_faux);
+    CHECK(jeu_absent == 0,
+          "%d fois un rival a joué un jeu que sa machine ne porte pas", jeu_absent);
+    CHECK(occupees >= 6, "seulement %d bornes ont servi de toute la manche", occupees);
+
+    /* Les deux lignes que la salle ne porte pas — dedale et piano difficiles —
+     * ne doivent jamais être jouées : on ne joue pas sur une machine absente. */
+    room_rv_fermer(&r);
+
+    /* Sans table déclarée, le module retombe sur son comportement d'avant :
+     * les rivaux jouent, et ne se tiennent nulle part. */
+    room_couperet c2;
+    room_rivaux   r2;
+    room_cp_ouvrir(&c2, 8, false);
+    room_rv_ouvrir(&r2, 0x50FAu);
+    (void)room_rv_remplir(&r2, &c2);
+    room_cp_lancer(&c2, 0x50FAu);
+    int joue_sans_salle = 0, borne_de_nulle_part = 0;
+    for (int t = 0; t < 60 * 60 && c2.phase == ROOM_CP_COURSE; ++t) {
+        room_rv_avancer(&r2, &c2, PAS_IMAGE);
+        room_cp_avancer(&c2, PAS_IMAGE);
+        for (uint8_t i = 0; i < 8; ++i) {
+            if (c2.place[i].jeu[0] != '\0') joue_sans_salle++;
+            if (room_rv_borne_de(&r2, i) != -1) borne_de_nulle_part++;
+        }
+    }
+    CHECK(joue_sans_salle > 0, "sans salle déclarée, plus personne ne joue");
+    CHECK(borne_de_nulle_part == 0,
+          "%d fois une borne a été rendue alors qu'aucune salle n'est déclarée",
+          borne_de_nulle_part);
+    room_rv_fermer(&r2);
+}
+
+/* ==========================================================================
  * 4. LE DÉTERMINISME
  * ========================================================================== */
 
@@ -563,6 +737,39 @@ static void test_determinisme(void)
     jouer_manche(0x13579u, ROOM_CP_MAX_PLACES, false, NULL, 0, &d, false);
     CHECK(!memes_bilans(&a, &d), "deux graines différentes rendent la même manche");
     printf("   trois graines rejouées à l'identique, points et fusibles compris\n");
+
+    /*
+     * LE MÊME TOTAL DANS UN DÉCOUPAGE DIFFÉRENT — la propriété que le module
+     * revendique en déduisant ses pas de l'horloge au lieu de les décompter.
+     *
+     * Elle N'EST PAS établie ici, elle est MESURÉE, et le résultat est imprimé
+     * quel qu'il soit. Le module et le couperet accumulent tous deux leur
+     * horloge en flottant simple : additionner 1/60 deux mille fois et 1/120
+     * quatre mille fois ne donne pas le même nombre au bit près, donc rien ne
+     * garantit a priori que le compte de pas coïncide sur toute une manche. Ce
+     * qui est garanti, c'est qu'il ne DÉRIVE pas — un décompte accumulerait
+     * l'écart, une déduction le borne à un pas.
+     */
+    for (int essai = 0; essai < 3; ++essai) {
+        const uint64_t g = 0x3C3Cu + (uint64_t)essai * 131u;
+        bilan lent, rapide;
+        jouer_manche_pas(g, ROOM_CP_MAX_PLACES, false, NULL, 0, &lent, false,
+                         1.0f / 60.0f);
+        jouer_manche_pas(g, ROOM_CP_MAX_PLACES, false, NULL, 0, &rapide, false,
+                         1.0f / 120.0f);
+        int32_t ecart = 0;
+        for (int i = 0; i < 8; ++i) {
+            const int32_t e = lent.points[i] - rapide.points[i];
+            ecart += (e < 0) ? -e : e;
+        }
+        printf("   graine %llu : 60 Hz contre 120 Hz -> %s, écart de points %d\n",
+               (unsigned long long)g,
+               memes_bilans(&lent, &rapide) ? "manche identique" : "manche différente",
+               ecart);
+    }
+    /* Aucun CHECK sur ce dernier point : la propriété qui compte pour le réseau
+     * est celle du dessus — même graine, même découpage, même manche — et c'est
+     * elle qui est exigée. Ce contrôle-ci RENSEIGNE, il ne juge pas. */
 }
 
 /* ==========================================================================
@@ -694,7 +901,7 @@ static void test_coupures(void)
     const int manches = 100;
     for (int profil = 0; profil < 2; ++profil) {
         long coupures = 0, parties = 0, points = 0, gagnees = 0;
-        long duree = 0, coupures_salle = 0, meneur = 0;
+        long duree = 0, coupures_salle = 0, meneur = 0, decisives = 0;
         for (int m = 0; m < manches; ++m) {
             bilan b;
             jouer_manche(0x7E57u + (uint64_t)m * 4099u, 4,
@@ -704,6 +911,7 @@ static void test_coupures(void)
             points   += b.points[4];
             duree    += (long)b.duree;
             coupures_salle += b.achats[ROOM_CP_COUPURE];
+            decisives += b.coupures_decisives;
             for (int i = 0; i < 8; ++i) if (b.points[i] > b.points[4]) { meneur++; break; }
             if (b.vainqueur == 4) gagnees++;
         }
@@ -720,6 +928,14 @@ static void test_coupures(void)
                (coupures > 0) ? (double)duree / (double)coupures : 0.0,
                (double)coupures_salle / (double)manches,
                (long)manches - meneur, manches);
+        /* Une coupure DÉCISIVE est celle dont la victime est prise par la lame
+         * du même cycle. C'est ce que la fenêtre d'avant-lame cherche à
+         * produire : moins de coupures, mais qui décident. */
+        printf("                     (%.2f coupure décisive par manche, soit "
+               "%.0f %% des coupures)\n",
+               (double)decisives / (double)manches,
+               (coupures_salle > 0)
+                   ? 100.0 * (double)decisives / (double)coupures_salle : 0.0);
 
         /*
          * LE SEUIL EST UNE RÈGLE DE JEU, pas un contrôle de régression : au-delà
@@ -776,6 +992,7 @@ int main(void)
 
     test_salon();
     test_joue();
+    test_bornes();
     test_equipes();
     test_determinisme();
     test_niveau();
