@@ -732,3 +732,37 @@ a:hover { color: #ffc862; }
     background: transparent;
     color: var(--muted);
 }
+
+/* ==========================================================================
+ * La manche en direct (salon.html)
+ * ========================================================================== */
+
+/* Le champ et son bouton sur une ligne, et qui repassent l'un sous l'autre
+ * quand la barre devient trop etroite — la barre du televiseur porte deja un
+ * libelle et un etat, et sur un telephone les quatre ne tiennent pas. */
+.field-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.field-row .field { min-width: 9rem; }
+.field-row input { text-transform: uppercase; letter-spacing: 0.18em; }
+
+.salon-titre {
+    margin: 0;
+    padding: 0.9rem 1rem 0;
+    font-size: var(--t-md);
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/*
+ * Un joueur sorti garde ses points et sa ligne. Il est estompe, pas efface :
+ * le mode ne met pas dehors, il change de metier — un sorti continue d'agir
+ * sur la manche, et le faire disparaitre du tableau raconterait le contraire.
+ * On ne compte pas sur la seule couleur : le rang devient un tiret.
+ */
+.board tbody tr.sorti td { color: var(--muted); }
+.board tbody tr.sorti td.c-score { color: var(--muted); }
