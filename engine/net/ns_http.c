@@ -285,7 +285,29 @@ bool ns_http_request(const char *method, const char *url,
         SDL_snprintf(out->error, sizeof out->error, "réponse illisible");
         return false;
     }
-    out->status = SDL_atoi(buf + 9);
+    /*
+     * Le code, lu sur TROIS octets et pas un de plus.
+     *
+     * C'était `SDL_atoi(buf + 9)`, et le commentaire six lignes plus bas dit
+     * pourquoi c'était faux : ce tampon n'est jamais terminé par un NUL.
+     * `SDL_atoi` s'arrête au premier caractère non chiffre — donc, sur une
+     * réponse faite de chiffres, il sort de l'allocation. Et le cas se
+     * construit : la capacité double depuis 8 Kio et 8192 × 2⁵ vaut 262 144,
+     * exactement la borne, si bien qu'une réponse pleine laisse `len == cap`
+     * sans un seul octet de battement après elle.
+     *
+     * Le `len < 12` juste au-dessus garantit les indices 9, 10 et 11. On exige
+     * en plus trois chiffres : un serveur qui n'en envoie pas ne parle pas
+     * HTTP, et rendre 0 est plus honnête qu'un nombre tiré d'octets voisins.
+     */
+    if (!SDL_isdigit((unsigned char)buf[9]) ||
+        !SDL_isdigit((unsigned char)buf[10]) ||
+        !SDL_isdigit((unsigned char)buf[11])) {
+        SDL_free(buf);
+        SDL_snprintf(out->error, sizeof out->error, "code de réponse illisible");
+        return false;
+    }
+    out->status = (buf[9] - '0') * 100 + (buf[10] - '0') * 10 + (buf[11] - '0');
 
     /* Fin d'en-tête. `SDL_strstr` sur un tampon non terminé serait faux : on
      * cherche à la main sur la longueur connue. */
