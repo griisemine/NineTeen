@@ -244,6 +244,26 @@ const char *ns_online_server_url(void);
 const char *ns_online_session_token(void);
 
 /*
+ * Change le jeton en cours de partie.
+ *
+ * Le jeton n'arrivait jusqu'ici que de la configuration, au démarrage — parce
+ * qu'il n'y avait aucun moyen d'en obtenir un ailleurs qu'en le collant à la
+ * main dans `settings.cfg`. Depuis que le comptoir sait inscrire et connecter
+ * (voir `ns_compte.h`), l'identité change PENDANT que le jeu tourne, et un
+ * module qui garderait l'ancien jeton soumettrait les scores sous l'ancien
+ * compte — ou sous aucun.
+ *
+ * Passer NULL ou une chaîne vide revient à se déconnecter : les envois
+ * suivants partent sans en-tête d'autorisation.
+ *
+ * Un billet déjà tiré est JETÉ. Il a été ouvert au nom de quelqu'un d'autre ;
+ * s'en servir ferait soumettre une partie sur un créneau qui n'appartient plus
+ * au joueur, et le serveur la refuserait au moment le plus coûteux — à la fin
+ * de la partie, quand le score est déjà fait.
+ */
+void ns_online_set_token(const char *token);
+
+/*
  * Le NUMÉRO que le serveur donne au créneau « flappy » + « hard ».
  *
  * Le classement et les fantômes s'interrogent par numéro ; le moteur ne connaît

@@ -778,6 +778,39 @@ const char *ns_online_session_token(void)
     return (g.enabled && g.token[0]) ? g.token : NULL;
 }
 
+void ns_online_set_token(const char *token)
+{
+    if (!g.enabled || !g.lock) return;
+
+    SDL_LockMutex(g.lock);
+    const bool meme = SDL_strcmp(g.token, token ? token : "") == 0;
+    if (!meme) {
+        SDL_snprintf(g.token, sizeof g.token, "%s", token ? token : "");
+
+        /*
+         * Le billet en réserve appartenait à l'identité précédente. On le jette
+         * ET on efface son secret : c'est un HMAC de partie, il n'a plus rien à
+         * sceller. Ne pas le jeter aurait produit le pire des échecs possibles —
+         * un refus à la SOUMISSION, quand la partie est déjà jouée.
+         */
+        g.ticket_ready = false;
+        SDL_zero(g.ticket);
+        g.ticket_game[0] = '\0';
+        g.ticket_diff[0] = '\0';
+        g.want_ticket[0] = '\0';
+        g.ticket_retry_at_ms = 0;
+
+        /*
+         * Les numéros de jeux, eux, RESTENT. Ils ne dépendent d'aucun compte —
+         * c'est la table `games` du serveur — et les redemander ferait un
+         * aller-retour pour rien à chaque connexion.
+         */
+        SDL_snprintf(g.status, sizeof g.status,
+                     g.token[0] ? "connecté" : "hors compte");
+    }
+    SDL_UnlockMutex(g.lock);
+}
+
 int ns_online_game_id(const char *game, const char *difficulty)
 {
     if (!g.enabled || !game || !game[0]) return -1;
