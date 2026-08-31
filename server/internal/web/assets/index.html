@@ -21,6 +21,7 @@
     <a href="#salle">La salle</a>
     <a href="#jeux">Les jeux</a>
     <a href="#bornes">Les bornes</a>
+    <a href="#couperet">Le Couperet</a>
     <a href="#classement">Classement</a>
     <a href="#telecharger">Télécharger</a>
   </nav>
@@ -167,6 +168,61 @@
     <ul class="rail" id="galerie-bornes">
       <li class="cab"><span class="cab-marquee">Chargement…</span></li>
     </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <!-- ================= Le Couperet ================= -->
+  <section class="section" id="couperet">
+    <div class="section-head">
+      <h2>Le Couperet</h2>
+      <p>Le mode compétitif, de deux à huit joueurs dans la même salle. Une phrase suffit à le
+         décrire&nbsp;: <em>tes points ne comptent qu'une fois la partie finie, et toutes les
+         quarante-cinq secondes le couperet sort le dernier.</em></p>
+      <p>Tout le reste en découle, parce que les dix-neuf bornes ne durent pas le même temps. La
+         durée médiane d'une partie va de <strong>5,9&nbsp;s</strong> à <strong>180&nbsp;s</strong>,
+         mesurée sur vingt-quatre parties par borne et par régime. Enchaîner du court met en banque
+         deux fois entre deux lames&nbsp;; s'engager sur du long en traverse quatre sans avoir rien
+         encaissé — et les bornes longues paient près de <strong>quatre-vingts fois</strong> plus.
+         Le multiplicateur est écrit
+         sur le fronton, avant qu'on insère le jeton.</p>
+      <p>Six actions s'achètent avec des <em>fusibles</em>&nbsp;: brouiller l'image de quelqu'un,
+         inverser son manche, couper le courant de sa borne, se blinder, donner un fusible, renvoyer
+         la prochaine attaque. Être éliminé ne met pas à la porte&nbsp;: on devient
+         <em>spectre</em>, on ne joue plus, mais on garde ses fusibles et on continue d'agir.</p>
+    </div>
+
+    <ul class="vues">
+      <li><figure>
+        <img src="/img/couperet-allee.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Une manche du Couperet vue depuis l'allée : les bornes tenues par des rivaux jouent leur partie. Rendu par le moteur du jeu.">
+        <figcaption>Les bornes que tiennent les rivaux jouent leur partie, pas une démo.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/couperet-bar.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le téléviseur du bar affichant le classement d'une manche du Couperet. Rendu par le moteur du jeu.">
+        <figcaption>Le téléviseur du bar passe au classement de la manche.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/couperet-verdict.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="La page de verdict à la fin d'une manche : rang, points, parties finies, coupures subies. Rendu par le moteur du jeu.">
+        <figcaption>Le verdict&nbsp;: votre rang, vos points, et ce que vous avez perdu sur coupure.</figcaption>
+      </figure></li>
+    </ul>
+
+    <div class="section-head">
+      <p><strong>L'équilibre est mesuré, pas affirmé.</strong> Le test ne simule pas les parties, il
+         les <em>joue</em>&nbsp;: les huit pilotes automatiques du jeu constituent un vivier de
+         durées et de scores réels, et deux cents manches de huit places sont jouées pour chaque
+         réglage. Celui qui s'engage l'emporte <strong>55&nbsp;%</strong> du temps contre celui qui
+         se presse, et 51&nbsp;/&nbsp;49&nbsp;/&nbsp;56&nbsp;% sur trois tirages indépendants. Les
+         six actions déplacent l'issue de <strong>38 points de pourcentage</strong>&nbsp;: sans
+         elles, l'engagement gagne neuf manches sur dix.</p>
+      <p>Les places libres sont tenues par des rivaux qui <em>jouent réellement</em> — ils allouent
+         un état de jeu et appellent le pilote automatique à chaque pas, comme vous. Rien ne
+         s'achète&nbsp;: ni saison, ni laissez-passer. Les fusibles naissent au coup d'envoi et
+         meurent au verdict.</p>
+    </div>
   </section>
 
   <!-- ================= Classement : traité comme un écran ================= -->

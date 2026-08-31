@@ -132,6 +132,39 @@ static void test_table(void)
            (double)longue, (double)room_cp_engagement(longue),
            (double)(pps_longue / pps_court));
 
+    /*
+     * L'ÉTENDUE DES MULTIPLICATEURS, IMPRIMÉE — parce qu'elle est PUBLIÉE.
+     *
+     * Ce nombre figure dans l'en-tête du module, dans `docs/JOUER.md`, dans le
+     * changelog et sur le site : c'est celui que le joueur lit pour comprendre
+     * ce qu'il choisit. Il a d'abord été calculé à la main, et faux — « x0,04
+     * et un rapport de 105 » là où le code rend x0,0534 et 78,6. Une valeur
+     * publiée à quatre endroits doit sortir d'ici, pas d'une tête.
+     *
+     * Le test ne fige pas la valeur : il l'IMPRIME et borne son ordre de
+     * grandeur. Régler un jeu déplace légitimement ces chiffres ; ce qui ne
+     * doit pas arriver, c'est qu'ils bougent sans que personne les relise.
+     */
+    {
+        float lo = 1e9f, hi = 0.0f;
+        const char *bas = "", *haut = "";
+        for (int i = 0; i < ns_game_count(); ++i) {
+            const ns_game_api *api = ns_game_at(i);
+            for (int h = 0; h < 2; ++h) {
+                const float m = room_cp_multiplicateur(api->id, h != 0);
+                if (m < lo) { lo = m; bas = api->id; }
+                if (m > hi) { hi = m; haut = api->id; }
+            }
+        }
+        printf("   multiplicateurs : de x%.4f (%s) à x%.3f (%s), rapport %.1f\n",
+               (double)lo, bas, (double)hi, haut, (double)(hi / lo));
+        CHECK(lo > 0.0f && hi > lo, "l'étendue des multiplicateurs est vide");
+        CHECK(hi / lo > 20.0f && hi / lo < 300.0f,
+              "le rapport des multiplicateurs vaut %.1f : les documents qui le "
+              "publient (en-tête, JOUER.md, changelog, site) sont à relire",
+              (double)(hi / lo));
+    }
+
     /* Un score négatif — celui qui vient d'un pair ou d'un fichier abîmé — ne
      * doit pas rendre un solde négatif. */
     CHECK(room_cp_points_pour("snake", false, -1000) == 0,

@@ -317,7 +317,8 @@ mesuré sur ce dépôt, la durée médiane d'une partie va de **5,9 s** (démine
 deux lames — on n'est jamais pris les mains vides. S'engager sur du long traverse **quatre lames
 sans avoir rien encaissé**, et si l'on est dernier quand l'une tombe, les trois minutes partent
 avec. En échange, les bornes longues paient beaucoup plus : le multiplicateur est peint sur leur
-fronton, il va de `x0,04` à `x4,20`, et il se lit **avant** d'insérer le jeton.
+fronton, il va de `×0,05` à `×4,20` — un rapport de **79** — et il se lit **avant** d'insérer le
+jeton.
 
 **La partie en cours défend.** Elle ne compte pas au classement tant qu'elle n'est pas finie,
 mais le couperet, lui, la voit : au train où l'on marque, elle vaut ce qu'elle vaut, et cela suffit

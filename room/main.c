@@ -2254,10 +2254,17 @@ int main(int argc, char **argv)
     uint8_t cp_cible = ROOM_CP_MAX_PLACES;
     bool    cp_actif = false;
     /*
-     * LE VERDICT reste à l'écran quinze secondes après la fin. Un minuteur et
+     * LE VERDICT reste à l'écran TRENTE secondes après la fin. Un minuteur et
      * non une touche à presser : une page de fin qu'il faut congédier bloque
      * celui qui s'est levé de sa chaise, et une manche se termine souvent
      * pendant qu'on regarde ailleurs.
+     *
+     * QUINZE D'ABORD, ET C'ÉTAIT TROP COURT. La page porte jusqu'à huit lignes
+     * de classement, trois colonnes et le carnet — la lire demande plus de
+     * quinze secondes à quelqu'un qui vient de perdre et qui cherche pourquoi.
+     * Le défaut s'est vu sur la recette du site : la capture visait le milieu
+     * de la fenêtre et est sortie APRÈS, sur une salle vide. Rien ne presse de
+     * toute façon : F9 relance immédiatement, la page ne bloque personne.
      */
     float   cp_verdict = 0.0f;
     /*
@@ -4759,7 +4766,7 @@ play_at_done: ;
 
                 if (couperet.phase == ROOM_CP_FINI && cp_actif) {
                     cp_actif = false;
-                    cp_verdict = 15.0f;
+                    cp_verdict = 30.0f;
                     /*
                      * LE CARNET EST NOTÉ ICI, et sauvé tout de suite. Attendre
                      * la fermeture du jeu perdrait la manche de quiconque quitte

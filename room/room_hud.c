@@ -1041,7 +1041,25 @@ void room_hud_draw_couperet(ns_sprite *s, const room_couperet *c, uint8_t moi,
         ns_sprite_text(s, bx + 20.0f + ns_sprite_text_width(t, 5.2f) + 8.0f, 40.0f,
                        2.0f, C_DIM, "S");
 
-        if (menace < ROOM_CP_MAX_PLACES) {
+        /*
+         * ÊTRE SORTI DOIT SE LIRE ICI, et pas seulement sur le téléviseur du
+         * bar. Un joueur qu'on vient d'éliminer voit sa borne s'éteindre et ne
+         * comprend pas pourquoi ; le tableau du bar le dit, mais il est à cinq
+         * mètres et derrière lui. La bande du haut est le seul endroit qu'il
+         * regarde déjà.
+         *
+         * Et elle dit ce qui RESTE plutôt que ce qui est perdu : sortir change
+         * de métier, ça ne met pas à la porte — on garde ses fusibles, on en
+         * reçoit un à chaque lame, et on continue d'agir. C'est la moitié de la
+         * phrase qu'il faut lire à ce moment-là, parce que c'est celle qui
+         * donne une raison de rester.
+         */
+        const bool spectre = (moi < ROOM_CP_MAX_PLACES) && c->place[moi].occupee
+                          && !c->place[moi].vivante;
+        if (spectre) {
+            ns_sprite_text(s, bx + 140.0f, 22.0f, 2.6f, C_DIM,
+                           "SORTI - IL VOUS RESTE VOS FUSIBLES");
+        } else if (menace < ROOM_CP_MAX_PLACES) {
             char l[80];
             if (je_suis_menace) {
                 SDL_snprintf(l, sizeof l, "LE COUPERET EST SUR TOI");

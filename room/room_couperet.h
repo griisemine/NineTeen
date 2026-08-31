@@ -148,6 +148,12 @@
  *   - PIANO NE DISPERSE PAS : min = médiane = max sur les 24 parties, aux deux
  *     régimes (le morceau a une longueur fixe). Sa ligne est exacte et ne dit
  *     rien de la variance humaine, la seule qui existe pour ce jeu-là.
+ *   - DEUX DES SEIZE LIGNES NE SONT JOUABLES NULLE PART. La salle porte
+ *     dix-huit bornes jouables (la dix-neuvième est le tableau des scores) et
+ *     elles couvrent QUATORZE des seize lignes : dedale et piano n'existent
+ *     qu'en régime normal, sur trois bornes chacun. Le tableau ci-dessus dit
+ *     donc ce que valent seize couples ; le mode n'en offre que quatorze au
+ *     choix, et un rival ne joue jamais ce que la salle ne porte pas.
  *   - CE N'EST PAS LA MÊME SUITE DE GRAINES que la mesure de `room_bareme.h`,
  *     et les deux ne coïncident donc pas exactement (démineur 25,4 s ici contre
  *     24,7 s là ; snake 45,4 contre 49,3). L'accord à quelques pour cent sur
@@ -199,7 +205,8 @@
 
 /*
  * La borne la plus lente du tableau vaut donc (1800/622)^K, et la plus rapide
- * (71/622)^K. À K = 1,35 : x4,20 contre x0,04, soit un rapport de 105. Ce n'est
+ * (71/622)^K. À K = 1,35, et calculé par le code plutôt qu'à la main : x4,198
+ * contre x0,0534, soit un rapport de 78,6. Ce n'est
  * PAS le rapport des rendements — le barème paie déjà à peu près le même nombre
  * de tickets pour une partie médiane de n'importe quelle borne — mais celui des
  * PRIX AFFICHÉS, et c'est lui que le joueur lit sur les frontons.

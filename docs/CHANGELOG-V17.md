@@ -614,7 +614,7 @@ tire dedans — deux cents manches de huit places, en 6,7 s.
 | Un blindage **à durée** (2 pour 30 s) | il coûtait **exactement** le revenu du temps. Personne n'atteignait jamais les 4 d'une coupure, et la manche avec sabotage rendait le même résultat que sans, **au joueur près** : six actions, pas une jouée |
 
 Ce qui est livré : le multiplicateur est attaché à la **borne** (donc affichable
-avant d'insérer le jeton, `x0,04` à `x4,20`), la partie en cours **défend** du
+avant d'insérer le jeton, `×0,053` à `×4,198`), la partie en cours **défend** du
 couperet sans compter au classement, et le fusible se gagne au **temps passé à
 jouer**.
 

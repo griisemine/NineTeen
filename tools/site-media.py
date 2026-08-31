@@ -221,15 +221,22 @@ class Moteur:
                         "\n" + r.stderr[-2000:])
         return r
 
-    def capture(self, sortie, largeur, hauteur, args, qualite="high"):
-        """Une image fixe, vérifiée."""
+    def capture(self, sortie, largeur, hauteur, args, qualite="high", hud=False):
+        """Une image fixe, vérifiée.
+
+        `hud` FAUX par défaut, et c'est le bon défaut : une galerie de la salle
+        montre la salle, pas une interface. Il n'existe que pour le Couperet,
+        dont la bande du haut — le compte à rebours et qui la lame vise — est
+        justement ce qu'il faut montrer. Sans elle, une image du mode est une
+        image de la salle ordinaire.
+        """
         if self.rapide:
             qualite = "medium"
         self._lancer([
             "--headless", f"--screenshot={sortie}",
             f"--width={largeur}", f"--height={hauteur}",
-            "--frames=8", f"--quality={qualite}", "--scale=1.0", "--no-hud",
-        ] + args)
+            "--frames=8", f"--quality={qualite}", "--scale=1.0",
+        ] + ([] if hud else ["--no-hud"]) + args)
         if not os.path.isfile(sortie):
             raise Echec(f"le moteur n'a écrit aucune image : {sortie}")
         return verifier_image(sortie, largeur, hauteur)
@@ -375,6 +382,44 @@ VUES = [
     ("sud", "Le vide sud, la poche la plus profonde du hall."),
 ]
 
+# Les vues du COUPERET, rendues avec une manche ouverte (`--couperet=8`).
+#
+# À part, et pas mêlées aux précédentes : ce sont les MÊMES points de vue de la
+# salle, et ce qu'elles montrent en plus est le mode. Les fondre dans la galerie
+# donnerait deux images de l'allée dont rien ne dirait ce qui les sépare.
+#
+# Trois, et chacune montre une chose que les autres ne montrent pas : l'allée
+# porte les bornes tenues par des rivaux, le bar porte le classement de la
+# manche, la dernière porte le verdict.
+#
+# LA TROISIÈME A ÉTÉ UNE INVITE DE BORNE, et c'était impossible : l'invite
+# « E — JOUER À… » ne s'affiche que si la caméra est en mode JOUEUR, et
+# `--view=` la met en mode capture. Aucun point de vue nommé ne pouvait donc la
+# montrer, et sa légende aurait décrit une image qui ne la contenait pas.
+#
+# Le verdict la remplace, et il vaut mieux : c'est la page qu'on lit à la fin
+# d'une manche, celle qui donne envie d'en jouer une seconde. Il coûte en
+# revanche une manche ENTIÈRE, jouée en temps réel : trois lames à quarante-cinq
+# secondes, soit 135 s à attendre pour une image.
+#
+# QUATRE PLACES ET PAS DEUX, et c'est une correction : à deux places une seule
+# lame suffit, la manche dure 45 s, et l'unique rival n'a pas fini sa partie —
+# le verdict sortait avec un tableau de zéros, ce qui donne d'une page de fin
+# l'image d'une page cassée. À quatre, la manche dure assez pour qu'on y lise
+# des points, des parties finies et des coupures subies. Mesuré : 3 600 images
+# couvrent 149 s sur cette machine, 1 300 n'en couvraient que 57.
+COUPERET = [
+    ("allee", ["--couperet=8", "--frames=900"],
+     "Une manche en cours : les bornes que tiennent les rivaux jouent "
+     "leur partie, pas une démo."),
+    ("bar", ["--couperet=8", "--frames=900"],
+     "Le téléviseur du bar passe au classement de la manche : points, "
+     "fusibles, et qui la lame vise."),
+    ("verdict", ["--view=allee", "--couperet=4", "--frames=3600"],
+     "Le verdict : votre rang, vos points, et ce que vous avez perdu sur "
+     "coupure."),
+]
+
 
 def plan_bornes(scene):
     """Les DIX-NEUF bornes, dans l'ordre de leur emplacement.
@@ -450,6 +495,11 @@ def main():
 
     noms_vues = {c["name"] for c in scene["captures"]}
     inconnues = [n for n, _ in VUES if n not in noms_vues]
+    # Les vues du Couperet portent leur propre `--view=` quand leur nom n'en est
+    # pas un : « verdict » nomme une PAGE, pas un point de vue de la salle.
+    inconnues += [n for n, a, _ in COUPERET
+                  if n not in noms_vues
+                  and not any(x.startswith("--view=") for x in a)]
     if inconnues:
         raise Echec("vue(s) inconnue(s) de la scène : " + ", ".join(inconnues))
 
@@ -573,6 +623,28 @@ def main():
             })
         info(f"{len(manifeste['bornes'])} bornes, "
              f"{humain(sum(poids(os.path.join(dossier_img, b['fichier'])) for b in plan_bornes(scene)))} au total")
+
+        # ----------------------------------------------------------- couperet
+        etape("Le Couperet, une manche ouverte")
+        for nom, args, legende in COUPERET:
+            brut = os.path.join(tmp, f"couperet-{nom}.png")
+            # `--frames` plus généreux que le défaut : la manche doit avoir
+            # tourné assez longtemps pour que les rivaux se soient installés sur
+            # leurs bornes et que le tableau du bar porte des chiffres. Une
+            # image prise au premier pas montrerait huit zéros.
+            vue = args if any(a.startswith("--view=") for a in args) \
+                       else [f"--view={nom}"] + args
+            mesure = moteur.capture(brut, 1600, 900, vue, hud=True)
+            sortie = os.path.join(dossier_img, f"couperet-{nom}.jpg")
+            encoder_jpeg(brut, sortie, 1280, 720)
+            produits.append(sortie)
+            info(f"couperet-{nom:8s} {humain(poids(sortie)):>10s}  "
+                 f"médiane {mesure['mediane']:3d}, moyenne {mesure['moyenne']:5.1f}")
+            manifeste.setdefault("couperet", []).append({
+                "nom": nom, "image": f"/img/couperet-{nom}.jpg",
+                "legende": legende,
+                "alt": legende + " Rendu par le moteur du jeu.",
+            })
 
         # ---------------------------------------------------------------- vues
         etape("La salle en plusieurs vues")

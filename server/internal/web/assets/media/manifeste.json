@@ -322,6 +322,26 @@
     "duree": 9.9,
     "alt": "Orbite lente dans la salle d'arcade : les deux rangées de bornes allumées, le plafond lumineux, la moquette à motifs néon."
   },
+  "couperet": [
+    {
+      "nom": "allee",
+      "image": "/img/couperet-allee.jpg",
+      "legende": "Une manche en cours : les bornes que tiennent les rivaux jouent leur partie, pas une démo.",
+      "alt": "Une manche en cours : les bornes que tiennent les rivaux jouent leur partie, pas une démo. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "bar",
+      "image": "/img/couperet-bar.jpg",
+      "legende": "Le téléviseur du bar passe au classement de la manche : points, fusibles, et qui la lame vise.",
+      "alt": "Le téléviseur du bar passe au classement de la manche : points, fusibles, et qui la lame vise. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "verdict",
+      "image": "/img/couperet-verdict.jpg",
+      "legende": "Le verdict : votre rang, vos points, et ce que vous avez perdu sur coupure.",
+      "alt": "Le verdict : votre rang, vos points, et ce que vous avez perdu sur coupure. Rendu par le moteur du jeu."
+    }
+  ],
   "compte": {
     "bornes": 19,
     "jeux": 8,

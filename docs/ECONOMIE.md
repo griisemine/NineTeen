@@ -17,6 +17,17 @@ Il n'y a pas non plus de minuterie qui punit l'absence, ni de compte à rebours 
 trois crochets — le tournoi du jour, la série, le quitte ou double — se refusent tous les trois
 sans rien perdre d'autre que ce qu'on n'a pas joué.
 
+**Et le compte à rebours du Couperet&nbsp;?** Le mode compétitif ajoute une lame qui tombe toutes
+les quarante-cinq secondes, et il faut dire pourquoi ça ne contredit pas la phrase ci-dessus.
+Cette minuterie ne punit pas **l'absence**&nbsp;: elle arbitre une **manche** qu'on a choisi de
+commencer, elle s'arrête quand on la quitte, et elle ne coûte rien à qui ne la joue jamais. Le
+Couperet a par ailleurs sa **propre monnaie** — les *fusibles* — qui naît au coup d'envoi et meurt
+au verdict&nbsp;: le portefeuille de la salle n'est pas touché, dans un sens ni dans l'autre. Les
+mêler ferait du mode une voie d'enrichissement, donc une raison de le jouer pour autre chose que
+lui-même. La seule chose qu'une manche laisse derrière elle est un **compte** — manches,
+victoires, meilleur rang — qui ne donne aucun avantage et ne s'échange contre rien. Voir
+`room/room_couperet.h` et *docs/JOUER.md*.
+
 Les affiches de 2020 annonçaient « 5 POUR 1 EURO » et « 20 POUR 3 EUROS ». C'était le décor
 plausible d'une vraie salle, et c'est devenu un mensonge le jour où le monnayeur a été branché.
 Elles ne le disent plus : voir *Les affiches ne peuvent plus mentir*, plus bas.
