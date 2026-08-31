@@ -18,7 +18,8 @@ elle ne dit pas si le changement est beau, elle dit s'il y en a un et sur quelle
 d'autre que « allez regarder celle-là ».
 
 L'écart moyen est affiché à côté mais ne décide de rien, et il y a une raison
-mesurée à ça : voir `ecart`.
+mesurée à ça : voir `ecart`. Les seuils sont étalonnés entre un bruit de rendu
+mesuré à 0,01 % et un contrôle négatif à 21 % ; voir `main`.
 
 Il ne remplace donc pas l'œil. Il dit OÙ le poser.
 
@@ -183,6 +184,18 @@ def main():
         # Les seuils disent OU poser l'oeil ; ils ne prononcent pas de verdict
         # esthetique. Ils sont etalonnes sur un controle negatif — deux vues
         # entierement interverties — et non choisis au juge.
+        # LES SEUILS SONT ETALONNES, pas choisis. Deux mesures les encadrent,
+        # faites sur cette machine en 1600 x 900 headless :
+        #
+        #   bruit de rendu — deux captures du MEME arbre, huit vues :
+        #       0,00 % partout sauf `travee` a 0,01 %. Ecart moyen 0,09 a 0,65
+        #       sur 255, ecart maximal 8. Le plancher est donc pratiquement nul.
+        #   controle negatif — deux vues entierement interverties :
+        #       21,2 % et 30,6 %.
+        #
+        # 0,5 % laisse donc cinquante fois le bruit avant de crier, et reste
+        # quarante fois sous une difference franche. Il n'y a pas de zone grise
+        # a cette echelle : soit une vue n'a pas bouge, soit elle a bouge.
         verdict = ("identique" if part < 0.5 else
                    "leger" if part < 3.0 else
                    "VISIBLE" if part < 12.0 else "FRANC")
