@@ -13,6 +13,8 @@ add_library(nineteen_engine STATIC
     core/ns_config.c
     core/ns_env.c
     core/ns_json.c
+    core/ns_saisie.c
+    core/ns_saisie_sdl.c
 
     rhi/ns_rhi.c
     rhi/ns_rhi_shader.c
@@ -31,6 +33,7 @@ add_library(nineteen_engine STATIC
     audio/ns_audio.c
 
     sprite/ns_sprite.c
+    sprite/ns_saisie_draw.c
 
     fx/ns_particles.c
 
