@@ -41,6 +41,7 @@
 #include "room_sound.h"
 #include "room_viewmodel.h"
 #include "room_poste.h"
+#include "room_rivaux.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -1013,20 +1014,10 @@ static uint64_t duel_live_open(duel_ghost *d, const char *spec,
  * ce qui est exactement ce qu'il doit faire de sept joueurs qui ne marquent
  * rien — et c'est déjà de quoi photographier les deux surfaces du mode.
  */
-static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, uint8_t camps,
-                              const char *moi)
+static uint8_t couperet_ouvrir(room_couperet *c, room_rivaux *r,
+                              const ns_scene *scene, uint8_t places,
+                              uint8_t camps, const char *moi)
 {
-    /*
-     * Des noms de salle, et TOUS SOUS QUATORZE CARACTÈRES : c'est la largeur de
-     * la colonne du tableau du bar, mesurée sur capture. « PIED-DE-BICHE » et
-     * « GRAND-MERE » y étaient au premier essai et écrivaient par-dessus la
-     * colonne d'à côté. Le tableau tronque désormais de lui-même, mais un nom
-     * qu'on choisit n'a aucune raison d'être tronqué.
-     */
-    static const char *g_noms[ROOM_CP_MAX_PLACES - 1] = {
-        "MARQUISE", "TOURNEVIS", "LE BELGE", "OCTOBRE",
-        "LA BICHE", "MAMIE", "ZERO"
-    };
     if (places < 2) places = 2;
     if (places > ROOM_CP_MAX_PLACES) places = ROOM_CP_MAX_PLACES;
 
@@ -1042,11 +1033,36 @@ static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, uint8_t camps,
 
     room_cp_ouvrir(c, places, camps > 1);
     (void)room_cp_asseoir(c, 0, (moi && moi[0]) ? moi : "VOUS", 0);
-    for (uint8_t i = 1; i < places; ++i) {
-        (void)room_cp_asseoir(c, i, g_noms[(i - 1u) % (ROOM_CP_MAX_PLACES - 1u)],
-                              (uint8_t)(i % camps));
+
+    /*
+     * LES AUTRES PLACES SONT TENUES PAR DES RIVAUX QUI JOUENT.
+     *
+     * Pas des compteurs qui montent : chacun alloue un état de jeu, appelle
+     * l'autopilote et le pas du jeu à chaque pas fixe, et encaisse par
+     * `room_cp_partie_fin` comme l'humain. Un rival qui tricherait serait
+     * invisible et impardonnable — et il rendrait la mesure d'équilibre du mode
+     * sans objet, puisqu'elle est faite sur ces mêmes autopilotes.
+     *
+     * Ils s'installent sur de VRAIES BORNES, ce qui est la moitié qui rend le
+     * mode lisible : pendant une manche, la borne d'en face ne joue plus une
+     * démo anonyme, elle joue la partie de quelqu'un dont le score monte au
+     * tableau du bar. Mesuré par `tests/test_rivaux.c` : sept bornes sur dix-
+     * huit s'allument, parce que toutes les conduites classent sur le même
+     * rendement affiché et veulent donc les mêmes machines.
+     */
+    const uint64_t graine = (uint64_t)SDL_GetPerformanceCounter();
+    room_rv_fermer(r);
+    room_rv_ouvrir(r, graine);
+    if (scene) (void)room_rv_bornes_scene(r, scene);
+    const int assis = room_rv_remplir(r, c);
+    if (assis + 1 < (int)places) {
+        /* Une place qu'aucun rival ne peut tenir — l'allocation a échoué —
+         * resterait vide et serait sortie à la première lame sans avoir joué.
+         * On le DIT plutôt que de laisser croire à un adversaire. */
+        NS_WARN("couperet : %d rivaux seulement pour %d places à tenir",
+                assis, (int)places - 1);
     }
-    room_cp_lancer(c, (uint64_t)SDL_GetPerformanceCounter());
+    room_cp_lancer(c, graine);
     if (camps > 1) {
         NS_INFO("couperet : manche ouverte, %u places en %u camps, "
                 "lame toutes les %.0f s",
@@ -2232,6 +2248,8 @@ int main(int argc, char **argv)
      * appels inertes sans qu'aucun d'eux ait besoin d'un `if` autour.
      */
     room_couperet couperet;
+    room_rivaux   rivaux;
+    SDL_zero(rivaux);
     uint8_t cp_moi   = ROOM_CP_MAX_PLACES;
     uint8_t cp_cible = ROOM_CP_MAX_PLACES;
     bool    cp_actif = false;
@@ -2249,14 +2267,20 @@ int main(int argc, char **argv)
      */
     ns_arene *arene = NULL;
     bool      cp_assis = false;      /* le salon en ligne est-il installé ? */
-    if (opt.couperet_ligne) {
-        uint8_t n = 0, moi = 0;
-        arene = couperet_en_ligne(opt.couperet_ligne, opt.player, &n, &moi);
-        if (arene) cp_moi = moi;
-    }
+    /*
+     * ELLE N'EST PAS OUVERTE ICI, et c'est la correction d'un défaut que seul
+     * un essai a trouvé : l'arène hérite du verrou de `ns_online`, or celui-ci
+     * n'est initialisé que cent cinquante lignes plus bas. Ouverte à cet
+     * endroit, elle demandait « le réseau est-il actif ? » à un module qui
+     * n'avait pas encore lu son URL, s'entendait répondre non, et refusait
+     * proprement — avec un message juste et une cause fausse.
+     *
+     * C'est exactement le genre de panne que la relecture ne voit pas : les
+     * deux morceaux sont corrects, c'est leur ORDRE qui ne l'est pas.
+     */
     room_cp_ouvrir(&couperet, 2, false);
     if (opt.couperet > 0) {
-        cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet,
+        cp_moi = couperet_ouvrir(&couperet, &rivaux, &scene, (uint8_t)opt.couperet,
                                  (uint8_t)opt.couperet_camps, opt.player);
         cp_actif = (couperet.phase == ROOM_CP_COURSE);
     }
@@ -2408,6 +2432,19 @@ int main(int argc, char **argv)
              * mondial restait vide, sans erreur. */
             ns_online_request_board("envol", "normal");
         }
+    }
+
+    /*
+     * LA MANCHE EN LIGNE, ouverte ICI et pas avant : elle hérite du verrou de
+     * `ns_online`, qui vient d'être posé. La règle « sans URL configurée,
+     * aucune socket n'est ouverte » est écrite à un seul endroit et ce module
+     * en hérite au lieu de la réimplémenter — la réimplémenter, c'est se donner
+     * deux chances de la poser de travers.
+     */
+    if (opt.couperet_ligne) {
+        uint8_t n = 0, moi = 0;
+        arene = couperet_en_ligne(opt.couperet_ligne, opt.player, &n, &moi);
+        if (arene) cp_moi = moi;
     }
 
     /*
@@ -3481,7 +3518,8 @@ play_at_done: ;
                              */
                             const bool equipes =
                                 (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
-                            cp_moi = couperet_ouvrir(&couperet, opt.couperet
+                            cp_moi = couperet_ouvrir(&couperet, &rivaux, &scene,
+                                                     opt.couperet
                                                      ? (uint8_t)opt.couperet
                                                      : ROOM_CP_MAX_PLACES,
                                                      equipes ? 2u
@@ -4553,7 +4591,30 @@ play_at_done: ;
             }
 
             if (cp_actif) {
+                /*
+                 * LES RIVAUX AVANCENT AVANT LA LAME, et l'ordre compte : une
+                 * partie qui se termine au même pas que le couperet doit être
+                 * ENCAISSÉE avant qu'on classe. Dans l'autre sens, un rival qui
+                 * vient de finir une bonne partie serait sorti pour ne pas
+                 * l'avoir encaissée — c'est-à-dire puni d'avoir gagné.
+                 *
+                 * La borne du joueur leur est retirée : personne ne s'installe
+                 * devant la machine où il joue. Un rival déjà installé n'en est
+                 * pas chassé — la coupure est la seule action du mode qui
+                 * détruise une partie en cours, et elle coûte quatre fusibles.
+                 */
+                room_rv_reserver(&rivaux, playing_cab
+                                 ? (int32_t)(playing_cab - scene.cabinets) : -1);
+                room_rv_avancer(&rivaux, &couperet, (float)clock.tick_seconds);
                 room_cp_avancer(&couperet, (float)clock.tick_seconds);
+                /*
+                 * LE BATTEMENT DES DIX DERNIÈRES SECONDES, appelé à chaque pas
+                 * sans y penser : c'est `room_sound` qui décide s'il sonne, et
+                 * c'est le bon partage — la cadence est une propriété du SON
+                 * (une horloge dont on veut qu'elle se reconnaisse), pas de la
+                 * règle. Le même motif que la rafale du monnayeur.
+                 */
+                room_sound_couperet_tic(&sound, couperet.prochain);
                 if (in_game && game_api && game && cp_moi < ROOM_CP_MAX_PLACES) {
                     room_cp_avance(&couperet, cp_moi, (int64_t)game_api->score(game));
                 }
@@ -4568,8 +4629,36 @@ play_at_done: ;
                  */
                 room_cp_evenement e;
                 while (room_cp_prendre(&couperet, &e)) {
+                    /*
+                     * OÙ SONNE UN SABOTAGE.
+                     *
+                     * Sur MA borne quand je suis concerné, et c'est le seul cas
+                     * où l'on connaisse un point : je sais où je joue, je ne
+                     * sais pas encore où jouent les autres — les rivaux ne
+                     * s'installent pas encore sur des bornes nommées. Faute de
+                     * mieux, le son des autres part de la position de la vue :
+                     * il s'entend, il ne se situe pas.
+                     *
+                     * C'est une approximation ASSUMÉE et provisoire. Elle coûte
+                     * précisément ce que `room_sound.h` cherchait à acheter en
+                     * spatialisant la coupure — « se retourner, et apprendre qui
+                     * frappe qui ». Le jour où un rival occupe une borne, ce
+                     * point devient le centre de sa dalle et rien d'autre ne
+                     * change ici.
+                     */
+                    const ns_v3 ou = (e.b == cp_moi && playing_cab)
+                                   ? playing_cab->screen_center : cam.position;
                     switch (e.type) {
+                    case ROOM_CP_EVT_ABSORBE:
+                        room_sound_couperet_blindage(&sound, ou);
+                        break;
+                    case ROOM_CP_EVT_RENVOYE:
+                        room_sound_couperet_renvoi(&sound, ou);
+                        break;
                     case ROOM_CP_EVT_ACTION:
+                        if (e.valeur == (int32_t)ROOM_CP_COUPURE) {
+                            room_sound_couperet_coupure(&sound, ou);
+                        }
                         if (e.b == cp_moi && e.valeur == (int32_t)ROOM_CP_COUPURE
                             && in_game) {
                             /*
@@ -4597,6 +4686,10 @@ play_at_done: ;
                         }
                         break;
                     case ROOM_CP_EVT_COUPERET:
+                        /* LA LAME. Non spatialisée : elle vient du compteur et
+                         * doit parvenir à l'identique aux huit — le raisonnement
+                         * est au-dessus de sa déclaration. */
+                        room_sound_couperet_lame(&sound);
                         /* L'ARBITRE DIFFUSE SON VERDICT. Ici et pas ailleurs :
                          * c'est le seul endroit où l'on sait qu'une lame vient
                          * de tomber, et le numéro qu'elle portait. */
@@ -5128,6 +5221,33 @@ play_at_done: ;
             }
 
             /*
+             * LES BORNES TENUES PAR UN RIVAL MONTRENT SA PARTIE, pas une démo.
+             *
+             * C'est ce qui fait qu'une manche se voit dans la salle plutôt que
+             * seulement sur un tableau : la borne d'en face n'affiche plus une
+             * démonstration anonyme, elle affiche le dedale que quelqu'un est
+             * en train de jouer contre vous, avec son score et sa mort. C'était
+             * déjà toute la mécanique de l'attract mode ; il ne lui manquait
+             * que de savoir à qui prêter ses dalles.
+             *
+             * Reposé À CHAQUE IMAGE et effacé d'abord : une borne qu'un rival
+             * vient de quitter doit retrouver sa démo, et personne ne viendra
+             * le dire.
+             */
+            room_attract_liberer(attract);
+            if (cp_actif && attract) {
+                for (uint8_t pl = 0; pl < ROOM_CP_MAX_PLACES; ++pl) {
+                    if (pl == cp_moi || !room_rv_tenue(&rivaux, pl)) continue;
+                    const int32_t b = room_rv_borne_de(&rivaux, pl);
+                    if (b < 0 || (uint32_t)b >= scene.cabinet_count) continue;
+                    room_attract_substituer(attract,
+                                            scene.cabinets[b].screen_material,
+                                            room_rv_api(&rivaux, pl),
+                                            room_rv_etat(&rivaux, pl));
+                }
+            }
+
+            /*
              * Les DÉMOS, après la partie du joueur et jamais avant : elles
              * doivent connaître la dalle qu'il occupe pour la laisser
              * tranquille. `playing_material` ne vaut quelque chose que si une
@@ -5599,6 +5719,22 @@ play_at_done: ;
                  * deux régimes d'une même borne ne durent pas du tout la même
                  * chose (7,1 s contre 25,4 s pour le démineur).
                  */
+                /*
+                 * VISER EN SE PLANTANT DEVANT LA MACHINE.
+                 *
+                 * S'approcher d'une borne tenue par quelqu'un en fait la cible.
+                 * C'est infiniment mieux que de faire défiler une liste : le
+                 * geste est physique, il se comprend sans qu'on l'explique, et
+                 * il donne une raison de TRAVERSER la salle pendant une manche
+                 * — donc de la voir. TAB reste, pour viser de loin et pour les
+                 * spectres, qui ne sont plus devant aucune borne.
+                 */
+                if (cp_actif && hud.near) {
+                    const int32_t b = (int32_t)(hud.near - scene.cabinets);
+                    const uint8_t p = room_rv_place_a_la_borne(&rivaux, b);
+                    if (p < ROOM_CP_MAX_PLACES && p != cp_moi) cp_cible = p;
+                }
+
                 hud.cp_multiplicateur = 0.0f;
                 hud.cp_duree = 0.0f;
                 if (cp_actif && hud.near && hud.near->game[0]) {
@@ -5782,6 +5918,7 @@ play_at_done: ;
     /* Avant `ns_online_shutdown` : l'arène hérite du verrou du classement, et
      * fermer le verrou avant ce qu'il protège laisse un fil parler à un module
      * qui n'existe plus. */
+    room_rv_fermer(&rivaux);
     ns_arene_fermer(arene);
     ns_realtime_shutdown();
     ns_online_shutdown();

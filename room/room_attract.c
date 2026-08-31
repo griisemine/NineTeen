@@ -27,6 +27,10 @@ typedef struct attract_demo {
     uint64_t           seed;
     float              dead_for;
     bool               hard;
+    /* La partie de quelqu'un d'autre, posée pour la durée d'une image. Voir
+     * `room_attract_substituer` dans l'en-tête. */
+    const ns_game_api *sub_api;
+    const void        *sub_state;
 } attract_demo;
 
 struct room_attract {
@@ -192,6 +196,27 @@ void room_attract_tick(room_attract *a, float dt, int32_t skip_material)
     }
 }
 
+void room_attract_substituer(room_attract *a, int32_t material,
+                             const ns_game_api *api, const void *state)
+{
+    if (!a || material < 0) return;
+    for (int i = 0; i < a->count; ++i) {
+        if (a->demo[i].material != material) continue;
+        a->demo[i].sub_api   = api;
+        a->demo[i].sub_state = api ? state : NULL;
+        return;
+    }
+}
+
+void room_attract_liberer(room_attract *a)
+{
+    if (!a) return;
+    for (int i = 0; i < a->count; ++i) {
+        a->demo[i].sub_api = NULL;
+        a->demo[i].sub_state = NULL;
+    }
+}
+
 void room_attract_draw(ns_rhi *rhi, ns_sprite *sprites, room_attract *a,
                        ns_renderer *rd, int32_t skip_material)
 {
@@ -204,8 +229,18 @@ void room_attract_draw(ns_rhi *rhi, ns_sprite *sprites, room_attract *a,
         a->cursor = (a->cursor + 1) % a->count;
         if (d->material == skip_material) continue;
 
+        /* La partie du rival plutôt que la démo, si quelqu'un tient cette
+         * borne. Les planches passent par `art_for` et non par `art_of` : un
+         * rival peut jouer un jeu dont aucune démo n'existe, et il faut alors
+         * les charger — c'est la seule allocation que cette passe puisse
+         * déclencher, et elle n'arrive qu'une fois par jeu. */
+        const ns_game_api *api = d->sub_api ? d->sub_api : d->api;
+        const void *etat = d->sub_api ? d->sub_state : d->state;
+        void *planches = d->sub_api ? art_for(rhi, a, api) : art_of(a, api);
+        if (!etat) { api = d->api; etat = d->state; planches = art_of(a, api); }
+
         ns_sprite_begin(sprites, 512.0f, 288.0f);
-        d->api->draw(sprites, d->state, art_of(a, d->api), 512.0f, 288.0f);
+        api->draw(sprites, etat, planches, 512.0f, 288.0f);
         static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
         ns_sprite_end(rhi, sprites, d->target.handle, 512, 288, off);
     }

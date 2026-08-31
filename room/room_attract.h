@@ -47,6 +47,7 @@
 #include "ns_rhi.h"
 #include "ns_scene.h"
 #include "ns_sprite.h"
+#include "games.h"
 
 /*
  * Dalles redessinées par image. Quatre : au-delà, on paie des passes de rendu
@@ -92,5 +93,41 @@ void room_attract_draw(ns_rhi *rhi, ns_sprite *sprites, room_attract *a,
 
 /* Nombre de démos réellement en vie. Pour le journal et pour les tests. */
 int room_attract_count(const room_attract *a);
+
+/* ==========================================================================
+ * LA SUBSTITUTION — quand une borne est occupée par QUELQU'UN
+ * ==========================================================================
+ *
+ * Ce que ça résout, et pourquoi ça vaut d'exister.
+ *
+ * Pendant une manche du Couperet, sept places sont tenues par des rivaux qui
+ * JOUENT réellement — ils allouent un état, appellent l'autopilote et le pas du
+ * jeu, et encaissent comme l'humain (`room/room_rivaux.h`). Sans ce qui suit,
+ * leur partie n'existerait nulle part à l'écran : la salle continuerait
+ * d'afficher dix-neuf démos anonymes, et le joueur regarderait une borne en
+ * ignorant que quelqu'un est en train d'y marquer contre lui.
+ *
+ * Avec, la salle n'a plus de démos aux bornes occupées : elle montre LA partie
+ * de ce rival, son score, sa mort. On voit MARQUISE jouer dedale sur la borne
+ * d'en face, et on décide de lui couper le courant. La salle avait déjà tout
+ * construit pour ça — dix-neuf dalles vivantes, une passe de rendu par tour de
+ * rôle — sans savoir à quoi ça servirait.
+ *
+ * LA SUBSTITUTION NE FAIT PAS AVANCER L'ÉTAT, et c'est le point : le rival tick
+ * sa propre partie, à son propre niveau de jeu. Une démo substituée est donc
+ * DESSINÉE mais plus AVANCÉE ici, sans quoi elle tournerait deux fois plus vite
+ * que ce que son propriétaire croit jouer.
+ *
+ * `api` nul efface la substitution et rend la borne à sa démo. `room_attract`
+ * ne possède ni l'état ni sa durée de vie : il n'en garde qu'un pointeur pour
+ * la durée d'une image, et l'appelant les repose à chaque image.
+ */
+void room_attract_substituer(room_attract *a, int32_t material,
+                             const ns_game_api *api, const void *state);
+
+/* Efface toutes les substitutions. À appeler avant de les reposer : une borne
+ * qu'un rival vient de quitter doit retrouver sa démo, et personne ne viendra
+ * le dire. */
+void room_attract_liberer(room_attract *a);
 
 #endif /* ROOM_ATTRACT_H */
