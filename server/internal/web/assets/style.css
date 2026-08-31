@@ -581,6 +581,53 @@ a:hover { color: #ffc862; }
 
 .note { margin-top: 1.2rem; font-size: var(--t-sm); color: var(--muted); }
 
+/* --- L'avertissement de première ouverture ------------------------------
+   Il est AU-DESSUS des boutons, et il doit se voir sans crier : un joueur qui
+   découvre seul le refus de macOS conclut que le jeu est cassé.
+
+   D'où l'ambre du filet — la couleur d'accent du site, celle des bandes de
+   danger des socles de bornes — plutôt que le rouge `--danger`, réservé aux
+   erreurs. Ce n'en est pas une : le paquet fonctionne, il demande un geste. */
+.avertissement {
+    margin-bottom: 1.6rem;
+    padding: 1.4rem 1.6rem;
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--amber);
+    border-radius: var(--radius);
+}
+.avertissement h3 {
+    font-family: var(--display); font-size: var(--t-lg);
+    margin: 0 0 0.6rem; color: var(--amber);
+}
+.avertissement p { margin: 0 0 1rem; font-size: var(--t-sm); }
+
+/* Deux colonnes quand la place existe, une seule sur un téléphone. Le nom de
+   la plateforme reste au-dessus de son geste dans les deux cas : le lire en
+   diagonale doit donner « macOS -> cette ligne », pas un paragraphe. */
+.gestes { margin: 0; display: grid; gap: 0.5rem 1.2rem; }
+.gestes dt {
+    font-family: var(--mono); font-size: var(--t-xs);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--amber); margin-top: 0.4rem;
+}
+.gestes dd {
+    margin: 0 0 0.4rem; font-size: var(--t-sm); color: var(--muted);
+}
+/* La ligne à copier est le seul élément que le joueur doit lire caractère par
+   caractère : elle sort du flux du paragraphe et ne se coupe pas au milieu.
+   `.ligne` et non `code` tout court : la même règle appliquée à tous les
+   `<code>` de ce bloc transformait le « .dmg » cité en fin de phrase en un
+   pavé de la largeur du cadre, avec le point de la phrase seul en dessous. */
+.gestes dd code.ligne {
+    display: block; margin: 0.5rem 0;
+    padding: 0.5rem 0.7rem;
+    background: var(--hall); border: 1px solid var(--edge);
+    border-radius: 4px;
+    font-size: var(--t-xs); color: var(--marquee);
+    overflow-x: auto; white-space: nowrap;
+}
+
 /* --- Avant / après ----------------------------------------------------- */
 
 .ledger {

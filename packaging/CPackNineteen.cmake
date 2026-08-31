@@ -37,6 +37,25 @@ if(CPACK_GENERATOR STREQUAL "DragNDrop")
     # le pose pas) : c'est LUI qui fait de ce .dmg un « glisser-déposer » et non
     # un dossier à recopier à la main.
 
+    # LA SIGNATURE, DANS `cpack` ET NON À CÔTÉ.
+    #
+    # Le même fichier des deux côtés : CPack l'appelle une fois avant que le
+    # .dmg ne se referme sur `Nineteen.app` — c'est le seul instant où le
+    # bundle est encore modifiable — et une fois après, quand l'image existe et
+    # peut être notarisée, agrafée et résumée dans un manifeste. Il choisit
+    # lui-même entre l'identité Developer ID et l'ad hoc selon ce que
+    # l'environnement porte, et ne sait pas échouer faute de secret. La
+    # mécanique est expliquée en tête de `packaging/macos/signature.cmake`.
+    #
+    # Conséquence voulue : `cpack --config …/CPackConfig.cmake`, la commande
+    # écrite dans le workflow comme dans la documentation, produit le MÊME
+    # paquet partout. Une étape de signature ajoutée au seul `release.yml`
+    # aurait fait diverger la release et la construction locale.
+    set(CPACK_PRE_BUILD_SCRIPTS
+        "${CPACK_NINETEEN_SOURCE_DIR}/packaging/macos/signature.cmake")
+    set(CPACK_POST_BUILD_SCRIPTS
+        "${CPACK_NINETEEN_SOURCE_DIR}/packaging/macos/signature.cmake")
+
 # ---------------------------------------------------------------------------
 # Linux — l'archive
 # ---------------------------------------------------------------------------

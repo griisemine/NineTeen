@@ -519,10 +519,27 @@ async function loadVersion() {
         // soixante appels par heure et par adresse.
         const publiee = data.publiee === true;
         const base = "https://github.com/griisemine/NineTeen/releases/download/v" + data.version;
+        // CES TROIS NOMS SONT CEUX QUE LA RELEASE PRODUIT, PAS CEUX QU'ON
+        // AIMERAIT. Les précédents étaient faux tous les trois, et la garde
+        // au-dessus (`publiee`) ne pouvait pas le voir : elle vérifie que la
+        // release existe, pas que le fichier demandé s'y trouve. Le jour où
+        // `publiee` serait passée à 1, les trois boutons auraient rendu 404
+        // une seconde fois.
+        //
+        //   .zip                -> l'empaquetage Windows est un installateur
+        //                          NSIS depuis la 17.0.0, donc un .exe
+        //   -macos-             -> CPack écrit « macOS », avec la capitale
+        //   -linux-x64.AppImage -> `paquets.sh` nomme l'AppImage d'après
+        //                          `uname -m`, comme le veut la convention
+        //                          AppImage : « x86_64 », et pas de « linux »
+        //
+        // `TestLesLiensDeTelechargementExistentVraiment` les compare désormais
+        // à `packaging/`, pour que la prochaine divergence se voie ici et non
+        // sur la page.
         const files = {
-            windows: `Nineteen-${data.version}-windows-x64.zip`,
-            macos: `Nineteen-${data.version}-macos-universal.dmg`,
-            linux: `Nineteen-${data.version}-linux-x64.AppImage`,
+            windows: `Nineteen-${data.version}-windows-x64.exe`,
+            macos: `Nineteen-${data.version}-macOS-universal.dmg`,
+            linux: `Nineteen-${data.version}-x86_64.AppImage`,
         };
         document.querySelectorAll("[data-dl]").forEach((el) => {
             const key = el.dataset.dl;

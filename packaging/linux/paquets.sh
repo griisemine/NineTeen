@@ -12,9 +12,17 @@
 # était justement d'en fixer la version. Voir le commentaire du Dockerfile.
 #
 # CE QUI SORT, dans build/linux-x64/paquets/ :
-#   nineteen-17.0.0-linux-x86_64.tar.gz   à déballer où l'on veut
-#   nineteen_17.0.0_amd64.deb             apt install ./…deb
-#   Nineteen-17.0.0-x86_64.AppImage       chmod +x, puis on lance
+#   nineteen-17.0.0-linux-<arch>.tar.gz   à déballer où l'on veut
+#   nineteen_17.0.0_<arch>.deb            apt install ./…deb
+#   Nineteen-17.0.0-<arch>.AppImage       chmod +x, puis on lance
+#   SIGNATURE-linux.txt                   l'état de signature et les SHA-256
+#
+# `<arch>` EST CELLE DE LA MACHINE QUI FABRIQUE, jamais celle qu'on espère. Sur
+# un runner GitHub c'est `x86_64` / `amd64` ; sur un Mac Apple Silicon, où
+# Docker est natif arm64, c'est `aarch64` / `arm64` — et ces paquets-là ne
+# s'installent sur aucun PC. Le nom du répertoire, `linux-x64`, dit donc autre
+# chose que son contenu selon l'endroit : c'est le nom du préréglage CMake, pas
+# une promesse d'architecture.
 #
 # POURQUOI L'APPIMAGE N'EST PAS UN GÉNÉRATEUR CPACK
 # -------------------------------------------------
@@ -142,8 +150,101 @@ chmod +x "$APPIMAGE"
 "$APPIMAGE" --appimage-extract-and-run --help | head -2
 
 # ---------------------------------------------------------------------------
-# 4. Ce qu'on vient de fabriquer, en chiffres
+# 4. Signature — facultative, et le manifeste qui dit laquelle a été prise
 # ---------------------------------------------------------------------------
+# RIEN À SIGNER, AU SENS OÙ MACOS ET WINDOWS L'ENTENDENT. Aucun noyau Linux ne
+# refuse un binaire non signé, aucun bureau n'affiche d'avertissement : les
+# trois paquets ci-dessus s'installent et démarrent tels quels. Ce que la
+# signature apporte ici est autre chose, et plus modeste — de quoi vérifier
+# qu'un fichier vient bien de ce dépôt et n'a pas été remplacé en route, sans
+# avoir à croire GitHub sur parole.
+#
+# `apt` NE LA VÉRIFIE PAS : il ne contrôle les signatures que pour les paquets
+# venus d'un dépôt, jamais pour un `apt install ./fichier.deb`. La signature
+# détachée s'adresse donc à qui la cherche, pas au joueur — et c'est pour ça
+# qu'elle est facultative et qu'aucune étape n'échoue sans elle.
+#
+# Les sommes SHA-256, elles, sont écrites DANS LES DEUX CAS : la page de
+# téléchargement du site les promet depuis longtemps et personne ne les
+# produisait.
+MANIFESTE="$SORTIE/SIGNATURE-linux.txt"
+
+if [ -n "${NINETEEN_SIGN_GPG_KEY:-}" ] && command -v gpg >/dev/null 2>&1; then
+    # Un trousseau JETABLE, dans le répertoire de sortie et pas dans
+    # `~/.gnupg` : ce script tourne dans un conteneur partagé avec l'arbre de
+    # sources par un montage, et une clé privée importée dans le trousseau de
+    # l'utilisateur y resterait après la fabrication.
+    GNUPGHOME="$(mktemp -d)"
+    export GNUPGHOME
+    chmod 700 "$GNUPGHOME"
+    # La clé arrive en base64 parce qu'un secret GitHub est une chaîne d'une
+    # seule ligne : une clé ASCII-armored y perdrait ses sauts de ligne.
+    printf '%s' "$NINETEEN_SIGN_GPG_KEY" | base64 -d | gpg --batch --quiet --import
+
+    # `--pinentry-mode loopback` : sans lui gpg cherche un terminal pour
+    # demander la phrase de passe, n'en trouve pas dans un conteneur, et rend
+    # une erreur qui ne dit pas laquelle.
+    for f in "$SORTIE"/*.tar.gz "$SORTIE"/*.deb "$SORTIE"/*.AppImage; do
+        [ -f "$f" ] || continue
+        gpg --batch --yes --quiet --pinentry-mode loopback \
+            --passphrase "${NINETEEN_SIGN_GPG_PASSPHRASE:-}" \
+            --detach-sign --armor "$f"
+    done
+    ETAT="SIGNE (GPG, signature detachee .asc a cote de chaque fichier)"
+    GESTE="gpg --verify nineteen_*.deb.asc nineteen_*.deb"
+    CLE="$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+    gpg --batch --armor --export > "$SORTIE/nineteen-signature.pub.asc"
+    rm -rf "$GNUPGHOME"
+    unset GNUPGHOME
+else
+    # PAS D'ÉCHEC ICI, et c'est le point de tout ce bloc : sans clé on fabrique
+    # le paquet quand même, et on l'écrit dans le manifeste plutôt que de
+    # laisser croire.
+    ETAT="NON SIGNE"
+    GESTE="Rien de particulier : les paquets Linux s'installent et demarrent tels quels."
+    CLE=""
+    if [ -n "${NINETEEN_SIGN_GPG_KEY:-}" ]; then
+        echo "signature : NINETEEN_SIGN_GPG_KEY est posee mais gpg est absent de cette image"
+    fi
+fi
+
+{
+    echo "Nineteen -- paquets Linux"
+    echo
+    echo "Etat : $ETAT"
+    # Un `if` et non `[ … ] && echo` : sous `set -e`, savoir si l'echec d'un
+    # test en tete de liste ET arrete le script demande de connaitre une regle
+    # POSIX que personne ne devrait avoir a retrouver pour relire ce fichier.
+    if [ -n "$CLE" ]; then
+        echo "Empreinte de la cle : $CLE"
+    fi
+    echo
+    echo "Architecture : $ARCH -- LUE sur la machine de fabrication, jamais supposee."
+    echo "Un paquet aarch64 ne s'installe pas sur un PC x86_64, et inversement."
+    echo
+    ( cd "$SORTIE" && sha256sum ./*.tar.gz ./*.deb ./*.AppImage 2>/dev/null )
+    echo
+    echo "Ce que le joueur doit faire :"
+    echo "  $GESTE"
+    echo
+    echo "Verifier soi-meme :"
+    echo "  sha256sum -c SIGNATURE-linux.txt --ignore-missing"
+    echo
+    # LE NOMBRE DE LIGNES N'EST PAS ECRIT, et c'est delibere : sha256sum
+    # compte les lignes de CE fichier-ci, donc toute retouche de ce texte
+    # changerait le chiffre qu'il annonce. Un nombre qui se dement lui-meme au
+    # premier mot ajoute vaut moins que pas de nombre du tout.
+    echo "  Elle rend OK pour chaque fichier present, puis un avertissement"
+    echo "  'lines are improperly formatted' qui compte les lignes de ce"
+    echo "  texte-ci -- sha256sum n'a pas a les comprendre. Elle sort en 0."
+} > "$MANIFESTE"
+
+# ---------------------------------------------------------------------------
+# 5. Ce qu'on vient de fabriquer, en chiffres
+# ---------------------------------------------------------------------------
+echo
+echo "=== Signature ==="
+cat "$MANIFESTE"
 echo
 echo "=== Paquets ==="
 ls -la "$SORTIE"

@@ -264,15 +264,51 @@
   <section class="section" id="telecharger">
     <div class="section-head">
       <h2>Télécharger</h2>
-      <p>Un exécutable par plateforme, produit par l'intégration continue à partir du même
+      <p>Un installateur par plateforme, produit par l'intégration continue à partir du même
          arbre de sources. Rien à installer à côté.</p>
+    </div>
+
+    <!-- AVANT LES BOUTONS, ET PAS APRÈS.
+         Ces paquets ne sont pas signés, et macOS refuse de les ouvrir : le
+         propriétaire du dépôt a installé le .dmg de la 17.0.0 sur sa machine
+         et reçu « Apple could not verify "Nineteen" is free of malware… ». La
+         même chose est reproduite en laboratoire — application sortie du .dmg,
+         `com.apple.quarantine` posé, lancement tué. Cette page était le seul
+         endroit du parcours où on pouvait le lui dire avant le clic.
+
+         Le texte ne dit pas « ce paquet n'est pas signé » mais « si votre
+         système refuse » : il reste donc vrai le jour où un certificat arrive,
+         sans qu'il faille penser à modifier cette page. Ce qui tranche pour
+         un fichier donné, c'est le `SIGNATURE-<plateforme>.txt` publié à côté
+         de lui, et le paquet lui-même. -->
+    <div class="avertissement">
+      <h3>La première ouverture demande un geste de plus</h3>
+      <p>Ces paquets ne portent pas encore de signature payante&nbsp;: le certificat qui la
+         donne — <strong>Developer&nbsp;ID</strong> chez Apple, <strong>Authenticode</strong>
+         chez Windows — s'achète, et ce projet n'en a pas. Le jeu fonctionne&nbsp;; le système
+         demande simplement une confirmation la première fois.</p>
+      <dl class="gestes">
+        <dt>macOS</dt>
+        <dd>Le système affiche <em>« Apple could not verify "Nineteen" is free of malware…
+            »</em>. Après avoir glissé Nineteen dans <strong>Applications</strong>, ouvrir le
+            Terminal et coller cette ligne, une seule fois&nbsp;:
+            <code class="ligne">xattr -dr com.apple.quarantine /Applications/Nineteen.app</code>
+            Elle retire l'étiquette « téléchargé depuis Internet » posée par le navigateur, et
+            ne désactive aucune protection. Le même texte est dans le <code>.dmg</code>.</dd>
+        <dt>Windows</dt>
+        <dd>L'écran bleu SmartScreen s'affiche&nbsp;: cliquer sur <strong>Informations
+            complémentaires</strong>, puis sur <strong>Exécuter quand même</strong>. Le second
+            bouton n'apparaît qu'après le premier clic.</dd>
+        <dt>Linux</dt>
+        <dd>Rien à faire&nbsp;: aucun noyau Linux ne refuse un binaire non signé.</dd>
+      </dl>
     </div>
 
     <ul class="platforms">
       <li>
         <h3>Windows</h3>
-        <p class="platform-detail">x64 · Direct3D&nbsp;12</p>
-        <a class="btn btn-primary" data-dl="windows" href="#" rel="nofollow">Télécharger&nbsp;.zip</a>
+        <p class="platform-detail">x64 · Vulkan</p>
+        <a class="btn btn-primary" data-dl="windows" href="#" rel="nofollow">Télécharger&nbsp;.exe</a>
       </li>
       <li>
         <h3>macOS</h3>
@@ -285,10 +321,8 @@
         <a class="btn btn-primary" data-dl="linux" href="#" rel="nofollow">Télécharger&nbsp;AppImage</a>
       </li>
     </ul>
-    <p class="note" id="note-attente" hidden>Les exécutables ne sont pas encore publiés :
-       ils doivent d'abord être <strong>signés</strong> — Developer&nbsp;ID côté Apple,
-       Authenticode côté Windows — sans quoi les deux systèmes refusent de les lancer.
-       D'ici là, le jeu se construit depuis les sources&nbsp;: la marche à suivre est
+    <p class="note" id="note-attente" hidden>Les paquets de cette version ne sont pas encore
+       publiés. D'ici là, le jeu se construit depuis les sources&nbsp;: la marche à suivre est
        dans <code>docs/DEPLOY.md</code>.</p>
     <p class="note" id="note-serveur" hidden>Pour brancher le jeu sur <em>ce</em> serveur, le
        lancer avec&nbsp;: <code id="ligne-serveur"></code> — ou poser la variable

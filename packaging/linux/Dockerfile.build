@@ -38,9 +38,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   zsync           `appimagetool` le cherche pour les mises à jour delta ;
 #                   absent, il le dit à chaque appel dans un avertissement qui
 #                   ressemble à une erreur
+#   gnupg           la signature détachée facultative de `paquets.sh`. Sans lui
+#                   le chemin signé ne s'exécuterait JAMAIS dans l'image qui
+#                   produit la release : le script le dirait plutôt que de
+#                   planter, mais il le dirait dans un journal que personne ne
+#                   relit un jour de balise. Mesuré (gnupg 2.2.27) : l'image
+#                   passe de 725,2 à 730,3 Mio, soit + 5,1
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build git ca-certificates curl \
-        dpkg-dev file desktop-file-utils zsync \
+        dpkg-dev file desktop-file-utils zsync gnupg \
         glslang-tools \
         libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
         libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \

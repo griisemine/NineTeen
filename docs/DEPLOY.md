@@ -97,6 +97,7 @@ NINETEEN_LOG=json \
 | `NINETEEN_PUBLIC_URL` | l'adresse que **le jeu** doit viser, annoncée au joueur sur la page de téléchargement. Vide = rien n'est annoncé. Voir ci-dessous |
 | `NINETEEN_RELEASE_PUBLIEE` | à `1`, la page rallume ses trois boutons de téléchargement |
 | `NINETEEN_DUEL_ADDR` | adresse d'écoute du **relais temps réel** (duel à deux et arène à N places), sur son propre port. **Vide par défaut : rien ne s'ouvre.** Voir ci-dessous |
+| `NINETEEN_DUEL_PUBLIC` | l'adresse `hote:port` du relais **telle qu'on l'annonce aux joueurs**, distincte de celle d'écoute comme `NINETEEN_PUBLIC_URL` l'est de `NINETEEN_ADDR`. **C'est elle qui ouvre les salons du Couperet** ; vide, les routes `/api/v1/salons` répondent 503. Voir ci-dessous |
 | `NINETEEN_BIND`, `NINETEEN_PORT` | *(docker-compose seulement)* interface et port **publiés** sur l'hôte. Défaut `127.0.0.1` et `8080` : le service ne sort pas de la machine tant que personne ne l'a demandé |
 
 #### `NINETEEN_PUBLIC_URL` — l'adresse que le serveur annonce au joueur
@@ -164,6 +165,37 @@ Le `docker-compose` fourni **ne le publie pas** et ne transmet pas la variable :
 sert le site et le classement. Un relais se déploie à côté, avec `duelrelay`, ou en ajoutant
 soi-même l'entrée `ports` qui va bien.
 
+#### `NINETEEN_DUEL_PUBLIC` — l'adresse du relais annoncée aux joueurs
+
+Elle ne se déduit **pas** de `NINETEEN_DUEL_ADDR`, exactement comme `NINETEEN_PUBLIC_URL` ne se
+déduit pas de `NINETEEN_ADDR` : l'une dit où le processus se pose — `0.0.0.0:8081` dans un
+conteneur — l'autre où le monde le joint. Seul l'exploitant connaît la seconde.
+
+```sh
+NINETEEN_DUEL_PUBLIC=arcade.example:8081 ./nineteend …
+```
+
+**C'est elle qui ouvre le service de salons.** Le mode compétitif se rejoignait jusqu'ici en
+convenant hors bande d'un numéro de salon et d'un numéro de place, tapés en ligne de commande.
+Le serveur tient maintenant un rendez-vous : `POST /api/v1/salons` rend un code de six caractères,
+`POST /api/v1/salons/{code}/join` attribue une place, et la réponse porte l'adresse du relais avec
+l'identifiant de session à y présenter. Sans cette variable, le serveur n'a pas d'adresse à mettre
+dans cette réponse : les sept routes de salon répondent **503**, plutôt que d'annoncer une adresse
+devinée. C'est le même sens sûr que partout ailleurs ici — un serveur lancé sans rien dire
+n'affirme rien.
+
+Le serveur la contrôle au démarrage et refuse de l'annoncer si elle ne convient pas, en disant
+pourquoi. Deux refus valent d'être connus :
+
+- **un schéma** (`http://arcade.example:8081`) — le relais est un protocole binaire sur TCP, pas
+  du HTTP ;
+- **une adresse d'écoute** (`:8081`, `0.0.0.0:8081`, `[::]:8081`) — « toutes les interfaces » ne
+  désigne aucune machine vue du joueur, et l'annoncer enverrait chaque client se connecter à
+  lui-même. C'est la faute la plus facile à faire : c'est la valeur d'à côté.
+
+Un relais qui écoute sans être annoncé produit un avertissement au démarrage, plutôt que de
+laisser chercher pourquoi les salons répondent 503.
+
 ### Derrière un reverse proxy
 
 Le serveur lit l'adresse cliente dans `RemoteAddr`, jamais dans `X-Forwarded-For` — cet en-tête
@@ -199,11 +231,83 @@ Le binaire produit dans `build/<preset>/bin/` a besoin des assets convertis, dan
 `build/<preset>/assets/`. Un paquet contient donc les deux, l'exécutable cherchant ses données
 dans `assets/` à côté de lui puis dans le répertoire du binaire.
 
-### Ce qui reste à faire
+### Fabriquer les paquets
 
-Le workflow de compilation existe pour les trois plateformes ; celui qui produit les paquets
-signés — AppImage, `.dmg` universal, `.msi` — reste à écrire. La page de téléchargement du site
-pointe déjà vers les artefacts de release GitHub et n'aura pas à changer.
+Une balise `v*` déclenche `.github/workflows/release.yml`, qui produit les cinq artefacts. À la
+main, depuis la machine de développement :
+
+```sh
+# macOS — le .dmg. `cpack` signe, écrit le lisez-moi et le manifeste lui-même.
+cmake --preset macos-universal -DCMAKE_BUILD_TYPE=Release
+cmake --build --preset macos-universal
+cpack --config build/macos-universal/CPackConfig.cmake -B build/macos-universal/paquets
+
+# Linux — .tar.gz, .deb et AppImage, dans le conteneur qui fixe la glibc à 2.35
+docker build -f packaging/linux/Dockerfile.build -t nineteen-build:22.04 packaging/linux
+docker run --rm -v "$PWD:/src" -w /src nineteen-build:22.04 sh packaging/linux/paquets.sh
+```
+
+**Les paquets Linux portent l'architecture de la machine qui les a produits**, lue par `uname -m`
+et jamais supposée. Sur un Mac Apple Silicon, Docker est natif `arm64` : la commande ci-dessus
+donne `nineteen_17.0.0_arm64.deb` et `Nineteen-17.0.0-aarch64.AppImage`, qui **ne s'installent
+pas** sur un PC. Les paquets publiés sortent d'un runner `ubuntu-24.04`, donc `x86_64`.
+
+Windows ne se fabrique **pas** ici : cette machine n'a ni `makensis`, ni `mingw-w64`, ni `wine`,
+et `cpack -G NSIS` s'arrête avant même de lire la configuration. Ce qui s'en vérifie depuis un
+Mac, c'est la configuration, par le test `paquets` (`packaging/verifier.cmake`).
+
+### Signature des paquets
+
+**Aucun de ces paquets n'est signé aujourd'hui**, et c'est une décision : le certificat qui évite
+l'avertissement s'achète, et il n'y en a pas. La chaîne fabrique donc des paquets de production
+non signés **sans échouer**, et signe automatiquement le jour où les variables existent.
+
+| | variables absentes | variables présentes |
+|---|---|---|
+| macOS | signature **ad hoc**, sans certificat | Developer ID + notarisation + agrafage |
+| Windows | rien | Authenticode sur le binaire **et** sur l'installateur |
+| Linux | rien | signature GPG détachée `.asc` par fichier |
+
+Les noms et le rôle de chaque variable sont dans le `.env.example` de la racine, section
+« Signature des paquets ». Ils ne sont pas répétés ici.
+
+**Un compte développeur Apple gratuit ne suffit pas.** Il ne délivre qu'une identité *Apple
+Development*, faite pour lancer une application sur ses propres machines. Mesuré : bundle signé
+avec elle, chaîne complète jusqu'à *Apple Root CA*, et `spctl -a -vv` répond quand même
+`rejected`. Il faut le programme payant, pour le certificat *Developer ID Application* **et** la
+notarisation — les deux, pas l'un des deux.
+
+**Ce que la signature ad hoc fait, et ce qu'elle ne fait pas.** Elle sert à une chose : sur Apple
+Silicon, un Mach-O `arm64` sans aucune signature n'est pas chargé — le noyau le tue. Mesuré sur
+un Mac M-série, même arbre, sans quarantaine : signature retirée → tué (code 137) ; signature ad
+hoc → démarre. Elle ne fait passer **ni** Gatekeeper **ni** la notarisation : sous quarantaine,
+l'application ad hoc est tuée de la même façon. Le raisonnement complet et les mesures sont en
+commentaire dans `packaging/macos/signature.cmake`.
+
+**Ce que le joueur doit faire**, par plateforme, tant que rien n'est signé :
+
+| Système | Ce qu'il voit | Le geste |
+|---|---|---|
+| macOS | « Apple could not verify "Nineteen" is free of malware… » | `xattr -dr com.apple.quarantine /Applications/Nineteen.app` |
+| Windows | l'écran bleu SmartScreen | **Informations complémentaires** → **Exécuter quand même** |
+| Linux | rien | rien |
+
+Le geste macOS est **vérifié** : lancement tué sous quarantaine, lancement et rendu d'une image
+après la commande. Le bouton **Ouvrir quand même** de *Réglages Système → Confidentialité et
+sécurité* fait la même chose et c'est la voie qu'Apple documente, mais il n'a pas pu être essayé
+depuis un script — il n'est donc écrit ni dans le `.dmg` ni sur la page de téléchargement, où une
+marche à suivre fausse coûterait plus cher qu'une marche à suivre austère.
+
+**Où l'information voyage.** Un artefact signé et un artefact non signé ne doivent pas être
+confondables. Le nom de fichier reste **stable** — le site bâtit ses liens à partir du seul
+numéro de version, et un suffixe qui disparaîtrait le jour de la bascule casserait ces liens
+exactement comme ils l'ont déjà été. L'état est donc porté par trois choses :
+
+- `SIGNATURE-<plateforme>.txt`, publié à côté des paquets, écrit dans **les deux** cas — jamais
+  absent — avec les sommes SHA-256 que la page de téléchargement promettait sans les produire ;
+- `A-LIRE-AVANT-D-OUVRIR.txt`, **dans** le `.dmg`, premier dans la fenêtre du volume ;
+- le paquet lui-même : `codesign -dv` rend `Signature=adhoc` ou nomme l'autorité. Celui-là ne
+  peut pas être séparé du fichier.
 
 ### Vérifier une installation
 

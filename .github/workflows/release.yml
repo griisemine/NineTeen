@@ -12,22 +12,36 @@
 #            nineteen-<v>-linux-x86_64.tar.gz   à déballer où l'on veut
 #   Windows  Nineteen-<v>-windows-x64.exe       double-clic, SANS droits admin
 #
-# IL NE PROMET PAS la signature. Un `.dmg` notarié demande un certificat Apple
-# Developer ID, un `.exe` signé un certificat Authenticode : ce sont des secrets
-# qui appartiennent à qui publie, pas au dépôt. Les étapes de signature ne
-# s'exécutent QUE si les secrets existent, et le paquet part non signé sinon —
-# en le disant dans le résumé du job plutôt qu'en échouant, et surtout plutôt
-# qu'en laissant croire le contraire.
+# IL NE PROMET PAS la signature, ET LE CHEMIN NON SIGNÉ EST LE CHEMIN PRINCIPAL.
 #
-# Conséquence pour qui télécharge un paquet non signé : macOS le mettra en
-# quarantaine (Gatekeeper) et Windows affichera SmartScreen. C'est écrit dans
-# les notes de version, pas caché.
+# Un `.dmg` que macOS ouvre sans rien dire demande un certificat **Developer ID
+# Application** ET la notarisation ; un `.exe` que SmartScreen laisse passer
+# demande un certificat Authenticode. Les trois s'achètent, et ce dépôt n'en a
+# aucun. Un compte développeur Apple GRATUIT ne suffit pas : il ne délivre qu'une
+# identité « Apple Development », et signer avec elle ne retire pas le refus —
+# vérifié sur la machine de développement, `spctl -a -vv` répond « rejected »
+# quand même.
 #
-# AUCUNE DE CES ÉTAPES DE SIGNATURE N'A JAMAIS ÉTÉ EXÉCUTÉE : il n'existe pas de
-# certificat pour ce projet. Elles sont écrites d'après la documentation des
-# outils, pas d'après un essai. Le premier qui pose un certificat dans les
-# secrets doit s'attendre à les corriger, et c'est plus honnête de le dire ici
-# que de laisser croire qu'elles sont éprouvées.
+# La règle est donc : SI les variables de signature sont dans l'environnement du
+# job, on signe ; SINON on fabrique le paquet non signé, on le DIT, et rien
+# n'échoue. Aucune étape de ce fichier ne dépend d'un secret pour réussir.
+#
+# Ce que voit un joueur qui télécharge un paquet non signé, et le geste exact
+# qu'on lui demande, sont dans le paquet lui-même — `A-LIRE-AVANT-D-OUVRIR.txt`
+# à la racine du .dmg — dans un manifeste `SIGNATURE-<plateforme>.txt` publié à
+# côté, sur la page de téléchargement du site et dans les notes de version. Pas
+# à un seul de ces endroits : un joueur n'en ouvre qu'un.
+#
+# CE QUI A ÉTÉ ESSAYÉ ET CE QUI NE L'A PAS ÉTÉ.
+#   Le chemin NON SIGNÉ de macOS : essayé de bout en bout sur un Mac Apple
+#   Silicon — .dmg fabriqué, monté, application recopiée, `com.apple.quarantine`
+#   posé comme le pose Safari, lancement refusé (tué, code 137), geste appliqué,
+#   lancement et rendu d'une image. Voir `packaging/macos/signature.cmake`.
+#   Le chemin SIGNÉ, sur les trois plateformes : JAMAIS EXÉCUTÉ, faute de
+#   certificat. Il est écrit d'après la documentation des outils. Le premier qui
+#   posera un certificat doit s'attendre à le corriger.
+#   Windows, signé ou non : rien n'en a été exécuté ailleurs qu'ici. La machine
+#   de développement n'a ni makensis, ni mingw-w64, ni wine (vérifié).
 name: Release
 
 on:
@@ -54,10 +68,17 @@ jobs:
     # le `env:` de cette même étape : la condition de l'ancienne version
     # (`env.MACOS_CERT_P12 != ''`) était donc toujours fausse, et l'étape de
     # signature n'aurait pas tourné même avec un certificat en place.
+    #
+    # Au niveau du JOB aussi parce que c'est `cpack` qui signe, pas une étape :
+    # ces variables doivent être dans l'environnement de l'étape « Paquet ».
+    # Un secret absent vaut la chaîne vide, jamais une erreur.
     env:
-      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      NINETEEN_SIGN_APPLE_IDENTITY: ${{ secrets.NINETEEN_SIGN_APPLE_IDENTITY }}
+      NINETEEN_SIGN_APPLE_P12: ${{ secrets.NINETEEN_SIGN_APPLE_P12 }}
+      NINETEEN_SIGN_APPLE_P12_PASSWORD: ${{ secrets.NINETEEN_SIGN_APPLE_P12_PASSWORD }}
+      NINETEEN_NOTARIZE_APPLE_ID: ${{ secrets.NINETEEN_NOTARIZE_APPLE_ID }}
+      NINETEEN_NOTARIZE_TEAM_ID: ${{ secrets.NINETEEN_NOTARIZE_TEAM_ID }}
+      NINETEEN_NOTARIZE_PASSWORD: ${{ secrets.NINETEEN_NOTARIZE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,27 +98,36 @@ jobs:
       - name: Tests
         run: ctest --preset macos-universal
 
-      # Le binaire est signé AVANT l'empaquetage : il part alors signé dans
-      # `Nineteen.app/Contents/MacOS/`. Ce n'est PAS une distribution notariée —
-      # celle-ci demande en plus `codesign` sur le bundle entier puis
-      # `notarytool submit` sur le .dmg. Ces deux étapes ne sont pas écrites
-      # parce qu'elles ne peuvent pas être essayées : elles seraient de la
-      # devinette dans un fichier qui prétend décrire ce qui se passe.
-      - name: Signature du binaire
-        if: env.MACOS_CERT_P12 != ''
+      # LE TROUSSEAU SEULEMENT. La signature elle-même est faite par `cpack`,
+      # dans `packaging/macos/signature.cmake` : c'est le seul instant où
+      # `Nineteen.app` est encore modifiable avant que `hdiutil` ne la scelle.
+      # Cette étape-ci se contente de rendre l'identité disponible à `codesign`,
+      # ce qu'un runner neuf ne peut pas deviner.
+      #
+      # Sans certificat elle ne tourne pas, et `cpack` signera AD HOC — ce qui
+      # ne fait pas passer Gatekeeper mais permet au binaire arm64 de se
+      # charger. La différence est expliquée là où l'ad hoc est appelé.
+      - name: Trousseau de signature
+        if: env.NINETEEN_SIGN_APPLE_P12 != ''
         run: |
-          echo "$MACOS_CERT_P12" | base64 --decode > /tmp/cert.p12
+          set -eu
+          echo "$NINETEEN_SIGN_APPLE_P12" | base64 --decode > /tmp/cert.p12
           security create-keychain -p actions build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p actions build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" \
-            -T /usr/bin/codesign
+          security import /tmp/cert.p12 -k build.keychain \
+            -P "$NINETEEN_SIGN_APPLE_P12_PASSWORD" -T /usr/bin/codesign
+          # Sans cette ligne, `codesign` déclenche une demande de mot de passe
+          # graphique à laquelle personne ne répond sur un runner, et le job
+          # reste bloqué jusqu'au délai de garde.
           security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
-          codesign --force --options runtime --timestamp \
-            --sign "$MACOS_SIGN_IDENTITY" \
-            build/macos-universal/bin/nineteen
           rm -f /tmp/cert.p12
+          security find-identity -v -p codesigning
 
+      # `cpack` signe, notarise, agrafe et écrit le manifeste, ou ne fait que
+      # l'ad hoc — selon ce que `env:` porte au niveau du job. Cette commande est
+      # la MÊME que celle de la documentation : il n'y a pas un paquet « de CI »
+      # et un paquet « local ».
       - name: Paquet
         run: cpack --config build/macos-universal/CPackConfig.cmake -B build/macos-universal/paquets
 
@@ -106,6 +136,10 @@ jobs:
       # prouver que le Mach-O démarre ; `--headless --screenshot` prouverait en
       # plus que les assets sont là, mais demande un GPU que le runner n'a pas
       # toujours — et un job de release ne doit pas échouer pour ça.
+      #
+      # `A-LIRE-AVANT-D-OUVRIR.txt` est vérifié comme le reste : c'est le seul
+      # endroit où le joueur d'un paquet non signé lira le geste à faire, et un
+      # .dmg qui le perdrait n'aurait l'air de rien.
       - name: Le .dmg s'ouvre et l'app démarre
         run: |
           set -eux
@@ -113,31 +147,62 @@ jobs:
             -mountpoint /tmp/dmg -readonly -nobrowse
           ls -la /tmp/dmg
           test -L /tmp/dmg/Applications
+          test -f /tmp/dmg/A-LIRE-AVANT-D-OUVRIR.txt
           test -f /tmp/dmg/Nineteen.app/Contents/Info.plist
           test -d /tmp/dmg/Nineteen.app/Contents/Resources/assets/scene
           lipo -archs /tmp/dmg/Nineteen.app/Contents/MacOS/nineteen
           /tmp/dmg/Nineteen.app/Contents/MacOS/nineteen --help | head -2
           hdiutil detach /tmp/dmg
 
-      - name: Ce que contient ce paquet
+      # LA SORTIE BRUTE, et pas un verdict recalculé par ce fichier. `codesign`
+      # et `spctl` sont les seuls à savoir ce que le système décidera ; les
+      # recopier tels quels dans le résumé évite qu'un `if:` d'ici ne prétende
+      # le contraire de ce que le Mac du joueur fera.
+      #
+      # `|| true` sur `spctl` : il rend un code non nul dès qu'il refuse, ce qui
+      # est LE CAS ATTENDU tant qu'aucun certificat n'existe. Sans ça le job
+      # échouerait précisément dans le cas nominal.
+      #
+      # `set -e` malgré le `|| true` : sans lui, un montage raté laisserait
+      # passer l'étape et écrirait un résumé vide, c'est-à-dire un paquet dont
+      # personne n'aurait vu ce que le système en dit.
+      - name: Ce que le système dit de ce paquet
         run: |
+          set -ex
+          hdiutil attach build/macos-universal/paquets/*.dmg \
+            -mountpoint /tmp/dmg -readonly -nobrowse
+          codesign -dv --verbose=4 /tmp/dmg/Nineteen.app 2>&1 | tee /tmp/codesign.txt
+          spctl -a -vv /tmp/dmg/Nineteen.app 2>&1 | tee /tmp/spctl.txt || true
+          hdiutil detach /tmp/dmg
           {
             echo "### macOS"
             echo ""
-            ls -la build/macos-universal/paquets/*.dmg
+            ls -la build/macos-universal/paquets/
             echo ""
-            if [ -n "$MACOS_CERT_P12" ]; then
-              echo "Binaire signé (le bundle et le .dmg, eux, ne sont NI signés NI notariés)."
-            else
-              echo "**Paquet NON SIGNÉ** — aucun certificat dans les secrets du dépôt."
-              echo "macOS le mettra en quarantaine. C'est attendu, pas une panne."
-            fi
+            echo '```'
+            cat build/macos-universal/paquets/SIGNATURE-macos.txt
+            echo '```'
+            echo ""
+            echo "codesign -dv --verbose=4 :"
+            echo '```'
+            cat /tmp/codesign.txt
+            echo '```'
+            echo ""
+            echo "spctl -a -vv :"
+            echo '```'
+            cat /tmp/spctl.txt
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Le manifeste part AVEC le paquet. Séparé, il ne sert à rien : c'est lui
+      # qui dit si ce .dmg-là est signé, et qui porte les sommes SHA-256 que la
+      # page de téléchargement promet.
       - uses: actions/upload-artifact@v4
         with:
           name: nineteen-macos
-          path: build/macos-universal/paquets/*.dmg
+          path: |
+            build/macos-universal/paquets/*.dmg
+            build/macos-universal/paquets/SIGNATURE-macos.txt
 
   # ==========================================================================
   # Linux — AppImage, .deb, .tar.gz, construits DANS un conteneur 22.04
@@ -158,6 +223,15 @@ jobs:
   linux:
     name: Paquets Linux (AppImage, .deb, .tar.gz)
     runs-on: ubuntu-24.04
+    # AUCUN NOYAU LINUX NE REFUSE UN BINAIRE NON SIGNÉ. Il n'y a donc pas de
+    # « chemin non signé qui ne marche pas » à réparer ici, contrairement à
+    # macOS et Windows : ces trois paquets s'installent et démarrent tels quels.
+    # La signature détachée ci-dessous sert à VÉRIFIER une provenance, pas à
+    # obtenir une permission — `paquets.sh` dit ce qu'elle vaut et ce qu'elle ne
+    # vaut pas.
+    env:
+      NINETEEN_SIGN_GPG_KEY: ${{ secrets.NINETEEN_SIGN_GPG_KEY }}
+      NINETEEN_SIGN_GPG_PASSPHRASE: ${{ secrets.NINETEEN_SIGN_GPG_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,10 +244,18 @@ jobs:
       # même vieille glibc que le paquet. C'est là qu'un défaut de portabilité se
       # voit — il s'en est trouvé un en écrivant ce workflow, voir
       # cmake/CompilerWarnings.cmake.
+      #
+      # Les deux variables de signature sont passées TOUJOURS, même vides : un
+      # `-e VAR` sur une variable vide donne une chaîne vide dans le conteneur,
+      # ce que `paquets.sh` traite comme « pas de clé ». Les passer sous
+      # condition demanderait un `if:` sur chaque, pour le même résultat et une
+      # ligne de plus à oublier.
       - name: Compilation, tests et paquets
         run: |
           docker run --rm -v "$PWD:/src" -w /src \
             -e NINETEEN_TESTS=1 \
+            -e NINETEEN_SIGN_GPG_KEY \
+            -e NINETEEN_SIGN_GPG_PASSPHRASE \
             nineteen-build:22.04 sh packaging/linux/paquets.sh
 
       # L'AppImage est relancée depuis le paquet fini, hors du conteneur qui
@@ -201,6 +283,9 @@ jobs:
           test -f /usr/share/applications/nineteen.desktop
           sudo apt-get remove -y nineteen
 
+      # Le manifeste est recopié tel quel plutôt que résumé : c'est `paquets.sh`
+      # qui sait ce qu'il a fait, et le réécrire ici serait la deuxième version
+      # d'une même phrase, donc la première à devenir fausse.
       - name: Ce que contient ce paquet
         run: |
           {
@@ -211,10 +296,15 @@ jobs:
             echo "Dépendances déclarées par le .deb :"
             dpkg-deb -f build/linux-x64/paquets/nineteen_*.deb Depends Recommends
             echo ""
-            echo "Paquets NON SIGNÉS : ni le .deb ni l'AppImage ne portent de"
-            echo "signature. C'est attendu — aucune clé n'existe pour ce dépôt."
+            echo '```'
+            cat build/linux-x64/paquets/SIGNATURE-linux.txt
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # `*.asc` et la clé publique ne sont produits que sur le chemin signé.
+      # `upload-artifact` accepte un motif qui ne trouve rien tant qu'AU MOINS
+      # un autre en trouve : c'est le cas des trois paquets, donc l'absence de
+      # signature ne fait pas échouer l'envoi.
       - uses: actions/upload-artifact@v4
         with:
           name: nineteen-linux
@@ -222,6 +312,8 @@ jobs:
             build/linux-x64/paquets/*.AppImage
             build/linux-x64/paquets/*.deb
             build/linux-x64/paquets/*.tar.gz
+            build/linux-x64/paquets/*.asc
+            build/linux-x64/paquets/SIGNATURE-linux.txt
 
   # ==========================================================================
   # Windows — l'installateur NSIS
@@ -243,8 +335,8 @@ jobs:
     name: Paquet Windows (.exe)
     runs-on: windows-2022
     env:
-      WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      NINETEEN_SIGN_WINDOWS_PFX: ${{ secrets.NINETEEN_SIGN_WINDOWS_PFX }}
+      NINETEEN_SIGN_WINDOWS_PASSWORD: ${{ secrets.NINETEEN_SIGN_WINDOWS_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -263,15 +355,34 @@ jobs:
       - name: Tests
         run: ctest --preset windows-x64
 
+      # `signtool` N'EST PAS DANS LE PATH d'un runner windows-2022. Il est livré
+      # avec le SDK Windows, sous `Program Files (x86)\Windows Kits\10\bin\
+      # <version>\x64\`, et la version change avec l'image. L'ancienne rédaction
+      # appelait `signtool` nu : elle aurait rendu « The term 'signtool' is not
+      # recognized » au premier certificat posé. On le CHERCHE, et on s'arrête
+      # en le disant s'il manque — mais seulement sur le chemin signé, celui que
+      # quelqu'un a explicitement demandé en posant un secret.
+      #
+      # RIEN DE CE BLOC N'A ÉTÉ EXÉCUTÉ. La machine de développement est un Mac
+      # sans makensis, sans mingw-w64 et sans wine (vérifié : les trois sont
+      # absents). Le tri de `Sort-Object -Descending` prend la version de SDK la
+      # plus récente, ce qui est la convention, pas une mesure.
       - name: Signature du binaire
-        if: env.WINDOWS_CERT_PFX != ''
+        if: env.NINETEEN_SIGN_WINDOWS_PFX != ''
         shell: pwsh
         run: |
+          $kit = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+          $st = Get-ChildItem -Path $kit -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match '\\x64\\' } |
+                Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $st) { throw "signtool.exe introuvable sous $kit" }
+          "SIGNTOOL=$($st.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx",
-            [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
-          & signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" `
+            [Convert]::FromBase64String($env:NINETEEN_SIGN_WINDOWS_PFX))
+          & $st.FullName sign /f "$env:TEMP\cert.pfx" /p "$env:NINETEEN_SIGN_WINDOWS_PASSWORD" `
             /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
             "build/windows-x64/bin/nineteen.exe"
+          if ($LASTEXITCODE -ne 0) { throw "signtool a echoue sur le binaire" }
 
       - name: Installateur
         run: cpack --config build/windows-x64/CPackConfig.cmake -B build/windows-x64/paquets
@@ -280,12 +391,13 @@ jobs:
       # que SmartScreen inspecte, pas le jeu qu'il contient. Signer l'un sans
       # l'autre ne sert à rien.
       - name: Signature de l'installateur
-        if: env.WINDOWS_CERT_PFX != ''
+        if: env.NINETEEN_SIGN_WINDOWS_PFX != ''
         shell: pwsh
         run: |
-          & signtool sign /f "$env:TEMP\cert.pfx" /p "$env:WINDOWS_CERT_PASSWORD" `
+          & $env:SIGNTOOL sign /f "$env:TEMP\cert.pfx" /p "$env:NINETEEN_SIGN_WINDOWS_PASSWORD" `
             /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
             (Get-Item build/windows-x64/paquets/*.exe).FullName
+          if ($LASTEXITCODE -ne 0) { throw "signtool a echoue sur l installateur" }
           Remove-Item "$env:TEMP\cert.pfx"
 
       # `/S` installe sans interface. On vérifie ensuite que le jeu est là où
@@ -302,26 +414,65 @@ jobs:
           & $jeu --help | Select-Object -First 2
           Get-ChildItem "$env:LOCALAPPDATA\Programs\nineteen"
 
+      # LE MANIFESTE EST ÉCRIT PAR WINDOWS, sur Windows. Il n'y a pas ici de
+      # `signature.cmake` comme sur macOS parce qu'il n'y a rien à faire au
+      # moment de l'empaquetage : NSIS produit un `.exe` qu'on signe APRÈS,
+      # tandis qu'un `.dmg` scelle son bundle et ne se rouvre pas.
+      #
+      # `Get-AuthenticodeSignature` plutôt qu'un `if` sur le secret : c'est
+      # Windows qui dit si ce fichier-là est signé, et sa réponse ne peut pas
+      # diverger de ce que verra le poste du joueur. Un test sur la présence
+      # d'un secret le pourrait — il dirait « signé » si `signtool` avait
+      # silencieusement échoué.
+      #
+      # PAS DE `@"…"@` : un « here-string » PowerShell exige que son `"@` de
+      # fermeture soit en colonne 1, ce qu'un bloc `run: |` de YAML ne permet
+      # pas — le fichier cesse d'être du YAML valide. Un tableau de lignes fait
+      # la même chose et reste indentable.
       - name: Ce que contient ce paquet
-        shell: bash
+        shell: pwsh
         run: |
-          {
-            echo "### Windows"
-            echo ""
-            ls -la build/windows-x64/paquets/*.exe
-            echo ""
-            if [ -n "$WINDOWS_CERT_PFX" ]; then
-              echo "Installateur et binaire signés."
-            else
-              echo "**Paquet NON SIGNÉ** — aucun certificat dans les secrets du"
-              echo "dépôt. Windows affichera SmartScreen. C'est attendu."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          $exe = (Get-Item build/windows-x64/paquets/*.exe)
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          $somme = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          if ($sig.Status -eq "Valid") {
+            $etat = "SIGNE -- " + $sig.SignerCertificate.Subject
+            $geste = @("  Rien a faire : double-clic.")
+          } else {
+            $etat = "NON SIGNE (Authenticode : " + $sig.Status + ")"
+            $geste = @(
+              "  Windows affiche l'ecran bleu SmartScreen (« Windows a protege votre",
+              "  ordinateur »). Cliquer sur « Informations complementaires », puis sur",
+              "  « Executer quand meme ». Le bouton n'apparait qu'APRES le premier clic :",
+              "  c'est la marche normale, pas un refus definitif."
+            )
+          }
+          $manifeste = "build/windows-x64/paquets/SIGNATURE-windows.txt"
+          $lignes = @(
+            "Nineteen -- installateur Windows",
+            "",
+            "Etat : $etat",
+            "",
+            $exe.Name,
+            "  sha256 = $somme",
+            "",
+            "Ce que le joueur doit faire :"
+          ) + $geste + @(
+            "",
+            "Verifier soi-meme :",
+            "  Get-FileHash " + $exe.Name + " -Algorithm SHA256",
+            "  Get-AuthenticodeSignature " + $exe.Name
+          )
+          $lignes | Set-Content -Encoding utf8 $manifeste
+          @("### Windows", "", '```') + $lignes + @('```') |
+            Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
 
       - uses: actions/upload-artifact@v4
         with:
           name: nineteen-windows
-          path: build/windows-x64/paquets/*.exe
+          path: |
+            build/windows-x64/paquets/*.exe
+            build/windows-x64/paquets/SIGNATURE-windows.txt
 
   # ==========================================================================
   # La release
@@ -344,30 +495,60 @@ jobs:
           body: |
             ## Nineteen ${{ github.ref_name }}
 
+            ### À lire d'abord : ces paquets ne sont pas signés
+
+            Le certificat qui évite l'avertissement s'achète — **Developer ID
+            Application** chez Apple, Authenticode chez Windows — et ce projet
+            n'en a pas encore. Les paquets fonctionnent, mais le système
+            demandera un geste de plus **la première fois**.
+
+            **macOS** affiche :
+
+            > Apple could not verify "Nineteen" is free of malware that may harm
+            > your Mac or compromise your privacy.
+
+            Après avoir glissé Nineteen dans Applications, ouvrir le Terminal
+            (Applications → Utilitaires) et coller cette ligne, une seule fois :
+
+            ```
+            xattr -dr com.apple.quarantine /Applications/Nineteen.app
+            ```
+
+            Elle retire l'étiquette « téléchargé depuis Internet » posée par le
+            navigateur ; elle ne désactive aucune protection du système. Le même
+            texte est dans le `.dmg`, dans `A-LIRE-AVANT-D-OUVRIR.txt`.
+
+            **Windows** affiche l'écran bleu SmartScreen (« Windows a protégé
+            votre ordinateur ») : cliquer sur **Informations complémentaires**,
+            puis sur **Exécuter quand même**. Le bouton n'apparaît qu'après le
+            premier clic.
+
+            **Linux** ne demande rien : aucun noyau Linux ne refuse un binaire
+            non signé.
+
+            Les fichiers `SIGNATURE-*.txt` publiés ci-dessous disent, pour
+            chaque plateforme, si ce paquet-là est signé, et portent les sommes
+            SHA-256.
+
             ### Installer
 
             | Système | Fichier | Ce qu'on en fait |
             |---|---|---|
-            | macOS 11+ | `Nineteen-*-macOS-universal.dmg` | Ouvrir, glisser **Nineteen** sur **Applications**. Universel : Apple Silicon et Intel. |
+            | macOS 11+ | `Nineteen-*-macOS-universal.dmg` | Ouvrir, glisser **Nineteen** sur **Applications**, puis la ligne ci-dessus. Universel : Apple Silicon et Intel. |
             | Linux | `Nineteen-*-x86_64.AppImage` | `chmod +x Nineteen-*.AppImage` puis lancer. Rien à installer. |
             | Debian / Ubuntu | `nineteen_*_amd64.deb` | `sudo apt install ./nineteen_*_amd64.deb` — le jeu apparaît dans le menu. |
             | Linux, sans installer | `nineteen-*-linux-x86_64.tar.gz` | Déballer, lancer `bin/nineteen`. |
-            | Windows 10/11 | `Nineteen-*-windows-x64.exe` | Double-clic. **Aucun droit administrateur** : le jeu s'installe dans votre propre profil, avec un raccourci au menu Démarrer et un désinstalleur. |
+            | Windows 10/11 | `Nineteen-*-windows-x64.exe` | Double-clic, puis SmartScreen ci-dessus. **Aucun droit administrateur** : le jeu s'installe dans votre propre profil, avec un raccourci au menu Démarrer et un désinstalleur. |
+
+            Les paquets Linux portent **l'architecture de la machine qui les a
+            produits**, lue et non supposée. Ceux-ci sortent d'un runner GitHub
+            `ubuntu-24.04`, donc `x86_64` / `amd64` : ils ne s'installent pas
+            sur un Raspberry Pi ni sur une machine ARM.
 
             L'AppImage et le `.deb` sont construits sur **Ubuntu 22.04 (glibc
             2.35)** : ils démarrent donc aussi sur Debian 12, Mint 21 et tout ce
             qui est sorti depuis. Une construction sur une base plus récente
             aurait exclu ces systèmes sans le dire.
-
-            ### Ces paquets ne sont pas signés
-
-            Tant qu'aucun certificat n'est fourni au dépôt, macOS mettra
-            l'application en quarantaine (« développeur non identifié ») et
-            Windows affichera SmartScreen.
-
-            - macOS : clic droit sur **Nineteen** → **Ouvrir**, puis confirmer.
-              Ou `xattr -dr com.apple.quarantine /Applications/Nineteen.app`.
-            - Windows : **Informations complémentaires** → **Exécuter quand même**.
 
             ### Prérequis réels
 

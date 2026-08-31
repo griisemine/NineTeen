@@ -46,6 +46,8 @@ macro(charger generateur)
     unset(CPACK_PACKAGING_INSTALL_PREFIX)
     unset(CPACK_INCLUDE_TOPLEVEL_DIRECTORY)
     unset(CPACK_DMG_VOLUME_NAME)
+    unset(CPACK_PRE_BUILD_SCRIPTS)
+    unset(CPACK_POST_BUILD_SCRIPTS)
     unset(CPACK_DEBIAN_FILE_NAME)
     unset(CPACK_DEBIAN_PACKAGE_SHLIBDEPS)
     unset(CPACK_NSIS_DEFINES)
@@ -81,6 +83,20 @@ endif()
 foreach(_f "packaging/macos/Info.plist.in" "packaging/macos/nineteen.icns")
     if(NOT EXISTS "${NINETEEN_SOURCE_DIR}/${_f}")
         echoue("macOS : ${_f} manque — le bundle serait un simple dossier")
+    endif()
+endforeach()
+
+# LES DEUX CROCHETS DE SIGNATURE. Sans eux `cpack` produit toujours un .dmg —
+# c'est là le danger : il sortirait sans signature ad hoc du bundle, sans
+# `A-LIRE-AVANT-D-OUVRIR.txt` et sans manifeste, et RIEN ne le dirait. Un
+# renommage de `signature.cmake` ou une faute de frappe dans ce chemin
+# passeraient jusqu'à la balise. C'est exactement le genre de panne muette pour
+# lequel ce fichier existe.
+foreach(_c CPACK_PRE_BUILD_SCRIPTS CPACK_POST_BUILD_SCRIPTS)
+    if(NOT ${_c})
+        echoue("DragNDrop : ${_c} n'est pas posé — le .dmg partirait sans signature ni lisez-moi")
+    elseif(NOT EXISTS "${${_c}}")
+        echoue("DragNDrop : ${_c} désigne « ${${_c}} », qui n'existe pas")
     endif()
 endforeach()
 

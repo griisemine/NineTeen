@@ -637,3 +637,86 @@ func TestLaPageDonneLAdresseAuJoueur(t *testing.T) {
 			"d'ouvrir. C'est au serveur de dire son adresse joignable")
 	}
 }
+
+// Les trois liens de telechargement portent le nom que la release produit
+// REELLEMENT.
+//
+// Les trois etaient faux en meme temps, et depuis longtemps :
+//
+//	.zip                -> l'empaquetage Windows est un installateur NSIS
+//	                       depuis la 17.0.0, donc un `.exe`
+//	-macos-universal    -> CPack ecrit « macOS », avec la capitale
+//	-linux-x64.AppImage -> `paquets.sh` nomme l'AppImage d'apres `uname -m`,
+//	                       comme le veut la convention AppImage : « x86_64 »,
+//	                       et sans « linux »
+//
+// Rien ne pouvait le voir. `TestLaPageNAffirmePasQuUnPaquetExiste` verifie que
+// la page demande au serveur si la RELEASE existe, pas que le FICHIER demande
+// s'y trouve : le jour ou NINETEEN_RELEASE_PUBLIEE serait passee a 1, les trois
+// boutons auraient rendu 404 une seconde fois.
+//
+// Ce test compare donc les noms d'`app.js` a ceux que `packaging/` fabrique.
+// Il ne les recopie pas : il lit les motifs a la source, pour qu'un changement
+// d'un cote se voie de l'autre.
+func TestLesLiensDeTelechargementExistentVraiment(t *testing.T) {
+	racine := racineDépôt()
+	if racine == "" {
+		t.Skip("dépôt complet absent : packaging/ n'est pas lisible d'ici")
+	}
+	js := string(lireAsset(t, "app.js"))
+
+	cpack, err := os.ReadFile(filepath.Join(racine, "packaging", "CPackNineteen.cmake"))
+	if err != nil {
+		t.Fatalf("packaging/CPackNineteen.cmake illisible : %v", err)
+	}
+	paquets, err := os.ReadFile(filepath.Join(racine, "packaging", "linux", "paquets.sh"))
+	if err != nil {
+		t.Fatalf("packaging/linux/paquets.sh illisible : %v", err)
+	}
+
+	// Les motifs tels que le packaging les ecrit, avec `${…}` a la place des
+	// variables. On les convertit en la forme JavaScript de `app.js`.
+	//   CPack        Nineteen-${CPACK_PACKAGE_VERSION}-macOS-universal + .dmg
+	//   app.js       Nineteen-${data.version}-macOS-universal.dmg
+	nom := func(source []byte, motif, suffixe string) string {
+		m := regexp.MustCompile(motif).FindSubmatch(source)
+		if m == nil {
+			t.Fatalf("motif introuvable dans le packaging : %s", motif)
+		}
+		return strings.ReplaceAll(string(m[1]), "${CPACK_PACKAGE_VERSION}", "${data.version}") + suffixe
+	}
+
+	attendus := map[string]string{
+		"macos": nom(cpack,
+			`set\(CPACK_PACKAGE_FILE_NAME "(Nineteen-\$\{CPACK_PACKAGE_VERSION\}-macOS-[^"]*)"\)`, ".dmg"),
+		"windows": nom(cpack,
+			`set\(CPACK_PACKAGE_FILE_NAME "(Nineteen-\$\{CPACK_PACKAGE_VERSION\}-windows-[^"]*)"\)`, ".exe"),
+	}
+
+	// L'AppImage ne sort pas de CPack : `paquets.sh` compose son nom. On lit
+	// la ligne qui le compose, et on remplace les deux variables du shell.
+	m := regexp.MustCompile(`APPIMAGE="\$SORTIE/(Nineteen-\$\{VERSION\}-\$\{ARCH\}\.AppImage)"`).FindSubmatch(paquets)
+	if m == nil {
+		t.Fatal("paquets.sh ne compose plus le nom de l'AppImage comme attendu")
+	}
+	// `$ARCH` vaut `uname -m` sur la machine de fabrication. Les paquets
+	// publies sortent d'un runner GitHub x86_64 ; ceux batis sur un Mac Apple
+	// Silicon sont `aarch64`, et ne sont pas ceux que la page propose.
+	appimage := strings.ReplaceAll(string(m[1]), "${VERSION}", "${data.version}")
+	attendus["linux"] = strings.ReplaceAll(appimage, "${ARCH}", "x86_64")
+
+	for plateforme, attendu := range attendus {
+		// `app.js` ecrit ces noms dans un gabarit entre accents graves.
+		motif := regexp.MustCompile(plateforme + ": `([^`]+)`")
+		trouve := motif.FindStringSubmatch(js)
+		if trouve == nil {
+			t.Errorf("app.js n'a pas de nom de fichier pour « %s »", plateforme)
+			continue
+		}
+		if trouve[1] != attendu {
+			t.Errorf("app.js propose « %s » pour %s, le packaging produit « %s » — "+
+				"le bouton rendrait 404 le jour où la release est publiée",
+				trouve[1], plateforme, attendu)
+		}
+	}
+}

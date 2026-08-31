@@ -69,19 +69,31 @@ add_subdirectory(tests)
 #   Windows  NSIS       -> un .exe d'installation, raccourci menu Démarrer et
 #                          désinstalleur, SANS droits administrateur
 #
-# IL NE FAIT PAS la signature. Un .dmg notarié demande un certificat Apple
-# Developer ID, un .exe signé un certificat Authenticode : ce sont des secrets
-# qui appartiennent à qui publie, pas au dépôt. Le workflow de release les
-# consomme s'ils existent et produit des paquets NON SIGNÉS sinon, en le
-# disant — plutôt que d'échouer, et plutôt que de prétendre.
+# IL FAIT la signature de macOS, et c'est nouveau : `packaging/macos/
+# signature.cmake` est accroché en `CPACK_PRE_BUILD_SCRIPTS` et
+# `CPACK_POST_BUILD_SCRIPTS`. La commande `cpack --config …` produit donc le
+# même paquet ici et sur un runner, sans étape de signature écrite à part.
+#
+# IL NE FAIT PAS APPARAÎTRE UN CERTIFICAT. Un .dmg que macOS ouvre sans rien
+# dire demande un Developer ID Application ET la notarisation ; un .exe que
+# SmartScreen laisse passer demande un Authenticode. Ils s'achètent, et ce dépôt
+# n'en a aucun. Variables posées, on signe ; variables vides, on signe AD HOC
+# sur macOS — ce qui permet au binaire arm64 de se charger et RIEN DE PLUS,
+# Gatekeeper refuse toujours — et le paquet part non signé EN LE DISANT :
+# `A-LIRE-AVANT-D-OUVRIR.txt` dans le .dmg, `SIGNATURE-<plateforme>.txt` à côté
+# des paquets. Aucune étape n'échoue faute de secret.
 #
 # CE QUI A ÉTÉ VÉRIFIÉ EN ÉCRIVANT CE BLOC, ET CE QUI NE L'A PAS ÉTÉ.
 #
 #   macOS   VÉRIFIÉ sur la machine de développement : .dmg produit, monté,
-#           Nineteen.app copiée dans /Applications, arbre de build RENOMMÉ pour
-#           qu'aucun montage de développement ne puisse la sauver, puis lancée.
+#           Nineteen.app copiée ailleurs, `com.apple.quarantine` posé comme le
+#           pose Safari — lancement TUÉ (code 137), ce que voit le joueur qui
+#           télécharge — puis geste de contournement appliqué, lancement et
+#           rendu d'une image de 3840x2160 non noire.
 #   Linux   VÉRIFIÉ dans un conteneur ubuntu:22.04 (Docker) : .deb installé par
-#           apt et lancé, AppImage lancée. Pas sur une machine Linux réelle.
+#           apt et lancé, AppImage lancée. Pas sur une machine Linux réelle. Et
+#           en aarch64, pas en x86_64 : Docker est natif arm64 sur ce Mac, donc
+#           les paquets produits ICI ne sont pas ceux que la release publie.
 #   Windows CONFIGURÉ, PAS VÉRIFIÉ. Cette machine n'a ni makensis, ni mingw-w64,
 #           ni wine : le .exe ne peut pas être produit ici, et personne ne doit
 #           lire ce bloc comme s'il l'avait été. Ce qui EST vérifié ici : que
@@ -120,7 +132,7 @@ elseif(APPLE)
     set(CPACK_GENERATOR "DragNDrop")
 else()
     # L'AppImage n'est PAS un générateur CPack : elle est produite par
-    # `packaging/linux/appimage.sh`, qui part du même `cmake --install`. Voir le
+    # `packaging/linux/paquets.sh`, qui part du même `cmake --install`. Voir le
     # commentaire en tête de ce script pour la raison.
     set(CPACK_GENERATOR "TGZ;DEB")
 endif()
