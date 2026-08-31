@@ -10,6 +10,7 @@
 #include "room_couperet.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 /* ==========================================================================
@@ -873,4 +874,72 @@ bool room_cp_valide(const room_couperet *c)
         if (!p->vivante && p->jeu[0] != '\0') return false;
     }
     return true;
+}
+
+/* ==========================================================================
+ * Le carnet
+ * ========================================================================== */
+
+void room_cp_carnet_noter(room_cp_carnet *k, int rang, int places)
+{
+    if (!k || places < 2 || rang < 1 || rang > places) return;
+
+    k->manches++;
+    if (rang == 1) {
+        k->victoires++;
+        k->serie++;
+        if (k->serie > k->serie_record) k->serie_record = k->serie;
+    } else {
+        /* La série tombe à zéro et NE COÛTE RIEN D'AUTRE. Elle n'est pas un
+         * capital qu'on perd : c'est une phrase sur le passé récent, et une
+         * phrase fausse ne se garde pas. */
+        k->serie = 0;
+    }
+    if (k->meilleur_rang == 0 || rang < k->meilleur_rang) k->meilleur_rang = rang;
+}
+
+void room_cp_carnet_charger(room_cp_carnet *k, const char *chemin)
+{
+    if (!k) return;
+    const room_cp_carnet vide = { 0 };
+    *k = vide;
+    if (!chemin || !chemin[0]) return;
+
+    FILE *f = fopen(chemin, "r");
+    if (!f) return;
+
+    char ligne[128];
+    while (fgets(ligne, (int)sizeof ligne, f)) {
+        char cle[32];
+        long v = 0;
+        /* Une ligne qui ne se lit pas est SAUTÉE et le reste survit : c'est le
+         * cas de la coupure de courant, et c'est celui qu'on veut survivre. */
+        if (sscanf(ligne, "%31[^=]=%ld", cle, &v) != 2) continue;
+        if (v < 0 || v > 1000000000L) continue;
+        if      (strcmp(cle, "manches")      == 0) k->manches      = (int32_t)v;
+        else if (strcmp(cle, "victoires")    == 0) k->victoires    = (int32_t)v;
+        else if (strcmp(cle, "meilleurRang") == 0) k->meilleur_rang = (int32_t)v;
+        else if (strcmp(cle, "serie")        == 0) k->serie        = (int32_t)v;
+        else if (strcmp(cle, "serieRecord")  == 0) k->serie_record = (int32_t)v;
+    }
+    fclose(f);
+
+    /* Un fichier abîmé ne doit pas produire un carnet qui se contredit : plus
+     * de victoires que de manches se lirait comme un bogue du jeu. */
+    if (k->victoires > k->manches) k->victoires = k->manches;
+    if (k->serie > k->victoires)   k->serie = k->victoires;
+    if (k->serie_record < k->serie) k->serie_record = k->serie;
+}
+
+bool room_cp_carnet_sauver(const room_cp_carnet *k, const char *chemin)
+{
+    if (!k || !chemin || !chemin[0]) return false;
+    FILE *f = fopen(chemin, "w");
+    if (!f) return false;
+    fprintf(f, "manches=%d\n", k->manches);
+    fprintf(f, "victoires=%d\n", k->victoires);
+    fprintf(f, "meilleurRang=%d\n", k->meilleur_rang);
+    fprintf(f, "serie=%d\n", k->serie);
+    fprintf(f, "serieRecord=%d\n", k->serie_record);
+    return fclose(f) == 0;
 }

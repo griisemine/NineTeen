@@ -1295,7 +1295,8 @@ void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float
 }
 
 void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
-                           uint8_t rivaux, float reste)
+                           uint8_t rivaux, const room_cp_carnet *carnet,
+                           float reste)
 {
     if (!s || !c || c->phase != ROOM_CP_FINI || reste <= 0.0f) return;
 
@@ -1311,7 +1312,7 @@ void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
      * illisible pendant neuf. */
     const float a = (reste < 1.0f) ? reste : 1.0f;
 
-    const float pw = 660.0f, ph = 62.0f + (float)n * 30.0f + 68.0f;
+    const float pw = 660.0f, ph = 62.0f + (float)n * 30.0f + 92.0f;
     const float px = (ROOM_HUD_W - pw) * 0.5f;
     const float py = (ROOM_HUD_H - ph) * 0.5f;
     ns_sprite_rect(s, px, py, pw, ph, (const float[4]){ 0.03f, 0.02f, 0.02f, 0.90f * a });
@@ -1399,6 +1400,29 @@ void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
     a_droite(s, px + 436.0f, yf, 1.8f, dimf, "PTS");
     a_droite(s, px + 528.0f, yf, 1.8f, dimf, "FINIES");
     a_droite(s, px + 628.0f, yf, 1.8f, dimf, "COUPEES");
-    centred(s, ROOM_HUD_W * 0.5f, yf + 26.0f, 2.4f,
+    /*
+     * LE CARNET, sur une ligne, sous le classement.
+     *
+     * C'est la seule chose qui survive à la manche, et la seule raison d'en
+     * jouer une seconde qui ne demande rien au joueur : « 3 victoires sur 11 »
+     * n'est pas une récompense, c'est une phrase sur ce qu'on a fait. Elle est
+     * SOUS le classement et pas au-dessus — ce qui vient de se passer d'abord,
+     * ce qu'on cumule ensuite.
+     */
+    if (carnet && carnet->manches > 0) {
+        char l[96];
+        if (carnet->serie >= 2) {
+            SDL_snprintf(l, sizeof l, "%d VICTOIRE%s SUR %d   -   %d D'AFFILEE",
+                         carnet->victoires, (carnet->victoires > 1) ? "S" : "",
+                         carnet->manches, carnet->serie);
+        } else {
+            SDL_snprintf(l, sizeof l, "%d VICTOIRE%s SUR %d   -   MEILLEUR RANG %d",
+                         carnet->victoires, (carnet->victoires > 1) ? "S" : "",
+                         carnet->manches, carnet->meilleur_rang);
+        }
+        centred(s, ROOM_HUD_W * 0.5f, yf + 24.0f, 2.0f,
+                (const float[4]){ C_DIM[0], C_DIM[1], C_DIM[2], a }, l);
+    }
+    centred(s, ROOM_HUD_W * 0.5f, yf + 48.0f, 2.4f,
             (const float[4]){ C_KEY[0], C_KEY[1], C_KEY[2], a }, "F9  UNE AUTRE MANCHE");
 }

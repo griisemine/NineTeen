@@ -549,7 +549,77 @@ static void test_arbitre(void)
 }
 
 /* ==========================================================================
- * 7. LE JOURNAL
+ * 7. LE CARNET
+ * ========================================================================== */
+
+static void test_carnet(void)
+{
+    printf("\n-- le carnet --\n");
+    room_cp_carnet k;
+    const char *chemin = "/tmp/ns_test_carnet.txt";
+    remove(chemin);
+
+    room_cp_carnet_charger(&k, chemin);
+    CHECK(k.manches == 0 && k.victoires == 0 && k.meilleur_rang == 0,
+          "un carnet absent ne rend pas un carnet neuf");
+
+    /* Une manche à UNE place n'est pas notée : on ne gagne pas contre personne,
+     * et une victoire qui ne coûte rien dévalue toutes les autres. */
+    room_cp_carnet_noter(&k, 1, 1);
+    CHECK(k.manches == 0, "une manche à une place a été notée");
+    room_cp_carnet_noter(&k, 0, 8);
+    room_cp_carnet_noter(&k, 9, 8);
+    CHECK(k.manches == 0, "un rang hors bornes a été noté");
+
+    room_cp_carnet_noter(&k, 3, 8);
+    room_cp_carnet_noter(&k, 1, 8);
+    room_cp_carnet_noter(&k, 1, 8);
+    CHECK(k.manches == 3, "%d manches au lieu de 3", k.manches);
+    CHECK(k.victoires == 2, "%d victoires au lieu de 2", k.victoires);
+    CHECK(k.meilleur_rang == 1, "meilleur rang %d au lieu de 1", k.meilleur_rang);
+    CHECK(k.serie == 2 && k.serie_record == 2, "série %d, record %d",
+          k.serie, k.serie_record);
+
+    room_cp_carnet_noter(&k, 4, 8);
+    CHECK(k.serie == 0, "la série ne tombe pas sur une défaite");
+    CHECK(k.serie_record == 2, "le record de série a été perdu (%d)", k.serie_record);
+    CHECK(k.meilleur_rang == 1, "le meilleur rang a empiré (%d)", k.meilleur_rang);
+
+    CHECK(room_cp_carnet_sauver(&k, chemin), "le carnet ne s'écrit pas");
+    room_cp_carnet vide;
+    room_cp_carnet_charger(&vide, chemin);
+    CHECK(vide.manches == k.manches && vide.victoires == k.victoires &&
+          vide.meilleur_rang == k.meilleur_rang &&
+          vide.serie == k.serie && vide.serie_record == k.serie_record,
+          "le carnet relu diffère de celui qu'on a écrit");
+
+    /*
+     * UN FICHIER ABÎMÉ NE DOIT PAS PRODUIRE UN CARNET QUI SE CONTREDIT : plus
+     * de victoires que de manches se lirait comme un bogue du jeu, et le joueur
+     * n'aurait aucun moyen de savoir que c'est son fichier qui a souffert.
+     */
+    FILE *f = fopen(chemin, "w");
+    CHECK(f != NULL, "le fichier d'essai ne s'ouvre pas");
+    if (f) {
+        fprintf(f, "manches=2\nvictoires=99\nligne sans egal\nserie=50\n"
+                   "meilleurRang=-4\ninconnu=7\n");
+        fclose(f);
+    }
+    room_cp_carnet abime;
+    room_cp_carnet_charger(&abime, chemin);
+    CHECK(abime.manches == 2, "le carnet abîmé n'a pas gardé ce qui se lisait");
+    CHECK(abime.victoires <= abime.manches,
+          "%d victoires pour %d manches", abime.victoires, abime.manches);
+    CHECK(abime.serie <= abime.victoires, "la série dépasse les victoires");
+    CHECK(abime.meilleur_rang == 0, "un rang négatif a été retenu (%d)",
+          abime.meilleur_rang);
+    remove(chemin);
+    printf("   un carnet abîmé rend %d manche(s) et %d victoire(s), sans se contredire\n",
+           abime.manches, abime.victoires);
+}
+
+/* ==========================================================================
+ * 8. LE JOURNAL
  * ========================================================================== */
 
 static void test_journal(void)
@@ -589,7 +659,7 @@ static void test_journal(void)
 }
 
 /* ==========================================================================
- * 8. LE TOURNOI — l'équilibre, mesuré
+ * 9. LE TOURNOI — l'équilibre, mesuré
  * ========================================================================== */
 
 #define VIVIER 32      /* parties d'autopilote par ligne */
@@ -1036,6 +1106,7 @@ int main(void)
     test_equipes();
     test_actions();
     test_arbitre();
+    test_carnet();
     test_journal();
     test_tournoi();
 

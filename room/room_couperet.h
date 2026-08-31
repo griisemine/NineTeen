@@ -884,4 +884,54 @@ bool room_cp_prendre(room_couperet *c, room_cp_evenement *out);
  * hors bornes, aucun camp sans place. Pour le test et pour la recette. */
 bool room_cp_valide(const room_couperet *c);
 
+/* ==========================================================================
+ * LE CARNET — ce qui survit à la manche, et c'est TOUT ce qui lui survit
+ * ==========================================================================
+ *
+ * POURQUOI IL EXISTE. Les fusibles naissent au coup d'envoi et meurent au
+ * verdict ; le portefeuille de la salle n'est pas touché ; il n'y a ni saison
+ * ni laissez-passer. Une manche ne laisse donc RIEN — et une manche qui ne
+ * laisse rien ne donne aucune raison d'en jouer une seconde, alors que c'est
+ * précisément la seconde qui fait le mode.
+ *
+ * Ce carnet est la plus petite chose qui répare ça sans rien abîmer : un
+ * COMPTE, pas une récompense. Il ne donne aucun avantage, ne débloque rien, ne
+ * s'échange contre rien. Il dit ce qu'on a fait. C'est exactement le crochet
+ * que `room_bareme.h` revendique — « la RÉPÉTITION D'UNE BONNE PARTIE » — et
+ * c'est le seul qui ne demande rien au joueur en échange.
+ *
+ * IL EST SÉPARÉ DU PORTEFEUILLE, et son fichier aussi. Les mêler ferait du
+ * Couperet une voie d'enrichissement, donc une raison de le jouer pour autre
+ * chose que lui-même — c'est ce que l'en-tête de ce fichier refuse depuis sa
+ * première ligne.
+ *
+ * LE CHEMIN VIENT DE L'APPELANT. C'est ce qui garde ce module sans dépendance :
+ * il ne sait pas où vit le répertoire utilisateur, et il n'a pas à l'apprendre
+ * pour compter jusqu'à trois. Le test peut donc écrire où il veut sans toucher
+ * au carnet de qui l'exécute.
+ */
+typedef struct room_cp_carnet {
+    int32_t manches;        /* manches menées jusqu'au verdict */
+    int32_t victoires;
+    int32_t meilleur_rang;  /* le plus petit atteint ; 0 = jamais joué */
+    int32_t serie;          /* victoires consécutives, en cours */
+    int32_t serie_record;
+} room_cp_carnet;
+
+/* Absent ou illisible : on repart d'un carnet neuf SANS erreur — quelqu'un qui
+ * ouvre le mode pour la première fois n'a rien fait de mal. Même règle et même
+ * format ligne à ligne que `room_eco_charger` : une ligne abîmée se saute et le
+ * reste survit, ce qui est le cas de la coupure de courant. */
+void room_cp_carnet_charger(room_cp_carnet *k, const char *chemin);
+bool room_cp_carnet_sauver(const room_cp_carnet *k, const char *chemin);
+
+/*
+ * Note le résultat d'une manche. `rang` est 1-basé, `places` le nombre de
+ * places qui y étaient.
+ *
+ * Une manche à UNE place n'est pas notée : on ne gagne pas contre personne, et
+ * une victoire qui ne coûte rien dévalue toutes les autres.
+ */
+void room_cp_carnet_noter(room_cp_carnet *k, int rang, int places);
+
 #endif /* NS_ROOM_COUPERET_H */

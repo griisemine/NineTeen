@@ -2261,6 +2261,25 @@ int main(int argc, char **argv)
      */
     float   cp_verdict = 0.0f;
     /*
+     * LE CARNET — la seule chose qui survive à une manche, et c'est un COMPTE,
+     * pas une récompense : il ne donne aucun avantage et ne s'échange contre
+     * rien. Son fichier est distinct du portefeuille, parce que mêler les deux
+     * ferait du Couperet une voie d'enrichissement, donc une raison de le jouer
+     * pour autre chose que lui-même.
+     */
+    room_cp_carnet carnet;
+    char carnet_chemin[512];
+    {
+        const char *dir = ns_path_user_dir();
+        SDL_snprintf(carnet_chemin, sizeof carnet_chemin, "%scouperet.txt",
+                     dir ? dir : "");
+        room_cp_carnet_charger(&carnet, carnet_chemin);
+        if (carnet.manches > 0) {
+            NS_INFO("couperet : %d manche(s), %d victoire(s), meilleur rang %d",
+                    carnet.manches, carnet.victoires, carnet.meilleur_rang);
+        }
+    }
+    /*
      * LA MANCHE EN LIGNE. NULL = manche locale, qui est exactement le même mode
      * — c'est ce qui garantit qu'ils ne divergeront pas : il n'y a pas deux
      * couperets, il y en a un, et le réseau ne fait que dire qui l'arbitre.
@@ -4741,6 +4760,21 @@ play_at_done: ;
                 if (couperet.phase == ROOM_CP_FINI && cp_actif) {
                     cp_actif = false;
                     cp_verdict = 15.0f;
+                    /*
+                     * LE CARNET EST NOTÉ ICI, et sauvé tout de suite. Attendre
+                     * la fermeture du jeu perdrait la manche de quiconque quitte
+                     * par la croix — c'est-à-dire à peu près tout le monde après
+                     * une défaite, qui est le moment où le compte importe le
+                     * plus.
+                     */
+                    uint8_t ordre[ROOM_CP_MAX_PLACES];
+                    const int n = room_cp_classement_final(&couperet, ordre);
+                    int rang = 0;
+                    for (int k = 0; k < n; ++k) if (ordre[k] == cp_moi) rang = k + 1;
+                    if (rang > 0) {
+                        room_cp_carnet_noter(&carnet, rang, n);
+                        (void)room_cp_carnet_sauver(&carnet, carnet_chemin);
+                    }
                 }
             }
             if (cp_verdict > 0.0f) {
@@ -5758,7 +5792,8 @@ play_at_done: ;
                     for (uint8_t pl = 0; pl < ROOM_CP_MAX_PLACES; ++pl) {
                         if (room_rv_tenue(&rivaux, pl)) tenues |= (uint8_t)(1u << pl);
                     }
-                    room_hud_draw_verdict(sprites, &couperet, cp_moi, tenues, cp_verdict);
+                    room_hud_draw_verdict(sprites, &couperet, cp_moi, tenues,
+                                          &carnet, cp_verdict);
                 }
                 /*
                  * Les autres joueurs, quand le temps réel est actif. Dessinés

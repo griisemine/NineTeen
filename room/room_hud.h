@@ -293,7 +293,8 @@ void room_hud_draw_brouillage(ns_sprite *s, float w, float h, float force, float
  * C'est ce que fait une salle d'arcade réelle quand on relève la tête.
  */
 void room_hud_draw_verdict(ns_sprite *s, const room_couperet *c, uint8_t moi,
-                           uint8_t rivaux, float reste);
+                           uint8_t rivaux, const room_cp_carnet *carnet,
+                           float reste);
 void room_hud_draw_arene(ns_sprite *s, float w, float h, const room_couperet *c,
                          uint8_t moi, double time_seconds);
 
