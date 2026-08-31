@@ -114,10 +114,11 @@ static bool pseudo_pris(const room_couperet *c, const char *nom)
 static void nommer(uint64_t *alea, const room_couperet *c, uint8_t place,
                    char *sortie, size_t taille)
 {
-    /* 28 radicaux x 10 suffixes = 280 pseudos pour huit places : le rejet
-     * s'arrête en pratique au premier tour. Le plafond d'essais est là pour que
-     * la boucle se termine même si l'appelant a assis huit homonymes à la
-     * main. */
+    /* 28 radicaux et 6 suffixes DISTINCTS — la moitié des dix cases de la table
+     * sont vides, ce qui rend un nom sur deux nu — soit 168 pseudos pour huit
+     * places : le rejet s'arrête en pratique au premier tour. Le plafond
+     * d'essais est là pour que la boucle se termine même si l'appelant a assis
+     * huit homonymes à la main. */
     for (int essai = 0; essai < 64; ++essai) {
         const char *rad = g_radicaux[tirer(alea) % (uint64_t)RV_RADICAUX];
         const char *suf = g_suffixes[tirer(alea) % (uint64_t)RV_SUFFIXES];

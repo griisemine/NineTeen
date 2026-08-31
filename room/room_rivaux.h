@@ -190,6 +190,14 @@
  * machines qui rejouent la même manche voient donc le même rival rater les
  * mêmes tuyaux. Rien dans ce fichier ne lit l'horloge système.
  *
+ * ET LE DÉCOUPAGE N'Y CHANGE RIEN, ce qui n'allait pas de soi : le module et le
+ * couperet accumulent leur horloge en flottant simple, et additionner 1/60 deux
+ * mille fois ne donne pas le même nombre au bit près qu'additionner 1/120
+ * quatre mille fois. `tests/test_rivaux.c` joue donc les mêmes manches aux deux
+ * cadences et compare — trois graines, manche IDENTIQUE, zéro point d'écart.
+ * C'est la déduction du nombre de pas depuis l'horloge qui l'obtient : un
+ * décompte aurait accumulé la dérive au lieu de la borner à un pas.
+ *
  * X(cle, saut_pour_mille, titre)
  */
 #ifndef NS_ROOM_RIVAUX_H
@@ -429,7 +437,7 @@ typedef enum room_rv_conduite {
  *
  * LA MÉMOIRE, elle, se voit : chaque rival garde un bloc à la taille du PLUS
  * GROS état de jeu du dépôt (snake, 31 000 octets), pour ne pas réallouer entre
- * deux parties. Huit places font 248 Kio, alloués par `ns_alloc` — donc comptés
+ * deux parties. Huit places font 242 Kio, alloués par `ns_alloc` — donc comptés
  * dans le bilan de fuites que `room/main.c` imprime en sortant — et rendus par
  * `room_rv_fermer`.
  *
