@@ -97,6 +97,22 @@
  *     shooter   normal     3292    3915    3307    3322    3247    2932
  *     shooter   hard       2152    2175    2295    2227    2242    1980
  *
+ * LA COLONNE 0 % EST UN CONTRÔLE CROISÉ DE `ROOM_CP_DUREES`, puisqu'elle mesure
+ * exactement la même chose — durée médiane d'une partie d'autopilote — avec la
+ * même suite de graines mais QUARANTE-HUIT parties au lieu de vingt-quatre.
+ * Quinze lignes sur seize tombent à moins de 17 % l'une de l'autre, et cinq
+ * coïncident au dixième de seconde. LA SEIZIÈME NON : shooter difficile est
+ * annoncé à 48,0 s là-bas et mesuré à 27,5 s ici, soit -43 %.
+ *
+ * Ce n'est pas une contradiction, c'est la ligne la plus dispersée du dépôt qui
+ * se voit : sa médiane sur vingt-quatre parties n'est pas stable, et c'est la
+ * même borne dont la colonne de rendement ne bouge d'aucune façon lisible sous
+ * le levier (0,236 / 0,243 / 0,241 / 0,236 / 0,243 / 0,232). Les deux
+ * observations disent la même chose — sur cette borne, on ne mesure que du
+ * bruit. Aucune des deux tables n'est corrigée d'après l'autre : `ROOM_CP_DUREES`
+ * est le prix affiché sur le fronton, il ne doit pas bouger parce qu'un autre
+ * fichier a rejoué le jeu.
+ *
  * CE QUE CES DEUX TABLES NE DISENT PAS, et c'est pour ça qu'il en faut une
  * troisième : ni la durée ni le score ne mesurent la FORCE dans ce mode. Un
  * joueur du Couperet est fort s'il met beaucoup de points en banque par seconde
