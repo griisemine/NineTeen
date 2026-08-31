@@ -820,3 +820,25 @@ a:hover { color: #ffc862; }
     display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
     margin-top: 1.5rem; color: var(--muted); font-size: var(--t-sm);
 }
+
+/* Les quatre pas pour entrer dans une manche. Numerotes, parce que l'ordre
+ * compte — on ne rejoint pas un salon avant d'avoir un compte — et espaces,
+ * parce qu'une liste serree se lit comme un paragraphe et cesse d'etre une
+ * marche a suivre. */
+.pas {
+    margin: 1.2rem 0 0;
+    padding-left: 1.4rem;
+    display: flex; flex-direction: column; gap: 0.7rem;
+    color: var(--text); font-size: var(--t-sm); max-width: 62ch;
+}
+.pas strong { color: var(--marquee); }
+
+/* Une touche du clavier se dessine comme une touche : sans ca, « F1 » au fil
+ * du texte se lit comme une reference et non comme un geste a faire. */
+kbd {
+    font: inherit; font-size: 0.92em;
+    padding: 0.1em 0.45em;
+    background: #080a0e; color: var(--amber);
+    border: 1px solid var(--edge); border-bottom-width: 2px;
+    border-radius: 4px; white-space: nowrap;
+}
