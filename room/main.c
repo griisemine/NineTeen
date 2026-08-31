@@ -3026,6 +3026,12 @@ int main(int argc, char **argv)
             game_hard = hard;
             ns_online_prefetch_ticket(game_api->id, hard ? "hard" : "normal");
             start_run(game_api, game, runlog, 20240418, hard, opt.autoplay, &duel);
+            /* `--play-at=` démarre une partie sans que personne ait inséré de
+             * jeton, et c'est le chemin des CAPTURES : sans cette ligne, une
+             * image du mode montrerait un joueur devant une borne allumée que
+             * le couperet croit inoccupée, donc la place la plus menacée de la
+             * salle. C'est exactement l'image qu'on ne veut pas publier. */
+            room_cp_partie_debut(&couperet, cp_moi, game_api->id, hard);
             run_ms = 0;
             run_tick = 0; pending_press = 0;
             in_game = true;

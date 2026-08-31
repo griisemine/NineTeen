@@ -687,6 +687,82 @@ lit plus comme un choc. La relance rejoue un geste **court** de la seule main
 droite, 408 ms au lieu des 1 317 ms de la séquence complète, parce qu'imposer la
 séquence entière à chaque relance ferait attendre le joueur.
 
+### Les places libres jouent, et la salle le montre
+
+Sept rivaux qui **allouent un état de jeu et appellent l'autopilote à chaque pas
+fixe**. Trois niveaux, séparés par la fraction de pas sautés : le chevronné bat
+le débutant **102 manches sur 120**, 1,91 fois ses points. Trois et pas quatre —
+sur la grille 0/20/40/60 % demandée au départ, le bruit entre deux jeux de
+graines vaut 7 % pour un écart réel de 4,5 %.
+
+Et **`room_attract` prête ses dalles** : une borne tenue par un rival montre sa
+partie, pas une démo. La salle avait déjà tout construit pour ça — dix-neuf
+dalles vivantes, une passe de rendu par tour de rôle — il ne lui manquait que de
+savoir à qui les prêter. S'approcher d'une borne occupée en fait la cible.
+
+| | mesuré |
+|---|---|
+| bornes de la salle offertes | 18 sur 19 (la 19ᵉ est le tableau des scores) |
+| lignes du barème sans borne | 2 sur 16 — dedale et piano n'existent qu'en normal |
+| bornes allumées pendant une manche | **7 sur 18** (5 avant qu'un rival ait droit à un second choix) |
+| coût de sept rivaux | **1,1 à 3,2 µs par pas**, soit 0,04 % d'une image |
+| coupures subies par un humain | **0,91 par manche** — une toutes les 346 s |
+
+Le dernier chiffre est celui qu'il fallait surveiller : un rival qui coupe le
+joueur toutes les quarante secondes rend le mode insupportable. Le seuil était
+déjà tenu par la politique la plus naïve ; la mesure n'a donc rien sauvé, elle a
+établi qu'il n'y avait rien à sauver — et le contrôle reste dans le test pour la
+prochaine politique.
+
+### En ligne : le relais, et qui fait autorité sur quoi
+
+`--couperet-en-ligne=hôte:port,salon,place,places`. Le partage est net, et c'est
+la seule chose qui empêche huit machines de raconter huit manches différentes :
+
+- **chaque client** fait autorité sur SES points, SES fusibles et la borne qu'il
+  joue — personne d'autre ne peut les calculer ;
+- **une seule place arbitre** les éliminations et le sort des actions.
+
+Une action ne se rejoue pas chez chacun : elle CONSOMME le blindage de la
+victime, et deux machines qui la rejoueraient finiraient avec un nombre de
+plaques différent. L'arbitre résout et diffuse l'issue. Qui arbitre peut changer
+en cours de manche — le relais laisse sa socket au dernier joueur — et un
+verdict en double est jeté sur son numéro, ce qui n'est pas une anomalie mais le
+fonctionnement normal d'un arbitrage qui se transmet.
+
+Un `_Static_assert` dans `main.c` confronte les deux énumérations d'issue, celle
+de la règle et celle du fil. Rien d'autre ne les surveille : le jour où
+quelqu'un intercalera une valeur dans l'une des deux, les blindages se
+mettraient à absorber des renvois, en silence et seulement en ligne.
+
+**Vérifié** : le client de l'arène rend 142 contrôles sans relais et 194 contre
+un vrai relais Go ; le relais lui-même, muet de tout test jusqu'ici, en a douze,
+dont un qui raccroche 120 connexions au même signal sous `-race`. Et deux
+instances du jeu, même salon, lancent la manche et s'annoncent leur place.
+
+### Le mode fait du bruit
+
+Cinq sons synthétisés, dans le vocabulaire d'un tableau électrique — c'est celui
+des six actions, et le 100 Hz des ballasts est déjà celui de la salle.
+
+| | ce que c'est | brillance |
+|---|---|---|
+| `couperet_tic` | contact de relais, 4,6 ms utiles | **9,46** |
+| `couperet_lame` | contacteur de puissance, deux chocs, la salle qui accuse | **0,03** |
+| `couperet_coupure` | l'alimentation qui tombe, glissade 640 → 85 Hz | 0,02 |
+| `couperet_blindage` | plaque d'acier, trois modes inharmoniques | 1,71 |
+| `couperet_renvoi` | surtension qui repart, montée 110 → 1 500 Hz | 0,17 |
+
+Le tic et la lame sont les deux sons du même événement à deux moments
+différents : s'ils se ressemblaient, personne n'apprendrait lequel veut dire
+quoi. La mesure qui les sépare est le **rapport de brillance**, ×345, avec un
+plancher imposé à ×120 — et `stepgen` refuse le fichier qui ne le tient pas.
+
+Tic et lame **non spatialisés** : un compte à rebours atténué par la distance et
+bouché par un mur n'est pas un compte à rebours. Coupure, blindage et renvoi le
+sont : ce sont les trois seuls qui aient un lieu, et entendre d'où vient le coup
+est ce qui apprend qui frappe qui.
+
 ### Ce que ce mode n'est pas
 
 Ni saison, ni laissez-passer, ni rien qui s'achète. Les fusibles naissent au

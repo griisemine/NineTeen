@@ -355,6 +355,37 @@ l'engagé contre le pressé, et 51 / 49 / 56 % sur trois graines indépendantes.
 déplacent l'issue de **38 points de pourcentage** — sans elles, l'engagé gagne 94 % des manches —
 et le test *exige* cet écart, pour qu'une action affaiblie ne passe pas inaperçue.
 
+**Les rivaux jouent pour de vrai.** Les places que personne n'occupe sont tenues par des rivaux
+qui **allouent un état de jeu, appellent l'autopilote et le pas du jeu à chaque pas fixe**, et
+encaissent comme vous. Ils ne sont pas des compteurs qui montent : un rival qui tricherait serait
+invisible et impardonnable, et il rendrait sans objet la mesure d'équilibre ci-dessus, qui est
+faite sur ces mêmes autopilotes.
+
+Trois niveaux, séparés par la **fraction de pas où le rival ne réagit pas** — mesurée, pas
+supposée : le chevronné bat le débutant **102 manches sur 120** pour 1,91 fois ses points. Trois
+et pas quatre : sur la grille 0/20/40/60 % que j'avais d'abord demandée, deux mesures du même
+point s'écartent de 7 % pour un écart réel de 4,5 %. Elle ne mesurait rien.
+
+Et ils **s'installent sur de vraies bornes**. Pendant une manche, la borne d'en face ne joue plus
+une démonstration anonyme : elle joue *le dedale de quelqu'un*, avec son score et sa mort.
+S'approcher d'une borne tenue par un rival en fait votre cible — viser en se plantant devant la
+machine, plutôt qu'en faisant défiler une liste. Mesuré : **7 bornes sur 18 s'allument** pendant
+une manche, parce que toutes les conduites classent sur le même rendement affiché et veulent donc
+les mêmes machines.
+
+**En ligne** — `--couperet-en-ligne=hôte:port,salon,place,places`. Deux à huit personnes, chacune
+donnant le même salon et le même nombre de places. Le salon est convenu hors bande, comme
+l'identifiant d'un duel : ce dépôt n'a pas d'appariement, et en inventer un demanderait un
+service, des comptes et une file d'attente. Deux amis conviennent d'un nombre et le tapent.
+
+Le partage d'autorité est écrit et vérifié : **chaque client fait autorité sur ses points, ses
+fusibles et la borne qu'il joue** — personne d'autre ne peut les calculer ; **une seule place
+arbitre les éliminations et le sort des actions**, parce que ce sont les seules décisions qui
+doivent être prises une fois pour tout le monde. Qui arbitre peut changer en cours de manche, et
+la lame est reprise sans perdre un tour. Conséquence assumée, la même qu'en duel : **l'arbitre
+peut mentir**, et l'autorité sur les scores *enregistrés* ne bouge pas — elle reste le journal
+scellé par HMAC, recalculé par le serveur.
+
 **Ce que ce mode n'est pas.** Il n'a ni saison, ni laissez-passer, ni rien qui s'achète. Ses
 fusibles naissent au coup d'envoi et meurent au verdict ; le portefeuille de la salle n'est pas
 touché. La minuterie n'y punit pas l'absence — elle arbitre une manche qu'on a choisi de
