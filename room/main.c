@@ -25,6 +25,7 @@
 #include "ns_online.h"
 #include "ns_realtime.h"
 #include "ns_lockstep.h"
+#include "ns_arene.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -145,6 +146,17 @@ typedef struct options {
      */
     int         couperet;
     int         couperet_camps;   /* 0 ou 1 = chacun pour soi, 2 a 4 = équipes */
+    /*
+     * LE COUPERET EN LIGNE : « hôte:port,salon,place,places ».
+     *
+     * Convenu hors bande, exactement comme l'identifiant de `--duel-direct=` :
+     * ce dépôt n'a pas d'appariement, et en inventer un demanderait un service,
+     * des comptes et une file d'attente — c'est-à-dire trois choses de plus à
+     * défendre pour un jeu qui n'a pas encore de release publiée. Deux amis
+     * conviennent d'un nombre et le tapent ; c'est ce que faisait tout le monde
+     * avant qu'il y ait des serveurs de matchmaking.
+     */
+    const char *couperet_ligne;
     bool        menu;        /* ouvre le menu au démarrage — pour le photographier */
     int         menu_row;    /* et s'y placer sur une ligne précise */
     const char *player;     /* nom porté au classement local */
@@ -200,6 +212,11 @@ static void print_usage(const char *exe)
         "                       (2 a 8, defaut 8), reparties en E camps. Sans le\n"
         "                       « xE », c'est chacun pour soi. En jeu : F9 pour\n"
         "                       chacun pour soi, Maj+F9 pour deux equipes.\n"
+        "  --couperet-en-ligne=SPEC\n"
+        "                       la meme manche, contre de vraies personnes, via un\n"
+        "                       relais. SPEC vaut « hote:port,salon,place,places » :\n"
+        "                       tous donnent le meme salon et le meme nombre de\n"
+        "                       places, chacun la sienne. Chacun pour soi.\n"
         "  --rejouer=F          rejoue le journal d'entrées F et imprime le score,\n"
         "                       sans fenêtre ni GPU : c'est ce qui rend un rapport\n"
         "                       de bug reproductible\n"
@@ -446,6 +463,8 @@ static bool parse_options(int argc, char **argv, options *o)
             o->couperet = SDL_atoi(a + 11);
             const char *x = SDL_strchr(a + 11, 'x');
             o->couperet_camps = x ? SDL_atoi(x + 1) : 0;
+        } else if (SDL_strncmp(a, "--couperet-en-ligne=", 20) == 0) {
+            o->couperet_ligne = a + 20;
         } else if (SDL_strcmp(a, "--couperet") == 0) {
             o->couperet = ROOM_CP_MAX_PLACES;
         } else if (SDL_strncmp(a, "--rejouer=", 10) == 0) {
@@ -1038,6 +1057,71 @@ static uint8_t couperet_ouvrir(room_couperet *c, uint8_t places, uint8_t camps,
                 (unsigned)places, (double)room_cp_periode());
     }
     return 0;
+}
+
+/*
+ * OUVRIR UNE MANCHE EN LIGNE depuis « hôte:port,salon,place,places ».
+ *
+ * Rend NULL — et n'ouvre RIEN — si la chaîne ne se lit pas, ou si le réseau est
+ * inactif. Ce n'est pas une panne : c'est le défaut de ce dépôt, et l'appelant
+ * joue alors la manche locale, qui est exactement le même mode.
+ *
+ * LES VÉRIFICATIONS À LA COMPILATION ci-dessous ne sont pas de la coquetterie.
+ * Deux énumérations écrites dans deux fichiers — l'issue d'une action du côté
+ * de la règle, l'issue d'une action du côté du fil — doivent coïncider ordre
+ * pour ordre, et rien ne les surveille : ni le compilateur, ni les tests, qui
+ * ne se lisent pas l'un l'autre. Le jour où quelqu'un intercalera une valeur
+ * dans l'une des deux, les blindages se mettraient à absorber des renvois, en
+ * silence et seulement en ligne. Ce `_Static_assert` est le seul gardien
+ * possible de cette coïncidence, et c'est `main.c` qui doit le porter parce
+ * qu'il est le seul fichier à inclure les deux.
+ */
+_Static_assert((int)ROOM_CP_PASSEE    == (int)NS_ARENE_PASSEE    &&
+               (int)ROOM_CP_ABSORBEE  == (int)NS_ARENE_ABSORBEE  &&
+               (int)ROOM_CP_RENVOYEE  == (int)NS_ARENE_RENVOYEE  &&
+               (int)ROOM_CP_REFUSEE   == (int)NS_ARENE_REFUSEE,
+               "les issues de room_couperet.h et de ns_arene.h ont diverge");
+
+static ns_arene *couperet_en_ligne(const char *spec, const char *pseudo,
+                                   uint8_t *places_out, uint8_t *place_out)
+{
+    if (!spec || !spec[0]) return NULL;
+
+    char hote[128] = { 0 };
+    unsigned port = 0, place = 0, places = 0;
+    unsigned long long salon = 0;
+    if (SDL_sscanf(spec, "%127[^:]:%u,%llu,%u,%u",
+                   hote, &port, &salon, &place, &places) != 5) {
+        NS_WARN("--couperet-en-ligne : « %s » ne se lit pas — attendu "
+                "hote:port,salon,place,places", spec);
+        return NULL;
+    }
+    if (places < 2 || places > ROOM_CP_MAX_PLACES || place >= places) {
+        NS_WARN("--couperet-en-ligne : place %u sur %u places, hors bornes",
+                place, places);
+        return NULL;
+    }
+
+    ns_arene_config cfg;
+    SDL_zero(cfg);
+    cfg.hote   = hote;
+    cfg.port   = (uint16_t)port;
+    cfg.salon  = (uint64_t)salon;
+    cfg.place  = (uint8_t)place;
+    cfg.places = (uint8_t)places;
+    cfg.pseudo = (pseudo && pseudo[0]) ? pseudo : "JOUEUR";
+
+    char err[128] = { 0 };
+    ns_arene *a = ns_arene_ouvrir(&cfg, err, sizeof err);
+    if (!a) {
+        NS_WARN("--couperet-en-ligne : %s — la manche se jouera en local", err);
+        return NULL;
+    }
+    if (places_out) *places_out = (uint8_t)places;
+    if (place_out)  *place_out  = (uint8_t)place;
+    NS_INFO("couperet : salon %llu, place %u sur %u, relais %s:%u",
+            salon, place, places, hote, port);
+    return a;
 }
 
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
@@ -2158,6 +2242,18 @@ int main(int argc, char **argv)
      * pendant qu'on regarde ailleurs.
      */
     float   cp_verdict = 0.0f;
+    /*
+     * LA MANCHE EN LIGNE. NULL = manche locale, qui est exactement le même mode
+     * — c'est ce qui garantit qu'ils ne divergeront pas : il n'y a pas deux
+     * couperets, il y en a un, et le réseau ne fait que dire qui l'arbitre.
+     */
+    ns_arene *arene = NULL;
+    bool      cp_assis = false;      /* le salon en ligne est-il installé ? */
+    if (opt.couperet_ligne) {
+        uint8_t n = 0, moi = 0;
+        arene = couperet_en_ligne(opt.couperet_ligne, opt.player, &n, &moi);
+        if (arene) cp_moi = moi;
+    }
     room_cp_ouvrir(&couperet, 2, false);
     if (opt.couperet > 0) {
         cp_moi = couperet_ouvrir(&couperet, (uint8_t)opt.couperet,
@@ -3427,9 +3523,32 @@ play_at_done: ;
                         const bool sur_soi = !room_cp_action_offensive(a) &&
                                              cp_cible >= ROOM_CP_MAX_PLACES;
                         const uint8_t vers = sur_soi ? cp_moi : cp_cible;
-                        if (vers < ROOM_CP_MAX_PLACES &&
-                            room_cp_agir(&couperet, cp_moi, vers, a)) {
+                        if (vers >= ROOM_CP_MAX_PLACES) break;
+                        /*
+                         * UN SUIVEUR ENVOIE, IL N'APPLIQUE PAS.
+                         *
+                         * Deux machines qui résoudraient la même action chacune
+                         * de leur côté consommeraient chacune un blindage, et
+                         * l'une des deux en dépenserait un qui n'existe pas
+                         * chez l'autre. L'arbitre tranche, il diffuse le
+                         * résultat, et tout le monde applique le même — c'est
+                         * le même partage que pour la lame.
+                         *
+                         * Le son part dans les deux cas : le geste a eu lieu,
+                         * même si l'on n'en connaîtra l'issue qu'au retour.
+                         */
+                        if (arene && !couperet.arbitre) {
+                            ns_arene_agir(arene, vers, (uint8_t)a);
                             room_sound_jeton_bac(&sound, cam.position, 1);
+                        } else {
+                            room_cp_issue issue = ROOM_CP_REFUSEE;
+                            if (room_cp_agir_issue(&couperet, cp_moi, vers, a, &issue)) {
+                                if (arene) {
+                                    ns_arene_effet(arene, cp_moi, vers, (uint8_t)a,
+                                                   (ns_arene_issue)issue);
+                                }
+                                room_sound_jeton_bac(&sound, cam.position, 1);
+                            }
                         }
                     }
                     break;
@@ -4331,6 +4450,108 @@ play_at_done: ;
              * pause en ouvrant Échap serait un moyen d'échapper au couperet, et
              * les sept autres joueurs, eux, continueraient.
              */
+            /* ---- LA MANCHE EN LIGNE : ce qui arrive du relais ------------
+             *
+             * Avant `room_cp_avancer`, et l'ordre compte : un verdict reçu doit
+             * être appliqué AVANT que l'horloge locale ne franchisse la période,
+             * sinon un arbitre qui reprend la main rattraperait une lame déjà
+             * tombée ailleurs. `room_cp_verdict` sait la jeter, mais compter sur
+             * ça plutôt que sur l'ordre reviendrait à s'en remettre à une
+             * rustine pour une propriété qu'on peut simplement tenir.
+             */
+            if (arene) {
+                const ns_arene_liaison li = ns_arene_etat(arene);
+                if (li == NS_ARENE_COURSE && !cp_assis) {
+                    /*
+                     * LE SALON EST INSTALLÉ UNE FOIS, au coup d'envoi.
+                     *
+                     * Chacun pour soi et non en équipes : le protocole ne porte
+                     * pas de camp dans son entrée, et l'adopter depuis l'ÉTAT
+                     * que chacun publie sur lui-même laisserait un joueur
+                     * changer de camp en cours de manche — donc échapper au
+                     * couperet en rejoignant celui qui mène. Les équipes en
+                     * ligne demandent que le camp soit convenu à l'entrée ;
+                     * c'est un octet de plus dans le JOIN, et ce n'est pas fait.
+                     */
+                    ns_arene_place tab[ROOM_CP_MAX_PLACES];
+                    const uint32_t n = ns_arene_places(arene, tab, ROOM_CP_MAX_PLACES);
+                    uint8_t assises = 0;
+                    for (uint32_t k = 0; k < n; ++k) if (tab[k].presente) assises++;
+                    room_cp_ouvrir(&couperet, assises ? assises : 2, false);
+                    for (uint32_t k = 0; k < n && k < ROOM_CP_MAX_PLACES; ++k) {
+                        if (!tab[k].presente) continue;
+                        (void)room_cp_asseoir(&couperet, (uint8_t)k,
+                                              tab[k].pseudo, (uint8_t)k);
+                    }
+                    room_cp_lancer(&couperet, ns_arene_graine(arene));
+                    cp_moi   = ns_arene_ma_place(arene);
+                    cp_actif = (couperet.phase == ROOM_CP_COURSE);
+                    cp_assis = cp_actif;
+                    cp_verdict = 0.0f;
+                    NS_INFO("couperet : manche en ligne lancée, %u places, "
+                            "je suis la place %u", (unsigned)assises, cp_moi);
+                }
+                /*
+                 * QUI ARBITRE PEUT CHANGER EN COURS DE MANCHE, et il faut que
+                 * ça marche : le relais laisse sa socket au dernier joueur, donc
+                 * si l'arbitre raccroche, la lame doit être reprise par un
+                 * autre — sans quoi la manche se fige, vivante et sans fin.
+                 * `ns_arene_arbitre` redevient vrai tout seul, y compris quand
+                 * la liaison meurt : on finit alors la manche tout seul, ce qui
+                 * est la bonne dégradation.
+                 */
+                room_cp_set_arbitre(&couperet, ns_arene_arbitre(arene));
+
+                ns_arene_evenement ae;
+                while (ns_arene_prendre(arene, &ae)) {
+                    switch (ae.type) {
+                    case NS_ARENE_EVT_ETAT: {
+                        ns_arene_place tab[ROOM_CP_MAX_PLACES];
+                        const uint32_t n = ns_arene_places(arene, tab, ROOM_CP_MAX_PLACES);
+                        if (ae.a < n && tab[ae.a].presente && tab[ae.a].etat_recu) {
+                            (void)room_cp_adopter(&couperet, ae.a, cp_moi,
+                                                  tab[ae.a].points, tab[ae.a].fusibles,
+                                                  tab[ae.a].valeur - tab[ae.a].points,
+                                                  tab[ae.a].jeu, tab[ae.a].hard);
+                        }
+                        break;
+                    }
+                    case NS_ARENE_EVT_ACTION:
+                        /* Reçue par l'arbitre seul : c'est lui qui tranche, et
+                         * qui dit ensuite à tout le monde ce qui est arrivé. */
+                        if (couperet.arbitre) {
+                            room_cp_issue issue = ROOM_CP_REFUSEE;
+                            (void)room_cp_agir_issue(&couperet, ae.a, ae.b,
+                                                     (room_cp_action)ae.valeur, &issue);
+                            ns_arene_effet(arene, ae.a, ae.b, (uint8_t)ae.valeur,
+                                           (ns_arene_issue)issue);
+                        }
+                        break;
+                    case NS_ARENE_EVT_EFFET:
+                        /* Reçu par les autres : on applique, on ne re-résout
+                         * pas. Le blindage de la victime a déjà été consommé
+                         * chez l'arbitre, et le consulter ici en dépenserait un
+                         * second qui n'existe pas. */
+                        if (!couperet.arbitre) {
+                            (void)room_cp_appliquer(&couperet, ae.a, ae.b,
+                                                    (room_cp_action)ae.valeur,
+                                                    (room_cp_issue)ae.issue);
+                        }
+                        break;
+                    case NS_ARENE_EVT_VERDICT:
+                        if (!couperet.arbitre && ae.a != NS_ARENE_AUCUNE_PLACE) {
+                            (void)room_cp_verdict(&couperet, ae.a, ae.valeur);
+                        }
+                        break;
+                    case NS_ARENE_EVT_DEPART:
+                        room_cp_lever(&couperet, ae.a);
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            }
+
             if (cp_actif) {
                 room_cp_avancer(&couperet, (float)clock.tick_seconds);
                 if (in_game && game_api && game && cp_moi < ROOM_CP_MAX_PLACES) {
@@ -4376,6 +4597,16 @@ play_at_done: ;
                         }
                         break;
                     case ROOM_CP_EVT_COUPERET:
+                        /* L'ARBITRE DIFFUSE SON VERDICT. Ici et pas ailleurs :
+                         * c'est le seul endroit où l'on sait qu'une lame vient
+                         * de tomber, et le numéro qu'elle portait. */
+                        if (arene && couperet.arbitre) {
+                            ns_arene_verdict(arene, e.a,
+                                             (couperet.phase == ROOM_CP_FINI)
+                                                 ? couperet.vainqueur : NS_ARENE_AUCUN_CAMP,
+                                             (uint8_t)e.valeur,
+                                             (uint32_t)(couperet.horloge * 1000.0f));
+                        }
                         if (e.a == cp_moi && in_game) {
                             in_game = false;
                             playing_material = -1;
@@ -4393,6 +4624,21 @@ play_at_done: ;
                         break;
                     }
                 }
+                /*
+                 * MON ÉTAT, déposé à chaque pas. Le fil ne l'enverra qu'au
+                 * battement de 4 Hz : seule la dernière valeur compte, ce qui
+                 * est exactement ce qu'on veut d'un tableau de scores, et ça
+                 * évite d'avoir ici un second compteur à tenir d'accord avec
+                 * celui du fil.
+                 */
+                if (arene && cp_moi < ROOM_CP_MAX_PLACES) {
+                    const room_cp_place *me = &couperet.place[cp_moi];
+                    ns_arene_publier(arene, me->vivante, me->camp,
+                                     me->jeu, me->hard, me->score_vu,
+                                     me->points, me->fusibles,
+                                     room_cp_valeur(&couperet, cp_moi));
+                }
+
                 if (couperet.phase == ROOM_CP_FINI && cp_actif) {
                     cp_actif = false;
                     cp_verdict = 15.0f;
@@ -5533,6 +5779,10 @@ play_at_done: ;
      * ne pas hanter la salle pendant la durée du TTL. */
     duel_release(&duel);
     SDL_free(duel.state);
+    /* Avant `ns_online_shutdown` : l'arène hérite du verrou du classement, et
+     * fermer le verrou avant ce qu'il protège laisse un fil parler à un module
+     * qui n'existe plus. */
+    ns_arene_fermer(arene);
     ns_realtime_shutdown();
     ns_online_shutdown();
     /*

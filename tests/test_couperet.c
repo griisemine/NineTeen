@@ -474,7 +474,82 @@ static void test_actions(void)
 }
 
 /* ==========================================================================
- * 6. LE JOURNAL
+ * 6. L'ARBITRE ET LE SUIVEUR
+ * ========================================================================== */
+
+static void test_arbitre(void)
+{
+    printf("\n-- l'arbitre et le suiveur --\n");
+    const float periode = room_cp_periode();
+
+    /*
+     * UN SUIVEUR NE FAIT PAS TOMBER LA LAME, mais il avance tout le reste.
+     *
+     * C'est la propriété qui décide si deux machines voient la même manche : le
+     * couperet vit en C une seule fois, une seule place le fait tourner, et les
+     * autres appliquent ce qu'elles reçoivent. Un suiveur qui laisserait tomber
+     * sa propre lame sortirait quelqu'un que personne d'autre n'a vu sortir.
+     */
+    room_couperet f;
+    asseoir_tous(&f, 4, false);
+    room_cp_set_arbitre(&f, false);
+    room_cp_partie_debut(&f, 1, "snake", false);
+    room_cp_avancer(&f, 3.0f * periode);
+    CHECK(f.couperets == 0, "un suiveur a fait tomber %d lames", f.couperets);
+    CHECK(f.phase == ROOM_CP_COURSE, "un suiveur a terminé la manche tout seul");
+    CHECK(f.horloge > 3.0f * periode - 0.1f,
+          "l'horloge d'un suiveur n'avance pas (%.1f s)", (double)f.horloge);
+    CHECK(f.place[1].depuis > 3.0f * periode - 0.1f,
+          "la partie d'un suiveur n'avance pas (%.1f s)", (double)f.place[1].depuis);
+    /* Le revenu du temps est LOCAL : personne ne le diffuse, donc il doit
+     * courir chez le suiveur comme chez l'arbitre. */
+    CHECK(f.place[1].fusibles > ROOM_CP_FUSIBLES_DEPART,
+          "le revenu du temps ne court pas chez un suiveur (%d fusibles)",
+          f.place[1].fusibles);
+
+    /* Le verdict reçu sort bien la place annoncée, et distribue le fusible. */
+    CHECK(room_cp_verdict(&f, 2, 1), "le verdict reçu n'est pas appliqué");
+    CHECK(!f.place[2].vivante, "la place annoncée n'est pas sortie");
+    CHECK(f.place[2].sortie_a == 1, "le numéro de lame n'est pas noté");
+    CHECK(f.couperets == 1, "le compteur de lames ne suit pas (%d)", f.couperets);
+    CHECK(room_cp_valide(&f), "l'état est invalide après un verdict reçu");
+
+    /*
+     * UN VERDICT EN DOUBLE EST JETÉ, et ce n'est pas une anomalie : quand
+     * l'arbitre change — parce que le précédent a raccroché — deux machines
+     * peuvent diffuser le même numéro pendant que le tableau des places
+     * circule. Sans ce refus, la seconde copie sortirait un joueur de plus.
+     */
+    CHECK(!room_cp_verdict(&f, 3, 1), "un verdict déjà tombé est appliqué deux fois");
+    CHECK(f.place[3].vivante, "un verdict en double a sorti quelqu'un");
+
+    /* Un verdict qui SAUTE des numéros est appliqué : une trame perdue ne doit
+     * pas figer la manche. */
+    CHECK(room_cp_verdict(&f, 3, 4), "un verdict qui saute des numéros est refusé");
+    CHECK(!f.place[3].vivante, "la place du verdict sauté n'est pas sortie");
+    CHECK(f.couperets == 4, "les lames sautées ne sont pas comptées (%d)", f.couperets);
+
+    /*
+     * REPRENDRE L'ARBITRAGE EN COURS DE MANCHE. Le relais laisse sa socket au
+     * dernier joueur : si l'arbitre raccroche, quelqu'un doit reprendre la
+     * lame, sans quoi la manche se fige vivante et sans fin. La reprise ne
+     * demande aucun état — le nombre de lames tombées est déjà connu.
+     */
+    room_couperet g;
+    asseoir_tous(&g, 8, false);
+    room_cp_set_arbitre(&g, false);
+    room_cp_avancer(&g, 2.0f * periode + 1.0f);
+    CHECK(g.couperets == 0, "le suiveur a coupé");
+    room_cp_set_arbitre(&g, true);
+    room_cp_avancer(&g, 0.1f);
+    CHECK(g.couperets == 2,
+          "la reprise n'a pas rattrapé les lames dues (%d au lieu de 2)", g.couperets);
+    CHECK(room_cp_valide(&g), "l'état est invalide après une reprise d'arbitrage");
+    printf("   deux lames rattrapées d'un coup à la reprise de l'arbitrage\n");
+}
+
+/* ==========================================================================
+ * 7. LE JOURNAL
  * ========================================================================== */
 
 static void test_journal(void)
@@ -514,7 +589,7 @@ static void test_journal(void)
 }
 
 /* ==========================================================================
- * 7. LE TOURNOI — l'équilibre, mesuré
+ * 8. LE TOURNOI — l'équilibre, mesuré
  * ========================================================================== */
 
 #define VIVIER 32      /* parties d'autopilote par ligne */
@@ -960,6 +1035,7 @@ int main(void)
     test_couperet();
     test_equipes();
     test_actions();
+    test_arbitre();
     test_journal();
     test_tournoi();
 

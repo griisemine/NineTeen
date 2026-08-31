@@ -526,6 +526,27 @@ typedef struct room_couperet {
     int32_t       couperets;       /* combien sont tombés */
     uint8_t       vainqueur;       /* camp vainqueur, valide en phase FINI */
 
+    /*
+     * SUIS-JE L'ARBITRE ? Vrai par défaut, et vrai pour toujours hors ligne.
+     *
+     * La règle du couperet vit ici, en C, UNE SEULE FOIS. En ligne, une seule
+     * place la fait tourner et diffuse son verdict ; les autres l'appliquent
+     * par `room_cp_verdict`. Porter la règle dans le relais Go l'aurait écrite
+     * deux fois, en deux langages, et deux descriptions d'une même chose
+     * finissent toujours par se contredire — c'est le raisonnement de
+     * `room_bareme.h`, et il vaut ici.
+     *
+     * Ce que ça coûte, et il faut l'écrire : L'ARBITRE PEUT MENTIR. C'est
+     * exactement la même franchise que celle déjà inscrite dans le relais —
+     * « deux clients complices peuvent se mentir pendant un duel » — et la même
+     * limite : l'autorité sur les scores ENREGISTRÉS ne bouge pas d'un pouce,
+     * elle reste le journal scellé par HMAC et recalculé par le serveur.
+     *
+     * Un suiveur avance tout le reste normalement — l'horloge, les durées de
+     * partie, les effets, le revenu du temps. Il ne fait que ne pas TOMBER.
+     */
+    bool          arbitre;
+
     room_cp_evenement journal[ROOM_CP_JOURNAL];
     uint8_t       jrn_tete, jrn_queue;
 } room_couperet;
@@ -632,6 +653,35 @@ void room_cp_lancer(room_couperet *c, uint64_t graine);
  */
 void room_cp_avancer(room_couperet *c, float dt);
 
+/*
+ * Dit si cette machine arbitre. Vrai à l'ouverture, et le mode solo n'y touche
+ * jamais.
+ *
+ * REDEVENIR ARBITRE EN COURS DE MANCHE EST NORMAL et doit marcher : le relais
+ * laisse sa socket au dernier joueur, donc si l'arbitre raccroche, quelqu'un
+ * d'autre doit reprendre la lame — sans quoi la manche se fige, vivante et
+ * sans fin. La reprise ne demande aucun état : le nombre de lames tombées est
+ * déjà dans `couperets`, et `room_cp_avancer` en déduit celles qui manquent.
+ */
+void room_cp_set_arbitre(room_couperet *c, bool oui);
+
+/*
+ * APPLIQUE UN VERDICT REÇU. Rend vrai s'il a été appliqué.
+ *
+ * `numero` est celui de la lame, et il n'est pas décoratif : quand l'arbitre
+ * change — parce que le précédent a raccroché — deux machines peuvent diffuser
+ * le MÊME numéro pendant le temps que met le tableau des places à circuler. Un
+ * verdict dont le numéro est déjà tombé est donc jeté, en silence et sans
+ * erreur : ce n'est pas une anomalie, c'est le fonctionnement normal d'un
+ * arbitrage qui se transmet.
+ *
+ * Un verdict qui saute des numéros, lui, est appliqué : une trame perdue ne
+ * doit pas figer la manche. Les lames sautées sont comptées sans sortir
+ * personne, ce qui est la seule chose honnête à faire — on ne sait pas qui
+ * elles auraient pris.
+ */
+bool room_cp_verdict(room_couperet *c, uint8_t place, int32_t numero);
+
 /* Une partie commence sur une borne. Sans effet si la place est un spectre. */
 void room_cp_partie_debut(room_couperet *c, uint8_t place, const char *jeu, bool hard);
 
@@ -687,6 +737,47 @@ int32_t room_cp_partie_fin(room_couperet *c, uint8_t place, int64_t score);
  * chère doit être celle qui gagne, sans quoi personne ne l'achète.
  */
 bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quoi);
+
+/*
+ * L'ISSUE D'UNE ACTION — ce que l'arbitre a le devoir de dire aux autres.
+ *
+ * Une action ne se rejoue pas chez chacun : `room_cp_agir` CONSOMME le blindage
+ * de la victime et le leurre du visé, et deux machines qui la rejoueraient
+ * chacune de leur côté finiraient par ne plus avoir le même nombre de plaques.
+ * L'arbitre résout, et il diffuse le RÉSULTAT ; les autres l'appliquent tel
+ * quel. C'est le même partage que pour la lame, et pour la même raison.
+ *
+ * L'ordre suit celui de la résolution : le leurre d'abord, le blindage ensuite.
+ * Il est aussi celui de `ns_arene_issue`, et `room/main.c` le vérifie à la
+ * COMPILATION — deux énumérations écrites dans deux fichiers qui doivent
+ * coïncider ne peuvent pas se surveiller toutes seules.
+ */
+typedef enum room_cp_issue {
+    ROOM_CP_PASSEE = 0,   /* l'effet s'est appliqué à la cible */
+    ROOM_CP_ABSORBEE,     /* le blindage a tenu, et il est consommé */
+    ROOM_CP_RENVOYEE,     /* le leurre a renvoyé : l'auteur est sa propre cible */
+    ROOM_CP_REFUSEE       /* rien n'a eu lieu, rien n'a été débité */
+} room_cp_issue;
+
+/* La même chose que `room_cp_agir`, en disant ce qui s'est passé. C'est ce que
+ * l'arbitre appelle ; `room_cp_agir` n'en est que l'enveloppe qui jette
+ * l'issue, pour tout ce qui n'arbitre rien — le mode solo et les rivaux. */
+bool room_cp_agir_issue(room_couperet *c, uint8_t de, uint8_t vers,
+                        room_cp_action quoi, room_cp_issue *issue);
+
+/*
+ * APPLIQUE UNE ISSUE REÇUE, sans rien re-résoudre.
+ *
+ * Le coût est débité à l'auteur — c'est bien lui qui a payé — mais ni le
+ * leurre ni le blindage ne sont consultés : l'arbitre l'a déjà fait, et les
+ * consulter une seconde fois consommerait une plaque qui n'existe plus.
+ *
+ * Une issue REFUSEE n'applique rien et ne débite rien : c'est le cas où
+ * l'arbitre a vu quelque chose que le suiveur ne voyait pas — une cible qui
+ * venait de mourir, une borne qui venait de s'éteindre.
+ */
+bool room_cp_appliquer(room_couperet *c, uint8_t de, uint8_t vers,
+                       room_cp_action quoi, room_cp_issue issue);
 
 /* ==========================================================================
  * Lecture
@@ -746,6 +837,32 @@ int room_cp_classement_final(const room_couperet *c, uint8_t sortie[ROOM_CP_MAX_
  * rebours qui ne dit pas QUI est visé n'oblige personne à changer d'avis.
  */
 uint8_t room_cp_menace(const room_couperet *c);
+
+/*
+ * ADOPTE L'ÉTAT PUBLIÉ D'UNE AUTRE PLACE.
+ *
+ * QUI FAIT AUTORITÉ SUR QUOI, et il faut que ce soit net parce que c'est la
+ * seule chose qui empêche huit machines de raconter huit manches différentes :
+ *
+ *   - CHAQUE CLIENT fait autorité sur SES points, SES fusibles et la borne
+ *     qu'il joue. Personne d'autre ne peut les calculer : ils dépendent de
+ *     scores de partie que lui seul voit.
+ *   - L'ARBITRE fait autorité sur les ÉLIMINATIONS et sur le SORT DES ACTIONS.
+ *     Ce sont les seules décisions qui doivent être prises une fois pour tout
+ *     le monde.
+ *
+ * Cette fonction sert la première moitié, `room_cp_verdict` et
+ * `room_cp_appliquer` servent la seconde. Elle refuse d'écrire sur SA PROPRE
+ * place — un client qui adopterait l'idée qu'un autre se fait de son solde
+ * ouvrirait la porte à ce qu'on le lui vide.
+ *
+ * Elle n'écrit PAS `vivante` : la vie et la mort viennent de l'arbitre par le
+ * verdict, et pas d'un état qu'un joueur publie sur lui-même. Sans quoi il
+ * suffirait de se déclarer vivant pour le rester.
+ */
+bool room_cp_adopter(room_couperet *c, uint8_t place, uint8_t soi,
+                     int32_t points, int32_t fusibles, int32_t provisoire,
+                     const char *jeu, bool hard);
 
 /* Retire le plus ancien événement du journal. Faux si le journal est vide. */
 bool room_cp_prendre(room_couperet *c, room_cp_evenement *out);

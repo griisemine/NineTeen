@@ -174,6 +174,28 @@ static void pousser(room_couperet *c, room_cp_evt type,
     c->jrn_queue = suivant;
 }
 
+bool room_cp_adopter(room_couperet *c, uint8_t place, uint8_t soi,
+                     int32_t points, int32_t fusibles, int32_t provisoire,
+                     const char *jeu, bool hard)
+{
+    if (!c || place >= c->places) return false;
+    if (place == soi) return false;          /* on ne s'adopte pas soi-même */
+    room_cp_place *p = &c->place[place];
+    if (!p->occupee) return false;
+
+    /* Bornés à zéro : ces trois nombres viennent d'un pair, et aucun pair n'est
+     * digne de confiance. Un négatif casserait `room_cp_valide` chez le
+     * receveur pour une faute commise ailleurs. */
+    p->points    = (points    > 0) ? points    : 0;
+    p->fusibles  = (fusibles  > 0) ? fusibles  : 0;
+    p->provisoire = (provisoire > 0) ? provisoire : 0;
+    if (!p->vivante) { p->jeu[0] = '\0'; p->provisoire = 0; return true; }
+    copier(p->jeu, sizeof p->jeu, jeu);
+    p->hard = hard;
+    if (p->jeu[0] == '\0') p->provisoire = 0;
+    return true;
+}
+
 bool room_cp_prendre(room_couperet *c, room_cp_evenement *out)
 {
     if (!c || c->jrn_tete == c->jrn_queue) return false;
@@ -197,6 +219,7 @@ void room_cp_ouvrir(room_couperet *c, uint8_t places, bool equipes)
 
     c->phase    = ROOM_CP_SALON;
     c->places   = places;
+    c->arbitre  = true;
     c->equipes  = equipes;
     c->prochain = room_cp_periode();
     c->vainqueur = ROOM_CP_MAX_PLACES;
@@ -489,8 +512,14 @@ void room_cp_avancer(room_couperet *c, float dt)
      * l'horloge, et la même horloge donne le même compte.
      */
     const float periode = room_cp_periode();
-    int32_t dus = (int32_t)(c->horloge / periode);
-    while (c->couperets < dus && c->phase == ROOM_CP_COURSE) tomber(c);
+    /* UN SUIVEUR NE FAIT PAS TOMBER LA LAME : il attend le verdict de
+     * l'arbitre. Tout ce qui précède — l'horloge, les durées, les effets, le
+     * revenu du temps — a déjà été avancé, et doit l'être : ce sont des
+     * quantités locales que personne ne diffuse. */
+    if (c->arbitre) {
+        int32_t dus = (int32_t)(c->horloge / periode);
+        while (c->couperets < dus && c->phase == ROOM_CP_COURSE) tomber(c);
+    }
 
     c->prochain = periode - fmodf(c->horloge, periode);
 
@@ -502,6 +531,42 @@ void room_cp_avancer(room_couperet *c, float dt)
 /* ==========================================================================
  * Les parties
  * ========================================================================== */
+
+void room_cp_set_arbitre(room_couperet *c, bool oui)
+{
+    if (c) c->arbitre = oui;
+}
+
+bool room_cp_verdict(room_couperet *c, uint8_t place, int32_t numero)
+{
+    if (!c || c->phase != ROOM_CP_COURSE) return false;
+    /* Déjà tombée : on jette. Le raisonnement est au-dessus de la déclaration —
+     * c'est le fonctionnement normal d'un arbitrage qui change de main. */
+    if (numero <= c->couperets) return false;
+
+    /* Les lames sautées sont COMPTÉES sans sortir personne : une trame perdue
+     * ne doit pas figer la manche, et on ne sait pas qui elles auraient pris. */
+    c->couperets = numero;
+
+    if (place >= c->places) { conclure(c); return true; }
+    room_cp_place *v = &c->place[place];
+    if (!v->occupee || !v->vivante) return false;
+
+    v->vivante  = false;
+    v->jeu[0]   = '\0';
+    v->depuis   = 0.0f;
+    v->provisoire = 0;
+    v->score_vu = 0;
+    v->sortie_a = numero;
+    pousser(c, ROOM_CP_EVT_COUPERET, place, 0, numero);
+
+    for (int i = 0; i < c->places; ++i) {
+        if (!c->place[i].occupee || i == (int)place) continue;
+        c->place[i].fusibles++;
+    }
+    if (camp_le_plus_faible(c) >= ROOM_CP_MAX_PLACES) conclure(c);
+    return true;
+}
 
 void room_cp_partie_debut(room_couperet *c, uint8_t place, const char *jeu, bool hard)
 {
@@ -593,6 +658,58 @@ static void appliquer(room_couperet *c, uint8_t cible, room_cp_action quoi)
 
 bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quoi)
 {
+    return room_cp_agir_issue(c, de, vers, quoi, NULL);
+}
+
+bool room_cp_appliquer(room_couperet *c, uint8_t de, uint8_t vers,
+                       room_cp_action quoi, room_cp_issue issue)
+{
+    if (!c || c->phase != ROOM_CP_COURSE) return false;
+    if (!action_valide(quoi)) return false;
+    if (de >= c->places || vers >= c->places) return false;
+    if (issue == ROOM_CP_REFUSEE) return false;
+
+    room_cp_place *a = &c->place[de];
+    room_cp_place *b = &c->place[vers];
+    if (!a->occupee || !b->occupee) return false;
+
+    /* Le coût est débité même si l'arbitre a vu l'auteur plus riche que nous :
+     * c'est SON compte qui fait foi, et un solde négatif se voit dans
+     * `room_cp_valide` plutôt que de se cacher. On borne donc à zéro. */
+    const int32_t cout = room_cp_action_cout(quoi);
+    a->fusibles = (a->fusibles > cout) ? (a->fusibles - cout) : 0;
+    pousser(c, ROOM_CP_EVT_ACTION, de, vers, (int32_t)quoi);
+
+    if (!room_cp_action_offensive(quoi)) {
+        switch (quoi) {
+        case ROOM_CP_BLINDAGE: b->blindage = true; break;
+        case ROOM_CP_LEURRE:   b->leurre   = true; break;
+        case ROOM_CP_RELAIS:   b->fusibles += 1; break;
+        default: break;
+        }
+        return true;
+    }
+
+    switch (issue) {
+    case ROOM_CP_ABSORBEE:
+        b->blindage = false;
+        pousser(c, ROOM_CP_EVT_ABSORBE, de, vers, (int32_t)quoi);
+        return true;
+    case ROOM_CP_RENVOYEE:
+        b->leurre = false;
+        pousser(c, ROOM_CP_EVT_RENVOYE, de, vers, (int32_t)quoi);
+        appliquer(c, de, quoi);
+        return true;
+    default:
+        appliquer(c, vers, quoi);
+        return true;
+    }
+}
+
+bool room_cp_agir_issue(room_couperet *c, uint8_t de, uint8_t vers,
+                        room_cp_action quoi, room_cp_issue *issue)
+{
+    if (issue) *issue = ROOM_CP_REFUSEE;
     if (!c || c->phase != ROOM_CP_COURSE) return false;
     if (!action_valide(quoi)) return false;
     if (de >= c->places || vers >= c->places) return false;
@@ -631,14 +748,17 @@ bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quo
         case ROOM_CP_RELAIS:   b->fusibles  += 1; break;
         default: break;
         }
+        if (issue) *issue = ROOM_CP_PASSEE;
         return true;
     }
 
     /* L'ordre de résolution est écrit dans l'en-tête : leurre, puis blindage. */
+    if (issue) *issue = ROOM_CP_PASSEE;
     uint8_t cible = vers;
     if (b->leurre) {
         b->leurre = false;
         pousser(c, ROOM_CP_EVT_RENVOYE, de, vers, (int32_t)quoi);
+        if (issue) *issue = ROOM_CP_RENVOYEE;
         cible = de;
         /* Un leurre chez l'auteur ne renvoie PAS une seconde fois : deux
          * leurres face à face boucleraient, et une boucle dans une règle de jeu
@@ -646,6 +766,7 @@ bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quo
         if (c->place[cible].blindage) {
             c->place[cible].blindage = false;
             pousser(c, ROOM_CP_EVT_ABSORBE, de, cible, (int32_t)quoi);
+            if (issue) *issue = ROOM_CP_ABSORBEE;
             return true;
         }
         appliquer(c, cible, quoi);
@@ -654,6 +775,7 @@ bool room_cp_agir(room_couperet *c, uint8_t de, uint8_t vers, room_cp_action quo
     if (b->blindage) {
         b->blindage = false;
         pousser(c, ROOM_CP_EVT_ABSORBE, de, vers, (int32_t)quoi);
+        if (issue) *issue = ROOM_CP_ABSORBEE;
         return true;
     }
     appliquer(c, cible, quoi);
