@@ -697,13 +697,29 @@ func (s *Server) handleRunSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Le plafond vient de la LIGNE DU JEU, pas d'une constante. Il valait
+	// 1 000 000 pour tout le monde ; le demineur est plafonne a 10 000 dans la
+	// table, et ses regles autorisent 15 cases par seconde a 10 000 points la
+	// case, soit 750 000 points par seconde. Une partie de 1,4 s atteignait
+	// donc le million en passant tous les autres controles.
+	//
+	// Le repli n'est pas une politesse : une colonne a zero (jeu insere a la
+	// main, migration future incomplete) rendrait le plafond INFINI si on
+	// passait la valeur telle quelle. On refuse de degrader en silence.
+	plafond := game.MaxPlausibleScore
+	if plafond <= 0 {
+		plafond = 1_000_000
+		slog.Warn("plafond de plausibilite absent, repli applique",
+			"jeu", game.Slug, "plafond", plafond)
+	}
+
 	verdict := runs.Verify(runs.Context{
 		Secret:            run.Secret,
 		Seed:              run.Seed,
 		StartedAt:         run.StartedAt,
 		Now:               time.Now(),
 		GameSlug:          game.Slug,
-		MaxPlausibleScore: 1_000_000,
+		MaxPlausibleScore: plafond,
 	}, submission)
 
 	closed, err := s.store.CloseRun(r.Context(), run.ID, verdict.Score, verdict.Reason)
@@ -792,17 +808,33 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// L'identifiant de client est tiré par le jeu et n'a aucun privilège : il
-	// ne sert qu'à ne pas se voir soi-même et à remplacer sa propre ligne. On
-	// le borne quand même, parce qu'il devient une clé primaire.
+	// L'identifiant de client est tiré par le jeu. Il n'a aucun privilège au
+	// sens où il ne donne accès à rien — mais il DÉSIGNE la ligne qu'une
+	// requête réécrit, et c'est un privilège suffisant : tant qu'il était
+	// republié à tous les pairs, chacun pouvait renommer, déplacer ou faire
+	// disparaître n'importe qui. Il ne sort plus d'ici (`store.poignee`), et
+	// une ligne qui porte un compte ne s'écrase plus depuis l'anonymat.
+	//
+	// On le borne quand même : il devient une clé primaire.
 	req.ClientID = strings.TrimSpace(req.ClientID)
 	if len(req.ClientID) < 8 || len(req.ClientID) > 64 || !isASCIIToken(req.ClientID) {
 		s.fail(w, r, http.StatusBadRequest, "identifiant de client invalide", nil)
 		return
 	}
 
+	// La session se résout AVANT la branche « je pars ». Elle décidait
+	// jusqu'ici du seul pseudo ; elle décide maintenant aussi du droit
+	// d'écrire, et le départ est une écriture comme une autre.
+	var playerID *int64
+	var sessionUser string
+	if sess, err := s.authenticate(r); err == nil {
+		id := sess.PlayerID
+		playerID = &id
+		sessionUser = sess.Username
+	}
+
 	if req.Leaving {
-		if err := s.store.DropPresence(r.Context(), req.ClientID); err != nil {
+		if err := s.store.DropPresence(r.Context(), req.ClientID, playerID); err != nil {
 			s.fail(w, r, http.StatusInternalServerError, "présence indisponible", err)
 			return
 		}
@@ -828,12 +860,9 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 
 	// Le jeton, s'il y en a un, TRANCHE le pseudo. Sans jeton on garde ce qui a
 	// été déclaré, et on le dit.
-	var playerID *int64
-	if sess, err := s.authenticate(r); err == nil {
-		peer.Nickname = sess.Username
+	if playerID != nil {
+		peer.Nickname = sessionUser
 		peer.Verified = true
-		id := sess.PlayerID
-		playerID = &id
 	}
 
 	peers, err := s.store.TouchPresence(r.Context(), peer, playerID, presenceTTL)

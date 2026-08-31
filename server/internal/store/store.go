@@ -9,6 +9,10 @@ package store
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -25,6 +29,9 @@ var (
 
 type Store struct {
 	pool *pgxpool.Pool
+
+	// Le poivre des poignees de presence. Voir `poignee`.
+	poivre []byte
 }
 
 func Open(ctx context.Context, url string) (*Store, error) {
@@ -49,7 +56,12 @@ func Open(ctx context.Context, url string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("base injoignable : %w", err)
 	}
-	return &Store{pool: pool}, nil
+	poivre := make([]byte, 32)
+	if _, err := rand.Read(poivre); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("tirage du poivre : %w", err)
+	}
+	return &Store{pool: pool, poivre: poivre}, nil
 }
 
 func (s *Store) Close() { s.pool.Close() }
@@ -206,11 +218,19 @@ type Game struct {
 	Name       string  `json:"name"`
 	Difficulty string  `json:"difficulty"`
 	Multiplier float64 `json:"multiplier"`
+
+	// Le plafond de plausibilite de CE jeu, en points. Il est dans la table
+	// depuis la premiere migration et il n'etait lu par personne : le chemin
+	// de soumission passait 1 000 000 en dur pour les dix-neuf bornes. Un
+	// plafond ecrit une fois et jamais relu ne protege rien, et l'ecart n'est
+	// pas cosmetique — le demineur plafonne a 10 000, soit CENT fois moins.
+	MaxPlausibleScore int64 `json:"-"`
 }
 
 func (s *Store) Games(ctx context.Context) ([]Game, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, slug, name, difficulty, multiplier FROM games ORDER BY id`)
+		`SELECT id, slug, name, difficulty, multiplier, max_plausible_score
+		   FROM games ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("liste des jeux : %w", err)
 	}
@@ -219,7 +239,8 @@ func (s *Store) Games(ctx context.Context) ([]Game, error) {
 	var out []Game
 	for rows.Next() {
 		var g Game
-		if err := rows.Scan(&g.ID, &g.Slug, &g.Name, &g.Difficulty, &g.Multiplier); err != nil {
+		if err := rows.Scan(&g.ID, &g.Slug, &g.Name, &g.Difficulty, &g.Multiplier,
+			&g.MaxPlausibleScore); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -492,7 +513,9 @@ func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl 
 		    cabinet   = EXCLUDED.cabinet,
 		    game      = EXCLUDED.game,
 		    score     = EXCLUDED.score,
-		    seen_at   = now()`
+		    seen_at   = now()
+		WHERE presence.player_id IS NULL
+		   OR presence.player_id = EXCLUDED.player_id`
 
 	if _, err := s.pool.Exec(ctx, upsert,
 		p.ClientID, playerID, truncate(p.Nickname, 24), p.Verified,
@@ -526,15 +549,42 @@ func (s *Store) TouchPresence(ctx context.Context, p Peer, playerID *int64, ttl 
 			&q.Cabinet, &q.Game, &q.Score); err != nil {
 			return nil, err
 		}
+		// On rend une POIGNEE, jamais la cle. `client_id` est ce qui decide
+		// quelle ligne une requete reecrit : le publier a tous les pairs
+		// revenait a donner a chacun le droit d'ecrire chez les autres. Le
+		// client ne s'en sert que pour reconnaitre un pair d'une trame a la
+		// suivante (ns_realtime.c:233, il le range dans `p->id` et rien de
+		// plus), donc une valeur stable et opaque suffit exactement.
+		q.ClientID = s.poignee(q.ClientID)
 		peers = append(peers, q)
 	}
 	return peers, rows.Err()
 }
 
+// poignee — l'identite PUBLIQUE d'un pair, derivee de sa cle privee.
+//
+// HMAC et non un hachage nu : `client_id` est un jeton court choisi par le
+// client, donc enumerable. Un SHA-256 sans cle se retournerait par table.
+//
+// La cle est tiree au demarrage et jamais persistee. Une poignee change donc
+// au redemarrage du serveur — sans consequence, la presence expire en 12 s et
+// le client ne fait que comparer des poignees entre elles.
+func (s *Store) poignee(clientID string) string {
+	m := hmac.New(sha256.New, s.poivre)
+	m.Write([]byte(clientID))
+	return hex.EncodeToString(m.Sum(nil)[:12])
+}
+
 // DropPresence retire un client immédiatement, quand il a la politesse de le
 // dire. Le TTL suffirait ; ceci évite juste un fantôme de quelques secondes.
-func (s *Store) DropPresence(ctx context.Context, clientID string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM presence WHERE client_id = $1`, clientID)
+// Le predicat sur `player_id` est le meme que celui de l'upsert, et pour la
+// meme raison : sans lui, « je pars » supprimait la ligne de n'importe qui.
+func (s *Store) DropPresence(ctx context.Context, clientID string, playerID *int64) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM presence
+		  WHERE client_id = $1
+		    AND (player_id IS NULL OR player_id IS NOT DISTINCT FROM $2)`,
+		clientID, playerID)
 	return err
 }
 
