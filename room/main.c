@@ -4110,6 +4110,30 @@ play_at_done: ;
             }
         }
 
+        /*
+         * UNE CAPTURE NE S'OUVRE PAS UN MENU.
+         *
+         * Défaut mesuré, et il abîmait la mesure elle-même : les images de
+         * référence servant à prouver l'absence de régression graphique
+         * sortaient avec l'écran des réglages par-dessus la salle. Sur la vue
+         * `bar`, le panneau couvrait l'enseigne au néon — c'est-à-dire
+         * exactement le sujet de l'image.
+         *
+         * La cause n'est pas dans ce code : le journal montre un vrai
+         * `SDL_EVENT_KEY_DOWN` portant Échap, une vingtaine de secondes après
+         * le lancement, alors que personne ne touche le clavier. Une session
+         * automatisée, une fenêtre en plein écran et un système qui a son mot à
+         * dire : je n'ai pas identifié laquelle des trois, et je ne l'affirme
+         * donc pas.
+         *
+         * Ce qui est certain, c'est qu'une exécution qui écrit une image n'a
+         * pas de joueur devant elle. Elle n'a donc rien à faire d'un menu, et
+         * le lui refuser rend la mesure reproductible quelle que soit la cause.
+         */
+        if (want_menu && (opt.screenshot || opt.sequence || opt.headless)) {
+            want_menu = false;
+        }
+
         if (want_menu) {
             if (menu.open) {
                 room_menu_input(&menu, &menu_ctx, ROOM_MENU_CANCEL);
