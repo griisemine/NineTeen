@@ -813,3 +813,10 @@ a:hover { color: #ffc862; }
  */
 .board tbody tr.sorti td { color: var(--muted); }
 .board tbody tr.sorti td.c-score { color: var(--muted); }
+
+/* Le renvoi vers une manche en direct, en fin de section : une phrase et un
+ * bouton sur la meme ligne, qui se replient sur telephone. */
+.cta-ligne {
+    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+    margin-top: 1.5rem; color: var(--muted); font-size: var(--t-sm);
+}

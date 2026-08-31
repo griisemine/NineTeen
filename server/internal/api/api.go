@@ -1252,10 +1252,20 @@ type salonResumeJSON struct {
 // exactement ce que le module refuse. Un salon prive repond ici comme un autre,
 // justement parce qu'on ne risque rien a laisser regarder.
 type salonLiveJSON struct {
-	OK        bool                `json:"ok"`
-	Code      string              `json:"code"`
-	Nom       string              `json:"nom"`
-	Etat      string              `json:"etat"`
+	OK   bool   `json:"ok"`
+	Code string `json:"code"`
+	Nom  string `json:"nom"`
+	Etat string `json:"etat"`
+
+	// `places` et `camps` sont ici parce que la page web ne peut pas
+	// interpreter une ligne sans eux. Le camp d'un joueur vaut sa place en
+	// individuel et 0 ou 1 en equipes : sans savoir lequel des deux, la page
+	// affichait un tiret pour tout le monde, y compris sur une manche a deux
+	// camps. C'est le meme raisonnement que pour les autres vues — ce qu'on
+	// rend doit se lire sans avoir a deviner.
+	Places int `json:"places"`
+	Camps  int `json:"camps"`
+
 	DepuisMs  int64               `json:"depuisMs"`
 	Occupants []salonOccupantJSON `json:"occupants"`
 }
@@ -1267,12 +1277,13 @@ type salonBattementJSON struct {
 	Occupants []salonOccupantJSON `json:"occupants"`
 }
 
-// vueOccupants ne rend que les VIVANTS. L'ordre — celui des places — est celui
-// que `Vivants` garantit, et il est garanti la plutot qu'ici parce que ce n'est
-// pas une question de presentation : le client indexe ses propres tableaux par
-// la place.
+// vueOccupants rend le TABLEAU : les vivants tant que la manche court, tout le
+// monde une fois qu'elle est finie — voir `salons.Tableau`, ou la raison est
+// ecrite. L'ordre, celui des places, est garanti la-bas plutot qu'ici parce que
+// ce n'est pas une question de presentation : le client indexe ses propres
+// tableaux par la place.
 func vueOccupants(sal *salons.Salon, maintenant time.Time) []salonOccupantJSON {
-	vivants := sal.Vivants(maintenant)
+	vivants := sal.Tableau(maintenant)
 	out := make([]salonOccupantJSON, 0, len(vivants))
 	for _, o := range vivants {
 		out = append(out, salonOccupantJSON{
@@ -1321,6 +1332,7 @@ func vueResume(sal *salons.Salon, maintenant time.Time) salonResumeJSON {
 func vueLive(sal *salons.Salon, maintenant time.Time) salonLiveJSON {
 	return salonLiveJSON{
 		OK: true, Code: sal.Code, Nom: sal.Nom, Etat: string(sal.Etat),
+		Places: sal.Places, Camps: sal.Camps,
 		DepuisMs: depuisMs(sal, maintenant), Occupants: vueOccupants(sal, maintenant),
 	}
 }

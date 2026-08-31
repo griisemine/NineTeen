@@ -595,6 +595,30 @@ static void test_credits(void)
     }
     CHECK(promet_couperet, "la page des commandes annonce le Couperet : il existe");
 
+    /*
+     * ET ELLE ANNONCE LE COMPTOIR, pour la meme raison encore. Il s'ouvre tout
+     * seul au premier lancement branche sur un serveur — une fois. Ensuite, un
+     * joueur qui veut changer de compte, creer un salon ou en rejoindre un doit
+     * savoir quelle touche l'ouvre, et cette page est le seul endroit du jeu ou
+     * il ira le chercher.
+     */
+    bool promet_comptoir = false;
+    for (i = 0; i < cn; ++i) {
+        if ((cl[i].what && SDL_strstr(cl[i].what, "COMPTOIR"))
+         || (cl[i].who  && SDL_strstr(cl[i].who,  "COMPTOIR"))) promet_comptoir = true;
+    }
+    CHECK(promet_comptoir, "la page des commandes annonce le comptoir : c'est par la qu'on se connecte");
+
+    /* Pour les commandes, `what` porte la TOUCHE et `who` ce qu'elle fait. La
+     * comparaison est une egalite et non une sous-chaine : « F10 » contient
+     * « F1 », et un `strstr` passerait donc sans que la ligne du comptoir
+     * existe — la ligne de la troisieme personne suffirait. */
+    bool promet_f1 = false;
+    for (i = 0; i < cn; ++i) {
+        if (cl[i].what && SDL_strcmp(cl[i].what, "F1") == 0) promet_f1 = true;
+    }
+    CHECK(promet_f1, "et elle donne sa touche");
+
     static const char *const gestes[] = { "STICK GAUCHE", "STICK DROIT", "SAUTER", "COURIR",
                                           "F9", "TAB", "1 A 6" };
     for (size_t k = 0; k < SDL_arraysize(gestes); ++k) {

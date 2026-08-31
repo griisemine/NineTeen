@@ -142,9 +142,13 @@ func TestLesChampsRendusSontCeuxDuContrat(t *testing.T) {
 			veut: []string{"camps", "code", "depuisMs", "etat", "nom", "occupes", "places", "proprietaire"},
 		},
 		{
-			nom:  "classement live",
-			vue:  vueLive(sal, maintenant),
-			veut: []string{"code", "depuisMs", "etat", "nom", "occupants", "ok"},
+			nom: "classement live",
+			vue: vueLive(sal, maintenant),
+			// `camps` et `places` ont ete ajoutes : sans eux, la page web ne
+			// peut pas lire la colonne du camp — il vaut la place en
+			// individuel et 0 ou 1 en equipes, et elle affichait donc un tiret
+			// pour tout le monde, y compris sur une manche a deux camps.
+			veut: []string{"camps", "code", "depuisMs", "etat", "nom", "occupants", "ok", "places"},
 		},
 		{
 			nom:  "battement",

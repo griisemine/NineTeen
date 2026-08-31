@@ -604,6 +604,87 @@ func TestCampIgnoreLeBattement(t *testing.T) {
 	}
 }
 
+// TestFaucheGardeLeTableauFinal — une manche qui se vide garde ses lignes.
+//
+// Le defaut, mesure sur la page web avant correction : « MANCHE TERMINEE »
+// au-dessus de « Personne pour l'instant. » Un client cesse de battre quand la
+// manche s'arrete — il n'a plus rien a publier — donc le faucheur retirait les
+// occupants dans les secondes suivantes, et le tableau se vidait sous les yeux
+// de qui venait voir qui avait gagne.
+//
+// L'attente ne beneficie pas de cette regle, et c'est voulu : un salon que tout
+// le monde a quitte avant de commencer n'a rien a montrer.
+func TestFaucheGardeLeTableauFinal(t *testing.T) {
+	t0 := time.Date(2026, 8, 31, 22, 0, 0, 0, time.UTC)
+	tard := t0.Add(TTLOccupant + time.Second)
+
+	enManche := func() *Salon {
+		s := &Salon{Code: "KMPQRS", Places: 4, Camps: 2, Etat: Attente,
+			Proprietaire: 1, CreeA: t0, ChangeA: t0}
+		if _, err := s.Asseoir(t0, 1, "Zoe"); err != nil {
+			t.Fatalf("Asseoir : %v", err)
+		}
+		if _, err := s.Asseoir(t0, 2, "Malik"); err != nil {
+			t.Fatalf("Asseoir : %v", err)
+		}
+		if err := s.Battre(t0, 1, Battement{Points: 500, Vivante: true, Commence: true}); err != nil {
+			t.Fatalf("Battre : %v", err)
+		}
+		if err := s.Battre(t0, 2, Battement{Points: 340, Vivante: true}); err != nil {
+			t.Fatalf("Battre : %v", err)
+		}
+		return s
+	}
+
+	s := enManche()
+	if s.Etat != Manche {
+		t.Fatalf("le salon devait etre en manche, il est %q", s.Etat)
+	}
+	// AUCUNE place rendue, et le salon ferme. `retires` est la liste que
+	// l'appelant efface EN BASE : la rendre non vide gardait le tableau en
+	// memoire et le supprimait dans la foulee, si bien que la page web
+	// affichait quand meme un classement final vide. Mesure ainsi contre un
+	// vrai PostgreSQL, apres que la version precedente de ce test soit passee.
+	retires, ferme := s.Faucher(tard)
+	if len(retires) != 0 {
+		t.Fatalf("aucune place ne doit etre retiree d'une manche finie : %v", retires)
+	}
+	if !ferme {
+		t.Fatalf("le salon devait se fermer")
+	}
+	if s.Etat != Fini {
+		t.Errorf("etat = %q, attendu %q", s.Etat, Fini)
+	}
+	if len(s.Occupants) != 2 {
+		t.Fatalf("le tableau final a ete efface : %d ligne(s), attendu 2", len(s.Occupants))
+	}
+	if s.Occupants[0].Points != 500 || s.Occupants[1].Points != 340 {
+		t.Errorf("les points ont bouge : %d et %d",
+			s.Occupants[0].Points, s.Occupants[1].Points)
+	}
+
+	// Et une deuxieme fauche sur un salon deja fini ne touche plus rien.
+	if r, f := s.Faucher(tard.Add(time.Hour)); r != nil || f {
+		t.Errorf("un salon fini se fauchait encore : %v, %v", r, f)
+	}
+	if len(s.Occupants) != 2 {
+		t.Errorf("la deuxieme fauche a vide le tableau : %d", len(s.Occupants))
+	}
+
+	// En ATTENTE, au contraire, il n'y a rien a garder.
+	a := &Salon{Code: "KMPQRT", Places: 4, Camps: 1, Etat: Attente,
+		Proprietaire: 1, CreeA: t0, ChangeA: t0}
+	if _, err := a.Asseoir(t0, 1, "Zoe"); err != nil {
+		t.Fatalf("Asseoir : %v", err)
+	}
+	if _, ferme := a.Faucher(tard); !ferme {
+		t.Errorf("un salon en attente vide doit se fermer")
+	}
+	if len(a.Occupants) != 0 {
+		t.Errorf("un salon en attente ne garde personne : %d", len(a.Occupants))
+	}
+}
+
 /* ========================================================================== */
 /* Le code d'acces                                                            */
 /* ========================================================================== */

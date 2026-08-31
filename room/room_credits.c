@@ -119,6 +119,20 @@ static const room_credit_line g_controls[] = {
     { "ECHAP",   "EN PARTIE : SORTIR DE LA PARTIE, PAS DU JEU", false },
 
     /*
+     * LE COMPTOIR arrive AVANT le Couperet, parce qu'il en est la porte : sans
+     * compte et sans salon, le mode competitif ne se joue qu'en local contre
+     * des rivaux. Et il arrive dans cette page pour la meme raison que le
+     * Couperet y est — une commande que rien n'annonce est une commande que
+     * personne n'emploie. Celle-ci s'ouvre toute seule au premier lancement
+     * branche sur un serveur, mais une fois seulement : ensuite, il faut savoir
+     * qu'elle existe.
+     */
+    { "LE COMPTOIR - LE COMPTE ET LES SALONS", NULL, true },
+    { "F1",       "S'INSCRIRE, SE CONNECTER, TROUVER UNE MANCHE", false },
+    { "",         "CREER UN SALON, OU EN REJOINDRE UN PAR SON CODE", false },
+    { "",         "SANS SERVEUR CONFIGURE, IL DIT CE QUI MANQUE", false },
+
+    /*
      * LE COUPERET a sa propre section, et pas une ligne dans « LE RESTE ».
      *
      * C'est le seul MODE du jeu, et il est entierement invisible : rien dans la

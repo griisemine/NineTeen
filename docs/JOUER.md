@@ -414,8 +414,15 @@ Le jeu se parcourt, se joue, et se règle. Ce qui manque :
   « Les images de 2020 » ;
 - **le nom `ASTEROID`.** À une lettre de la marque *Asteroids* d'Atari. Risque résiduel signalé,
   pas tranché : c'est une décision, pas un travail ;
-- **la signature du paquet.** Ni Developer ID ni Authenticode — mesuré : `codesign -dv` rend
-  `adhoc, linker-signed`. macOS et Windows avertiront au premier lancement.
+- **la signature du paquet.** Ni Developer ID ni Authenticode, et ça n'est pas près de changer :
+  le compte développeur Apple **gratuit** ne suffit pas, mesuré — un certificat « Apple
+  Development » avec quarantaine posée donne `spctl : rejected` et le processus est tué. Il faut
+  le programme payant. En attendant, le paquet est signé **ad hoc**, ce qui lui permet de se
+  charger mais ne convainc pas Gatekeeper, et il porte un `A-LIRE-AVANT-D-OUVRIR.txt` avec le
+  geste exact — `xattr -dr com.apple.quarantine`, vérifié ici : tué avant, démarre après. La
+  bascule vers un paquet signé est déjà écrite et n'attend que les variables d'environnement ;
+  côté Windows, rien n'a pu être exécuté sur cette machine ;
+- **le pas verrouillé en duel direct**, toujours pas mesuré entre deux machines.
 
 Cette liste a été fausse deux fois plutôt qu'une : elle annonçait encore « aucun son », « aucune
 interaction » et « la collision n'est pas branchée » longtemps après que les trois aient été
@@ -567,6 +574,57 @@ jeton=$(curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: appli
 Le jeton se range dans `network.token` de `settings.cfg` pour que le jeu lui-même
 s'en serve. **Sans jeton, tout marche encore** : le classement mondial s'affiche
 en lecture seule, et les parties restent locales.
+
+**Mais plus personne n'a à faire ça.** Cette manipulation était la SEULE façon de
+se connecter, et elle était impossible depuis le jeu : `SDL_StartTextInput`
+n'existait nulle part dans le dépôt, donc aucun champ n'était saisissable. Le
+comptoir (`F1`) fait maintenant l'inscription, la connexion et le rangement du
+jeton. Les lignes ci-dessus restent utiles pour vérifier une chaîne de bout en
+bout depuis un terminal, pas pour jouer.
+
+## Le comptoir — s'inscrire, se connecter, trouver une manche
+
+`F1`, depuis n'importe où dans la salle. Il s'ouvre aussi **tout seul** au premier
+lancement branché sur un serveur, tant qu'aucune session n'est gardée.
+
+| Page | Ce qu'on y fait |
+|---|---|
+| Accueil | se connecter, créer un compte, ou jouer sans compte |
+| Les salons | la liste des salons **publics** ouverts, rafraîchie à la demande |
+| Créer un salon | un nom, de 2 à 8 places, 1 ou 2 camps, public ou privé |
+| Rejoindre par code | six caractères, sans I, O, 0 ni 1 pour qu'ils se dictent |
+| Le salon | le code en grand, qui est assis où, et le bouton qui lance la manche |
+
+Sans serveur configuré, le comptoir s'ouvre quand même et **dit ce qui manque** —
+`--server=`, `NINETEEN_SERVER_URL`, ou `network.serverUrl`. Une touche qui ne fait
+rien selon un réglage qu'on ne voit pas est pire qu'une page qui explique.
+
+Ce que le comptoir refuse avant même d'appeler le serveur : un champ vide, et une
+deuxième demande quand la première est encore en vol — sans quoi un double appui
+créerait deux salons.
+
+**Le code n'est pas ce qui donne la place.** Six caractères tapés à la main, c'est
+court par nécessité, donc devinable. Ce qui ouvre réellement une place sur le
+relais est un nombre de 63 bits tiré par le serveur, rendu au seul joueur
+authentifié et admis ; il n'apparaît ni dans la liste publique ni dans le
+classement en direct, et un test échoue s'il venait à y fuir.
+
+**Les camps sont attribués par le serveur**, en alternance sur les places. Ce n'est
+pas une étiquette d'affichage : le Couperet classe les camps et la lame descend
+dans le camp dernier. Un camp déclaré par le client serait un camp qu'on change en
+cours de manche pour rejoindre celui qui mène.
+
+### Regarder une manche sans y jouer
+
+`/salon.html` sur le serveur web suit une manche pendant qu'elle se joue — le camp,
+la borne tenue, les fusibles, les points, et qui est déjà sorti. L'adresse porte le
+code (`/salon.html?c=K7M3QP`) : c'est ce lien qu'on envoie à quelqu'un. La page
+liste aussi les salons publics ouverts.
+
+Deux tableaux, deux sources, et la page le dit : le classement général n'accepte
+que des parties **recalculées** par le serveur, alors qu'ici ce sont les joueurs
+qui publient leur ligne pendant la manche. Suffisant pour regarder, insuffisant
+pour un palmarès.
 
 Deux détails que cette vérification a mis au jour, et qu'aucun test unitaire
 n'aurait attrapés parce qu'ils vivent *entre* les deux moitiés du projet : le

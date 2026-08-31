@@ -1261,6 +1261,14 @@ func (s *Store) BattreSalon(ctx context.Context, code string, playerID int64,
 // meme chose s'il ne tournait jamais — seule la table grossirait. C'est la
 // propriete que `PurgePresence` a deja, et elle vaut qu'on la garde : elle
 // interdit qu'une periodicite mal reglee change ce que les joueurs voient.
+//
+// Cette phrase a ete FAUSSE, et le dire ici sert de garde. La regle a change —
+// une manche abandonnee garde son tableau — et ce menage-ci a continue
+// d'effacer les lignes en SQL pendant que `Faucher` les gardait en Go. La page
+// web affichait donc un classement final vide, et rien dans le code ne
+// signalait le desaccord : le commentaire, lui, affirmait qu'il n'y en avait
+// pas. Toute regle ajoutee a `Faucher` doit etre repercutee ci-dessous, ou la
+// phrase d'ouverture redevient un mensonge.
 func (s *Store) PurgerSalons(ctx context.Context, maintenant time.Time,
 	ttl, retention time.Duration) (int64, int64, error) {
 
@@ -1269,15 +1277,41 @@ func (s *Store) PurgerSalons(ctx context.Context, maintenant time.Time,
 	// la peremption a la lecture (voir `CreerSalon`) : deux horloges pour une
 	// meme decision finiraient par ne pas dire la meme chose, et l'ecart ne se
 	// verrait nulle part.
-	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM salon_places WHERE battu_a < $1`, maintenant.Add(-ttl))
+	limite := maintenant.Add(-ttl)
+
+	// L'ORDRE DES QUATRE ETAPES EST LA REGLE ELLE-MEME. Il suit `Faucher`, pas
+	// l'inverse, et la premiere doit passer AVANT la deuxieme : c'est elle qui
+	// met la manche a l'etat fini pendant que ses lignes sont encore la.
+	//
+	// 1. Une MANCHE dont plus personne n'est frais se termine, ET GARDE SES
+	//    LIGNES. Ce sont le classement final. Un client cesse de battre quand
+	//    la manche s'arrete — il n'a plus rien a publier — donc les effacer
+	//    donnait « MANCHE TERMINEE » au-dessus d'un tableau vide sur la page
+	//    web, mesure ainsi avant correction.
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE salons SET etat = 'fini', change_a = $1
+		 WHERE etat = 'manche'
+		   AND NOT EXISTS (SELECT 1 FROM salon_places p
+		                    WHERE p.salon_id = salons.id AND p.battu_a >= $2)`,
+		maintenant, limite); err != nil {
+		return 0, 0, fmt.Errorf("cloture des manches abandonnees : %w", err)
+	}
+
+	// 2. Ailleurs — donc dans un salon qui vit encore — les places perimees
+	//    tombent une a une, et leur numero redevient libre.
+	tag, err := s.pool.Exec(ctx, `
+		DELETE FROM salon_places p
+		 USING salons s
+		 WHERE p.salon_id = s.id AND s.etat <> 'fini' AND p.battu_a < $1`, limite)
 	if err != nil {
 		return 0, 0, fmt.Errorf("purge des places : %w", err)
 	}
 	places := tag.RowsAffected()
 
-	// Un salon sans personne est fini. `change_a` prend la date du constat :
-	// c'est de la que court la retention.
+	// 3. Un salon vide est fini. En pratique c'est le salon en ATTENTE que tout
+	//    le monde a quitte avant de commencer : celui-la n'a rien a montrer, et
+	//    il se vide pour de bon. `change_a` prend la date du constat : c'est de
+	//    la que court la retention.
 	if _, err := s.pool.Exec(ctx, `
 		UPDATE salons SET etat = 'fini', change_a = $1
 		 WHERE etat <> 'fini'

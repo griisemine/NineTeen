@@ -291,6 +291,26 @@ func (s *Salon) Vivants(maintenant time.Time) []Occupant {
 	return out
 }
 
+// Tableau rend les lignes A AFFICHER, dans l'ordre des places.
+//
+// C'est `Vivants` tant que la manche court, et TOUT LE MONDE une fois qu'elle
+// est finie. Deux methodes et non une, parce que ce sont deux questions
+// differentes : `Vivants` sert a decider — qui herite, quelle place est libre,
+// le salon est-il mort — et la fraicheur y est la bonne reponse. Le tableau,
+// lui, se lit apres coup, et un client cesse de battre des que la manche
+// s'arrete. Filtrer sur la fraicheur donnait donc « MANCHE TERMINEE » au-dessus
+// d'un tableau vide, mesure sur la page web : le classement final disparaissait
+// dans les douze secondes qui suivaient la fin.
+func (s *Salon) Tableau(maintenant time.Time) []Occupant {
+	if s.Etat != Fini {
+		return s.Vivants(maintenant)
+	}
+	out := make([]Occupant, len(s.Occupants))
+	copy(out, s.Occupants)
+	slices.SortFunc(out, func(a, b Occupant) int { return a.Place - b.Place })
+	return out
+}
+
 // Occupes compte les places reellement tenues.
 func (s *Salon) Occupes(maintenant time.Time) int {
 	n := 0
@@ -564,6 +584,23 @@ func (s *Salon) Battre(maintenant time.Time, playerID int64, b Battement) error 
 // taille — et elle vaut qu'on la garde : elle interdit qu'une periodicite mal
 // reglee change ce que les joueurs voient.
 func (s *Salon) Faucher(maintenant time.Time) (retires []int, ferme bool) {
+	// UN SALON FINI NE SE FAUCHE PLUS, et ses occupants restent.
+	//
+	// Ce sont les LIGNES DU CLASSEMENT FINAL. Un client cesse de battre quand
+	// la manche s'arrete — c'est normal, il n'a plus rien a publier — et le
+	// faucheur les retirait donc une a une dans les secondes qui suivent. Vu
+	// depuis la page web : la manche se termine, et le tableau se vide sous les
+	// yeux de qui vient regarder qui a gagne. Mesure a l'ecran avant
+	// correction : « MANCHE TERMINEE » au-dessus de « Personne pour
+	// l'instant. »
+	//
+	// Le salon disparait quand meme, mais par `Perime` et en bloc, apres sa
+	// duree de retention. Une place fauchee sur un salon deja fini ne libere
+	// rien : plus personne ne peut s'y asseoir.
+	if s.Etat == Fini {
+		return nil, false
+	}
+
 	gardes := s.Occupants[:0:0]
 	for _, o := range s.Occupants {
 		if frais(o, maintenant) {
@@ -575,8 +612,30 @@ func (s *Salon) Faucher(maintenant time.Time) (retires []int, ferme bool) {
 	if len(retires) == 0 {
 		return nil, false
 	}
-	s.Occupants = gardes
+
+	// UNE MANCHE QUI SE VIDE GARDE SON TABLEAU. Si la fauche ne laisse
+	// personne alors qu'on jouait, la manche se termine — mais les lignes
+	// restent, avec les points qu'elles avaient. Les effacer donnerait un
+	// « MANCHE TERMINEE » au-dessus d'un tableau vide, c'est-a-dire la page
+	// d'une partie dont on ne saura jamais rien. En ATTENTE, au contraire, il
+	// n'y a rien a montrer : un salon que tout le monde a quitte avant de
+	// commencer se vide pour de bon.
 	etait := s.Etat
+	if len(gardes) == 0 && etait == Manche {
+		if TransitionPermise(s.Etat, Fini) {
+			s.Etat = Fini
+			s.ChangeA = maintenant
+		}
+		// ON NE REND AUCUNE PLACE A RETIRER, et c'est le point : `retires` est
+		// la liste que l'appelant EFFACE en base. La rendre ici gardait le
+		// tableau en memoire et le supprimait dans la foulee — le classement
+		// final revenait vide malgre tout, ce qui est exactement ce qu'on
+		// essaie d'eviter. Rien n'est retire : la manche est finie, plus
+		// personne ne peut s'asseoir, et la place n'a plus a etre liberee.
+		return nil, s.Etat == Fini && etait != Fini
+	}
+
+	s.Occupants = gardes
 	s.reprendreLaMain(maintenant)
 	return retires, s.Etat == Fini && etait != Fini
 }
