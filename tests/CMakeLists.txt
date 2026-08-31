@@ -691,3 +691,47 @@ nineteen_set_warnings(ns_test_arene)
 nineteen_apply_sanitizers(ns_test_arene)
 add_test(NAME arene COMMAND ns_test_arene)
 set_tests_properties(arene PROPERTIES TIMEOUT 60)
+
+# Le comptoir : l'écran d'accueil, sa navigation et ses refus.
+#
+# Il ne connaît ni SDL ni les sockets, et c'est exactement ce qui le rend
+# testable : on lui repose un état de réseau à la main et l'on vérifie les
+# demandes qui en sortent. Le défaut qu'on attrape ici — deux salons créés pour
+# un double clic, un mot de passe qui survit à la connexion, un curseur laissé
+# hors des lignes quand la liste raccourcit — ne se verrait autrement que chez
+# un joueur.
+add_executable(ns_test_comptoir test_comptoir.c
+    "${CMAKE_SOURCE_DIR}/room/room_comptoir.c")
+target_include_directories(ns_test_comptoir PRIVATE "${CMAKE_SOURCE_DIR}/room")
+target_link_libraries(ns_test_comptoir PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_comptoir)
+nineteen_apply_sanitizers(ns_test_comptoir)
+add_test(NAME comptoir COMMAND ns_test_comptoir)
+
+# --------------------------------------------------------------------------
+# LA SAISIE DE TEXTE — le champ, et son accord avec la police
+# --------------------------------------------------------------------------
+#
+# Il ne lie QUE le moteur, et le test n'inclut même pas SDL. Ce n'est pas de la
+# frugalité : `ns_saisie.c` ne doit connaître ni SDL, ni le RHI, ni la fonte, et
+# ces deux lignes sont la vérification la moins chère de cette promesse — le
+# jour où le champ appellerait SDL, cette cible cesserait de se construire.
+#
+# Ce que ce test tient et que rien d'autre ne tient : l'ACCORD entre le filtre
+# du champ et la table de `ns_font5x7.h`. Les deux vivent dans des fichiers qui
+# ne s'incluent pas, délibérément, et un pseudo accepté ici mais indessinable
+# là-bas donnerait un compte que son titulaire ne peut pas lire — le serveur,
+# lui, accepte les accents (`auth.ValidateUsername`). Le test les confronte code
+# par code : étendre la fonte sans détendre le filtre, ou l'inverse, casse le
+# build au lieu de passer inaperçu.
+#
+# Ce qu'il ne peut PAS tenir, et c'est dit dans son en-tête : la frappe réelle et
+# le collage. `SDL_EVENT_TEXT_INPUT` demande une fenêtre qui a le focus clavier,
+# `SDL_GetClipboardText` un serveur graphique ; ni l'un ni l'autre n'existe sur
+# une machine d'intégration continue. C'est précisément pourquoi `ns_saisie_sdl.c`
+# ne contient qu'un `switch` et pas une règle d'édition.
+add_executable(ns_test_saisie test_saisie.c)
+target_link_libraries(ns_test_saisie PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_saisie)
+nineteen_apply_sanitizers(ns_test_saisie)
+add_test(NAME saisie COMMAND ns_test_saisie)

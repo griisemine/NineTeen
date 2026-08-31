@@ -32,9 +32,11 @@
 #include "room_camera.h"
 #include "room_door.h"
 #include "ns_env.h"
+#include "ns_saisie_sdl.h"
 #include "ns_skin.h"
 #include "room_attract.h"
 #include "room_hud.h"
+#include "room_comptoir.h"
 #include "room_menu.h"
 #include "room_pad.h"
 #include "room_presence.h"
@@ -1098,6 +1100,158 @@ _Static_assert((int)ROOM_CP_PASSEE    == (int)NS_ARENE_PASSEE    &&
                (int)ROOM_CP_REFUSEE   == (int)NS_ARENE_REFUSEE,
                "les issues de room_couperet.h et de ns_arene.h ont diverge");
 
+/*
+ * Ouvre une place sur le relais.
+ *
+ * Deux chemins y mènent et un seul les ouvre : la ligne de commande
+ * (`--couperet-en-ligne=`), qui servait à mettre le mode au point à deux
+ * fenêtres, et le comptoir, par lequel arrive un vrai joueur. Les bornes et le
+ * message d'échec sont donc écrits une fois — un salon dont la place déborde
+ * les tableaux de huit du mode n'est pas moins dangereux parce qu'il vient du
+ * serveur plutôt que d'une option.
+ */
+static ns_arene *arene_ouvrir_place(const char *hote, uint16_t port, uint64_t salon,
+                                    unsigned place, unsigned places,
+                                    const char *pseudo, const char *origine,
+                                    uint8_t *places_out, uint8_t *place_out)
+{
+    if (places < 2 || places > ROOM_CP_MAX_PLACES || place >= places) {
+        NS_WARN("%s : place %u sur %u places, hors bornes", origine, place, places);
+        return NULL;
+    }
+
+    ns_arene_config cfg;
+    SDL_zero(cfg);
+    cfg.hote   = hote;
+    cfg.port   = port;
+    cfg.salon  = salon;
+    cfg.place  = (uint8_t)place;
+    cfg.places = (uint8_t)places;
+    cfg.pseudo = (pseudo && pseudo[0]) ? pseudo : "JOUEUR";
+
+    char err[128] = { 0 };
+    ns_arene *a = ns_arene_ouvrir(&cfg, err, sizeof err);
+    if (!a) {
+        NS_WARN("%s : %s — la manche se jouera en local", origine, err);
+        return NULL;
+    }
+    if (places_out) *places_out = (uint8_t)places;
+    if (place_out)  *place_out  = (uint8_t)place;
+    NS_INFO("couperet : salon %llu, place %u sur %u, relais %s:%u",
+            (unsigned long long)salon, place, places, hote, port);
+    return a;
+}
+
+/*
+ * UN PAS DE COMPTOIR.
+ *
+ * Le comptoir ne parle pas au réseau et `ns_compte` ne connaît pas l'écran :
+ * c'est ici qu'ils se rencontrent, à un seul endroit, une fois par image. Deux
+ * points de rencontre auraient fini par ne pas poser le même état.
+ *
+ * Rend la demande que `main` doit traiter lui-même — ouvrir la manche et
+ * refermer le comptoir touchent à la salle, que ni l'un ni l'autre ne connaît.
+ */
+/*
+ * Le battement du salon.
+ *
+ * DEUX MÉTIERS DANS UN SEUL ALLER-RETOUR, comme la présence, et pour la même
+ * raison : c'est le seul échange périodique du mode, et lui faire coûter deux
+ * requêtes doublerait le trafic pour rien. Il dit au serveur qu'on est vivant —
+ * sans quoi le faucheur retire la place au bout de son délai — et il publie la
+ * ligne de classement que la page web affiche.
+ *
+ * DEUX SECONDES, et pas les 250 ms de l'arène. L'arène a besoin de 4 Hz pour
+ * JOUER ; le battement, lui, n'a que deux échéances : le faucheur, qui pardonne
+ * douze secondes, et la page web, qui relève toutes les deux secondes. Battre
+ * plus vite ne montrerait rien de plus et ferait six requêtes HTTP par seconde
+ * là où il en faut une.
+ */
+static void salon_battre_si_temps(const room_couperet *cp, uint8_t moi,
+                                  bool lancer, uint32_t *prochain_ms)
+{
+    const uint32_t maintenant = SDL_GetTicks();
+    if (maintenant < *prochain_ms) return;
+    *prochain_ms = maintenant + 2000u;
+
+    if (moi >= ROOM_CP_MAX_PLACES || !cp->place[moi].occupee) {
+        /* Dans le salon mais pas encore en manche : on bat quand même, sinon
+         * on se fait faucher en attendant que l'hôte lance. */
+        ns_salon_battre(0, 0, true, "", 0, lancer);
+        return;
+    }
+    const room_cp_place *p = &cp->place[moi];
+    ns_salon_battre((int)p->points, (int)p->fusibles, p->vivante,
+                    p->jeu[0] ? p->jeu : "", (int)p->camp, lancer);
+}
+
+static room_comptoir_demande comptoir_pas(room_comptoir *c, SDL_Window *fenetre,
+                                          bool ouvert)
+{
+    ns_compte_etat etat = ns_compte_etat_courant();
+    room_comptoir_poser_reseau(c, etat, ns_compte_occupe(),
+                               ns_compte_pseudo(), ns_compte_message());
+
+    ns_salon_resume liste[NS_SALON_MAX_LISTE];
+    const int n = ns_salons_liste(liste, NS_SALON_MAX_LISTE);
+    room_comptoir_poser_salons(c, liste, n, ns_salons_liste_age_ms());
+
+    ns_salon salon;
+    room_comptoir_poser_salon(c, ns_salon_courant(&salon) ? &salon : NULL);
+
+    /*
+     * LE JETON A CHANGÉ. Trois conséquences, et les oublier laisserait le jeu
+     * dans un état où l'on est connecté à l'écran sans l'être nulle part
+     * ailleurs :
+     *   - `ns_online` doit soumettre sous la nouvelle identité ;
+     *   - la configuration doit s'en souvenir, sinon il faut se reconnecter à
+     *     chaque lancement, ce qui est exactement ce qu'on vient de réparer ;
+     *   - la présence doit reprendre le pseudo vérifié.
+     */
+    if (ns_compte_jeton_change()) {
+        const char *jeton = ns_compte_jeton();
+        ns_online_set_token(jeton);
+        ns_config_set_str(NS_CFG_SERVER_TOKEN, jeton);
+        if (!ns_config_save())
+            NS_WARN("compte : la session n'a pas pu être gardée, il faudra se reconnecter");
+        NS_INFO("compte : %s", jeton[0] ? "connecté" : "déconnecté");
+    }
+
+    /*
+     * La saisie du système ne s'allume que sur un champ qui a le curseur.
+     * L'allumer en permanence ferait monter le clavier virtuel sur les
+     * plateformes qui en ont un, et avalerait les touches de la salle.
+     */
+    ns_saisie *champ = ouvert ? room_comptoir_champ(c) : NULL;
+    if (champ && !ns_saisie_sdl_active(fenetre))      ns_saisie_sdl_ouvrir(fenetre);
+    else if (!champ && ns_saisie_sdl_active(fenetre)) ns_saisie_sdl_fermer(fenetre);
+
+    const room_comptoir_demande d = room_comptoir_prendre(c);
+    switch (d) {
+    case ROOM_CT_D_INSCRIRE:
+        ns_compte_inscrire(room_comptoir_lu_pseudo(c), room_comptoir_lu_mdp(c));
+        room_comptoir_oublier_mdp(c);
+        break;
+    case ROOM_CT_D_CONNECTER:
+        ns_compte_connecter(room_comptoir_lu_pseudo(c), room_comptoir_lu_mdp(c));
+        /* Le mot de passe est oublié DÈS L'ENVOI et pas à la réponse : entre
+         * les deux il peut s'écouler des secondes, et il n'a plus rien à faire
+         * dans une structure qui vit toute la partie. */
+        room_comptoir_oublier_mdp(c);
+        break;
+    case ROOM_CT_D_DECONNECTER: ns_compte_deconnecter(); break;
+    case ROOM_CT_D_LISTER:      ns_salons_demander_liste(); break;
+    case ROOM_CT_D_CREER:
+        ns_salon_creer(room_comptoir_lu_nom(c), c->places, c->camps, c->prive);
+        break;
+    case ROOM_CT_D_REJOINDRE:   ns_salon_rejoindre(room_comptoir_lu_code(c)); break;
+    case ROOM_CT_D_QUITTER:     ns_salon_quitter(); break;
+    case ROOM_CT_D_SUPPRIMER:   ns_salon_supprimer(); break;
+    default: break;
+    }
+    return d;
+}
+
 static ns_arene *couperet_en_ligne(const char *spec, const char *pseudo,
                                    uint8_t *places_out, uint8_t *place_out)
 {
@@ -1112,32 +1266,8 @@ static ns_arene *couperet_en_ligne(const char *spec, const char *pseudo,
                 "hote:port,salon,place,places", spec);
         return NULL;
     }
-    if (places < 2 || places > ROOM_CP_MAX_PLACES || place >= places) {
-        NS_WARN("--couperet-en-ligne : place %u sur %u places, hors bornes",
-                place, places);
-        return NULL;
-    }
-
-    ns_arene_config cfg;
-    SDL_zero(cfg);
-    cfg.hote   = hote;
-    cfg.port   = (uint16_t)port;
-    cfg.salon  = (uint64_t)salon;
-    cfg.place  = (uint8_t)place;
-    cfg.places = (uint8_t)places;
-    cfg.pseudo = (pseudo && pseudo[0]) ? pseudo : "JOUEUR";
-
-    char err[128] = { 0 };
-    ns_arene *a = ns_arene_ouvrir(&cfg, err, sizeof err);
-    if (!a) {
-        NS_WARN("--couperet-en-ligne : %s — la manche se jouera en local", err);
-        return NULL;
-    }
-    if (places_out) *places_out = (uint8_t)places;
-    if (place_out)  *place_out  = (uint8_t)place;
-    NS_INFO("couperet : salon %llu, place %u sur %u, relais %s:%u",
-            salon, place, places, hote, port);
-    return a;
+    return arene_ouvrir_place(hote, (uint16_t)port, (uint64_t)salon, place, places,
+                              pseudo, "--couperet-en-ligne", places_out, place_out);
 }
 
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
@@ -2458,6 +2588,16 @@ int main(int argc, char **argv)
              * mondial restait vide, sans erreur. */
             ns_online_request_board("envol", "normal");
         }
+
+        /*
+         * LE COMPTOIR HÉRITE DU MÊME VERROU, et il en hérite au lieu de le
+         * réimplémenter : `--offline` ne doit pas laisser une porte ouverte
+         * simplement parce qu'elle est neuve. Sans URL, `ns_compte_init` ne
+         * crée même pas son fil.
+         */
+        if (!opt.offline && ns_compte_init(choix.url, oc.token)) {
+            NS_INFO("comptoir : F1 pour s'inscrire, se connecter et rejoindre un salon");
+        }
     }
 
     /*
@@ -2834,6 +2974,31 @@ int main(int argc, char **argv)
      * Perdre sa partie parce qu'on a appuyé deux fois sur Échap est un défaut,
      * pas un raccourci.
      */
+    /*
+     * Le comptoir vit à côté du menu et pas dedans. Le menu règle la MACHINE —
+     * qualité, volumes, sensibilité ; le comptoir règle QUI JOUE. Les mettre
+     * ensemble aurait mis le mot de passe à deux flèches du curseur de
+     * poussière, et surtout aurait obligé le menu à connaître le réseau.
+     */
+    room_comptoir accueil; room_comptoir_init(&accueil);
+
+    /*
+     * LE COMPTOIR S'OUVRE TOUT SEUL au premier lancement branché sur un
+     * serveur. C'est le seul moment où c'est justifié, et la condition le dit :
+     * un serveur configuré, et aucune session gardée. Autrement dit, quelqu'un
+     * qui vient de brancher son jeu sur une salle et qui n'a pas de compte.
+     *
+     * On regarde la CONFIGURATION et non l'état du module : la vérification du
+     * jeton part sur le réseau et met le temps qu'elle met, alors que l'écran
+     * s'affiche à la première image. Un joueur déjà connecté verrait sinon le
+     * comptoir s'ouvrir puis se refermer sous ses yeux.
+     */
+    bool accueil_ouvert =
+        ns_compte_etat_courant() != NS_COMPTE_ETEINT
+        && !ns_config_get_str(NS_CFG_SERVER_TOKEN, "")[0];
+    uint32_t salon_prochain_battement_ms = 0;
+    bool     salon_lancer = false;   /* « commence » à poser au prochain battement */
+
     room_menu menu; SDL_zero(menu);
     /*
      * L'interrupteur du temps réel, que le menu écrit et persiste.
@@ -3287,6 +3452,50 @@ play_at_done: ;
 
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
+            /*
+             * LE COMPTOIR PASSE AVANT TOUT LE RESTE, et pas seulement avant le
+             * menu : tant qu'un champ a le curseur, un « W » est une lettre et
+             * pas un pas en avant, une flèche déplace le curseur et pas la
+             * caméra. `ns_saisie_sdl_evenement` dit ce qu'il a consommé — et il
+             * laisse délibérément passer Entrée, Échap et Tab, parce que
+             * valider, annuler et changer de champ sont des décisions d'écran
+             * et non de champ de texte.
+             */
+            if (accueil_ouvert) {
+                ns_saisie *champ = room_comptoir_champ(&accueil);
+                if (champ && ns_saisie_sdl_evenement(champ, &ev)) continue;
+
+                if (ev.type == SDL_EVENT_KEY_DOWN) {
+                    const bool cmd = (ev.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+                    if (champ && cmd && ev.key.key == SDLK_V) {
+                        /* Le collage : c'est avec ça qu'on entre un code reçu
+                         * par message, et le recopier à la main est justement ce
+                         * que les six caractères cherchent à rendre possible,
+                         * pas ce qu'on veut imposer. */
+                        ns_saisie_sdl_coller(champ);
+                        continue;
+                    }
+                    switch (ev.key.key) {
+                    case SDLK_UP:     room_comptoir_agir(&accueil, ROOM_CT_HAUT); break;
+                    case SDLK_DOWN:   room_comptoir_agir(&accueil, ROOM_CT_BAS); break;
+                    case SDLK_LEFT:   room_comptoir_agir(&accueil, ROOM_CT_GAUCHE); break;
+                    case SDLK_RIGHT:  room_comptoir_agir(&accueil, ROOM_CT_DROITE); break;
+                    case SDLK_TAB:    room_comptoir_agir(&accueil, ROOM_CT_SUIVANT); break;
+                    case SDLK_RETURN: case SDLK_KP_ENTER:
+                        room_comptoir_agir(&accueil, ROOM_CT_VALIDER); break;
+                    case SDLK_ESCAPE: room_comptoir_agir(&accueil, ROOM_CT_ANNULER); break;
+                    case SDLK_F1:
+                        /* La même touche referme : c'est ce qu'on essaie quand
+                         * on ne trouve pas la sortie. */
+                        accueil_ouvert = false;
+                        break;
+                    default: break;
+                    }
+                    continue;
+                }
+                if (ev.type == SDL_EVENT_TEXT_INPUT) continue;
+            }
+
             switch (ev.type) {
             case SDL_EVENT_QUIT:
                 running = false;
@@ -3381,6 +3590,15 @@ play_at_done: ;
                     /* Le geste est le même que celui de Start sur la manette :
                      * il est donc décidé une seule fois, après la boucle. */
                     want_menu = true;
+                    break;
+                case SDLK_F1:
+                    /*
+                     * Le comptoir. Il s'ouvre même sans serveur configuré : sa
+                     * première page DIT alors ce qui manque et où le mettre.
+                     * Une touche qui ne fait rien selon un réglage qu'on ne
+                     * voit pas est pire qu'une page qui explique.
+                     */
+                    accueil_ouvert = true;
                     break;
                 case SDLK_F2: {
                     /* Capture à la demande, dans le répertoire utilisateur. */
@@ -3819,6 +4037,79 @@ play_at_done: ;
          * permet à la manette de faire exactement la même chose sans que ces
          * huit lignes existent deux fois.
          */
+        /*
+         * Le pas de comptoir. Il tourne MÊME FERMÉ : le jeton gardé d'une
+         * session précédente se vérifie au démarrage, et il faut bien que
+         * quelqu'un lise la réponse pour rebrancher `ns_online`. Un écran fermé
+         * ne veut pas dire un module éteint.
+         */
+        {
+            const room_comptoir_demande d =
+                comptoir_pas(&accueil, ns_rhi_window(rhi), accueil_ouvert);
+
+            /*
+             * On bat DÈS QU'ON EST DANS UN SALON, écran ouvert ou fermé. Le
+             * faucheur du serveur ne fait pas la différence : un joueur qui a
+             * refermé le comptoir pour aller chercher une borne est un joueur
+             * vivant, et le laisser tomber pour ça serait la pire des sorties.
+             */
+            {
+                ns_salon dedans;
+                if (ns_salon_courant(&dedans)) {
+                    salon_battre_si_temps(&couperet, cp_moi, salon_lancer,
+                                          &salon_prochain_battement_ms);
+                    salon_lancer = false;
+                } else {
+                    salon_prochain_battement_ms = 0;
+                }
+            }
+
+            if (d == ROOM_CT_D_FERMER) {
+                accueil_ouvert = false;
+            } else if (d == ROOM_CT_D_LANCER) {
+                ns_salon salon;
+                if (ns_salon_courant(&salon) && salon.relais_hote[0] && salon.relais_port) {
+                    uint8_t places = 0, place = 0;
+                    ns_arene *neuve = arene_ouvrir_place(
+                        salon.relais_hote, salon.relais_port, salon.relais_salon,
+                        (unsigned)salon.place, (unsigned)salon.places,
+                        ns_compte_pseudo(), "comptoir", &places, &place);
+                    if (neuve) {
+                        /* On ferme la manche précédente AVANT d'installer la
+                         * neuve. Deux arènes ouvertes sur le même relais
+                         * publieraient deux états pour une seule place. */
+                        if (arene) ns_arene_fermer(arene);
+                        arene = neuve;
+
+                        /*
+                         * ON N'APPELLE PAS `couperet_ouvrir` ICI, et c'est le
+                         * point à ne pas rater : celui-là remplit toutes les
+                         * autres places de RIVAUX. En ligne, ces places sont de
+                         * vrais joueurs. C'est le bloc du coup d'envoi qui
+                         * assied le salon, une fois, quand le relais dit
+                         * COURSE ; on lui rend la main en remettant `cp_assis`
+                         * à faux, et l'on n'invente aucune place en attendant.
+                         */
+                        (void)places; (void)place;
+                        cp_assis = false;
+                        cp_actif = false;
+                        cp_moi   = ROOM_CP_MAX_PLACES;
+                        accueil_ouvert = false;
+
+                        /* Le serveur doit basculer en « manche » MAINTENANT :
+                         * c'est ce qui retire le salon de la liste publique et
+                         * ferme la porte aux retardataires. On force donc le
+                         * battement au lieu d'attendre son échéance. */
+                        salon_lancer = true;
+                        salon_prochain_battement_ms = 0;
+                    }
+                } else {
+                    NS_WARN("comptoir : le salon n'a pas rendu de relais, "
+                            "la manche ne peut pas s'ouvrir en ligne");
+                }
+            }
+        }
+
         if (want_menu) {
             if (menu.open) {
                 room_menu_input(&menu, &menu_ctx, ROOM_MENU_CANCEL);
@@ -4535,31 +4826,58 @@ play_at_done: ;
                     /*
                      * LE SALON EST INSTALLÉ UNE FOIS, au coup d'envoi.
                      *
-                     * Chacun pour soi et non en équipes : le protocole ne porte
-                     * pas de camp dans son entrée, et l'adopter depuis l'ÉTAT
-                     * que chacun publie sur lui-même laisserait un joueur
-                     * changer de camp en cours de manche — donc échapper au
-                     * couperet en rejoignant celui qui mène. Les équipes en
-                     * ligne demandent que le camp soit convenu à l'entrée ;
-                     * c'est un octet de plus dans le JOIN, et ce n'est pas fait.
+                     * LES CAMPS VIENNENT DU SALON, PAS DU RELAIS. C'est ce qui
+                     * a débloqué les équipes en ligne, longtemps annoncées
+                     * impossibles ici même : le protocole du relais ne porte pas
+                     * de camp, et l'adopter depuis l'ÉTAT que chacun publie sur
+                     * lui-même laisserait un joueur changer de camp en cours de
+                     * manche — donc échapper au couperet en rejoignant celui qui
+                     * mène. C'était vrai du RELAIS, qui ne connaît personne.
+                     *
+                     * Le salon, lui, a authentifié chacun et lui a ATTRIBUÉ sa
+                     * place et son camp (`salons.CampDeLaPlace`, côté serveur,
+                     * qui ignore ce que le client prétend). Le camp n'a donc pas
+                     * à voyager sur le relais : il se lit ici, et il ne se
+                     * discute pas. Les deux numérotations coïncident par
+                     * construction — c'est `salon.place` qu'on a donné au relais
+                     * en ouvrant l'arène.
                      */
+                    ns_salon sal;
+                    const bool par_salon = ns_salon_courant(&sal);
+                    const bool equipes_ligne = par_salon && sal.camps > 1;
+
                     ns_arene_place tab[ROOM_CP_MAX_PLACES];
                     const uint32_t n = ns_arene_places(arene, tab, ROOM_CP_MAX_PLACES);
                     uint8_t assises = 0;
                     for (uint32_t k = 0; k < n; ++k) if (tab[k].presente) assises++;
-                    room_cp_ouvrir(&couperet, assises ? assises : 2, false);
+                    room_cp_ouvrir(&couperet, assises ? assises : 2, equipes_ligne);
                     for (uint32_t k = 0; k < n && k < ROOM_CP_MAX_PLACES; ++k) {
                         if (!tab[k].presente) continue;
+                        uint8_t camp = (uint8_t)k;
+                        if (equipes_ligne) {
+                            /* Le camp de CETTE place, tel que le serveur l'a
+                             * attribué. Une place que le salon ne connaît pas
+                             * encore garde l'alternance, qui est la règle que le
+                             * serveur applique lui aussi. */
+                            camp = (uint8_t)(k % (uint32_t)sal.camps);
+                            for (int o = 0; o < sal.occupants; ++o) {
+                                if ((uint32_t)sal.occupant[o].place == k) {
+                                    camp = (uint8_t)sal.occupant[o].camp;
+                                    break;
+                                }
+                            }
+                        }
                         (void)room_cp_asseoir(&couperet, (uint8_t)k,
-                                              tab[k].pseudo, (uint8_t)k);
+                                              tab[k].pseudo, camp);
                     }
                     room_cp_lancer(&couperet, ns_arene_graine(arene));
                     cp_moi   = ns_arene_ma_place(arene);
                     cp_actif = (couperet.phase == ROOM_CP_COURSE);
                     cp_assis = cp_actif;
                     cp_verdict = 0.0f;
-                    NS_INFO("couperet : manche en ligne lancée, %u places, "
-                            "je suis la place %u", (unsigned)assises, cp_moi);
+                    NS_INFO("couperet : manche en ligne lancée, %u places, %s, "
+                            "je suis la place %u", (unsigned)assises,
+                            equipes_ligne ? "en camps" : "chacun pour soi", cp_moi);
                 }
                 /*
                  * QUI ARBITRE PEUT CHANGER EN COURS DE MANCHE, et il faut que
@@ -5836,6 +6154,20 @@ play_at_done: ;
                     }
                 }
                 room_menu_draw(sprites, &menu, &menu_ctx);
+                if (accueil_ouvert) {
+                    /*
+                     * ROOM_HUD_W / ROOM_HUD_H, et surtout PAS `w` et `h`.
+                     * `ns_sprite_begin` a ouvert la passe dans une résolution
+                     * VIRTUELLE de 1280 x 720 : c'est ce qui rend l'interface
+                     * identique en fenêtre et en plein écran. Passer la taille
+                     * réelle du framebuffer centrait le panneau à 1512, 949
+                     * dans un espace qui s'arrête à 1280, 720 — il était
+                     * dessiné, entièrement hors de l'écran, et rien ne le
+                     * disait.
+                     */
+                    room_comptoir_draw(sprites, ROOM_HUD_W, ROOM_HUD_H, &accueil,
+                                       SDL_GetTicks());
+                }
                 ns_sprite_end(rhi, sprites, target, w, h, NULL);
             }
 

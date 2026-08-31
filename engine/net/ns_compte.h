@@ -58,12 +58,21 @@
  * pourrait pas comprendre.
  *
  *   - pseudo : 24 caractères au plus (auth.ValidateUsername) ;
- *   - mot de passe : 256 au plus, 12 au moins (auth.ValidatePassword). Tronquer
- *     à moins de 256 rendrait impossible la connexion d'un compte créé sur le
- *     site avec un mot de passe long — un échec sans message, le pire des cas.
+ *   - mot de passe : 256 CARACTÈRES au plus, 12 au moins
+ *     (auth.ValidatePassword). Tronquer à moins de 256 rendrait impossible la
+ *     connexion d'un compte créé sur le site avec un mot de passe long — un
+ *     échec sans message, le pire des cas.
+ *
+ * Et 256 caractères ne font pas 256 octets. Le serveur compte des RUNES et
+ * accepte les accents ; le champ de saisie aussi, parce qu'un champ masqué n'a
+ * pas à être dessinable (voir `ns_saisie.c`, la règle du masque). Un caractère
+ * UTF-8 pèse jusqu'à quatre octets, donc le tampon doit en tenir 1024 plus le
+ * terminateur. Il en faisait 264 : au-delà de 65 caractères accentués, le mot
+ * de passe était coupé — et coupé au MILIEU d'une séquence, ce qui produit une
+ * inscription qui réussit et une connexion qui échoue sans un mot.
  */
 #define NS_COMPTE_PSEUDO_MAX  32
-#define NS_COMPTE_MDP_MAX     264
+#define NS_COMPTE_MDP_MAX     1032
 #define NS_COMPTE_JETON_MAX   256
 #define NS_COMPTE_MESSAGE_MAX 160
 

@@ -78,11 +78,13 @@ static struct {
 } g;
 
 /*
- * Le mot de passe pèse à lui seul plus que tout le reste de la requête. Le
- * dire à la compilation évite qu'un champ ajouté un jour fasse grossir la file
- * sans que personne le remarque.
+ * Le mot de passe pèse à lui seul plus que tout le reste de la requête : 1 032
+ * octets, parce que 256 caractères accentués en font 1 024. Le dire à la
+ * compilation évite qu'un champ ajouté un jour fasse grossir la file sans que
+ * personne le remarque — la file en garde huit, donc chaque octet compte huit
+ * fois.
  */
-_Static_assert(sizeof(requete) < 1024, "une requête doit rester petite : la file en garde huit");
+_Static_assert(sizeof(requete) < 1400, "une requête doit rester petite : la file en garde huit");
 
 /* ==========================================================================
  * Petites aides
@@ -790,21 +792,44 @@ bool ns_compte_jeton_change(void)
     return v;
 }
 
+/*
+ * Range le secret, ou dit non.
+ *
+ * `SDL_snprintf` tronque en silence, et tronquer un mot de passe donne le pire
+ * des échecs : à l'inscription le compte se crée avec ce qui est passé, à la
+ * connexion il est refusé, et rien à l'écran ne relie les deux. Le tampon est
+ * dimensionné pour que le cas n'arrive pas ; ce garde-fou est là pour le jour
+ * où quelqu'un changera une borne sans changer l'autre.
+ */
+static bool ranger_secret(requete *q, const char *mdp)
+{
+    const size_t n = mdp ? SDL_strlen(mdp) : 0;
+    if (n >= sizeof q->secret) {
+        SDL_LockMutex(g.verrou);
+        dire("mot de passe trop long pour ce champ");
+        SDL_UnlockMutex(g.verrou);
+        return false;
+    }
+    SDL_memcpy(q->secret, mdp ? mdp : "", n);
+    q->secret[n] = '\0';
+    return true;
+}
+
 void ns_compte_inscrire(const char *pseudo, const char *mdp)
 {
+    if (!g.actif) return;
     requete q; SDL_zero(q); q.genre = G_INSCRIRE;
     SDL_snprintf(q.texte, sizeof q.texte, "%s", pseudo ? pseudo : "");
-    SDL_snprintf(q.secret, sizeof q.secret, "%s", mdp ? mdp : "");
-    (void)enfiler(&q);
+    if (ranger_secret(&q, mdp)) (void)enfiler(&q);
     effacer(q.secret, sizeof q.secret);
 }
 
 void ns_compte_connecter(const char *pseudo, const char *mdp)
 {
+    if (!g.actif) return;
     requete q; SDL_zero(q); q.genre = G_CONNECTER;
     SDL_snprintf(q.texte, sizeof q.texte, "%s", pseudo ? pseudo : "");
-    SDL_snprintf(q.secret, sizeof q.secret, "%s", mdp ? mdp : "");
-    (void)enfiler(&q);
+    if (ranger_secret(&q, mdp)) (void)enfiler(&q);
     effacer(q.secret, sizeof q.secret);
 }
 
