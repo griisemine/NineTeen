@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"nineteen/internal/api"
 	"nineteen/internal/duel"
 	"nineteen/internal/migrations"
+	"nineteen/internal/salons"
 	"nineteen/internal/store"
 	"nineteen/internal/web"
 )
@@ -71,6 +73,15 @@ func main() {
 		logFormat = flag.String("log", envOr("NINETEEN_LOG", "text"), "format de journal : text ou json")
 		duelAddr  = flag.String("duel-addr", envOr("NINETEEN_DUEL_ADDR", ""),
 			"adresse d'ecoute du relais de duel (vide = pas de duel en direct)")
+		// L'adresse du relais TELLE QU'ON L'ANNONCE, distincte de celle
+		// ci-dessus comme `-public-url` est distincte de `-addr`, et pour la
+		// meme raison : l'une dit ou le processus se pose, l'autre ou le monde
+		// le joint. Elle est ce qu'un joueur recoit en creant ou en rejoignant
+		// un salon ; sans elle, un code de salon ne mene nulle part, et les
+		// routes de salon repondent 503 plutot que d'annoncer une adresse
+		// devinee.
+		duelPublic = flag.String("duel-public", envOr("NINETEEN_DUEL_PUBLIC", ""),
+			"adresse « hote:port » du relais annoncee aux joueurs d'un salon (vide = salons desactives)")
 		insecureOK = flag.Bool("insecure-ok", envOr("NINETEEN_INSECURE_OK", "") != "",
 			"autoriser l'écoute publique SANS cookies Secure (à n'employer qu'en connaissance de cause)")
 		// L'ADRESSE PUBLIQUE, celle que le JEU doit viser.
@@ -103,6 +114,18 @@ func main() {
 	// symptôme côté jeu est un classement qui reste local. On la contrôle donc
 	// ici, et on refuse de l'annoncer plutôt que de la propager.
 	*publicURL = urlPubliqueValide(*publicURL, logger)
+	relaisPublic := adresseRelaisValide(*duelPublic, logger)
+
+	// Un relais qui ecoute et que personne n'annonce est le piege exact que
+	// `-public-url` a deja pour le site : tout marche, sauf que le joueur n'a
+	// aucun moyen d'apprendre l'adresse. On le dit au demarrage, une fois,
+	// plutot que de laisser chercher pourquoi les salons repondent 503.
+	if *duelAddr != "" && !relaisPublic.Annonce() {
+		logger.Warn("le relais ecoute mais n'est annonce a personne : les salons resteront fermes",
+			"ecoute", *duelAddr,
+			"aide", "poser NINETEEN_DUEL_PUBLIC (ou -duel-public) sur l'adresse « hote:port » "+
+				"par laquelle les joueurs joignent ce relais")
+	}
 
 	// Une adresse publique sans `-secure` envoie le cookie de session en clair.
 	//
@@ -164,6 +187,7 @@ func main() {
 		Version:   version,
 		Publiee:   os.Getenv("NINETEEN_RELEASE_PUBLIEE") == "1",
 		PublicURL: *publicURL,
+		Relais:    relaisPublic,
 		Assets:    assets,
 	})
 
@@ -304,6 +328,66 @@ func urlPubliqueValide(brut string, logger *slog.Logger) string {
 	propre := u.String()
 	logger.Info("adresse publique annoncée au joueur", "url", propre)
 	return propre
+}
+
+// adresseRelaisValide controle l'adresse du relais qu'on ANNONCE aux joueurs
+// d'un salon, et rend le zero quand il n'y a rien de sur a dire.
+//
+// C'est le pendant exact de `urlPubliqueValide` pour l'autre port, et le meme
+// raisonnement s'applique : une adresse fausse est PIRE que pas d'adresse. Ici
+// elle donnerait a chaque joueur d'un salon un hote et un port ou personne ne
+// repond, apres qu'il a obtenu un code, une place et l'accord des autres — le
+// mode echouerait donc au dernier moment, et pour tout le monde a la fois.
+//
+// Trois refus, et chacun correspond a une faute qu'on fait vraiment :
+//
+//   - UN SCHEMA. Le relais n'est pas du HTTP : c'est un protocole binaire sur
+//     TCP (voir l'en-tete de internal/duel/relay.go). « http://x:8081 » n'a pas
+//     de sens ici, et le recopier tel quel donnerait un nom d'hote a rallonge.
+//
+//   - UNE ADRESSE D'ECOUTE. « :8081 », « 0.0.0.0:8081 » et « [::]:8081 » sont
+//     ce qu'on ecrit dans `-duel-addr` : elles disent « toutes les interfaces »,
+//     ce qui ne designe aucune machine vue de l'exterieur. Les recopier
+//     enverrait le client se connecter a lui-meme.
+//
+//   - UN PORT QUI N'EN EST PAS UN. Absent, non numerique, ou hors de 1..65535.
+func adresseRelaisValide(brut string, logger *slog.Logger) api.RelaisPublic {
+	brut = strings.TrimSpace(brut)
+	if brut == "" {
+		return api.RelaisPublic{}
+	}
+
+	if strings.Contains(brut, "://") {
+		logger.Error("NINETEEN_DUEL_PUBLIC porte un schema : le relais n'est pas du HTTP",
+			"valeur", brut, "aide", "attendu « hote:port », sans schema")
+		return api.RelaisPublic{}
+	}
+
+	hote, port, err := net.SplitHostPort(brut)
+	if err != nil {
+		logger.Error("NINETEEN_DUEL_PUBLIC illisible, aucun salon ne sera ouvert",
+			"valeur", brut, "aide", "attendu « hote:port », par exemple arcade.example:8081")
+		return api.RelaisPublic{}
+	}
+
+	switch hote {
+	case "", "0.0.0.0", "::", "[::]", "*":
+		logger.Error("NINETEEN_DUEL_PUBLIC est une adresse d'ecoute, pas une adresse a annoncer",
+			"valeur", brut,
+			"aide", "« toutes les interfaces » ne designe aucune machine vue du joueur ; "+
+				"annoncer le nom ou l'adresse par laquelle il joint ce relais")
+		return api.RelaisPublic{}
+	}
+
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		logger.Error("NINETEEN_DUEL_PUBLIC : port invalide, aucun salon ne sera ouvert",
+			"valeur", brut, "port", port)
+		return api.RelaisPublic{}
+	}
+
+	logger.Info("relais annonce aux joueurs de salon", "hote", hote, "port", n)
+	return api.RelaisPublic{Hote: hote, Port: n}
 }
 
 // redactURL masque le mot de passe d'une URL de connexion.
@@ -508,6 +592,22 @@ func housekeeping(ctx context.Context, db *store.Store, logger *slog.Logger) {
 		case <-fast.C:
 			if err := db.PurgePresence(ctx, presenceKeep); err != nil {
 				logger.Warn("purge de la présence", "err", err)
+			}
+			// Les salons suivent le rythme rapide pour la même raison que la
+			// présence, et avec la même conséquence limitée : les lectures
+			// filtrent déjà sur `battu_a`, donc une place morte n'est jamais
+			// servie et ce passage-ci ne fait que garder les deux tables à la
+			// taille de ce qui se joue réellement. Un service où il ne
+			// tournerait jamais afficherait exactement la même chose.
+			//
+			// Les deux durées viennent des règles, pas d'ici : `TTLOccupant`
+			// est justifiée par le rythme du client, `RetentionFini` par la
+			// durée d'une manche. Voir internal/salons.
+			if places, salles, err := db.PurgerSalons(ctx, time.Now(),
+				salons.TTLOccupant, salons.RetentionFini); err != nil {
+				logger.Warn("purge des salons", "err", err)
+			} else if places > 0 || salles > 0 {
+				logger.Info("salons purgés", "places", places, "salons", salles)
 			}
 
 		case <-slow.C:

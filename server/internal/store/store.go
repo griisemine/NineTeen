@@ -20,6 +20,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"nineteen/internal/salons"
 )
 
 var (
@@ -724,4 +726,571 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+/* ========================================================================== */
+/* Salons du Couperet                                                         */
+/* ========================================================================== */
+
+// Le magasin ne JUGE rien d'un salon : il charge, il laisse `internal/salons`
+// decider, il reecrit. C'est la meme separation que pour les parties, ou le
+// score est recalcule par `internal/runs` et non par une requete.
+//
+// La consequence pratique vaut d'etre ecrite : aucune de ces requetes ne
+// contient de regle de jeu. On n'y trouvera ni « la place la plus petite », ni
+// « qui herite du salon », ni « depuis quand un occupant est mort ». Tout cela
+// se teste sans base, et c'est ce qui rend ces requetes-ci ennuyeuses.
+
+// requeteur — le minimum qu'il faut savoir faire pour lire ou ecrire un salon.
+//
+// `*pgxpool.Pool` et `pgx.Tx` le satisfont tous les deux. Ce n'est pas de
+// l'abstraction gratuite : les lectures se font hors transaction, les
+// modifications a l'interieur d'une, et sans cette interface le chargement
+// serait ecrit deux fois — donc, un jour, differemment.
+type requeteur interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// Le pseudo du proprietaire vient de `players`, jamais d'une copie dans
+// `salons` : un compte renomme ne doit pas laisser un ancien nom dans une liste
+// publique.
+const salonColonnes = `s.id, s.code, s.nom, s.places, s.camps, s.prive, s.etat,
+	       s.relais, s.proprietaire, p.username::text, s.cree_a, s.change_a`
+
+// lireSalon decode une ligne de salon. Les entiers etroits sont scannes dans
+// leur type exact puis convertis : la colonne est un `smallint`, et compter sur
+// une conversion implicite du pilote serait parier sur un detail qu'aucun test
+// d'ici ne couvre.
+func lireSalon(row pgx.Row) (int64, *salons.Salon, error) {
+	var (
+		id            int64
+		places, camps int16
+		etat          string
+		sal           salons.Salon
+	)
+	err := row.Scan(&id, &sal.Code, &sal.Nom, &places, &camps, &sal.Prive, &etat,
+		&sal.Relais, &sal.Proprietaire, &sal.ProprietairePseudo, &sal.CreeA, &sal.ChangeA)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil, ErrNotFound
+	}
+	if err != nil {
+		return 0, nil, fmt.Errorf("lecture du salon : %w", err)
+	}
+	sal.Places = int(places)
+	sal.Camps = int(camps)
+	sal.Etat = salons.Etat(etat)
+	return id, &sal, nil
+}
+
+// occupantsDe charge les places de plusieurs salons en une requete.
+//
+// Une requete et non une par salon : la liste publique en montre plusieurs
+// dizaines, et huit places chacun feraient autant d'allers-retours que de
+// lignes affichees.
+func occupantsDe(ctx context.Context, q requeteur, ids []int64) (map[int64][]salons.Occupant, error) {
+	out := make(map[int64][]salons.Occupant, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	const req = `
+		SELECT salon_id, place, player_id, pseudo, camp, points, fusibles,
+		       vivante, borne, entre_a, battu_a
+		FROM salon_places
+		WHERE salon_id = ANY($1)
+		ORDER BY salon_id, place`
+
+	rows, err := q.Query(ctx, req, ids)
+	if err != nil {
+		return nil, fmt.Errorf("places du salon : %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			salonID     int64
+			place, camp int16
+			o           salons.Occupant
+		)
+		if err := rows.Scan(&salonID, &place, &o.PlayerID, &o.Pseudo, &camp,
+			&o.Points, &o.Fusibles, &o.Vivante, &o.Borne, &o.EntreA, &o.BattuA); err != nil {
+			return nil, err
+		}
+		o.Place = int(place)
+		o.Camp = int(camp)
+		out[salonID] = append(out[salonID], o)
+	}
+	return out, rows.Err()
+}
+
+// salonParCode charge un salon complet. `verrou` pose un FOR UPDATE, obligatoire
+// des qu'on s'apprete a ecrire : sans lui, deux entrees simultanees liraient la
+// meme place libre et la seconde echouerait sur la cle primaire au lieu de
+// prendre la place suivante.
+func salonParCode(ctx context.Context, q requeteur, code string, verrou bool) (int64, *salons.Salon, error) {
+	req := `SELECT ` + salonColonnes + `
+		FROM salons s JOIN players p ON p.id = s.proprietaire
+		WHERE s.code = $1`
+	if verrou {
+		// « OF s » et non un FOR UPDATE nu : verrouiller aussi la ligne de
+		// `players` bloquerait deux salons du meme proprietaire l'un derriere
+		// l'autre, pour rien.
+		req += ` FOR UPDATE OF s`
+	}
+	id, sal, err := lireSalon(q.QueryRow(ctx, req, code))
+	if err != nil {
+		return 0, nil, err
+	}
+	places, err := occupantsDe(ctx, q, []int64{id})
+	if err != nil {
+		return 0, nil, err
+	}
+	sal.Occupants = places[id]
+	return id, sal, nil
+}
+
+// ecrireSalon reecrit ce que les regles ont pu changer.
+//
+// Les trois colonnes partent ensemble et sans condition, meme quand rien n'a
+// bouge. Ecrire « seulement si ca a change » demanderait de comparer avant et
+// apres, c'est-a-dire de redire ici ce que les regles ont decide — et c'est
+// exactement le genre de redite qui finit par se tromper de sens.
+func ecrireSalon(ctx context.Context, q requeteur, id int64, sal *salons.Salon) error {
+	_, err := q.Exec(ctx,
+		`UPDATE salons SET etat = $2, proprietaire = $3, change_a = $4 WHERE id = $1`,
+		id, string(sal.Etat), sal.Proprietaire, sal.ChangeA)
+	if err != nil {
+		return fmt.Errorf("mise a jour du salon : %w", err)
+	}
+	return nil
+}
+
+// vider retire les places que le faucheur vient de rendre.
+func vider(ctx context.Context, q requeteur, id int64, places []int) error {
+	if len(places) == 0 {
+		return nil
+	}
+	nums := make([]int16, len(places))
+	for i, p := range places {
+		nums[i] = int16(p)
+	}
+	_, err := q.Exec(ctx,
+		`DELETE FROM salon_places WHERE salon_id = $1 AND place = ANY($2)`, id, nums)
+	if err != nil {
+		return fmt.Errorf("liberation de place : %w", err)
+	}
+	return nil
+}
+
+// CreerSalon ouvre un salon et y assied son createur.
+//
+// `maxParProprietaire` borne le nombre de salons qu'un meme joueur tient
+// ouverts. La borne est passee par l'appelant plutot qu'ecrite ici : c'est une
+// politique de service, elle vit avec les autres, dans internal/api.
+//
+// UNE SEULE HORLOGE POUR TOUS LES SALONS, et c'est celle de l'application.
+//
+// Toutes les dates de ces deux tables sont ECRITES depuis Go — jamais par un
+// `DEFAULT now()` — et toutes les comparaisons de peremption se font en Go, dans
+// `internal/salons`. Le melange serait le vrai danger : si la creation datait de
+// l'horloge de la base et le battement de celle du serveur, un decalage de
+// quelques secondes entre les deux machines suffirait a faucher des places
+// vivantes, ou a en garder des mortes, sans que rien ne le dise. Le prix de
+// cette regle est qu'un deploiement a plusieurs serveurs demande des horloges
+// d'accord entre elles — ce que NTP fait deja, et qui se diagnostique, alors
+// qu'un ecart base/serveur ne se voit nulle part.
+func (s *Store) CreerSalon(ctx context.Context, nom string, places, camps int, prive bool,
+	playerID int64, pseudo string, maxParProprietaire int, maintenant time.Time) (*salons.Salon, error) {
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("creation de salon : %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var ouverts int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM salons WHERE proprietaire = $1 AND etat <> 'fini'`,
+		playerID).Scan(&ouverts); err != nil {
+		return nil, fmt.Errorf("comptage des salons : %w", err)
+	}
+	if ouverts >= maxParProprietaire {
+		return nil, salons.ErrTropDeSalons
+	}
+
+	relais, err := salons.TirerRelais()
+	if err != nil {
+		return nil, err
+	}
+
+	// Le code est TIRE, donc il peut collisionner. A 2^30 codes et quelques
+	// dizaines de salons vivants, la collision est un evenement qu'on n'a jamais
+	// vu — mais « jamais vu » n'est pas « impossible », et une collision non
+	// traitee rendrait au joueur une erreur interne pour un tirage malchanceux.
+	//
+	// Chaque essai se fait dans un POINT DE REPRISE et non dans la transaction
+	// nue : dans PostgreSQL, une violation de contrainte avorte la transaction
+	// entiere, donc reessayer sans point de reprise echouerait sur toutes les
+	// requetes suivantes, y compris celles qui n'ont rien a voir.
+	var (
+		id  int64
+		sal *salons.Salon
+	)
+	for essai := 0; essai < 8; essai++ {
+		code, cerr := salons.TirerCode()
+		if cerr != nil {
+			return nil, cerr
+		}
+
+		point, perr := tx.Begin(ctx)
+		if perr != nil {
+			return nil, fmt.Errorf("creation de salon : %w", perr)
+		}
+		const req = `
+			INSERT INTO salons (code, nom, places, camps, prive, relais, proprietaire,
+			                    cree_a, change_a)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+			RETURNING id`
+		err = point.QueryRow(ctx, req, code, nom, int16(places), int16(camps), prive,
+			relais, playerID, maintenant).Scan(&id)
+		if err != nil {
+			_ = point.Rollback(ctx)
+			if isUniqueViolation(err) {
+				continue
+			}
+			return nil, fmt.Errorf("creation de salon : %w", err)
+		}
+		if err := point.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("creation de salon : %w", err)
+		}
+		sal = &salons.Salon{
+			Code: code, Nom: nom, Places: places, Camps: camps, Prive: prive,
+			Etat: salons.Attente, Relais: relais,
+			Proprietaire: playerID, ProprietairePseudo: pseudo,
+			CreeA: maintenant, ChangeA: maintenant,
+		}
+		break
+	}
+	if sal == nil {
+		return nil, errors.New("aucun code de salon libre apres huit tirages")
+	}
+
+	// La place 0 revient au createur — c'est `Asseoir` qui le decide, pas cette
+	// requete : la plus petite place libre d'un salon neuf EST la zero.
+	place, err := sal.Asseoir(maintenant, playerID, pseudo)
+	if err != nil {
+		return nil, err
+	}
+	if err := poserPlace(ctx, tx, id, sal, place); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("creation de salon : %w", err)
+	}
+	return sal, nil
+}
+
+// occupantA retrouve la ligne que les regles viennent d'ecrire pour une place.
+//
+// Rendre une erreur plutot qu'indexer : `sal.Occupants` est ce que le paquet de
+// regles a produit, et si la place demandee n'y est pas, c'est ce paquet qui a
+// tort. Un `panic` sur un index perdrait le seul renseignement utile — laquelle.
+func occupantA(sal *salons.Salon, place int) (*salons.Occupant, error) {
+	for i := range sal.Occupants {
+		if sal.Occupants[i].Place == place {
+			return &sal.Occupants[i], nil
+		}
+	}
+	return nil, fmt.Errorf("place %d absente du salon", place)
+}
+
+// poserPlace ecrit la ligne d'un occupant, telle que les regles l'ont produite.
+func poserPlace(ctx context.Context, q requeteur, id int64, sal *salons.Salon, place int) error {
+	o, err := occupantA(sal, place)
+	if err != nil {
+		return err
+	}
+	const req = `
+		INSERT INTO salon_places (salon_id, place, player_id, pseudo, camp,
+		                          points, fusibles, vivante, borne, entre_a, battu_a)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (salon_id, place) DO UPDATE SET
+		    player_id = EXCLUDED.player_id,
+		    pseudo    = EXCLUDED.pseudo,
+		    camp      = EXCLUDED.camp,
+		    battu_a   = EXCLUDED.battu_a`
+	if _, err := q.Exec(ctx, req, id, int16(o.Place), o.PlayerID, o.Pseudo, int16(o.Camp),
+		o.Points, o.Fusibles, o.Vivante, o.Borne, o.EntreA, o.BattuA); err != nil {
+		return fmt.Errorf("attribution de place : %w", err)
+	}
+	return nil
+}
+
+// SalonsPublics rend les salons que la liste doit montrer.
+//
+// Le filtre SQL — non prive, en attente — est une PRE-SELECTION, pas la regle :
+// c'est `Ouvert()` qui tranche, apres que le faucheur a retire les occupants
+// disparus. Un salon dont tout le monde vient de s'evaporer sort donc de la
+// liste au moment ou on la lit, sans attendre le menage periodique.
+func (s *Store) SalonsPublics(ctx context.Context, maintenant time.Time, limite int) ([]salons.Salon, error) {
+	if limite < 1 || limite > 100 {
+		limite = 50
+	}
+	req := `SELECT ` + salonColonnes + `
+		FROM salons s JOIN players p ON p.id = s.proprietaire
+		WHERE NOT s.prive AND s.etat = 'attente'
+		ORDER BY s.cree_a DESC
+		LIMIT $1`
+
+	rows, err := s.pool.Query(ctx, req, limite)
+	if err != nil {
+		return nil, fmt.Errorf("liste des salons : %w", err)
+	}
+	defer rows.Close()
+
+	var (
+		ids   []int64
+		liste []*salons.Salon
+	)
+	for rows.Next() {
+		id, sal, err := lireSalon(rows)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+		liste = append(liste, sal)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Les lignes sont relachees AVANT la seconde requete : les garder ouvertes
+	// tiendrait une connexion du pool pendant qu'on en demande une autre, ce qui
+	// est le debut d'un epuisement de pool sous charge.
+	rows.Close()
+
+	places, err := occupantsDe(ctx, s.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]salons.Salon, 0, len(liste))
+	for i, sal := range liste {
+		sal.Occupants = places[ids[i]]
+		sal.Faucher(maintenant)
+		if !sal.Ouvert() {
+			continue
+		}
+		out = append(out, *sal)
+	}
+	return out, nil
+}
+
+// SalonParCode rend un salon, faucheur applique. C'est la lecture du classement
+// live et celle qui accompagne un battement.
+func (s *Store) SalonParCode(ctx context.Context, code string, maintenant time.Time) (*salons.Salon, error) {
+	_, sal, err := salonParCode(ctx, s.pool, code, false)
+	if err != nil {
+		return nil, err
+	}
+	sal.Faucher(maintenant)
+	return sal, nil
+}
+
+// RejoindreSalon assied un joueur et rend le salon tel qu'il est apres coup.
+//
+// Tout se passe dans UNE transaction avec la ligne du salon verrouillee : c'est
+// ce qui fait que huit joueurs qui entrent en meme temps obtiennent huit places
+// distinctes au lieu de se disputer la zero.
+func (s *Store) RejoindreSalon(ctx context.Context, code string, playerID int64, pseudo string,
+	maintenant time.Time) (*salons.Salon, int, error) {
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("entree dans le salon : %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	id, sal, err := salonParCode(ctx, tx, code, true)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	retires, _ := sal.Faucher(maintenant)
+	if err := vider(ctx, tx, id, retires); err != nil {
+		return nil, 0, err
+	}
+
+	place, refus := sal.Asseoir(maintenant, playerID, pseudo)
+	if refus != nil {
+		// Complet ou ferme. On VALIDE quand meme ce que le faucheur vient de
+		// nettoyer : ce menage-la est juste, il ne depend pas de l'entree, et le
+		// jeter ferait recommencer le meme travail au prochain appel — dans un
+		// salon plein, c'est-a-dire a chaque essai de tout le monde.
+		if err := ecrireSalon(ctx, tx, id, sal); err == nil {
+			_ = tx.Commit(ctx)
+		}
+		return nil, 0, refus
+	}
+	if err := poserPlace(ctx, tx, id, sal, place); err != nil {
+		return nil, 0, err
+	}
+	if err := ecrireSalon(ctx, tx, id, sal); err != nil {
+		return nil, 0, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, 0, fmt.Errorf("entree dans le salon : %w", err)
+	}
+	return sal, place, nil
+}
+
+// QuitterSalon leve un joueur. Partir sans etre assis n'est pas une erreur :
+// voir `Lever` (internal/salons).
+func (s *Store) QuitterSalon(ctx context.Context, code string, playerID int64, maintenant time.Time) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("sortie du salon : %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	id, sal, err := salonParCode(ctx, tx, code, true)
+	if err != nil {
+		return err
+	}
+
+	retires, _ := sal.Faucher(maintenant)
+	place, assis := sal.PlaceDe(playerID)
+	if assis {
+		retires = append(retires, place)
+	}
+	sal.Lever(maintenant, playerID)
+
+	if err := vider(ctx, tx, id, retires); err != nil {
+		return err
+	}
+	if err := ecrireSalon(ctx, tx, id, sal); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("sortie du salon : %w", err)
+	}
+	return nil
+}
+
+// SupprimerSalon ferme un salon. Le PROPRIETAIRE seul, et le proprietaire est
+// celui que les regles designent MAINTENANT : le faucheur passe d'abord, donc
+// un heritier peut fermer un salon que son createur a abandonne.
+func (s *Store) SupprimerSalon(ctx context.Context, code string, playerID int64, maintenant time.Time) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("fermeture du salon : %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	id, sal, err := salonParCode(ctx, tx, code, true)
+	if err != nil {
+		return err
+	}
+	sal.Faucher(maintenant)
+	if sal.Proprietaire != playerID {
+		return salons.ErrPasProprietaire
+	}
+
+	// La ligne part, et les places avec elle par cascade. On n'ecrit pas un etat
+	// « fini » avant de supprimer : la fermeture demandee est explicite, elle
+	// n'a personne a informer, et garder dix minutes un salon que son
+	// proprietaire vient de fermer n'aiderait aucun spectateur.
+	if _, err := tx.Exec(ctx, `DELETE FROM salons WHERE id = $1`, id); err != nil {
+		return fmt.Errorf("fermeture du salon : %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("fermeture du salon : %w", err)
+	}
+	return nil
+}
+
+// BattreSalon enregistre un battement et rend le salon tel qu'il en ressort.
+func (s *Store) BattreSalon(ctx context.Context, code string, playerID int64,
+	b salons.Battement, maintenant time.Time) (*salons.Salon, error) {
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("battement : %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	id, sal, err := salonParCode(ctx, tx, code, true)
+	if err != nil {
+		return nil, err
+	}
+
+	retires, _ := sal.Faucher(maintenant)
+	if err := vider(ctx, tx, id, retires); err != nil {
+		return nil, err
+	}
+
+	if err := sal.Battre(maintenant, playerID, b); err != nil {
+		return nil, err
+	}
+	place, _ := sal.PlaceDe(playerID)
+	o, err := occupantA(sal, place)
+	if err != nil {
+		return nil, err
+	}
+
+	const req = `
+		UPDATE salon_places
+		   SET camp = $3, points = $4, fusibles = $5, vivante = $6,
+		       borne = $7, battu_a = $8
+		 WHERE salon_id = $1 AND place = $2`
+	if _, err := tx.Exec(ctx, req, id, int16(place), int16(o.Camp), o.Points,
+		o.Fusibles, o.Vivante, o.Borne, o.BattuA); err != nil {
+		return nil, fmt.Errorf("battement : %w", err)
+	}
+	if err := ecrireSalon(ctx, tx, id, sal); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("battement : %w", err)
+	}
+	return sal, nil
+}
+
+// PurgerSalons est le menage periodique. Il ne decide RIEN : il execute en gros
+// ce que `Faucher` decide en detail, et le service afficherait exactement la
+// meme chose s'il ne tournait jamais — seule la table grossirait. C'est la
+// propriete que `PurgePresence` a deja, et elle vaut qu'on la garde : elle
+// interdit qu'une periodicite mal reglee change ce que les joueurs voient.
+func (s *Store) PurgerSalons(ctx context.Context, maintenant time.Time,
+	ttl, retention time.Duration) (int64, int64, error) {
+
+	// Les bornes sont CALCULEES EN GO et passees en parametre, plutot que
+	// derivees du `now()` de la base. C'est la meme horloge que celle qui juge
+	// la peremption a la lecture (voir `CreerSalon`) : deux horloges pour une
+	// meme decision finiraient par ne pas dire la meme chose, et l'ecart ne se
+	// verrait nulle part.
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM salon_places WHERE battu_a < $1`, maintenant.Add(-ttl))
+	if err != nil {
+		return 0, 0, fmt.Errorf("purge des places : %w", err)
+	}
+	places := tag.RowsAffected()
+
+	// Un salon sans personne est fini. `change_a` prend la date du constat :
+	// c'est de la que court la retention.
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE salons SET etat = 'fini', change_a = $1
+		 WHERE etat <> 'fini'
+		   AND NOT EXISTS (SELECT 1 FROM salon_places WHERE salon_id = salons.id)`,
+		maintenant); err != nil {
+		return places, 0, fmt.Errorf("fermeture des salons vides : %w", err)
+	}
+
+	tag, err = s.pool.Exec(ctx,
+		`DELETE FROM salons WHERE etat = 'fini' AND change_a < $1`,
+		maintenant.Add(-retention))
+	if err != nil {
+		return places, 0, fmt.Errorf("purge des salons : %w", err)
+	}
+	return places, tag.RowsAffected(), nil
 }

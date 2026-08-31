@@ -25,6 +25,7 @@ import (
 
 	"nineteen/internal/auth"
 	"nineteen/internal/runs"
+	"nineteen/internal/salons"
 	"nineteen/internal/store"
 )
 
@@ -52,8 +53,30 @@ type Server struct {
 	// bloc plutôt que d'annoncer une adresse devinée. Contrôlée avant d'arriver
 	// ici — voir `urlPubliqueValide` dans cmd/nineteend.
 	publicURL string
-	assets    http.Handler
+	// L'adresse du relais TELLE QU'ON L'ANNONCE aux joueurs d'un salon.
+	//
+	// Elle n'a rien a voir avec l'adresse d'ECOUTE du relais : celle-ci dit ou
+	// le monde le joint, celle-la ou le processus se pose. Derriere une
+	// publication Docker ou un proxy, les deux different toujours — c'est le
+	// meme partage que `-addr` et `-public-url`, et il se regle de la meme
+	// facon. Voir `adresseRelaisValide` dans cmd/nineteend.
+	//
+	// Vide quand rien n'est annonce, et les salons repondent alors 503. C'est le
+	// sens sur : un salon dont on ne peut pas donner le relais est un salon
+	// qu'on ne peut pas jouer, et l'ouvrir quand meme donnerait au joueur un code
+	// et aucun moyen de s'en servir.
+	relais RelaisPublic
+	assets http.Handler
 }
+
+// RelaisPublic — ou joindre le relais, tel qu'on l'ecrit au joueur.
+type RelaisPublic struct {
+	Hote string
+	Port int
+}
+
+// Annonce dit s'il y a quelque chose a annoncer.
+func (r RelaisPublic) Annonce() bool { return r.Hote != "" && r.Port > 0 }
 
 type Config struct {
 	Store     *store.Store
@@ -62,6 +85,7 @@ type Config struct {
 	Version   string
 	Publiee   bool
 	PublicURL string
+	Relais    RelaisPublic
 	Assets    http.Handler
 }
 
@@ -74,6 +98,7 @@ func New(cfg Config) *Server {
 		version:   cfg.Version,
 		publiee:   cfg.Publiee,
 		publicURL: cfg.PublicURL,
+		relais:    cfg.Relais,
 		assets:    cfg.Assets,
 	}
 	s.routes()
@@ -103,6 +128,22 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/presence", s.handlePresence)
 	s.mux.HandleFunc("GET /api/v1/ghosts", s.handleGhosts)
 	s.mux.HandleFunc("GET /api/v1/ghosts/{id}", s.handleGhost)
+
+	// Les salons du Couperet. La creation, l'entree, la sortie et le battement
+	// exigent un compte : une place dans une manche est une ressource qu'on tient
+	// contre les autres, contrairement a la presence dans l'allee, qui n'enleve
+	// rien a personne.
+	//
+	// La LISTE et le CLASSEMENT LIVE sont publics, pour la meme raison que le
+	// classement l'est : on doit pouvoir regarder une manche, et decider de
+	// s'inscrire, sans etre deja inscrit.
+	s.mux.HandleFunc("POST /api/v1/salons", s.handleSalonCreer)
+	s.mux.HandleFunc("GET /api/v1/salons", s.handleSalonsListe)
+	s.mux.HandleFunc("POST /api/v1/salons/{code}/join", s.handleSalonEntrer)
+	s.mux.HandleFunc("POST /api/v1/salons/{code}/leave", s.handleSalonSortir)
+	s.mux.HandleFunc("DELETE /api/v1/salons/{code}", s.handleSalonFermer)
+	s.mux.HandleFunc("POST /api/v1/salons/{code}/beat", s.handleSalonBattre)
+	s.mux.HandleFunc("GET /api/v1/salons/{code}/live", s.handleSalonLive)
 
 	s.mux.HandleFunc("GET /api/v1/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/v1/health", s.handleHealth)
@@ -1092,6 +1133,547 @@ func (s *Server) handleGhost(w http.ResponseWriter, r *http.Request) {
 	// exacte qui est écrite, et non ailleurs dans le programme. S'ajoutent
 	// `nosniff` et `Content-Disposition: attachment` posés juste au-dessus.
 	_, _ = io.WriteString(w, g.Inputs)
+}
+
+/* ========================================================================== */
+/* Salons du Couperet                                                         */
+/* ========================================================================== */
+
+// Le service de rendez-vous du mode competitif.
+//
+// CE QU'IL REPARE. Le Couperet se joue en ligne depuis qu'il existe, et le seul
+// moyen d'y retrouver quelqu'un etait de convenir HORS BANDE d'un numero de
+// salon et d'un numero de place, puis de les taper en ligne de commande
+// (« --couperet-en-ligne=hote:port,salon,place,places », room/main.c). Deux
+// joueurs qui choisissent la meme place ne se voient jamais ; celui qui se
+// trompe sur le nombre de places est refuse par le relais sans savoir pourquoi.
+// Ce n'etait pas un mode difficile a lancer, c'etait un mode qu'on ne pouvait
+// pas lancer sans se parler ailleurs d'abord.
+//
+// LES REGLES NE SONT PAS ICI. Elles sont dans `internal/salons`, qui se teste
+// sans base et sans socket. Ce qui suit ne fait que trois choses : borner ce
+// qu'un client peut demander, traduire les refus en codes HTTP, et decider QUI
+// voit QUOI. La troisieme est la seule qui compte pour la securite, et elle
+// tient en une regle : `relais` ne sort jamais vers qui n'est pas assis.
+
+// Le nombre de salons qu'un meme joueur peut tenir ouverts en meme temps.
+//
+// TROIS, et la borne existe parce qu'un salon coute des places sur le relais,
+// qui en a un budget fixe (`maxPlacesOuvertes`, 512, internal/duel/relay.go).
+// Sans elle, une boucle de creation reserverait ce budget sans jamais jouer, et
+// les salons des autres seraient refuses par un relais plein. Trois laisse de
+// quoi preparer une soiree — un salon public, un prive, un qu'on vient
+// d'abandonner et qui n'a pas encore ete fauche — sans qu'un seul compte puisse
+// prendre plus de vingt-quatre places sur les 512.
+const salonsParProprietaire = 3
+
+type salonCreerRequest struct {
+	Nom    string `json:"nom"`
+	Places int    `json:"places"`
+	Camps  int    `json:"camps"`
+	Prive  bool   `json:"prive"`
+}
+
+// Les champs d'un battement. Ce sont ceux du mode, aux types du mode : `points`
+// et `fusibles` sont des `int32_t` dans `room_cp_place` (room/room_couperet.h),
+// et les declarer plus larges ici laisserait entrer des valeurs que le client ne
+// saurait pas relire.
+type salonBattementRequest struct {
+	Points   int32  `json:"points"`
+	Fusibles int32  `json:"fusibles"`
+	Vivante  bool   `json:"vivante"`
+	Borne    string `json:"borne"`
+	Camp     int    `json:"camp"`
+	Commence bool   `json:"commence"`
+}
+
+/* -------------------------------------------------------------------------- */
+/* Les formes rendues                                                         */
+/* -------------------------------------------------------------------------- */
+
+// Declarees une fois et partagees par les six routes. Le tableau des occupants
+// est le meme a la creation, a l'entree, au battement et au classement live :
+// le decrire quatre fois aurait garanti que les quatre finissent par differer
+// d'un champ, et le client C lit ces noms-la.
+type salonOccupantJSON struct {
+	Place    int    `json:"place"`
+	Pseudo   string `json:"pseudo"`
+	Camp     int    `json:"camp"`
+	Points   int32  `json:"points"`
+	Fusibles int32  `json:"fusibles"`
+	Vivante  bool   `json:"vivante"`
+	Borne    string `json:"borne"`
+}
+
+// salonRelaisJSON — de quoi se brancher, et rien d'autre.
+//
+// C'EST LA CAPACITE. `salon` est l'identifiant de session sur le relais, tire
+// avec `crypto/rand` a la creation ; le relais n'a aucune notion de compte et
+// apparie sur ce seul nombre. Cette structure n'apparait donc que dans la
+// reponse d'une creation ou d'une entree — c'est-a-dire vers un joueur
+// authentifie a qui le serveur vient d'attribuer une place. Elle n'est ni dans
+// la liste, ni dans le classement live. Voir internal/salons/salons.go.
+type salonRelaisJSON struct {
+	Hote  string `json:"hote"`
+	Port  int    `json:"port"`
+	Salon int64  `json:"salon"`
+}
+
+type salonVueJSON struct {
+	OK           bool                `json:"ok"`
+	Code         string              `json:"code"`
+	Nom          string              `json:"nom"`
+	Places       int                 `json:"places"`
+	Camps        int                 `json:"camps"`
+	Prive        bool                `json:"prive"`
+	Proprietaire string              `json:"proprietaire"`
+	Etat         string              `json:"etat"`
+	Relais       salonRelaisJSON     `json:"relais"`
+	Place        int                 `json:"place"`
+	Occupants    []salonOccupantJSON `json:"occupants"`
+}
+
+type salonResumeJSON struct {
+	Code         string `json:"code"`
+	Nom          string `json:"nom"`
+	Places       int    `json:"places"`
+	Occupes      int    `json:"occupes"`
+	Camps        int    `json:"camps"`
+	Proprietaire string `json:"proprietaire"`
+	Etat         string `json:"etat"`
+	DepuisMs     int64  `json:"depuisMs"`
+}
+
+// salonLiveJSON — ce que lit la page du classement live.
+//
+// AUCUN CHAMP `relais`, et ce n'est pas un oubli : cette route est PUBLIQUE.
+// Y publier l'identifiant de session reviendrait a donner l'entree de la manche
+// a quiconque connait le code — c'est-a-dire a faire du code la capacite,
+// exactement ce que le module refuse. Un salon prive repond ici comme un autre,
+// justement parce qu'on ne risque rien a laisser regarder.
+type salonLiveJSON struct {
+	OK        bool                `json:"ok"`
+	Code      string              `json:"code"`
+	Nom       string              `json:"nom"`
+	Etat      string              `json:"etat"`
+	DepuisMs  int64               `json:"depuisMs"`
+	Occupants []salonOccupantJSON `json:"occupants"`
+}
+
+type salonBattementJSON struct {
+	OK        bool                `json:"ok"`
+	Etat      string              `json:"etat"`
+	Places    int                 `json:"places"`
+	Occupants []salonOccupantJSON `json:"occupants"`
+}
+
+// vueOccupants ne rend que les VIVANTS. L'ordre — celui des places — est celui
+// que `Vivants` garantit, et il est garanti la plutot qu'ici parce que ce n'est
+// pas une question de presentation : le client indexe ses propres tableaux par
+// la place.
+func vueOccupants(sal *salons.Salon, maintenant time.Time) []salonOccupantJSON {
+	vivants := sal.Vivants(maintenant)
+	out := make([]salonOccupantJSON, 0, len(vivants))
+	for _, o := range vivants {
+		out = append(out, salonOccupantJSON{
+			Place: o.Place, Pseudo: o.Pseudo, Camp: o.Camp,
+			Points: o.Points, Fusibles: o.Fusibles,
+			Vivante: o.Vivante, Borne: o.Borne,
+		})
+	}
+	return out
+}
+
+// depuisMs — l'age de l'ETAT COURANT, jamais celui du salon.
+//
+// Un seul champ pour deux questions qui n'en font qu'une : « il attend depuis
+// combien de temps ? » quand on choisit un salon, « la manche court depuis
+// combien de temps ? » quand on la regarde. Negatif est impossible en principe
+// et rendu a zero : une horloge de base legerement en avance ne doit pas
+// afficher un compteur qui remonte.
+func depuisMs(sal *salons.Salon, maintenant time.Time) int64 {
+	ms := maintenant.Sub(sal.ChangeA).Milliseconds()
+	if ms < 0 {
+		return 0
+	}
+	return ms
+}
+
+func vueSalon(sal *salons.Salon, place int, relais RelaisPublic, maintenant time.Time) salonVueJSON {
+	return salonVueJSON{
+		OK: true, Code: sal.Code, Nom: sal.Nom,
+		Places: sal.Places, Camps: sal.Camps, Prive: sal.Prive,
+		Proprietaire: sal.ProprietairePseudo, Etat: string(sal.Etat),
+		Relais: salonRelaisJSON{Hote: relais.Hote, Port: relais.Port, Salon: sal.Relais},
+		Place:  place, Occupants: vueOccupants(sal, maintenant),
+	}
+}
+
+func vueResume(sal *salons.Salon, maintenant time.Time) salonResumeJSON {
+	return salonResumeJSON{
+		Code: sal.Code, Nom: sal.Nom, Places: sal.Places,
+		Occupes: sal.Occupes(maintenant), Camps: sal.Camps,
+		Proprietaire: sal.ProprietairePseudo, Etat: string(sal.Etat),
+		DepuisMs: depuisMs(sal, maintenant),
+	}
+}
+
+func vueLive(sal *salons.Salon, maintenant time.Time) salonLiveJSON {
+	return salonLiveJSON{
+		OK: true, Code: sal.Code, Nom: sal.Nom, Etat: string(sal.Etat),
+		DepuisMs: depuisMs(sal, maintenant), Occupants: vueOccupants(sal, maintenant),
+	}
+}
+
+func vueBattement(sal *salons.Salon, maintenant time.Time) salonBattementJSON {
+	return salonBattementJSON{
+		OK: true, Etat: string(sal.Etat), Places: sal.Places,
+		Occupants: vueOccupants(sal, maintenant),
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Garde-fous communs                                                         */
+/* -------------------------------------------------------------------------- */
+
+// salonsOuverts refuse TOUT le service quand aucun relais n'est annonce.
+//
+// Un salon sans relais est un code et aucun moyen de s'en servir : le creer
+// serait promettre un rendez-vous a une adresse qu'on ne connait pas. La liste
+// et le classement live tombent sous la meme regle, parce qu'un service qui
+// n'ouvre pas de salons n'a pas de salons a montrer.
+//
+// Le controle passe AVANT l'authentification, et l'ordre est reflechi : c'est un
+// fait de configuration du serveur, identique pour tout le monde et pour toutes
+// les requetes, donc il ne renseigne personne sur personne. Demander des
+// identifiants pour ensuite repondre « ce service n'existe pas ici » ferait
+// chercher la faute du mauvais cote.
+func (s *Server) salonsOuverts(w http.ResponseWriter, r *http.Request) bool {
+	if s.relais.Annonce() {
+		return true
+	}
+	s.fail(w, r, http.StatusServiceUnavailable,
+		"les salons sont indisponibles : ce serveur n'annonce aucun relais", nil)
+	return false
+}
+
+// codeSalon lit le code de l'URL et le refuse SANS interroger la base quand ce
+// n'en est pas un.
+//
+// 404 et non 400 : du point de vue de qui tape, un code mal forme et un code
+// inexistant sont la meme chose — un salon qu'on ne trouve pas — et distinguer
+// les deux renseignerait sur la forme des codes valides sans rendre service.
+func (s *Server) codeSalon(w http.ResponseWriter, r *http.Request) (string, bool) {
+	code := salons.NormaliserCode(r.PathValue("code"))
+	if code == "" {
+		s.fail(w, r, http.StatusNotFound, "salon inconnu", nil)
+		return "", false
+	}
+	return code, true
+}
+
+// echecSalon traduit un refus des regles en code HTTP.
+//
+// Un seul endroit pour la table, parce que six gestionnaires qui la recopient
+// finissent par rendre 404 la ou l'un d'eux rend 409, et le client n'a alors
+// plus de comportement defini.
+func (s *Server) echecSalon(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		s.fail(w, r, http.StatusNotFound, "salon inconnu", nil)
+	case errors.Is(err, salons.ErrComplet):
+		s.fail(w, r, http.StatusConflict, "salon complet", nil)
+	case errors.Is(err, salons.ErrFerme):
+		// 410 et non 404 : le salon a existé, il n'accepte plus. Le client peut
+		// dire « la manche est déjà lancée » au lieu de « code inconnu », qui
+		// enverrait le joueur retaper un code juste.
+		s.fail(w, r, http.StatusGone, "ce salon ne se rejoint plus", nil)
+	case errors.Is(err, salons.ErrPasProprietaire):
+		s.fail(w, r, http.StatusForbidden, "seul le propriétaire peut fermer ce salon", nil)
+	case errors.Is(err, salons.ErrPasAssis):
+		s.fail(w, r, http.StatusConflict, "vous n'avez pas de place dans ce salon", nil)
+	case errors.Is(err, salons.ErrTropDeSalons):
+		s.fail(w, r, http.StatusConflict,
+			"vous tenez déjà trop de salons ouverts : fermez-en un", nil)
+	default:
+		s.fail(w, r, http.StatusInternalServerError, "salon indisponible", err)
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Les six routes                                                             */
+/* -------------------------------------------------------------------------- */
+
+func (s *Server) handleSalonCreer(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	// Creer un salon ecrit une ligne qui vit plusieurs minutes et reserve des
+	// places sur le relais. La limite est donc par COMPTE et non par adresse :
+	// c'est le compte qui porte le plafond de salons simultanes, et le compter
+	// par adresse punirait quatre joueurs derriere le meme routeur.
+	if !s.rateLimit(w, r, "salon-creer|"+strconv.FormatInt(sess.PlayerID, 10), 30, time.Hour) {
+		return
+	}
+
+	var req salonCreerRequest
+	if !decodeJSON(w, r, s, &req) {
+		return
+	}
+
+	// Zero veut dire « pas d'avis », pas « zero place » : un champ absent d'un
+	// JSON arrive ici a zero, et refuser la demande pour ca obligerait tout
+	// client a repeter les valeurs par defaut. Un salon plein en individuel est
+	// ce que le mode fait de plus courant.
+	if req.Places == 0 {
+		req.Places = salons.PlacesMax
+	}
+	if req.Camps == 0 {
+		req.Camps = salons.CampsMin
+	}
+
+	// Le nom passe par l'assainisseur des champs courts, celui des pseudos et
+	// des noms de borne. Reutilise et non recopie : deux assainissements pour
+	// une meme sorte de champ finissent par diverger, et la divergence ne se
+	// voit que le jour ou l'un laisse passer ce que l'autre refusait.
+	nom := sanitizeShort(req.Nom, salons.NomMax)
+	if err := salons.Valider(nom, req.Places, req.Camps); err != nil {
+		s.fail(w, r, http.StatusBadRequest,
+			"salon invalide : un nom, 2 à 8 places, 1 ou 2 camps", err)
+		return
+	}
+
+	maintenant := time.Now()
+	sal, err := s.store.CreerSalon(r.Context(), nom, req.Places, req.Camps, req.Prive,
+		sess.PlayerID, sanitizeNickname(sess.Username), salonsParProprietaire, maintenant)
+	if err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+
+	place, _ := sal.PlaceDe(sess.PlayerID)
+	s.log.Info("salon ouvert", "code", sal.Code, "proprietaire", sess.Username,
+		"places", sal.Places, "camps", sal.Camps, "prive", sal.Prive)
+	writeJSON(w, http.StatusCreated, vueSalon(sal, place, s.relais, maintenant))
+}
+
+// handleSalonsListe — ce qu'on peut rejoindre, maintenant.
+//
+// PUBLIQUE, sans compte, pour la meme raison que le classement l'est : on doit
+// pouvoir regarder ce qui se joue, et decider de s'inscrire, sans etre deja
+// inscrit. Elle ne montre QUE les salons publics en attente ; un salon prive
+// n'y parait jamais, quel que soit son etat.
+func (s *Server) handleSalonsListe(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	// La liste se rafraichit dans un menu pendant qu'on choisit. La limite tient
+	// donc un rythme de consultation humain — plusieurs par seconde en pointe —
+	// tout en fermant la porte a une boucle.
+	if !s.rateLimit(w, r, "salons-liste", 600, 10*time.Minute) {
+		return
+	}
+
+	maintenant := time.Now()
+	liste, err := s.store.SalonsPublics(r.Context(), maintenant, 50)
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "liste indisponible", err)
+		return
+	}
+	resumes := make([]salonResumeJSON, 0, len(liste))
+	for i := range liste {
+		resumes = append(resumes, vueResume(&liste[i], maintenant))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "salons": resumes})
+}
+
+func (s *Server) handleSalonEntrer(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	code, ok := s.codeSalon(w, r)
+	if !ok {
+		return
+	}
+
+	// DEUX LIMITES, et la premiere est celle qui compte.
+	//
+	// Par ADRESSE, elle est ce qui rend le code de six caracteres tenable. Les
+	// 32 symboles et les 6 positions font 1 073 741 824 codes (`EspaceDesCodes`,
+	// internal/salons) ; a 60 essais par dix minutes, soit 6 par minute,
+	// balayer de quoi tomber sur l'un des cent salons vivants demanderait en
+	// moyenne 10,7 millions d'essais, c'est-a-dire plus de trois ans. Le code
+	// n'est pas un secret solide ; c'est cette limite qui fait qu'il n'a pas
+	// besoin de l'etre.
+	//
+	// Par COMPTE, elle borne simplement le va-et-vient d'un joueur legitime.
+	if !s.rateLimit(w, r, "salon-entrer", 60, 10*time.Minute) {
+		return
+	}
+	if !s.rateLimit(w, r, "salon-entrer|"+strconv.FormatInt(sess.PlayerID, 10), 120, time.Hour) {
+		return
+	}
+
+	maintenant := time.Now()
+	sal, place, err := s.store.RejoindreSalon(r.Context(), code, sess.PlayerID,
+		sanitizeNickname(sess.Username), maintenant)
+	if err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+	s.log.Info("entree dans un salon", "code", sal.Code, "joueur", sess.Username, "place", place)
+	writeJSON(w, http.StatusOK, vueSalon(sal, place, s.relais, maintenant))
+}
+
+// handleSalonSortir — partir proprement.
+//
+// Le faucheur suffirait : une place cesse d'etre tenue douze secondes apres le
+// dernier battement. Ceci evite seulement que sept joueurs attendent ces douze
+// secondes pour quelqu'un qui vient de fermer sa fenetre — exactement la raison
+// pour laquelle la presence a son champ `leaving`.
+func (s *Server) handleSalonSortir(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	code, ok := s.codeSalon(w, r)
+	if !ok {
+		return
+	}
+	if !s.rateLimit(w, r, "salon-sortir|"+strconv.FormatInt(sess.PlayerID, 10), 120, time.Hour) {
+		return
+	}
+
+	if err := s.store.QuitterSalon(r.Context(), code, sess.PlayerID, time.Now()); err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+	// 204 : il n'y a rien a rendre. Le client sait deja ce qu'il a quitte, et
+	// lui renvoyer l'etat d'un salon dont il ne fait plus partie l'inviterait a
+	// continuer de l'afficher.
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleSalonFermer(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	code, ok := s.codeSalon(w, r)
+	if !ok {
+		return
+	}
+	if !s.rateLimit(w, r, "salon-fermer|"+strconv.FormatInt(sess.PlayerID, 10), 60, time.Hour) {
+		return
+	}
+
+	if err := s.store.SupprimerSalon(r.Context(), code, sess.PlayerID, time.Now()); err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+	s.log.Info("salon ferme", "code", code, "par", sess.Username)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleSalonBattre — le signe de vie ET la ligne de classement, en un seul
+// aller-retour.
+//
+// Les deux ensemble pour la meme raison que la presence : c'est le seul echange
+// periodique du mode, et lui faire couter deux requetes doublerait le trafic
+// sans rien apprendre de plus. Ce qui est publie ici n'a AUCUNE autorite — les
+// points d'une manche ne sont pas des scores de classement, ils sont ce que
+// l'arbitre du salon annonce, et l'autorite sur les scores enregistres reste ou
+// elle est depuis toujours : le journal scelle, recalcule par le serveur.
+func (s *Server) handleSalonBattre(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	sess, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	code, ok := s.codeSalon(w, r)
+	if !ok {
+		return
+	}
+	// La meme limite que la presence, parce que c'est le meme rythme et le meme
+	// client : 4 Hz au plus (`NS_ARENE_PERIODE_MS`), 2 000 sur dix minutes, soit
+	// un peu plus de 3/s soutenus. Voir `handlePresence`.
+	if !s.rateLimit(w, r, "salon-battre|"+strconv.FormatInt(sess.PlayerID, 10), 2000, 10*time.Minute) {
+		return
+	}
+
+	var req salonBattementRequest
+	if !decodeJSON(w, r, s, &req) {
+		return
+	}
+
+	maintenant := time.Now()
+	sal, err := s.store.BattreSalon(r.Context(), code, sess.PlayerID, salons.Battement{
+		Points:   req.Points,
+		Fusibles: req.Fusibles,
+		Vivante:  req.Vivante,
+		// Le nom de borne est un identifiant venu du client, pas du texte libre :
+		// meme traitement que dans la presence.
+		Borne:    sanitizeShort(req.Borne, salons.BorneMax),
+		Camp:     req.Camp,
+		Commence: req.Commence,
+	}, maintenant)
+	if err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, vueBattement(sal, maintenant))
+}
+
+// handleSalonLive — le classement live, tel que la page web l'interroge.
+//
+// PUBLIQUE, et un salon PRIVE repond aussi : connaitre le code suffit pour
+// regarder. C'est exactement ce qu'on veut d'un salon entre amis — il ne parait
+// dans aucune liste, et le lien se partage a qui l'on veut. Rien n'est concede
+// par la, parce que ce qui donne l'entree n'est pas le code mais l'identifiant
+// de relais, et il n'est pas dans cette reponse : voir `salonLiveJSON`.
+func (s *Server) handleSalonLive(w http.ResponseWriter, r *http.Request) {
+	if !s.salonsOuverts(w, r) {
+		return
+	}
+	// LA FORME DU CODE EST CONTROLEE AVANT LA LIMITE DE DEBIT, et l'ordre est
+	// voulu : un code mal forme n'est jamais un salon, le refuser ne coute pas
+	// une lecture, et lui faire consommer un jeton punirait une faute de frappe
+	// aussi cher qu'un balayage. Ce que la limite protege, ce sont les codes
+	// BIEN formes — ceux qui, eux, interrogent la base.
+	code, ok := s.codeSalon(w, r)
+	if !ok {
+		return
+	}
+	// Une page de classement se rafraichit toute seule. La limite tient le
+	// rythme de publication du client (4 Hz) pour que le tableau ne soit jamais
+	// plus vieux que la source, sans laisser une boucle s'installer.
+	if !s.rateLimit(w, r, "salon-live", 1200, 10*time.Minute) {
+		return
+	}
+
+	maintenant := time.Now()
+	sal, err := s.store.SalonParCode(r.Context(), code, maintenant)
+	if err != nil {
+		s.echecSalon(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, vueLive(sal, maintenant))
 }
 
 /* ========================================================================== */
