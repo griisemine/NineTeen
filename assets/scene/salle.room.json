@@ -5700,7 +5700,7 @@
       ]
     },
     {
-      "_": "LA PORTE EXTÉRIEURE, au bout du sas. En 2020 elle mesure 1,214 x 2,139 m au seuil z = 12,755, et c'est par elle qu'on entre.\nSes deux panneaux — le vantail de bois, et le ciel qu'on voit par l'ouverture — étaient côte à côte sur 2,30 m de large. Le couloir du sas n'en fait que 1,669 : ils n'y tiennent pas. Ramenés à 0,70 chacun, ils passent, et le vantail garde la cote de la porte réelle.",
+      "_": "LA PORTE EXTERIEURE, au bout du sas. La baie fait 1,214 x 2,139 m et c'est par la qu'on entre.\nCE QU'ELLE ETAIT, ET POURQUOI LE JOUEUR L'A DITE « pas bien realisee du tout » : DEUX PANNEAUX PLATS COTE A COTE, un vantail de 0,70 m et une photo de ciel de 0,70 m. La planche « porte_exterieur.jpg » est pourtant une porte ENTIERE — battant noir, quatre barres d'acier brosse, poignee, dormant — de 358 x 800 pixels, soit un rapport de 0,4475. Etiree sur un panneau de 0,70 x 2,139, rapport 0,327, elle etait ecrasee de 27 pour cent en largeur ET coupee de moitie : on ne voyait que sa moitie gauche, collee a un ciel. D'ou l'impression d'une demi-porte scotchee a une photo.\nCE QU'ELLE EST : un vantail a son format NATUREL, 0,957 x 2,139 — 2,139 x 0,4475 —, donc sans la moindre deformation, et un dormant qui occupe le reste de la baie, 0,1285 m de chaque cote. Le vantail a 5 cm d'EPAISSEUR : un panneau d'epaisseur nulle se voit des deux cotes et n'a pas de tranche, ce qui est le premier detail qui trahit un decor.\nLE CIEL EST RETIRE. Une porte fermee ne laisse pas voir le ciel a cote d'elle : le panneau qui le montrait etait la pour combler la largeur que le vantail ecrase n'occupait pas. Le dormant la comble maintenant, et c'est le bloc SORTIE au-dessus qui dit que l'on sort par la.",
       "name": "porte_entree_battant",
       "at": [
         6.118,
@@ -5711,34 +5711,68 @@
       "pose": "sol",
       "poi": "porte",
       "anchor": [
-        -0.35,
+        0.0,
         0.0,
         0.8
       ],
       "parts": [
         {
-          "type": "panel",
-          "material": "porte_bois",
+          "_": "Le DORMANT, en deux jambages. La baie fait 1,214 m, le vantail a son format naturel en occupe 0,957 : il reste 0,257, soit 0,1285 de chaque cote. Un tableau de 12,8 cm est la cote d'un dormant reel. Profondeur 0,12 m dans une paroi de 0,20 : le dormant est DANS l'embrasure, il ne saille ni dedans ni dehors.",
+          "type": "box",
+          "material": "laque_sombre",
           "at": [
-            -0.35,
-            1.07,
+            -0.54275,
+            1.0695,
             0.0
           ],
           "size": [
-            0.7,
-            2.139
-          ]
+            0.1285,
+            2.139,
+            0.12
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "type": "box",
+          "material": "laque_sombre",
+          "at": [
+            0.54275,
+            1.0695,
+            0.0
+          ],
+          "size": [
+            0.1285,
+            2.139,
+            0.12
+          ],
+          "chamfer": 0.008
+        },
+        {
+          "_": "Le VANTAIL, et son epaisseur. La planche habille la face qu'on regarde ; le corps sous elle porte la tranche, sans quoi la porte serait une feuille.",
+          "type": "box",
+          "material": "laque_sombre",
+          "at": [
+            0.0,
+            1.0695,
+            0.0
+          ],
+          "size": [
+            0.957,
+            2.139,
+            0.05
+          ],
+          "chamfer": 0.004
         },
         {
           "type": "panel",
-          "material": "ciel",
+          "material": "porte_bois",
           "at": [
-            0.35,
-            1.07,
-            0.0
+            0.0,
+            1.0695,
+            0.026
           ],
           "size": [
-            0.7,
+            0.957,
             2.139
           ]
         }
