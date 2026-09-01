@@ -74,6 +74,25 @@ void ns_config_set_bool(const char *key, bool value);
  * verrou de `ns_online` et ne démarre pas si celui-ci n'a pas démarré.
  */
 #define NS_CFG_REALTIME     "network.realtime"
+/*
+ * LA MISE À JOUR — deux clés, et pas une de plus.
+ *
+ * `update.auto` : télécharger le paquet sans qu'on l'ait demandé. FAUX par
+ * défaut, et ce défaut est un choix : un paquet fait 175 Mio, et les prendre
+ * sur la ligne de quelqu'un qui voulait jouer dix minutes n'est pas au jeu d'en
+ * décider. Vrai, la mise à jour arrive toute seule et attend qu'on l'installe.
+ *
+ * `update.skipped` : la version qu'on a écartée. Sans elle, « non merci »
+ * voudrait dire « redemande-moi au prochain lancement », ce qui est la
+ * définition d'un logiciel insistant.
+ *
+ * Aucune clé pour « vérifier ou non » : c'est l'adresse du serveur qui décide,
+ * et `--no-maj` la coupe pour une exécution. Un troisième interrupteur pour la
+ * même chose ferait trois endroits où chercher pourquoi rien ne se passe.
+ */
+#define NS_CFG_MAJ_AUTO     "update.auto"
+#define NS_CFG_MAJ_REFUSEE  "update.skipped"
+
 #define NS_CFG_MOUSE_SENS      "input.mouseSensitivity"
 #define NS_CFG_ROOM_SOURCE     "room.source"            /* generated | legacy */
 

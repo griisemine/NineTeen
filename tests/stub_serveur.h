@@ -55,4 +55,35 @@ const char *stub_dernier_creneau(void);
 /* Le score que le bouchon a recalculé pour la dernière soumission, ou -1. */
 int stub_dernier_score(void);
 
+/*
+ * CE QUE LE BOUCHON OFFRE AU TÉLÉCHARGEMENT, pour la mise à jour.
+ *
+ * `version` est ce qu'annonce `/api/v1/telechargements` ; `nom` est le fichier,
+ * dont l'extension décide de la plateforme exactement comme chez le vrai
+ * serveur ; `contenu` est ce que le fichier contient ; `somme_hex` est
+ * l'empreinte ANNONCÉE, qu'on veut pouvoir mentir volontairement — un paquet
+ * dont l'empreinte ne tombe pas juste doit être écarté, et c'est la seule
+ * vérification qui protège d'un installeur tronqué.
+ *
+ * Passer NULL à `version` rend la route vide, ce qui est un serveur sans
+ * paquet.
+ */
+void stub_poser_maj(const char *version, const char *nom,
+                    const char *contenu, const char *somme_hex);
+
+/*
+ * UN SECOND PAQUET dans la liste, de la même plateforme et d'une AUTRE version.
+ *
+ * C'est la situation ordinaire d'un répertoire de téléchargement : on y garde
+ * les anciennes versions à côté des nouvelles. Deux paquets d'une même
+ * plateforme ont la même extension, et sans ce cas dans les tests, le client
+ * pouvait prendre le premier venu — ce qu'il a fait, mesuré sur la pile réelle.
+ *
+ * NULL le retire.
+ */
+void stub_poser_maj_voisin(const char *nom);
+
+/* Combien de fois le fichier a été demandé. Une reprise en compte deux. */
+uint32_t stub_fichiers_servis(void);
+
 #endif /* NS_STUB_SERVEUR_H */

@@ -171,3 +171,31 @@ func TestSansDepotLaRouteDeFichierRend404(t *testing.T) {
 		t.Errorf("code %d, 404 attendu", rec.Code)
 	}
 }
+
+// LE NUMERO QUE LE JEU COMPARE AU SIEN vient des paquets, pas du binaire Go.
+//
+// Sans ce choix, un serveur avance devant un repertoire pas encore refait
+// annoncerait une version qu'il ne peut pas livrer : le jeu telechargerait
+// l'ancien paquet, l'installerait, ne changerait pas de version, et se le
+// verrait reproposer a chaque lancement. Une boucle que rien n'arrete.
+func TestLaVersionAnnonceeSuitLesPaquetsPresents(t *testing.T) {
+	racine := t.TempDir()
+	if err := os.WriteFile(filepath.Join(racine, "nineteen_16.4.0_arm64.deb"),
+		[]byte("paquet"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	corps := lireJSON(t, appel(t, serveurAvecDepot(racine, false),
+		"GET", "/api/v1/telechargements"))
+	if corps["version"] != "16.4.0" {
+		t.Errorf("version %q, attendu celle du paquet « 16.4.0 »", corps["version"])
+	}
+
+	// Sans paquet local, il n'y a rien a lire : le serveur garde la sienne, et
+	// c'est la seule reponse honnete.
+	corps = lireJSON(t, appel(t, serveurAvecDepot(t.TempDir(), true),
+		"GET", "/api/v1/telechargements"))
+	if corps["version"] == "16.4.0" || corps["version"] == "" {
+		t.Errorf("version %q sans depot : celle du serveur etait attendue", corps["version"])
+	}
+}

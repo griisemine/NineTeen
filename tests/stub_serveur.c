@@ -43,6 +43,14 @@ static struct {
     char           creneau[32];
     int            score;
     uint32_t       graine;
+
+    /* Ce que la route des téléchargements offre. Voir `stub_poser_maj`. */
+    char           maj_version[32];
+    char           maj_nom[128];
+    char           maj_contenu[256];
+    char           maj_somme[80];
+    char           maj_voisin[128];
+    SDL_AtomicInt  servis;
 } s;
 
 /*
@@ -60,6 +68,18 @@ static const char *const CRENEAUX[] = {
     "asteroid-easy", "aplomb-easy", "envol-easy", "dedale", "piano",
 };
 #define STUB_CRENEAUX (int)(sizeof CRENEAUX / sizeof CRENEAUX[0])
+
+/*
+ * Le bouchon annonce la plateforme de la machine qui exécute le test, sinon le
+ * paquet serait toujours écarté et le test ne vérifierait que le refus.
+ */
+#if defined(_WIN32)
+    #define STUB_PLATEFORME "windows"
+#elif defined(__APPLE__)
+    #define STUB_PLATEFORME "macos"
+#else
+    #define STUB_PLATEFORME "linux"
+#endif
 
 static int creneau_id(const char *nom)
 {
@@ -192,6 +212,88 @@ static void repondre_classement(stub_socket c)
     envoyer(c, 200, "OK", corps);
 }
 
+/*
+ * La liste des paquets, dans la forme exacte de `handleTelechargements` — les
+ * clés en minuscules, l'architecture dans le vocabulaire français du serveur
+ * (« universel », « arm64 »), et l'URL DONNÉE et non devinée.
+ */
+static void repondre_telechargements(stub_socket c)
+{
+    SDL_LockMutex(s.verrou);
+    const bool rien = s.maj_version[0] == '\0' || s.maj_nom[0] == '\0';
+    char corps[1024];
+    if (rien) {
+        SDL_snprintf(corps, sizeof corps,
+                     "{\"ok\":true,\"version\":\"0.0.0\",\"source\":\"aucune\","
+                     "\"serveur\":\"\",\"fichiers\":[],\"manifestes\":[]}");
+    } else {
+        /* L'architecture suit le nom, comme `Classer` la déduit : « universel »
+         * pour un nom qui le dit, sinon rien — ce qui convient partout et
+         * permet au test de couvrir les deux chemins. */
+        const char *arch = SDL_strstr(s.maj_nom, "universal") ? "universel" : "";
+        /* Le voisin est mis EN TÊTE : un client qui prendrait le premier venu
+         * se trahit alors tout de suite, au lieu de passer par chance. */
+        char voisin[320] = { 0 };
+        if (s.maj_voisin[0]) {
+            SDL_snprintf(voisin, sizeof voisin,
+                         "{\"nom\":\"%s\",\"url\":\"/telechargements/%s\","
+                         "\"plateforme\":\"%s\",\"arch\":\"%s\",\"format\":\"essai\","
+                         "\"octets\":1,\"sha256\":\"\"},",
+                         s.maj_voisin, s.maj_voisin, STUB_PLATEFORME, arch);
+        }
+        SDL_snprintf(corps, sizeof corps,
+                     "{\"ok\":true,\"version\":\"%s\",\"source\":\"locale\","
+                     "\"serveur\":\"\",\"fichiers\":[%s{"
+                     "\"nom\":\"%s\",\"url\":\"/telechargements/%s\","
+                     "\"plateforme\":\"%s\",\"arch\":\"%s\",\"format\":\"essai\","
+                     "\"octets\":%zu,\"sha256\":\"%s\"}],\"manifestes\":[]}",
+                     s.maj_version, voisin, s.maj_nom, s.maj_nom,
+                     STUB_PLATEFORME, arch,
+                     SDL_strlen(s.maj_contenu), s.maj_somme);
+    }
+    SDL_UnlockMutex(s.verrou);
+    envoyer(c, 200, "OK", corps);
+}
+
+/*
+ * Le fichier lui-même, avec la REPRISE : un en-tête `Range: bytes=N-` doit
+ * rendre 206 et la suite seule. Sans ce chemin dans le bouchon, la reprise ne
+ * serait vérifiée que face à un vrai serveur, c'est-à-dire jamais dans
+ * l'intégration continue.
+ */
+static void repondre_fichier(stub_socket c, const char *requete)
+{
+    SDL_AddAtomicInt(&s.servis, 1);
+
+    SDL_LockMutex(s.verrou);
+    char contenu[256];
+    SDL_strlcpy(contenu, s.maj_contenu, sizeof contenu);
+    const bool connu = s.maj_nom[0] != '\0'
+                    && SDL_strstr(requete, s.maj_nom) != NULL;
+    SDL_UnlockMutex(s.verrou);
+
+    if (!connu) { envoyer(c, 404, "Not Found", "{\"ok\":false}"); return; }
+
+    size_t depuis = 0;
+    const char *r = SDL_strstr(requete, "Range: bytes=");
+    if (r) depuis = (size_t)SDL_atoi(r + 13);
+
+    const size_t total = SDL_strlen(contenu);
+    if (depuis >= total) { envoyer(c, 416, "Range Not Satisfiable", ""); return; }
+
+    char entete[256];
+    const size_t n = total - depuis;
+    const int len = SDL_snprintf(entete, sizeof entete,
+                                 "HTTP/1.1 %d %s\r\n"
+                                 "Content-Type: application/octet-stream\r\n"
+                                 "Content-Length: %zu\r\n"
+                                 "Connection: close\r\n\r\n",
+                                 depuis ? 206 : 200,
+                                 depuis ? "Partial Content" : "OK", n);
+    (void)send(c, entete, (size_t)len, 0);
+    (void)send(c, contenu + depuis, n, 0);
+}
+
 static int SDLCALL boucle(void *inutile)
 {
     (void)inutile;
@@ -233,7 +335,11 @@ static int SDLCALL boucle(void *inutile)
 
         const bool autorise = SDL_strstr(req, "Authorization: Bearer " STUB_JETON) != NULL;
 
-        if (SDL_strncmp(req, "GET /api/v1/games", 17) == 0) {
+        if (SDL_strncmp(req, "GET /api/v1/telechargements", 27) == 0) {
+            repondre_telechargements(c);
+        } else if (SDL_strncmp(req, "GET /telechargements/", 21) == 0) {
+            repondre_fichier(c, req);
+        } else if (SDL_strncmp(req, "GET /api/v1/games", 17) == 0) {
             repondre_jeux(c);
         } else if (SDL_strncmp(req, "GET /api/v1/leaderboard", 23) == 0) {
             repondre_classement(c);
@@ -325,3 +431,23 @@ const char *stub_dernier_creneau(void)
 {
     return s.creneau;
 }
+
+void stub_poser_maj(const char *version, const char *nom,
+                    const char *contenu, const char *somme_hex)
+{
+    SDL_LockMutex(s.verrou);
+    SDL_strlcpy(s.maj_version, version ? version : "", sizeof s.maj_version);
+    SDL_strlcpy(s.maj_nom, nom ? nom : "", sizeof s.maj_nom);
+    SDL_strlcpy(s.maj_contenu, contenu ? contenu : "", sizeof s.maj_contenu);
+    SDL_strlcpy(s.maj_somme, somme_hex ? somme_hex : "", sizeof s.maj_somme);
+    SDL_UnlockMutex(s.verrou);
+}
+
+void stub_poser_maj_voisin(const char *nom)
+{
+    SDL_LockMutex(s.verrou);
+    SDL_strlcpy(s.maj_voisin, nom ? nom : "", sizeof s.maj_voisin);
+    SDL_UnlockMutex(s.verrou);
+}
+
+uint32_t stub_fichiers_servis(void) { return (uint32_t)SDL_GetAtomicInt(&s.servis); }

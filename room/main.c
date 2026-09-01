@@ -26,6 +26,7 @@
 #include "ns_realtime.h"
 #include "ns_lockstep.h"
 #include "ns_arene.h"
+#include "ns_maj.h"
 #include "ns_runlog.h"
 #include "ns_scores.h"
 
@@ -120,6 +121,11 @@ typedef struct options {
      * `ns_realtime` ne sait pas qu'il existe.
      */
     int         demo_peers;
+    /* `--no-maj` : ne pas demander au serveur s'il existe une version plus
+     * récente. Les captures et l'integration continue en ont besoin — un
+     * bandeau qui apparaît au bout de trois secondes rendrait une image
+     * différente d'une exécution à l'autre. */
+    bool        no_maj;
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* --server= : le plus fort des quatre niveaux */
@@ -236,6 +242,8 @@ static void print_usage(const char *exe)
         "  --temps-reel         présence dans la salle et duels (INERTE par défaut) ;\n"
         "                       demande un serveur, et se règle aussi dans Échap\n"
         "  --no-temps-reel      force l'inverse, quel que soit le réglage gardé\n"
+        "  --no-maj             ne demande pas au serveur s'il a une version plus\n"
+        "                       récente. Le bandeau de mise à jour n'apparaît pas.\n"
         "  --pairs-demo=N       peuple l'allée de N marcheurs FABRIQUÉS (0 à 16),\n"
         "                       sans serveur ni la moindre socket : c'est ce qui\n"
         "                       permet de photographier des corps qui marchent.\n"
@@ -483,6 +491,8 @@ static bool parse_options(int argc, char **argv, options *o)
              * supplémentaires seraient rejetés plus bas sans rien dire. */
             const int n = SDL_atoi(a + 13);
             o->demo_peers = (n < 0) ? 0 : (n > NS_RT_MAX_PEERS ? NS_RT_MAX_PEERS : n);
+        } else if (SDL_strcmp(a, "--no-maj") == 0) {
+            o->no_maj = true;
         } else if (SDL_strcmp(a, "--offline") == 0) {
             o->offline = true;
         } else if (SDL_strcmp(a, "--no-hud") == 0) {
@@ -2668,6 +2678,31 @@ int main(int argc, char **argv)
         }
 
         /*
+         * LA MISE À JOUR, sur la même adresse et jamais avant elle.
+         *
+         * Elle part APRÈS `ns_online_init` pour hériter du même choix
+         * d'adresse : deux modules qui résoudraient l'URL chacun de leur côté
+         * pourraient viser deux serveurs, et c'est la panne qu'on ne saurait
+         * pas lire. Elle ne demande rien de plus — pas de jeton, pas de compte
+         * — parce que télécharger le jeu n'exige d'être personne.
+         *
+         * Et elle ne retarde RIEN : `ns_maj_init` lance un fil et rend la main.
+         * Le jeu démarre, se joue et se ferme sans jamais l'attendre. C'est la
+         * leçon de la V1, et elle est écrite en toutes lettres dans
+         * `engine/net/ns_maj.h`.
+         */
+        ns_maj_config mc;
+        SDL_zero(mc);
+        mc.server_url = choix.url;
+        mc.version = NINETEEN_VERSION;
+        mc.locked = opt.offline || opt.no_maj;
+        mc.auto_transfert = ns_config_get_bool(NS_CFG_MAJ_AUTO, false);
+        if (ns_maj_init(&mc)) {
+            NS_INFO("mise à jour : question posée à « %s » (version %s)",
+                    choix.url, NINETEEN_VERSION);
+        }
+
+        /*
          * LE COMPTOIR HÉRITE DU MÊME VERROU, et il en hérite au lieu de le
          * réimplémenter : `--offline` ne doit pas laisser une porte ouverte
          * simplement parce qu'elle est neuve. Sans URL, `ns_compte_init` ne
@@ -3785,6 +3820,42 @@ play_at_done: ;
                     ns_renderer_set_settings(rhi, renderer, &rs);
                     settings_banner = 2.6f;
                     NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
+                    break;
+                }
+                case SDLK_F11: {
+                    /*
+                     * LA MISE À JOUR : une touche pour agir, la même avec MAJ
+                     * pour écarter.
+                     *
+                     * F11 parce que F1 à F10 sont prises, et le modificateur
+                     * suit l'idiome que F9 a déjà posé pour les manches en
+                     * équipes. La touche ne fait RIEN quand il n'y a rien à
+                     * faire, et elle le dit dans le journal : une touche muette
+                     * se prend pour une touche cassée.
+                     *
+                     * Écarter écrit la version refusée dans la configuration.
+                     * Sans ça, « non merci » voudrait dire « redemande-moi au
+                     * prochain lancement », ce qui est la définition d'un
+                     * logiciel insistant.
+                     */
+                    if (ev.key.repeat) break;
+                    const bool ecarter = (ev.key.mod & SDL_KMOD_SHIFT) != 0;
+                    switch (ns_maj_etat_courant()) {
+                    case NS_MAJ_DISPONIBLE:
+                        if (ecarter) ns_maj_refuser();
+                        else         ns_maj_telecharger();
+                        break;
+                    case NS_MAJ_PRETE:
+                        if (ecarter) ns_maj_refuser();
+                        else if (!ns_maj_installer()) {
+                            NS_WARN("mise à jour : le système n'a pas pu ouvrir « %s »",
+                                    ns_maj_paquet());
+                        }
+                        break;
+                    default:
+                        NS_INFO("mise à jour : %s", ns_maj_message());
+                        break;
+                    }
                     break;
                 }
                 case SDLK_E:
@@ -6198,6 +6269,56 @@ play_at_done: ;
                 hud.eco_message_timer = room_eco_salle_message_reste();
 
                 /*
+                 * LE BANDEAU DE MISE À JOUR, composé ici parce que c'est ici
+                 * qu'on sait ce que le joueur peut faire de la touche.
+                 *
+                 * `ns_maj` sait où il en est ; il ne sait pas qu'une touche
+                 * s'appelle F11 dans cette salle, et il n'a pas à le savoir —
+                 * c'est le même partage que pour l'économie, dont l'affichage
+                 * ne possède rien de ce qu'il montre.
+                 *
+                 * Rien pendant une partie en plein écran : l'écran appartient
+                 * alors au mini-jeu, et une ligne posée par-dessus serait à la
+                 * fois illisible et de trop.
+                 */
+                static char maj_ligne[192];
+                hud.maj_texte = NULL;
+                hud.maj_avancement = -1.0f;
+                if (!fullscreen_game) {
+                    switch (ns_maj_etat_courant()) {
+                    case NS_MAJ_DISPONIBLE:
+                        SDL_snprintf(maj_ligne, sizeof maj_ligne,
+                                     "VERSION %s DISPONIBLE - F11 TELECHARGER, MAJ+F11 ECARTER",
+                                     ns_maj_version_offerte());
+                        hud.maj_texte = maj_ligne;
+                        break;
+                    case NS_MAJ_TRANSFERT:
+                        SDL_snprintf(maj_ligne, sizeof maj_ligne,
+                                     "TELECHARGEMENT DE LA VERSION %s - %d %%",
+                                     ns_maj_version_offerte(),
+                                     (int)(ns_maj_avancement() * 100.0f + 0.5f));
+                        hud.maj_texte = maj_ligne;
+                        hud.maj_avancement = ns_maj_avancement();
+                        break;
+                    case NS_MAJ_PRETE:
+                        SDL_snprintf(maj_ligne, sizeof maj_ligne,
+                                     "VERSION %s PRETE - F11 POUR L'INSTALLER",
+                                     ns_maj_version_offerte());
+                        hud.maj_texte = maj_ligne;
+                        break;
+                    /* Les quatre autres états ne s'affichent pas. « À jour »
+                     * n'est pas une nouvelle, et un échec de mise à jour n'a
+                     * rien à faire au milieu d'une salle d'arcade : il est dans
+                     * le journal, où on va le chercher quand on le cherche. */
+                    case NS_MAJ_INACTIVE:
+                    case NS_MAJ_QUESTION:
+                    case NS_MAJ_A_JOUR:
+                    case NS_MAJ_ECHEC:
+                        break;
+                    }
+                }
+
+                /*
                  * LE PRIX DE LA BORNE QU'ON APPROCHE, pendant une manche.
                  *
                  * Le régime vient de la BORNE et non de `game_hard` : on n'est
@@ -6429,6 +6550,11 @@ play_at_done: ;
     ns_arene_fermer(arene);
     ns_realtime_shutdown();
     ns_online_shutdown();
+    /* Un transfert en cours est ABANDONNÉ, pas attendu : personne n'accepte
+     * que fermer un jeu prenne les trois minutes d'un paquet de 175 Mio. Le
+     * fichier partiel reste, et la prochaine session reprend où l'on en
+     * était — c'est à ça que sert l'en-tête `Range`. */
+    ns_maj_shutdown();
     /*
      * LE JOURNAL D'ENTRÉES S'ÉCRIT AUSSI À LA SORTIE, et pas seulement quand la
      * partie se termine.

@@ -296,3 +296,38 @@ func racineDepot() string {
 	}
 	return ""
 }
+
+// LA VERSION ANNONCEE DOIT ETRE CELLE DES PAQUETS, et le piege est le tri.
+//
+// « 17.9.0 » vient AVANT « 17.10.0 », ce qu'une comparaison de chaines rend
+// faux. Le jour ou la dixieme version mineure sort, un depot qui se trompe
+// annonce l'ancienne, et le jeu cesse silencieusement de se mettre a jour.
+func TestLaVersionDuDepotEstCelleDuPaquetLePlusRecent(t *testing.T) {
+	racine := t.TempDir()
+	for _, nom := range []string{
+		"Nineteen-17.9.0-aarch64.AppImage",
+		"nineteen_17.10.0_arm64.deb",
+		"Nineteen-17.2.0-macOS-universal.dmg",
+		"SIGNATURE-linux.txt", // une annexe ne porte aucune version
+	} {
+		if err := os.WriteFile(filepath.Join(racine, nom), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	d := Ouvrir(racine)
+	if got := d.Version(); got != "17.10.0" {
+		t.Fatalf("version du depot = %q, attendu 17.10.0", got)
+	}
+}
+
+// Un depot sans paquet n'annonce rien plutot que d'inventer un numero : c'est
+// le serveur qui garde alors le sien.
+func TestUnDepotVideNAnnonceAucuneVersion(t *testing.T) {
+	if got := Ouvrir(t.TempDir()).Version(); got != "" {
+		t.Fatalf("version = %q, attendu vide", got)
+	}
+	if got := Ouvrir("").Version(); got != "" {
+		t.Fatalf("version sans repertoire = %q, attendu vide", got)
+	}
+}

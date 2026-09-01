@@ -40,6 +40,7 @@ add_library(nineteen_engine STATIC
     net/ns_scores.c
     net/ns_runlog.c
     net/ns_http.c
+    net/ns_maj.c
     net/ns_online.c
     net/ns_realtime.c
     net/ns_lockstep.c

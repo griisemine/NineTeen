@@ -105,6 +105,32 @@ void ns_sha256(const void *data, size_t len, uint8_t out[32])
     sha256_ctx c; sha256_init(&c); sha256_update(&c, data, len); sha256_final(&c, out);
 }
 
+bool ns_sha256_fichier(const char *chemin, uint8_t out[32])
+{
+    if (!chemin || !out) return false;
+    SDL_IOStream *io = SDL_IOFromFile(chemin, "rb");
+    if (!io) return false;
+
+    /* 64 Kio : la même taille que le bloc de téléchargement, pour que lire un
+     * paquet coûte le même nombre d'appels que l'avoir reçu. */
+    const size_t BLOC = 64u * 1024u;
+    uint8_t *tampon = (uint8_t *)SDL_malloc(BLOC);
+    if (!tampon) { SDL_CloseIO(io); return false; }
+
+    sha256_ctx c;
+    sha256_init(&c);
+    for (;;) {
+        const size_t lu = SDL_ReadIO(io, tampon, BLOC);
+        if (lu == 0) break;
+        sha256_update(&c, tampon, lu);
+    }
+    const bool ok = SDL_GetIOStatus(io) == SDL_IO_STATUS_EOF;
+    SDL_free(tampon);
+    SDL_CloseIO(io);
+    if (ok) sha256_final(&c, out);
+    return ok;
+}
+
 void ns_hmac_sha256(const uint8_t *key, size_t key_len,
                     const void *data, size_t len, uint8_t out[32])
 {

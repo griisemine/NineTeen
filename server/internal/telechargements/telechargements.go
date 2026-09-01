@@ -30,7 +30,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -171,6 +173,72 @@ func (d *Depot) Liste() ([]Fichier, []Annexe) {
 // `filepath.Join` seul ne suffirait pas : « ../../etc/passwd » se joint tres
 // bien. On verifie le nom AVANT de le joindre, et on verifie encore ce qu'on
 // obtient.
+// LA VERSION QUE CE DEPOT PORTE REELLEMENT, lue dans les noms de fichiers.
+//
+// Le serveur connait SA version, celle de son binaire Go. Ce n'est pas la meme
+// chose que celle des paquets poses a cote de lui, et confondre les deux est
+// exactement ce qui ferait proposer une mise a jour mensongere : un serveur
+// avance a 17.1.0 devant un repertoire encore rempli de 17.0.0 annoncerait
+// « 17.1.0 disponible » et livrerait l'ancien paquet. Le jeu l'installerait, ne
+// changerait pas de version, et redemanderait au lancement suivant — une boucle
+// que rien n'arrete et que rien n'explique.
+//
+// La verite reste le repertoire. Le numero est celui du paquet le PLUS RECENT
+// qui s'y trouve, lu dans son nom, ou une chaine vide si aucun n'en porte.
+func (d *Depot) Version() string {
+	if !d.Actif() {
+		return ""
+	}
+	entrees, err := os.ReadDir(d.racine)
+	if err != nil {
+		return ""
+	}
+	meilleure := ""
+	for _, e := range entrees {
+		if e.IsDir() || !nomSain(e.Name()) || estAnnexe(e.Name()) {
+			continue
+		}
+		if p, _, _ := Classer(e.Name()); p == "" {
+			continue
+		}
+		v := versionDansNom(e.Name())
+		if v != "" && (meilleure == "" || comparerVersions(v, meilleure) > 0) {
+			meilleure = v
+		}
+	}
+	return meilleure
+}
+
+// versionDansNom extrait le premier « X.Y.Z » d'un nom de fichier.
+var motifVersion = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+func versionDansNom(nom string) string {
+	return motifVersion.FindString(nom)
+}
+
+// comparerVersions compare champ par champ, en ENTIERS. Une comparaison de
+// chaines mettrait 17.9.0 apres 17.10.0, et le jour ou la dixieme version
+// mineure sort, le depot annoncerait la mauvaise sans rien dire.
+func comparerVersions(a, b string) int {
+	ca, cb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < 3; i++ {
+		va, vb := 0, 0
+		if i < len(ca) {
+			va, _ = strconv.Atoi(ca[i])
+		}
+		if i < len(cb) {
+			vb, _ = strconv.Atoi(cb[i])
+		}
+		if va != vb {
+			if va < vb {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
 func (d *Depot) Chemin(nom string) (string, bool) {
 	if !d.Actif() || !nomSain(nom) {
 		return "", false

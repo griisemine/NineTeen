@@ -135,6 +135,67 @@ static void set_timeout(ns_socket s, uint32_t ms)
 #endif
 }
 
+/*
+ * OUVRIR LA CONNEXION, pour les deux appelants de ce fichier.
+ *
+ * La requête en mémoire et le téléchargement en fichier faisaient la même chose
+ * ici : résoudre le nom, essayer chaque adresse rendue, poser les délais,
+ * couper Nagle et désarmer SIGPIPE. Le second l'a d'abord recopiée, ce qui est
+ * la façon la plus sûre d'oublier `SO_NOSIGPIPE` dans une seule des deux copies
+ * et de voir le jeu disparaître quand un serveur raccroche pendant un
+ * téléchargement de 175 Mio.
+ */
+static ns_socket ouvrir_connexion(const char *host, uint16_t port,
+                                  uint32_t timeout_ms,
+                                  char *erreur, size_t erreur_cap)
+{
+#if defined(_WIN32)
+    /* Winsock veut être réveillé une fois par processus. `WSAStartup` est
+     * réentrant et compté, donc l'appeler ici est sans danger. */
+    WSADATA wsa;
+    static SDL_AtomicInt started;
+    if (SDL_CompareAndSwapAtomicInt(&started, 0, 1)) WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+
+    char port_text[8];
+    SDL_snprintf(port_text, sizeof port_text, "%u", (unsigned)port);
+
+    struct addrinfo hints, *res = NULL;
+    SDL_zero(hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(host, port_text, &hints, &res) != 0 || !res) {
+        if (erreur) SDL_snprintf(erreur, erreur_cap, "hôte introuvable : %s", host);
+        return NS_INVALID_SOCKET;
+    }
+
+    ns_socket s = NS_INVALID_SOCKET;
+    for (struct addrinfo *a = res; a; a = a->ai_next) {
+        s = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
+        if (s == NS_INVALID_SOCKET) continue;
+        set_timeout(s, timeout_ms);
+        if (connect(s, a->ai_addr, (int)a->ai_addrlen) == 0) break;
+        ns_close_socket(s);
+        s = NS_INVALID_SOCKET;
+    }
+    freeaddrinfo(res);
+
+    if (s == NS_INVALID_SOCKET) {
+        if (erreur) SDL_snprintf(erreur, erreur_cap, "connexion refusée : %s:%u",
+                                 host, (unsigned)port);
+        return NS_INVALID_SOCKET;
+    }
+
+    const int one = 1;
+    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);
+#if !defined(_WIN32) && defined(SO_NOSIGPIPE)
+    /* Sans ça, un serveur qui raccroche pendant l'émission TUE le processus par
+     * SIGPIPE — un score perdu deviendrait un jeu qui disparaît. */
+    setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (const char *)&one, sizeof one);
+#endif
+    return s;
+}
+
 /* ==========================================================================
  * Requête
  * ========================================================================== */
@@ -166,51 +227,9 @@ bool ns_http_request(const char *method, const char *url,
         return false;
     }
 
-#if defined(_WIN32)
-    /* Winsock veut être réveillé une fois par processus. `WSAStartup` est
-     * réentrant et compté, donc l'appeler ici est sans danger. */
-    WSADATA wsa;
-    static SDL_AtomicInt started;
-    if (SDL_CompareAndSwapAtomicInt(&started, 0, 1)) WSAStartup(MAKEWORD(2, 2), &wsa);
-#endif
-
-    char port_text[8];
-    SDL_snprintf(port_text, sizeof port_text, "%u", (unsigned)port);
-
-    struct addrinfo hints, *res = NULL;
-    SDL_zero(hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    if (getaddrinfo(host, port_text, &hints, &res) != 0 || !res) {
-        SDL_snprintf(out->error, sizeof out->error, "hôte introuvable : %s", host);
-        return false;
-    }
-
-    ns_socket s = NS_INVALID_SOCKET;
-    for (struct addrinfo *a = res; a; a = a->ai_next) {
-        s = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
-        if (s == NS_INVALID_SOCKET) continue;
-        set_timeout(s, timeout_ms);
-        if (connect(s, a->ai_addr, (int)a->ai_addrlen) == 0) break;
-        ns_close_socket(s);
-        s = NS_INVALID_SOCKET;
-    }
-    freeaddrinfo(res);
-
-    if (s == NS_INVALID_SOCKET) {
-        SDL_snprintf(out->error, sizeof out->error, "connexion refusée : %s:%u", host, port);
-        return false;
-    }
-
-    {
-        const int one = 1;
-        setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof one);
-    #if !defined(_WIN32) && defined(SO_NOSIGPIPE)
-        /* Sans ça, un serveur qui raccroche pendant l'émission TUE le processus
-         * par SIGPIPE — un score perdu deviendrait un jeu qui disparaît. */
-        setsockopt(s, SOL_SOCKET, SO_NOSIGPIPE, (const char *)&one, sizeof one);
-    #endif
-    }
+    const ns_socket s = ouvrir_connexion(host, port, timeout_ms,
+                                         out->error, sizeof out->error);
+    if (s == NS_INVALID_SOCKET) return false;
 
     /* --- l'en-tête ------------------------------------------------------- */
     char head[2048];
@@ -338,4 +357,212 @@ bool ns_http_request(const char *method, const char *url,
     out->body = payload;
     out->length = body_size;
     return true;
+}
+
+/* ==========================================================================
+ * Téléchargement — voir ns_http.h pour ce qu'il fait et pourquoi il existe
+ * ========================================================================== */
+
+/*
+ * La taille du fichier déjà là, ou 0. Elle sert de point de reprise : `SDL_
+ * GetPathInfo` la donne sans ouvrir le fichier, et un fichier absent est une
+ * reprise à zéro, ce qui est exactement le cas du premier téléchargement.
+ */
+static int64_t taille_deja_recue(const char *chemin)
+{
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(chemin, &info) || info.type != SDL_PATHTYPE_FILE) return 0;
+    return (info.size > 0) ? (int64_t)info.size : 0;
+}
+
+/* Cherche un en-tête dans le bloc reçu et rend sa valeur entière. Le tampon
+ * n'est pas terminé par un NUL, donc rien ici ne peut employer `SDL_strstr`. */
+static bool entete_entier(const char *entete, size_t len, const char *nom, int64_t *out)
+{
+    const size_t nom_len = SDL_strlen(nom);
+    for (size_t i = 0; i + nom_len < len; ++i) {
+        if (SDL_strncasecmp(entete + i, nom, nom_len) != 0) continue;
+        size_t j = i + nom_len;
+        while (j < len && (entete[j] == ' ' || entete[j] == ':')) ++j;
+        int64_t v = 0;
+        bool chiffre = false;
+        while (j < len && entete[j] >= '0' && entete[j] <= '9') {
+            v = v * 10 + (entete[j++] - '0');
+            chiffre = true;
+        }
+        if (chiffre) { *out = v; return true; }
+    }
+    return false;
+}
+
+bool ns_http_telecharger(const char *url, const char *chemin,
+                         uint32_t timeout_ms,
+                         ns_http_progres progres, void *contexte,
+                         int *statut, char *erreur, size_t erreur_cap)
+{
+    if (statut) *statut = 0;
+    if (erreur && erreur_cap) erreur[0] = '\0';
+    if (!url || !chemin) return false;
+
+    char host[256], path[1024];
+    uint16_t port = 80;
+    if (!ns_http_parse_url(url, host, sizeof host, &port, path, sizeof path,
+                           erreur, erreur_cap)) {
+        return false;
+    }
+
+    const int64_t deja = taille_deja_recue(chemin);
+
+    const ns_socket s = ouvrir_connexion(host, port, timeout_ms, erreur, erreur_cap);
+    if (s == NS_INVALID_SOCKET) return false;
+
+    char head[1536];
+    int n = SDL_snprintf(head, sizeof head,
+                         "GET %s HTTP/1.1\r\n"
+                         "Host: %s:%u\r\n"
+                         "User-Agent: nineteen\r\n"
+                         "Connection: close\r\n"
+                         "Accept: application/octet-stream\r\n",
+                         path, host, (unsigned)port);
+    if (deja > 0) {
+        n += SDL_snprintf(head + n, sizeof head - (size_t)n,
+                          "Range: bytes=%lld-\r\n", (long long)deja);
+    }
+    n += SDL_snprintf(head + n, sizeof head - (size_t)n, "\r\n");
+    if (n <= 0 || (size_t)n >= sizeof head) {
+        ns_close_socket(s);
+        if (erreur) SDL_snprintf(erreur, erreur_cap, "en-tête trop long");
+        return false;
+    }
+    if (!sock_send_all(s, head, (size_t)n)) {
+        ns_close_socket(s);
+        if (erreur) SDL_snprintf(erreur, erreur_cap, "émission interrompue");
+        return false;
+    }
+
+    /*
+     * 64 Kio par lecture. Mesuré sur la boucle locale : le paquet de 175 Mio
+     * arrive en 2 680 blocs, et la même boucle en 8 Kio en demande 21 400 pour
+     * exactement le même octet — c'est du travail que personne ne voit passer
+     * mais que la machine fait quand même.
+     */
+    static const size_t BLOC = 64u * 1024u;
+    char *tampon = (char *)SDL_malloc(BLOC);
+    if (!tampon) {
+        ns_close_socket(s);
+        if (erreur) SDL_snprintf(erreur, erreur_cap, "mémoire épuisée");
+        return false;
+    }
+
+    SDL_IOStream *io = NULL;
+    int64_t attendu = 0, ecrit = 0;
+    size_t entete_len = 0;
+    bool entete_lu = false, ok = false, abandon = false;
+    char entete[4096];
+
+    for (;;) {
+#if defined(_WIN32)
+        const int recu = recv(s, tampon, (int)BLOC, 0);
+#else
+        const ssize_t recu = recv(s, tampon, BLOC, 0);
+#endif
+        if (recu <= 0) break;
+
+        size_t debut = 0;
+        if (!entete_lu) {
+            /*
+             * L'en-tête peut arriver en plusieurs morceaux, et le corps peut
+             * commencer dans le même paquet que sa dernière ligne. On accumule
+             * jusqu'à la ligne vide, puis on écrit ce qui la suit — l'oublier
+             * ferait perdre les premiers octets du fichier, et un paquet amputé
+             * de son début échoue à la vérification d'empreinte sans que rien
+             * ne dise pourquoi.
+             */
+            const size_t place = sizeof entete - entete_len;
+            const size_t pris = ((size_t)recu < place) ? (size_t)recu : place;
+            SDL_memcpy(entete + entete_len, tampon, pris);
+            entete_len += pris;
+
+            size_t fin = 0;
+            for (size_t i = 0; i + 3 < entete_len; ++i) {
+                if (entete[i] == '\r' && entete[i + 1] == '\n'
+                    && entete[i + 2] == '\r' && entete[i + 3] == '\n') {
+                    fin = i + 4;
+                    break;
+                }
+            }
+            if (fin == 0) {
+                if (entete_len == sizeof entete) {
+                    if (erreur) SDL_snprintf(erreur, erreur_cap, "en-tête démesuré");
+                    break;
+                }
+                continue;
+            }
+
+            if (entete_len < 12 || SDL_strncmp(entete, "HTTP/1.", 7) != 0
+                || !SDL_isdigit((unsigned char)entete[9])
+                || !SDL_isdigit((unsigned char)entete[10])
+                || !SDL_isdigit((unsigned char)entete[11])) {
+                if (erreur) SDL_snprintf(erreur, erreur_cap, "réponse illisible");
+                break;
+            }
+            const int code = (entete[9] - '0') * 100 + (entete[10] - '0') * 10
+                           + (entete[11] - '0');
+            if (statut) *statut = code;
+
+            /*
+             * 206 : le serveur reprend là où on s'était arrêté, on ajoute à la
+             * suite. 200 : il recommence tout — soit qu'il ignore `Range`, soit
+             * que le fichier ait changé — et il faut alors ÉCRASER, sinon on
+             * colle deux versions bout à bout et l'empreinte ne tombe jamais
+             * juste. 416 : on en a déjà autant qu'il en a, ce qui veut dire
+             * fini. Tout le reste est un échec.
+             */
+            if (code == 416 && deja > 0) { ok = true; break; }
+            if (code != 200 && code != 206) {
+                if (erreur) SDL_snprintf(erreur, erreur_cap, "réponse %d", code);
+                break;
+            }
+            const bool reprise = (code == 206);
+            (void)entete_entier(entete, fin, "Content-Length", &attendu);
+            ecrit = reprise ? deja : 0;
+            if (attendu > 0) attendu += ecrit;
+
+            io = SDL_IOFromFile(chemin, reprise ? "ab" : "wb");
+            if (!io) {
+                if (erreur) SDL_snprintf(erreur, erreur_cap, "écriture impossible : %s",
+                                         SDL_GetError());
+                break;
+            }
+            entete_lu = true;
+
+            /* Ce qui suivait la ligne vide DANS ce même paquet. */
+            const size_t reste_entete = fin - (entete_len - pris);
+            debut = (reste_entete <= (size_t)recu) ? reste_entete : (size_t)recu;
+        }
+
+        const size_t utile = (size_t)recu - debut;
+        if (utile) {
+            if (SDL_WriteIO(io, tampon + debut, utile) != utile) {
+                if (erreur) SDL_snprintf(erreur, erreur_cap, "disque plein ou en lecture seule");
+                break;
+            }
+            ecrit += (int64_t)utile;
+        }
+        if (progres && !progres(contexte, ecrit, attendu)) { abandon = true; break; }
+    }
+
+    if (io) {
+        SDL_CloseIO(io);
+        /* Complet quand le serveur avait annoncé une taille et qu'on l'a
+         * atteinte. Sans annonce on ne peut rien affirmer : c'est l'appelant
+         * qui tranche, et il a l'empreinte pour ça. */
+        if (!abandon && !ok) ok = (attendu > 0) ? (ecrit >= attendu) : (ecrit > 0);
+    }
+    if (!ok && !abandon && erreur && erreur_cap && !erreur[0]) {
+        SDL_snprintf(erreur, erreur_cap, "transfert interrompu");
+    }
+    SDL_free(tampon);
+    ns_close_socket(s);
+    return ok;
 }

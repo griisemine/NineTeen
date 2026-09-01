@@ -1757,6 +1757,18 @@ func (s *Server) handleTelechargements(w http.ResponseWriter, r *http.Request) {
 	paquets, annexes := s.depot.Liste()
 	source := "locale"
 
+	// LA VERSION ANNONCEE EST CELLE DES PAQUETS, pas celle du binaire Go.
+	//
+	// Le jeu compare ce numero au sien pour decider s'il se met a jour. Un
+	// serveur avance devant un repertoire pas encore refait annoncerait une
+	// version qu'il ne peut pas livrer : le joueur telechargerait l'ancien
+	// paquet, l'installerait, ne changerait pas de version, et se le verrait
+	// reproposer au lancement suivant. Le repertoire reste la verite.
+	version := s.version
+	if v := s.depot.Version(); v != "" {
+		version = v
+	}
+
 	if len(paquets) == 0 {
 		annexes = nil
 		if s.publiee {
@@ -1777,7 +1789,7 @@ func (s *Server) handleTelechargements(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
-		"version":    s.version,
+		"version":    version,
 		"source":     source,
 		"serveur":    s.publicURL,
 		"fichiers":   paquets,

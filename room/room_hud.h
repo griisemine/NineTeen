@@ -126,6 +126,25 @@ typedef struct room_hud_state {
      */
     float cp_multiplicateur;
     float cp_duree;              /* la durée médiane mesurée, en secondes */
+
+    /*
+     * LA MISE À JOUR, et pourquoi elle a droit à un bandeau PERMANENT.
+     *
+     * Les autres messages de cet écran s'effacent au bout de quelques
+     * secondes, parce qu'ils rendent compte de ce qui vient de se passer. Une
+     * version plus récente n'est pas un événement : c'est un état, il dure
+     * jusqu'à ce qu'on en fasse quelque chose, et un message qui s'efface tout
+     * seul serait la façon la plus sûre de ne jamais mettre à jour.
+     *
+     * Vide = rien à dire, et c'est le cas ordinaire : sans serveur configuré
+     * le bandeau n'existe pas. Il n'apparaît jamais pendant une partie en
+     * plein écran, ni sous `--no-hud`.
+     */
+    const char *maj_texte;
+    /* De 0 à 1 pendant le transfert, négatif quand il n'y a pas de barre à
+     * montrer. Une barre à zéro et pas de barre du tout ne disent pas la même
+     * chose. */
+    float       maj_avancement;
 } room_hud_state;
 
 /*

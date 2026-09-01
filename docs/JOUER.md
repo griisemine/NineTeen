@@ -270,13 +270,53 @@ installation en lecture seule :
 - Windows : `%APPDATA%\recognizer\Nineteen\`
 
 On y trouve `nineteen.log`, les captures de `F2`, `settings.cfg` — ce dernier n'étant écrit que si
-un réglage a changé —, `scores.txt` et `portefeuille.txt`.
+un réglage a changé —, `scores.txt`, `portefeuille.txt`, le répertoire `runs/` des parties en
+attente d'envoi et le répertoire `maj/` où atterrit un paquet de mise à jour.
 
 `portefeuille.txt` porte les jetons, les tickets, la série et les lots acquis. Il est écrit
 atomiquement, comme les deux autres : un temporaire puis un renommage, de sorte qu'une coupure de
 courant laisse l'ancien fichier intact plutôt qu'un fichier à moitié écrit. Le supprimer remet
 l'économie à zéro et ne casse rien — le jeu repart d'un portefeuille neuf sans un message
 d'erreur, ce qui est le cas du premier lancement.
+
+## La mise à jour, et pourquoi elle ne bloque jamais rien
+
+Au lancement, si une adresse de serveur est configurée, le jeu demande
+`/api/v1/telechargements` **sur un fil** et compare la version que le serveur annonce à la
+sienne. Le jeu démarre, se joue et se ferme sans jamais attendre cette réponse.
+
+Ce n'est pas une précaution de style. En 2020, tout le corps de `main()` était enfermé dans
+`if (checkVersion(...))` : sans réponse du serveur, le jeu affichait « une nouvelle version est
+disponible » puis se fermait. Hors ligne, il ne pouvait pas atteindre sa propre fenêtre. Écrire
+un mécanisme de mise à jour, c'est réécrire très exactement cette chose-là, et
+`engine/net/ns_maj.h` porte les trois règles qui l'en empêchent.
+
+Ce qui se passe, dans l'ordre :
+
+1. Le serveur annonce la version **des paquets qu'il a**, lue dans leurs noms de fichiers — pas
+   celle de son binaire. Un serveur avancé devant un répertoire pas encore refait annoncerait
+   sinon une version qu'il ne peut pas livrer.
+2. Le jeu choisit le paquet de **cette** plateforme, de **cette** architecture et de **cette**
+   version. Un paquet `arm64` n'est jamais proposé sur un PC `x86_64`. Sur Linux l'AppImage passe
+   avant le `.deb` : elle se lance sans droits d'administrateur.
+3. Un bandeau apparaît en haut à gauche. `F11` télécharge, `Maj+F11` écarte la version — et elle
+   ne sera plus jamais reproposée, parce que la réponse est écrite dans `settings.cfg`.
+4. Le téléchargement **reprend** là où il s'était arrêté si la session précédente a été fermée au
+   milieu. Fermer le jeu abandonne le transfert au lieu de le faire attendre.
+5. Le paquet reçu est vérifié contre l'empreinte SHA-256 que le serveur publie. Si elle ne tombe
+   pas juste, le fichier est **effacé** et rien n'est proposé. C'est la seule vérification qui
+   protège d'un installeur tronqué.
+6. `F11` une seconde fois confie le paquet au système, qui applique ses propres contrôles. Le jeu
+   n'exécute rien lui-même et ne remplace jamais son propre binaire.
+
+Deux réglages, dans `settings.cfg` :
+
+| Clé | Défaut | Ce que ça fait |
+| --- | --- | --- |
+| `update.auto` | `false` | Télécharge sans qu'on l'ait demandé. Un paquet fait 175 Mio, et ce n'est pas au jeu d'en décider à la place de celui qui voulait jouer dix minutes. |
+| `update.skipped` | vide | La version écartée. Écrite par `Maj+F11`. |
+
+`--no-maj` coupe la question pour une exécution. `--offline` la coupe aussi, comme tout le reste.
 
 ## L'économie : jeton, partie, tickets, lot
 

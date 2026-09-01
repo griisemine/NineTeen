@@ -485,6 +485,15 @@ nineteen_apply_sanitizers(ns_test_online)
 add_test(NAME online COMMAND ns_test_online)
 set_tests_properties(online PROPERTIES TIMEOUT 60)
 
+# La mise a jour. Elle partage le bouchon HTTP avec le test du classement :
+# c'est le meme serveur qu'ils imitent, et deux bouchons divergeraient.
+add_executable(ns_test_maj test_maj.c stub_serveur.c)
+target_link_libraries(ns_test_maj PRIVATE nineteen::engine)
+nineteen_set_warnings(ns_test_maj)
+nineteen_apply_sanitizers(ns_test_maj)
+add_test(NAME maj COMMAND ns_test_maj)
+set_tests_properties(maj PROPERTIES TIMEOUT 90)
+
 # La présence et le duel en différé, sur le même principe que `ns_test_online`
 # et pour la même raison : c'est ENTRE le C et le Go que vivent les défauts que
 # personne ne voit d'un seul côté.

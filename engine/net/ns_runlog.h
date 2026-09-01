@@ -229,6 +229,20 @@ bool ns_runlog_queue_read(const char *path, char *run_id, size_t run_id_cap,
  * serait la seule vérification d'un code dont l'erreur est silencieuse.
  * ------------------------------------------------------------------------- */
 void ns_sha256(const void *data, size_t len, uint8_t out[32]);
+
+/*
+ * L'empreinte d'un FICHIER, lue par blocs de 64 Kio.
+ *
+ * `ns_sha256` veut tout en mémoire, ce qui convient à une charge canonique de
+ * quelques kilo-octets et pas du tout à un paquet du jeu : le `.deb` mesuré
+ * pèse 175 580 032 octets. La mise à jour doit pourtant vérifier ce qu'elle a
+ * téléchargé AVANT de le proposer au joueur — sans ça, une coupure au milieu du
+ * transfert livrerait un installeur tronqué, c'est-à-dire la seule façon de
+ * casser une machine avec une mise à jour.
+ *
+ * Rend false si le fichier ne se lit pas ; `out` est alors laissé intact.
+ */
+bool ns_sha256_fichier(const char *chemin, uint8_t out[32]);
 void ns_hmac_sha256(const uint8_t *key, size_t key_len,
                     const void *data, size_t len, uint8_t out[32]);
 size_t ns_base64_raw(const uint8_t *data, size_t len, char *out, size_t cap);

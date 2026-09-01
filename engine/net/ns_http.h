@@ -63,6 +63,45 @@ bool ns_http_request(const char *method, const char *url,
 
 void ns_http_response_free(ns_http_response *r);
 
+/* ==========================================================================
+ * LE TÉLÉCHARGEMENT, qui ne passe PAS par `ns_http_request`
+ * ==========================================================================
+ * `ns_http_request` garde toute la réponse en mémoire et la borne à 256 Kio.
+ * C'est le bon choix pour un classement de quelques kilo-octets, et le mauvais
+ * pour un paquet du jeu : le `.deb` mesuré fait 175 580 032 octets, soit sept
+ * cents fois la borne, et le charger d'un bloc coûterait autant de mémoire que
+ * toute la salle.
+ *
+ * Celui-ci écrit au fil de l'eau dans un fichier, en 64 Kio à la fois, et il
+ * REPREND : si le fichier existe déjà il demande la suite avec un en-tête
+ * `Range`, ce que le serveur sait servir. Une coupure de réseau au milieu d'un
+ * paquet de 175 Mio ne recommence donc pas depuis zéro — ce qui, sur une ligne
+ * ordinaire, est la différence entre une mise à jour qui aboutit et une qui
+ * n'aboutit jamais.
+ * ========================================================================== */
+
+/*
+ * Appelée à chaque bloc reçu. Rendre `false` ARRÊTE le téléchargement — c'est
+ * ainsi qu'on referme le jeu sans attendre la fin d'un paquet, et le fichier
+ * partiel reste sur le disque pour la fois suivante.
+ *
+ * `total` vaut la taille annoncée par le serveur, ou 0 s'il ne l'annonce pas.
+ */
+typedef bool (*ns_http_progres)(void *contexte, int64_t recu, int64_t total);
+
+/*
+ * Télécharge `url` vers `chemin`, en reprenant ce qui s'y trouve déjà.
+ *
+ * Rend true quand le corps est arrivé en entier. `statut` reçoit le code HTTP
+ * — 200 pour un début, 206 pour une reprise — même en cas d'échec, parce que
+ * distinguer un 404 d'une coupure est ce qui permet de décider si l'on
+ * réessaie. Bloquant, à appeler depuis un fil de travail.
+ */
+bool ns_http_telecharger(const char *url, const char *chemin,
+                         uint32_t timeout_ms,
+                         ns_http_progres progres, void *contexte,
+                         int *statut, char *erreur, size_t erreur_cap);
+
 /* Découpe une URL. Rendue publique parce que c'est la partie qu'on veut tester
  * sans ouvrir de socket — et parce qu'une URL mal découpée est le genre de
  * défaut qui ne se voit qu'en production. */

@@ -394,6 +394,42 @@ static void draw_gamble(ns_sprite *s, const room_hud_state *st)
             "REPARTIR SANS REPONDRE VAUT GARDER");
 }
 
+/*
+ * LE BANDEAU DE MISE À JOUR, en haut à gauche et sur une seule ligne.
+ *
+ * En HAUT, parce que tout le bas de l'écran est déjà pris : l'invite des
+ * comptoirs y a été descendue pour cesser de couvrir la vitrine, et le quitte
+ * ou double s'y installe à la fin d'une partie. En haut à GAUCHE parce que le
+ * solde tient le coin droit.
+ *
+ * Il ne clignote pas et ne bouge pas. Une mise à jour n'est pas urgente : elle
+ * attend qu'on ait fini de jouer, et un bandeau qui s'agite apprend surtout à
+ * ne plus le regarder.
+ */
+static void draw_maj(ns_sprite *s, const room_hud_state *st)
+{
+    if (!st->maj_texte || !st->maj_texte[0]) return;
+
+    const float scale = 2.0f;
+    const float w = ns_sprite_text_width(st->maj_texte, scale) + 28.0f;
+    const float h = ns_sprite_text_height(scale) + 16.0f;
+    const float x = 24.0f, y = 24.0f;
+
+    ns_sprite_rect(s, x, y, w, h, C_PANEL);
+    ns_sprite_text(s, x + 14.0f, y + 8.0f, scale, C_KEY, st->maj_texte);
+
+    /* La barre, seulement pendant un transfert. Deux pixels de haut sous le
+     * texte : elle dit qu'il se passe quelque chose sans réclamer l'écran. */
+    if (st->maj_avancement >= 0.0f) {
+        const float bw = w - 28.0f;
+        const float by = y + h - 5.0f;
+        const float fond[4] = { 0.20f, 0.17f, 0.13f, 0.9f };
+        ns_sprite_rect(s, x + 14.0f, by, bw, 3.0f, fond);
+        const float part = (st->maj_avancement > 1.0f) ? 1.0f : st->maj_avancement;
+        if (part > 0.0f) ns_sprite_rect(s, x + 14.0f, by, bw * part, 3.0f, C_GOLD);
+    }
+}
+
 void room_hud_draw(ns_sprite *s, const room_hud_state *st)
 {
     if (!s || !st) return;
@@ -404,6 +440,7 @@ void room_hud_draw(ns_sprite *s, const room_hud_state *st)
     draw_gamble(s, st);
     draw_settings(s, st);
     draw_eco_message(s, st);
+    draw_maj(s, st);
     draw_intro(s, st);
 }
 
