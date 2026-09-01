@@ -193,6 +193,10 @@ int main(int argc, char **argv)
     const char *titre = NULL, *out_path = NULL;
     bool neon = false;
     float hue[3] = { 1.00f, 0.42f, 0.12f };   /* la teinte du gaz */
+    /* La teinte du HALO, quand elle diffère de celle du tube. Non renseignée,
+     * elle recopie `--teinte` plus bas, et le rendu est alors inchangé. */
+    float halo_hue[3];
+    bool  halo_donnee = false;
 
     for (int i = 1; i < argc; ++i) {
         if (strncmp(argv[i], "--titre=", 8) == 0)        titre = argv[i] + 8;
@@ -203,6 +207,13 @@ int main(int argc, char **argv)
                 tool_fatalf("--teinte attend r,g,b entre 0 et 1");
             }
         }
+        else if (strncmp(argv[i], "--halo=", 7) == 0) {
+            if (sscanf(argv[i] + 7, "%f,%f,%f",
+                       &halo_hue[0], &halo_hue[1], &halo_hue[2]) != 3) {
+                tool_fatalf("--halo attend r,g,b entre 0 et 1");
+            }
+            halo_donnee = true;
+        }
         else if (strcmp(argv[i], "--neon") == 0)         neon = true;
         else if (!out_path) out_path = argv[i];
     }
@@ -212,12 +223,20 @@ int main(int argc, char **argv)
             "usage : %s --titre=NOM [options] <sortie.png>\n"
             "  --titre=NOM       le nom du jeu, en majuscules\n"
             "  --teinte=r,g,b    la couleur du gaz (défaut 1,0.42,0.12)\n"
+            "  --halo=r,g,b      la couleur du SECOND tube, celui qui cerne le\n"
+            "                    premier (défaut : la même que --teinte, donc\n"
+            "                    une enseigne d'une seule couleur)\n"
             "  --width=N --height=N  dimensions (défaut 1024x256)\n"
             "  --neon            tube de verre nu sur panneau sombre, et non\n"
             "                    plaque de plexiglas rétroéclairée\n", argv[0]);
         return 2;
     }
     if (width < 64 || height < 32) tool_fatalf("planche trop petite");
+    /* Sans second gaz déclaré, le halo est de la teinte du tube : c'est le
+     * comportement de toujours, et les neuf planches de borne en dépendent. */
+    if (!halo_donnee) {
+        halo_hue[0] = hue[0]; halo_hue[1] = hue[1]; halo_hue[2] = hue[2];
+    }
 
     const int len = (int)strlen(titre);
     if (len < 1 || len > 16) tool_fatalf("titre de 1 à 16 caractères, pas %d", len);
@@ -334,10 +353,39 @@ int main(int argc, char **argv)
                 const float halo = ((expf(-t * t * k_halo) - bord_h) / (1.0f - bord_h))
                                  * (neon ? 1.05f : 0.80f);
 
+                /*
+                 * DEUX GAZ, et c'est ce que l'enseigne de 2020 montrait.
+                 *
+                 * `nineteen_name.jpg` n'a jamais ete d'une seule couleur : les
+                 * lettres y sont ROUGES, cernees de blanc, et c'est un contour
+                 * BLEU qui les detache du panneau noir. Une enseigne au neon
+                 * assemble des tubes de gaz differents ; la rendre d'une teinte
+                 * unique est ce qui la fait lire comme une plaque retroeclairee.
+                 *
+                 * La teinte suit donc la distance au tube : celle du gaz au
+                 * contact, celle du second tube a la portee. Quand les deux sont
+                 * egales — le cas de TOUTES les planches de borne, qui ne
+                 * passent pas `--halo=` — l'interpolation est l'identite et la
+                 * planche ne bouge pas d'un octet.
+                 *
+                 * Le passage d'un gaz a l'autre est FRANC, et il a fallu le
+                 * mesurer pour le savoir : interpole lineairement sur la
+                 * portee, le rouge et le bleu se rejoignent en un mauve continu
+                 * ou l'oeil ne lit plus deux couleurs mais une seule, delavee —
+                 * le denombrement de cet essai-la ne trouvait plus ni rouge ni
+                 * bleu, mais 13,5 % de (0,75 ; 0,42 ; 0,58). La bascule est donc
+                 * resserree sur le tiers median de la portee : un liseré franc
+                 * de la premiere couleur, un halo franc de la seconde.
+                 */
+                float teinte[3];
+                const float u = clamp01((t - 0.18f) / 0.34f);
+                const float m = u * u * (3.0f - 2.0f * u);   /* adoucie aux deux bouts */
+                for (int c = 0; c < 3; ++c) teinte[c] = hue[c] + (halo_hue[c] - hue[c]) * m;
+
                 const float k = clamp01(halo + coeur);
-                r += (hue[0] + coeur * (1.0f - hue[0])) * k;
-                g += (hue[1] + coeur * (1.0f - hue[1])) * k;
-                b += (hue[2] + coeur * (1.0f - hue[2])) * k;
+                r += (teinte[0] + coeur * (1.0f - teinte[0])) * k;
+                g += (teinte[1] + coeur * (1.0f - teinte[1])) * k;
+                b += (teinte[2] + coeur * (1.0f - teinte[2])) * k;
             }
 
             unsigned char *o = &px[((size_t)y * width + x) * 3];

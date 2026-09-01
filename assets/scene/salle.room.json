@@ -1104,16 +1104,19 @@
       "_emis": "Emissif ramene de [0,3 ; 1,0 ; 0,4] x 2,6 a [1 ; 1 ; 1] x 0,55, et c'est la PLANCHE qui l'impose. « exit.png » etait une capture d'ecran grise : multiplier un gris moyen par 2,6 donnait une lueur. « bloc_sortie.png » est une plaque retroeclairee verte a lettres en reserve — elle porte deja sa teinte et sa clarte, et le meme reglage cumulait deux fois le vert. Teinte neutre, comme chez l'enseigne NINETEEN, et 0,55 : un bloc de secours doit se voir de loin dans un sas sombre sans bruler a 2,40 m."
     },
     {
-      "_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le plus sature du decor, et une enseigne doit se detacher des murs chauds plutot que s'y ajouter. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.",
+      "_": "L'enseigne de la salle, en VRAI NEON. Elle portait `nineteen_name.jpg`, une image peinte avec ombre portee et contour dessine ; le proprietaire l'a demandee « ecrite en neon ». `marqueeart --neon` dessine un tube de verre nu de douze millimetres devant un panneau noir, halo compris. L'emissif reste module par l'albedo texel par texel, donc le panneau noir reste noir et seuls les tubes s'allument — c'est exactement ce qu'on veut d'un neon.",
+      "_teintes": "ROUGE ET BLEU, RELEVES SUR LA PLANCHE DE 2020, et non plus cyan uni. Le cyan tenait dans un raisonnement — « une enseigne doit se detacher des murs chauds » — que personne n'avait confronte a `nineteen_name.jpg`. Denombrement des couleurs du fichier, cube 6x6x6 sur les 279 220 pixels : 58,9 % de panneau noir, 12,0 % de BLEU (0,25 ; 0,25 ; 0,92), 11,1 % de BLANC, 9,8 % de ROUGE (0,92 ; 0,25 ; 0,25). L'enseigne de 2020 avait DEUX gaz, un jambage rouge cerne de blanc que detache un contour bleu — c'est ce que le proprietaire appelle « les differentes couleurs de neon », et une teinte unique les efface. Le blanc n'est pas declare : `--neon` le produit deja au coeur du tube. Voir `assets/CMakeLists.txt` et l'option `--halo=` de `tools/marqueeart.c`.",
+      "_emissif": "2,4 -> 1,7, ET C'ETAIT LE DEFAUT QUE LE PROPRIETAIRE A NOMME : « un bloc blanc sature », « le bloom deborde largement du panneau ». Les 2,4 avaient ete poses sans une ligne pour les defendre, dans le meme commit que le passage au neon, dont le message ne parle que du dessin de la planche. Ils etaient AU-DESSUS des 1,9 de `classement_fond`, dont le commentaire exige pourtant que la dalle du bar « domine l'enseigne qui la surplombe » : le fichier se contredisait, et c'est l'enseigne qui gagnait.\nMESURE sur les planches, en luminance HDR = texel lineaire x emissif, sur toute l'image. L'ancienne, cyan a 2,4 : moyenne 0,656, et 35,7 % de la planche AU-DESSUS du seuil de floraison de 0,85 (`ns_render.c:299`) — plus du tiers du panneau entrait dans le halo, d'ou le debordement. Celle de 2020 a son emissif de l'epoque (2,2 x teinte (1 ; 0,9 ; 0,6), soit 1,98 en luminance) : moyenne 0,305 et 11,1 %. La nouvelle a 1,7 : moyenne 0,297 et 6,5 %. Elle rend donc la luminance moyenne de 2020 a 3 % pres, en franchissant le seuil sur une surface DEUX FOIS MOINDRE — parce que son panneau est noir sur un tiers de son etendue la ou le cyan ne l'etait nulle part.\n1,7 et pas plus : au-dela de 1,9 l'enseigne repasserait devant la dalle du bar, ce que le poste 12 interdit.",
       "name": "enseigne",
       "texture": "nineteen_neon.png",
-      "roughness": 0.3,
+      "_rugosite": "0,30 -> 0,80, ET C'EST LA TROISIEME CAUSE DU BLOC BLANC, celle qu'on ne pouvait pas deviner sans separer les tampons. Isole en `--debug=emissive`, l'emissif de l'enseigne sort UNIFORME sur les huit lettres : le blanc qui mangeait « EEN » n'en venait donc pas. Il venait du SPECULAIRE — a 0,30 le panneau est un vernis, son lobe est etroit, et le reflet d'un luminaire du bar y posait une tache assez vive pour saturer, fusionner trois lettres et fleurir par-dessus le cadre. Verifie par substitution, tout le reste egal : a 0,80 la tache a disparu et les huit lettres se lisent. Un panneau d'enseigne au neon est de la tole peinte, pas du vernis ; 0,80 dit la matiere, et le seul brillant qui reste est celui des tubes.",
+      "roughness": 0.8,
       "emissive": [
         1.0,
         1.0,
         1.0
       ],
-      "emissiveStrength": 2.4,
+      "emissiveStrength": 1.7,
       "fit": true
     },
     {
@@ -1708,6 +1711,7 @@
     {
       "_atmo": "SPEC-ATMOSPHERE poste 9 : sa PORTEE est retenue, son INTENSITE est refusee, et il a fallu trois mesures pour en arriver la. La specification demandait 34 pour une portee de 3,4 ; appliquee telle quelle elle FAIT TOMBER la mediane de --view=allee a 32 alors que son propre critere de recette exige 42, et celle de --view=borne de 69 a 44 alors que le poste 3 exige qu'elle ne bouge pas. La specification se contredisait, et le developpeur l'a dit au lieu de corriger en douce.\nLe poste demandait de ramener l'intensite de 74 a 34. Applique tel quel il fait tomber la mediane de --view=allee a 32 quand son propre critere exige 42, et celle de --view=borne de 69 a 44 quand un autre poste exige 50 a 60. J'ai d'abord retenu 54 en compromis.\nC'ETAIT FAUX, et pour une raison qui vaut d'etre ecrite : la mesure qui donnait 42 a 54 avait ete prise sur un BINAIRE PERIME — le meme piege qui, le meme jour, a fait mesurer un personnage a 1,14 m au lieu de 1,46. Remesure sur trois valeurs, chacune apres une reconstruction confirmee :\n    rampes 54 -> allee 35,2  borne 49,1\n    rampes 74 -> allee 42,1  borne 57,7\n    rampes 94 -> allee 47,5  borne 64,3\nSeul 74 — la valeur d'ORIGINE — tient les deux criteres. La portee reduite de 4,6 a 3,4 est gardee : mesuree seule, elle ne coute que trois points et elle sert le diagnostic du poste, qui reste juste sur le fond — ces rampes sont a l'aplomb de l'ilot et lavent le fond du champ plutot que d'eclairer les bornes. C'est donc la PORTEE qui corrige ce defaut, pas l'intensite.",
       "name": "rampe_ilot_nord",
+      "_sombre": "74 -> 45, ET LE CRITERE DE `borne` EST LA RAISON, pas l'envie de baisser la lumiere. Le proprietaire demande « reduit le nombre de lumiere dans la salle pour augmenter l'ambiance », « neon et dark salle d'arcade » ; le poste 9 demandait deja 34, et le `_atmo` ci-dessus l'a refuse sur deux criteres — `allee` >= 42 et `borne` entre 50 et 60.\nCES DEUX CRITERES ONT ETE REMESURES AVANT DE TOUCHER A QUOI QUE CE SOIT, en `--headless --view=NOM --frames=40`, et le second ne tenait plus : a 74, `borne` sort a 65 de mediane, c'est-a-dire CINQ POINTS AU-DESSUS de sa bande. A 45 elle retombe a 59, dans la bande. La baisse ne casse donc pas ce critere : elle le REPARE. `centre` passe de 34 a 31 et reste au-dessus de son plancher de 30.\nCE QUI EST GARDE DU REFUS : on ne descend pas a 34, ou le releve du `_atmo` donne `borne` a 49. 45 est le milieu, et les six exemplaires passent de 444 d'intensite cumulee a 270.\nCE QUE CA COUTE, mesure en isolant chaque changement : l'enseigne seule fait passer `allee` de 39 a 36 de mediane, les rampes font le reste, 36 -> 30. `travee` ne bouge pas d'un point entre les deux (63 avant comme apres les rampes) et `bar` pas d'un dixieme : ces lampes sont a l'APLOMB de l'ilot, elles n'eclairaient donc qu'`allee` et le plafond, ce que le poste 9 disait deja. Sur les huit vues de recette plus `borne` et `centre`, la plus basse mediane est 25 (`classement`), pour un plancher de lisibilite ecrit a 20.\nCE QU'ON VOIT : le fond du champ derriere l'ilot cesse d'etre lave, les caissons reprennent du relief, et le tapis au neon redevient la chose claire de l'allee — c'est-a-dire que ce sont les machines qui eclairent, ce que `_lumieres` annonce en tete de ce fichier sans que le compte l'ait jamais suivi.",
       "at": [
         -2.4,
         2.74,
@@ -1718,7 +1722,7 @@
         0.79,
         0.54
       ],
-      "intensity": 74.0,
+      "intensity": 45.0,
       "range": 3.4,
       "radius": 0.32,
       "flicker": false,
@@ -1750,7 +1754,7 @@
         0.79,
         0.54
       ],
-      "intensity": 74.0,
+      "intensity": 45.0,
       "range": 3.4,
       "radius": 0.32,
       "flicker": false,
@@ -1767,6 +1771,7 @@
           0.0
         ]
       },
+      "_sombre": "74 -> 45, en meme temps que sa jumelle du nord et pour la meme raison : voir `rampe_ilot_nord._sombre`, qui porte la mesure. Les six exemplaires sont un seul geste d'eclairage, les separer n'aurait aucun sens.",
       "_": "Idem pour la rangée sud. Les deux rampes corrigent un défaut de disposition, pas de réglage : l'îlot de douze bornes — la pièce maîtresse de la salle — n'avait AUCUN luminaire au-dessus de lui. Les deux plafonniers « allée » sont à x −5,2, c'est-à-dire à l'ouest de tout. Les caissons ne recevaient donc que la lumière de leurs propres écrans, par la tranche."
     },
     {

@@ -218,14 +218,26 @@ set(MARQUEE_ART "")
 # douze millimetres devant un panneau noir, dont le halo porte loin. C'est le
 # mode `--neon` de marqueeart, ajoute pour ca.
 #
-# Cyan et non magenta : le liseré des dix-neuf bornes est deja le materiau le
-# plus sature du decor, et l'enseigne doit se detacher des murs chauds, pas s'y
-# ajouter.
+# ROUGE ET BLEU, ET C'EST UN RELEVE, PAS UN GOUT.
+#
+# Le cyan uni qui etait ici tenait dans un raisonnement — « une enseigne doit se
+# detacher des murs chauds » — qui n'avait jamais ete confronte a la planche de
+# 2020. Elle l'a ete : le denombrement des couleurs de `nineteen_name.jpg`
+# (cube 6x6x6, tout le fichier) donne 58,9 % de panneau noir, 12,0 % de BLEU
+# (0,25 ; 0,25 ; 0,92), 11,1 % de BLANC et 9,8 % de ROUGE (0,92 ; 0,25 ; 0,25).
+# L'enseigne de 2020 n'a jamais eu une couleur : elle en avait DEUX, un jambage
+# rouge cerne de blanc que detache un contour bleu. C'est ce que le proprietaire
+# nomme « les differentes couleurs de neon », et une teinte unique les efface.
+#
+# Le blanc n'est pas passe en parametre : `--neon` le produit deja au coeur du
+# tube, ou le verre sature. Les deux gaz suffisent donc a retrouver les quatre
+# valeurs relevees.
 set(_neon "${GEN}/sideart/nineteen_neon.png")
 add_custom_command(
     OUTPUT  "${_neon}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GEN}/sideart"
-    COMMAND marqueeart --titre=NINETEEN --neon "--teinte=0.24,0.78,1.0"
+    COMMAND marqueeart --titre=NINETEEN --neon
+            "--teinte=0.92,0.25,0.25" "--halo=0.25,0.25,0.92"
             --width=2048 --height=512 "${_neon}"
     DEPENDS marqueeart
     COMMENT "Enseigne au neon : nineteen_neon.png"
