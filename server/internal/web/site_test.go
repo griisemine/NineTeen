@@ -55,6 +55,55 @@ func index(t *testing.T) string {
 	return string(lireAsset(t, "index.html"))
 }
 
+// LES CINQ PAGES, et pas seulement l'accueil.
+//
+// Les controles de ce fichier ne lisaient qu'`index.html`, du temps ou le site
+// tenait sur une page et demie. Il en a cinq : accueil, Couperet, classement,
+// telechargement, compte. Une image sans alt ou une ressource tierce sur l'une
+// des quatre autres passait donc sans etre vue.
+//
+// La liste est LUE dans le systeme de fichiers embarque et non ecrite ici : une
+// sixieme page tombe sous les memes controles le jour ou elle apparait, sans
+// que personne ait a y penser.
+func pages(t *testing.T) map[string]string {
+	t.Helper()
+	entrees, err := fs.ReadDir(FS, "assets")
+	if err != nil {
+		t.Fatalf("site embarque illisible : %v", err)
+	}
+	out := map[string]string{}
+	for _, e := range entrees {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".html") {
+			continue
+		}
+		out[e.Name()] = string(lireAsset(t, e.Name()))
+	}
+	if len(out) == 0 {
+		t.Fatal("aucune page HTML dans le site embarque")
+	}
+	return out
+}
+
+// Les scripts du site, meme lecture et meme raison.
+func scripts(t *testing.T) map[string]string {
+	t.Helper()
+	entrees, err := fs.ReadDir(FS, "assets")
+	if err != nil {
+		t.Fatalf("site embarque illisible : %v", err)
+	}
+	out := map[string]string{}
+	for _, e := range entrees {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".js") {
+			continue
+		}
+		out[e.Name()] = string(lireAsset(t, e.Name()))
+	}
+	if len(out) == 0 {
+		t.Fatal("aucun script dans le site embarque")
+	}
+	return out
+}
+
 /* ========================================================================== */
 /* 1. Tout fichier référencé existe                                           */
 /* ========================================================================== */
@@ -65,34 +114,35 @@ func index(t *testing.T) string {
 var motifRessource = regexp.MustCompile(`(?:src|href|poster)="(/[^"]+)"`)
 
 func TestToutFichierReferenceExiste(t *testing.T) {
-	page := index(t)
-
 	// Les chemins servis par le serveur mais qui ne sont pas des fichiers du
 	// site : ils sont produits par l'API, pas par `assets/`.
 	dynamiques := map[string]bool{"/": true}
 
 	trouvés, manquants := 0, 0
-	for _, m := range motifRessource.FindAllStringSubmatch(page, -1) {
-		url := m[1]
-		if dynamiques[url] || strings.HasPrefix(url, "/api/") {
-			continue
-		}
-		// Une ancre (« #audit ») n'est pas une ressource.
-		if i := strings.IndexByte(url, '#'); i >= 0 {
-			url = url[:i]
-		}
-		if url == "" || url == "/" {
-			continue
-		}
-		trouvés++
-		if _, err := fs.Stat(FS, "assets"+url); err != nil {
-			manquants++
-			t.Errorf("index.html référence %s, qui n'est pas dans le site embarqué", url)
+	for nom, page := range pages(t) {
+		for _, m := range motifRessource.FindAllStringSubmatch(page, -1) {
+			url := m[1]
+			if dynamiques[url] || strings.HasPrefix(url, "/api/") ||
+				strings.HasPrefix(url, "/telechargements/") {
+				continue
+			}
+			// Une ancre n'est pas une ressource.
+			if i := strings.IndexByte(url, '#'); i >= 0 {
+				url = url[:i]
+			}
+			if url == "" || url == "/" {
+				continue
+			}
+			trouvés++
+			if _, err := fs.Stat(FS, "assets"+url); err != nil {
+				manquants++
+				t.Errorf("%s référence %s, qui n'est pas dans le site embarqué", nom, url)
+			}
 		}
 	}
 	if trouvés == 0 {
-		t.Fatal("aucune ressource locale trouvée dans index.html : le motif de " +
-			"détection ne reconnaît plus la page, donc ce test ne contrôle plus rien")
+		t.Fatal("aucune ressource locale trouvée : le motif de détection ne " +
+			"reconnaît plus les pages, donc ce test ne contrôle plus rien")
 	}
 	t.Logf("%d ressources locales référencées, %d absente(s)", trouvés, manquants)
 }
@@ -151,14 +201,16 @@ var motifAlt = regexp.MustCompile(`\salt="([^"]*)"`)
 // une image décorative, mais aucune de celles-ci ne l'est : elles SONT le
 // contenu de la page.
 func TestChaqueImageAUnTexteAlternatif(t *testing.T) {
-	for _, balise := range motifImg.FindAllString(index(t), -1) {
-		m := motifAlt.FindStringSubmatch(balise)
-		if m == nil {
-			t.Errorf("image sans attribut alt : %s", résumé(balise))
-			continue
-		}
-		if strings.TrimSpace(m[1]) == "" {
-			t.Errorf("image à alt vide : %s", résumé(balise))
+	for nom, page := range pages(t) {
+		for _, balise := range motifImg.FindAllString(page, -1) {
+			m := motifAlt.FindStringSubmatch(balise)
+			if m == nil {
+				t.Errorf("%s : image sans attribut alt : %s", nom, résumé(balise))
+				continue
+			}
+			if strings.TrimSpace(m[1]) == "" {
+				t.Errorf("%s : image à alt vide : %s", nom, résumé(balise))
+			}
 		}
 	}
 }
@@ -183,16 +235,17 @@ var motifExterne = regexp.MustCompile(`(?:src|href)="(https?:)?//([^"]+)"`)
 // silencieusement bloqué, et le site s'afficherait sans sa fonte. Les liens de
 // TEXTE vers GitHub restent permis — ils ne chargent rien.
 func TestAucuneRessourceTierce(t *testing.T) {
-	page := index(t)
-	for _, m := range motifExterne.FindAllStringSubmatch(page, -1) {
-		hôte := m[2]
-		// `href` sur une balise `<a>` est un lien, pas un chargement. On ne
-		// retient que ce qui est chargé par la page.
-		balise := contexteBalise(page, m[0])
-		if strings.HasPrefix(balise, "<a ") {
-			continue
+	for nom, page := range pages(t) {
+		for _, m := range motifExterne.FindAllStringSubmatch(page, -1) {
+			hôte := m[2]
+			// `href` sur une balise `<a>` est un lien, pas un chargement. On ne
+			// retient que ce qui est chargé par la page.
+			balise := contexteBalise(page, m[0])
+			if strings.HasPrefix(balise, "<a ") {
+				continue
+			}
+			t.Errorf("%s : ressource tierce chargée : %s (dans %s)", nom, hôte, résumé(balise))
 		}
-		t.Errorf("ressource tierce chargée par la page : %s (dans %s)", hôte, résumé(balise))
 	}
 }
 
@@ -285,31 +338,75 @@ func TestChiffresDeLaPageSuiventLeManifeste(t *testing.T) {
 		"jeux":       strconv.Itoa(m.Compte.Jeux),
 		"luminaires": strconv.Itoa(m.Compte.Luminaires),
 		"vues":       strconv.Itoa(m.Compte.VuesNommées),
-		"version":    m.Version,
+		"props":      strconv.Itoa(m.Compte.Props),
 	}
 
+	// EXIGES SUR L'ACCUEIL, parce qu'ils sont l'identite du site. Les autres
+	// sont facultatifs : « luminaires » et « vues nommees » disaient l'etat d'un
+	// moteur et non ce qu'on vient jouer, et la page les a laisses tomber. Ce
+	// test ne demande donc plus qu'ils soient affiches, il demande que ceux qui
+	// LE SONT soient justes, ce qui est la seule chose qu'il peut promettre.
+	obligatoires := []string{"bornes", "jeux"}
+
 	vus := map[string]int{}
-	for _, occ := range motifChiffre.FindAllStringSubmatch(index(t), -1) {
-		clé, valeur := occ[1], strings.TrimSpace(occ[2])
-		veut, connu := attendu[clé]
-		if !connu {
-			t.Errorf(`data-chiffre="%s" n'a pas de source : ajouter la clé dans ce `+
-				`test, ou retirer l'attribut`, clé)
-			continue
-		}
-		vus[clé]++
-		if valeur != veut {
-			t.Errorf(`la page annonce %s = %q ; la source dit %q`, clé, valeur, veut)
+	for nom, page := range pages(t) {
+		for _, occ := range motifChiffre.FindAllStringSubmatch(page, -1) {
+			clé, valeur := occ[1], strings.TrimSpace(occ[2])
+			veut, connu := attendu[clé]
+			if !connu {
+				t.Errorf(`%s : data-chiffre="%s" n'a pas de source : ajouter la clé `+
+					`dans ce test, ou retirer l'attribut`, nom, clé)
+				continue
+			}
+			vus[clé]++
+			if valeur != veut {
+				t.Errorf(`%s annonce %s = %q, la source dit %q`, nom, clé, valeur, veut)
+			}
 		}
 	}
 
 	// Le contrôle du contrôle : si la page cessait de porter ces attributs, ce
 	// test passerait en ne vérifiant rien du tout.
-	for clé := range attendu {
+	for _, clé := range obligatoires {
 		if vus[clé] == 0 {
-			t.Errorf(`aucun data-chiffre="%s" dans index.html : le chiffre n'est plus contrôlé`, clé)
+			t.Errorf(`aucun data-chiffre="%s" dans le site : le chiffre n'est plus contrôlé`, clé)
 		}
 	}
+}
+
+// LE NUMERO DE VERSION ECRIT EN DUR DANS CHAQUE PAGE.
+//
+// Les cinq pages portent « Version 17.0.0 » dans leur pied, sous un
+// `data-version` que le script remplace par ce que rend /api/v1/version. Ce
+// texte-la n'est donc vu que pendant le chargement, ou quand le script ne
+// s'execute pas, et c'est exactement le genre de valeur qui se demode sans que
+// personne s'en apercoive.
+//
+// Il doit valoir la version du manifeste, qui suit elle-meme CMake par
+// TestVersionDuMediaSuitCMake. La chaine tient donc de CMakeLists.txt au pied
+// de page.
+func TestLaVersionEcriteDansLesPagesSuitLaSource(t *testing.T) {
+	m := manifeste(t)
+	motif := regexp.MustCompile(`data-version[^>]*>([^<]*)<`)
+
+	vus := 0
+	for nom, page := range pages(t) {
+		occurrences := motif.FindAllStringSubmatch(page, -1)
+		if len(occurrences) == 0 {
+			t.Errorf("%s ne porte aucun data-version", nom)
+			continue
+		}
+		for _, occ := range occurrences {
+			vus++
+			if got := strings.TrimSpace(occ[1]); got != m.Version {
+				t.Errorf("%s écrit la version %q, la source dit %q", nom, got, m.Version)
+			}
+		}
+	}
+	if vus == 0 {
+		t.Fatal("aucun data-version dans le site : ce test ne contrôle plus rien")
+	}
+	t.Logf("%d mentions de version vérifiées", vus)
 }
 
 // Le manifeste doit décrire autant d'entrées qu'il en compte. Un décompte qui
@@ -500,223 +597,311 @@ func TestVersionDuMediaSuitCMake(t *testing.T) {
 	}
 }
 
-// La page ne doit pas offrir un téléchargement qui n'existe pas.
-//
-// Elle le faisait : `app.js` bâtissait trois liens vers
-// `github.com/griisemine/NineTeen/releases/download/v<version>/…` à partir du
-// seul numéro de version, en supposant que la release existe. Mesuré contre
-// l'API GitHub le jour où ce test a été écrit : le dépôt répond 200,
-// `releases/tags/v17.0.0` répond 404, et la liste des releases est vide. Les
-// trois boutons « Télécharger » — ce pour quoi la page existe — étaient trois
-// 404, et un bouton mort fait douter du reste de la page.
-//
-// Le test ne va PAS interroger GitHub : un test qui dépend du réseau échoue
-// pour des raisons qui ne le regardent pas. Il vérifie la seule chose qui soit
-// à nous — que la page demande au serveur si la version est publiée, au lieu
-// de le supposer, et qu'elle a de quoi le dire quand la réponse est non.
-func TestLaPageNAffirmePasQuUnPaquetExiste(t *testing.T) {
-	js := string(lireAsset(t, "app.js"))
-	if !strings.Contains(js, "data.publiee") {
-		t.Error("app.js ne lit pas « publiee » : les liens de téléchargement " +
-			"sont donc bâtis sans savoir si la release existe")
-	}
-	// Les deux moitiés de la règle. « ne jamais poser de href » passerait la
-	// première seule, et le téléchargement cesserait d'exister.
-	if !strings.Contains(js, "el.removeAttribute(\"href\")") {
-		t.Error("app.js ne retire pas le href quand la version n'est pas publiée")
-	}
-	if !strings.Contains(js, "el.href = ") {
-		t.Error("app.js ne pose jamais de href : plus personne ne peut télécharger")
-	}
-	if !strings.Contains(js, "aria-disabled") {
-		t.Error("un bouton qui n'est plus un lien doit le dire à un lecteur d'écran")
-	}
-
-	html := string(lireAsset(t, "index.html"))
-	if !strings.Contains(html, `id="note-attente"`) {
-		t.Error("index.html n'a pas la note qui explique l'attente")
-	}
-	if !strings.Contains(html, "hidden") {
-		t.Error("la note d'attente doit être masquée par défaut : c'est app.js " +
-			"qui la découvre, une fois la réponse du serveur connue")
-	}
-}
-
 /* ========================================================================== */
-/* 4. Le site ne suppose pas où il est servi                                  */
+/* 4. Les cinq pages, et la ponctuation qu'on leur demande                    */
 /* ========================================================================== */
 
-// TestLeSiteNeSupposePasSonPropreHote — la page doit fonctionner ailleurs que
-// sur `localhost`.
+// Le site a cinq pages et une seule barre de navigation. Chacune doit la
+// porter, et se designer elle-meme par `aria-current`, sinon un visiteur ne sait
+// plus ou il est.
 //
-// Le site est servi depuis un `embed.FS` : le même fichier part sur la machine
-// du développeur, dans le conteneur, et derrière le proxy TLS d'un vrai
-// déploiement. Une adresse d'API écrite en dur y serait juste pour un seul des
-// trois, et le symptôme sur les deux autres est une page qui s'affiche
-// parfaitement avec un classement vide et des erreurs en console.
-//
-// La règle est donc : `app.js` appelle l'API en RELATIF, et rien d'absolu ne
-// désigne un hôte à nous. Ce qui reste permis, ce sont les liens vers GitHub —
-// ce sont des liens, pas des appels d'API, et ils pointent vers un service qui
-// n'est pas celui-ci.
-//
-// Mesuré au moment d'écrire ce test : `app.js` ne contenait déjà aucun
-// `localhost`, et son helper `api(path)` passe le chemin tel quel à `fetch`
-// avec `credentials: "same-origin"`. Le test cloue cet état plutôt que de le
-// supposer conservé.
-func TestLeSiteNeSupposePasSonPropreHote(t *testing.T) {
-	js := string(lireAsset(t, "app.js"))
-	html := string(lireAsset(t, "index.html"))
+// Ce test attrape le defaut le plus banal d'un site a plusieurs pages : une
+// page ajoutee sans etre mise dans le menu des autres, ou un lien de menu
+// oublie sur une page. Rien ne se voit, on ne peut simplement plus revenir.
+func TestChaquePagePorteLaMemeNavigation(t *testing.T) {
+	liens := []string{"/", "/couperet.html", "/classement.html", "/telecharger.html"}
+	toutes := pages(t)
 
-	for _, interdit := range []string{"localhost", "127.0.0.1", "0.0.0.0", "://[::1]"} {
-		if strings.Contains(js, interdit) {
-			t.Errorf("app.js contient %q : le site ne marcherait que là", interdit)
-		}
-		if strings.Contains(html, interdit) {
-			t.Errorf("index.html contient %q : le site ne marcherait que là", interdit)
+	// Les pages que le menu designe, par leur nom de fichier. La racine est
+	// index.html : c'est le serveur de fichiers qui fait la correspondance, et
+	// elle n'est ecrite qu'ici.
+	cibles := map[string]bool{"index.html": true}
+	for _, l := range liens {
+		if l != "/" {
+			cibles[strings.TrimPrefix(l, "/")] = true
 		}
 	}
 
-	// Les appels d'API partent en relatif. Le helper est le seul point de
-	// passage, et il reçoit `path` sans préfixe.
-	if !strings.Contains(js, `const response = await fetch(path, {`) {
-		t.Error("app.js n'appelle plus l'API par son helper relatif : vérifier " +
-			"qu'aucune origine n'a été écrite en dur")
-	}
-	if !strings.Contains(js, `credentials: "same-origin"`) {
-		t.Error("app.js n'envoie plus les cookies en same-origin : la session " +
-			"cesserait de suivre dès que l'origine change")
-	}
-
-	// Aucun `api("http…")` : le seul argument admis est un chemin.
-	if motif := regexp.MustCompile("api\\(\\s*[\"'`]\\s*https?://"); motif.MatchString(js) {
-		t.Error("app.js appelle l'API par une URL absolue")
-	}
-}
-
-// TestLaPageDonneLAdresseAuJoueur — la page dit quoi taper dans `--server=`,
-// et elle le tient du SERVEUR.
-//
-// Ce qui manquait : la page livrait un binaire et aucune adresse. Le joueur
-// téléchargeait le jeu et devait deviner l'URL — alors que le serveur, lui, la
-// connaît. `NINETEEN_PUBLIC_URL` la lui donne, `/api/v1/version` la publie, et
-// la page l'écrit telle qu'on la tape.
-//
-// Le piège que ce test interdit : bâtir la ligne à partir de `window.location`.
-// Les deux coïncident en développement et divergent dès qu'un proxy TLS est
-// devant — la page est alors jointe en `https://`, que le client du jeu refuse
-// explicitement d'ouvrir. On donnerait donc au joueur une URL inutilisable
-// précisément sur le déploiement où l'aide compte le plus.
-func TestLaPageDonneLAdresseAuJoueur(t *testing.T) {
-	js := string(lireAsset(t, "app.js"))
-	html := string(lireAsset(t, "index.html"))
-
-	if !strings.Contains(html, `id="note-serveur"`) || !strings.Contains(html, `id="ligne-serveur"`) {
-		t.Error("index.html n'a pas de quoi afficher l'adresse du serveur")
-	}
-	if !strings.Contains(js, "data.serveur") {
-		t.Error("app.js ne lit pas « serveur » dans /api/v1/version : la page ne " +
-			"peut donc pas dire au joueur quoi passer à --server=")
-	}
-	if !strings.Contains(js, "--server=") {
-		t.Error("app.js n'écrit pas la ligne complète : une adresse sans l'option " +
-			"laisse encore deviner")
-	}
-	// Masquée par défaut : un serveur qui n'annonce rien ne doit pas afficher
-	// une ligne à trou.
-	if !strings.Contains(js, `noteServeur.hidden = adresse === ""`) {
-		t.Error("le bloc n'est pas caché quand le serveur n'annonce aucune adresse")
-	}
-	// Rien n'entre en HTML sur cette page, y compris une valeur de configuration.
-	if !strings.Contains(js, "ligneServeur.textContent") {
-		t.Error("l'adresse doit être posée en textContent, comme tout le reste")
-	}
-	if strings.Contains(js, "window.location.origin") || strings.Contains(js, "location.host") {
-		t.Error("la ligne --server= est bâtie depuis l'origine de la page : elle " +
-			"donnerait une adresse https derrière un proxy TLS, que le jeu refuse " +
-			"d'ouvrir. C'est au serveur de dire son adresse joignable")
-	}
-}
-
-// Les trois liens de telechargement portent le nom que la release produit
-// REELLEMENT.
-//
-// Les trois etaient faux en meme temps, et depuis longtemps :
-//
-//	.zip                -> l'empaquetage Windows est un installateur NSIS
-//	                       depuis la 17.0.0, donc un `.exe`
-//	-macos-universal    -> CPack ecrit « macOS », avec la capitale
-//	-linux-x64.AppImage -> `paquets.sh` nomme l'AppImage d'apres `uname -m`,
-//	                       comme le veut la convention AppImage : « x86_64 »,
-//	                       et sans « linux »
-//
-// Rien ne pouvait le voir. `TestLaPageNAffirmePasQuUnPaquetExiste` verifie que
-// la page demande au serveur si la RELEASE existe, pas que le FICHIER demande
-// s'y trouve : le jour ou NINETEEN_RELEASE_PUBLIEE serait passee a 1, les trois
-// boutons auraient rendu 404 une seconde fois.
-//
-// Ce test compare donc les noms d'`app.js` a ceux que `packaging/` fabrique.
-// Il ne les recopie pas : il lit les motifs a la source, pour qu'un changement
-// d'un cote se voie de l'autre.
-func TestLesLiensDeTelechargementExistentVraiment(t *testing.T) {
-	racine := racineDépôt()
-	if racine == "" {
-		t.Skip("dépôt complet absent : packaging/ n'est pas lisible d'ici")
-	}
-	js := string(lireAsset(t, "app.js"))
-
-	cpack, err := os.ReadFile(filepath.Join(racine, "packaging", "CPackNineteen.cmake"))
-	if err != nil {
-		t.Fatalf("packaging/CPackNineteen.cmake illisible : %v", err)
-	}
-	paquets, err := os.ReadFile(filepath.Join(racine, "packaging", "linux", "paquets.sh"))
-	if err != nil {
-		t.Fatalf("packaging/linux/paquets.sh illisible : %v", err)
-	}
-
-	// Les motifs tels que le packaging les ecrit, avec `${…}` a la place des
-	// variables. On les convertit en la forme JavaScript de `app.js`.
-	//   CPack        Nineteen-${CPACK_PACKAGE_VERSION}-macOS-universal + .dmg
-	//   app.js       Nineteen-${data.version}-macOS-universal.dmg
-	nom := func(source []byte, motif, suffixe string) string {
-		m := regexp.MustCompile(motif).FindSubmatch(source)
-		if m == nil {
-			t.Fatalf("motif introuvable dans le packaging : %s", motif)
+	for nom, page := range toutes {
+		for _, l := range liens {
+			if !strings.Contains(page, `href="`+l+`"`) {
+				t.Errorf("%s ne mène pas à %s", nom, l)
+			}
 		}
-		return strings.ReplaceAll(string(m[1]), "${CPACK_PACKAGE_VERSION}", "${data.version}") + suffixe
+		if !strings.Contains(page, `id="compte-barre"`) {
+			t.Errorf("%s n'a pas la barre de compte : on ne peut pas s'y connecter", nom)
+		}
+		if !strings.Contains(page, `src="/nineteen.js"`) {
+			t.Errorf("%s ne charge pas le socle commun", nom)
+		}
+		// La page courante se marque, et une seule fois. Seules les pages du
+		// MENU le font : compte.html se rejoint par la barre de compte, en haut
+		// a droite, qui n'est pas le menu et n'a pas d'entree a souligner.
+		attendu := 0
+		if _, dansLeMenu := cibles[nom]; dansLeMenu {
+			attendu = 1
+		}
+		if n := strings.Count(page, `aria-current="page"`); n != attendu {
+			t.Errorf("%s porte %d fois aria-current=\"page\", il en faut %d", nom, n, attendu)
+		}
 	}
 
-	attendus := map[string]string{
-		"macos": nom(cpack,
-			`set\(CPACK_PACKAGE_FILE_NAME "(Nineteen-\$\{CPACK_PACKAGE_VERSION\}-macOS-[^"]*)"\)`, ".dmg"),
-		"windows": nom(cpack,
-			`set\(CPACK_PACKAGE_FILE_NAME "(Nineteen-\$\{CPACK_PACKAGE_VERSION\}-windows-[^"]*)"\)`, ".exe"),
-	}
-
-	// L'AppImage ne sort pas de CPack : `paquets.sh` compose son nom. On lit
-	// la ligne qui le compose, et on remplace les deux variables du shell.
-	m := regexp.MustCompile(`APPIMAGE="\$SORTIE/(Nineteen-\$\{VERSION\}-\$\{ARCH\}\.AppImage)"`).FindSubmatch(paquets)
-	if m == nil {
-		t.Fatal("paquets.sh ne compose plus le nom de l'AppImage comme attendu")
-	}
-	// `$ARCH` vaut `uname -m` sur la machine de fabrication. Les paquets
-	// publies sortent d'un runner GitHub x86_64 ; ceux batis sur un Mac Apple
-	// Silicon sont `aarch64`, et ne sont pas ceux que la page propose.
-	appimage := strings.ReplaceAll(string(m[1]), "${VERSION}", "${data.version}")
-	attendus["linux"] = strings.ReplaceAll(appimage, "${ARCH}", "x86_64")
-
-	for plateforme, attendu := range attendus {
-		// `app.js` ecrit ces noms dans un gabarit entre accents graves.
-		motif := regexp.MustCompile(plateforme + ": `([^`]+)`")
-		trouve := motif.FindStringSubmatch(js)
-		if trouve == nil {
-			t.Errorf("app.js n'a pas de nom de fichier pour « %s »", plateforme)
+	// Le contrôle du contrôle : les quatre liens du menu doivent correspondre à
+	// des pages qui existent, sauf la racine qui est index.html.
+	for _, l := range liens {
+		if l == "/" {
 			continue
 		}
-		if trouve[1] != attendu {
-			t.Errorf("app.js propose « %s » pour %s, le packaging produit « %s » — "+
-				"le bouton rendrait 404 le jour où la release est publiée",
-				trouve[1], plateforme, attendu)
+		if _, ok := toutes[strings.TrimPrefix(l, "/")]; !ok {
+			t.Errorf("le menu mène à %s, qui n'est pas une page du site", l)
 		}
 	}
+}
+
+// LA POLITIQUE DE CONTENU INTERDIT LE STYLE ET LE SCRIPT EN LIGNE.
+//
+// `securityHeaders` pose `style-src 'self'` et `script-src 'self'`, sans
+// `'unsafe-inline'`. Un attribut `style=` ou un `<script>` sans `src` ne
+// produirait donc aucune erreur visible : il serait silencieusement bloque, et
+// la page s'afficherait de travers sur le seul deploiement qui compte, celui du
+// public. C'est le genre de defaut qu'on ne voit jamais en developpement.
+func TestAucunStyleNiScriptEnLigne(t *testing.T) {
+	scriptEnLigne := regexp.MustCompile(`<script(?:\s[^>]*)?>`)
+	for nom, page := range pages(t) {
+		if strings.Contains(page, "style=\"") {
+			t.Errorf("%s porte un attribut style en ligne, que la politique de "+
+				"contenu du serveur bloque", nom)
+		}
+		if strings.Contains(page, "<style") {
+			t.Errorf("%s porte une balise <style>, que la politique de contenu bloque", nom)
+		}
+		for _, balise := range scriptEnLigne.FindAllString(page, -1) {
+			if !strings.Contains(balise, "src=") {
+				t.Errorf("%s porte un script en ligne (%s), que la politique de "+
+					"contenu bloque", nom, balise)
+			}
+		}
+	}
+}
+
+// LA PONCTUATION DEMANDEE PAR LE PROPRIETAIRE DU DEPOT.
+//
+// Ni point-virgule, ni tiret long, dans le texte du site. La demande est de
+// forme et non de fond, et elle se tient : ce sont les deux signes qui font
+// reconnaitre un texte ecrit par une machine, et un site de jeu qui a l'air
+// ecrit par une machine se croit moins.
+//
+// La regle est verifiable parce que les pages ont ete ecrites pour l'etre : pas
+// une seule entite HTML (`&nbsp;` en porte un), pas un attribut `style`, pas de
+// script en ligne. Tout point-virgule dans un .html est donc du texte, ou un
+// attribut, et aucun des deux n'a de raison d'en porter.
+//
+// Cote script, seuls les LITTERAUX DE CHAINE sont regardes : le code en est
+// forcement plein. La seule exception admise est le separateur `";"` de
+// `document.cookie`, qui n'est pas du texte affiche.
+func TestLaPonctuationDuSiteEstCelleDemandee(t *testing.T) {
+	interdits := map[rune]string{
+		';': "point-virgule",
+		'—': "tiret cadratin",
+		'–': "tiret demi-cadratin",
+	}
+
+	for nom, page := range pages(t) {
+		for i, r := range page {
+			if quoi, mauvais := interdits[r]; mauvais {
+				t.Errorf("%s:%d porte un %s : %s", nom, ligneDe(page, i), quoi,
+					résumé(extrait(page, i)))
+			}
+		}
+	}
+
+	for nom, js := range scripts(t) {
+		for i, r := range js {
+			if r == '—' || r == '–' {
+				t.Errorf("%s:%d porte un tiret long : %s", nom, ligneDe(js, i),
+					résumé(extrait(js, i)))
+			}
+		}
+		for _, ch := range chaînesJS(js) {
+			// Le séparateur de `document.cookie.split(";")`. Un caractère
+			// seul n'est jamais une phrase.
+			if ch.texte == ";" {
+				continue
+			}
+			if strings.ContainsRune(ch.texte, ';') {
+				t.Errorf("%s:%d : chaîne avec point-virgule : %q", nom, ch.ligne, ch.texte)
+			}
+		}
+	}
+}
+
+// LE SITE PARLE DU JEU, PAS DE SA REFONTE.
+//
+// Il portait une section « Le chantier » qui comparait le rendu, l'eclairage,
+// la physique et la securite « avant » et « apres », et un renvoi vers l'audit
+// du code de 2020. C'est l'histoire du depot, et le proprietaire l'a dit sans
+// detour : ce n'est pas ce que vient lire quelqu'un qui veut jouer.
+//
+// La liste ci-dessous est courte et litterale a dessein. Elle n'essaie pas de
+// juger un texte, elle rappelle une decision au moment ou l'on s'appreterait a
+// la defaire sans y penser.
+func TestLeSiteParleDuJeuEtPasDeSaRefonte(t *testing.T) {
+	proscrits := []string{
+		"Le chantier",
+		"L'audit",
+		"SECURITY_AUDIT",
+		"reconstruit",
+		"refonte",
+		"code d'origine",
+		"site d'origine",
+	}
+	for nom, page := range pages(t) {
+		for _, mot := range proscrits {
+			if strings.Contains(page, mot) {
+				t.Errorf("%s parle de la refonte du projet (%q) : le site est celui "+
+					"du jeu", nom, mot)
+			}
+		}
+	}
+}
+
+// LE SITE NE SUPPOSE PAS SON PROPRE HOTE.
+//
+// Toutes les requetes partent en relatif, avec `credentials: "same-origin"`. Un
+// chemin absolu code en dur marcherait sur la machine de developpement et
+// echouerait derriere un nom de domaine, ce qui est le pire moment pour
+// l'apprendre.
+func TestLeSiteNeSupposePasSonPropreHote(t *testing.T) {
+	motif := regexp.MustCompile(`["'` + "`" + `]https?://[^"'` + "`" + `]+`)
+	for nom, js := range scripts(t) {
+		for _, occ := range motif.FindAllString(js, -1) {
+			t.Errorf("%s contient une URL absolue en dur : %s", nom, occ)
+		}
+		if strings.Contains(js, "window.location.host") ||
+			strings.Contains(js, "window.location.origin") {
+			t.Errorf("%s bâtit une adresse depuis l'origine de la page : le jeu ne "+
+				"sait pas ouvrir une URL https, et le serveur est le seul à connaître "+
+				"son adresse joignable", nom)
+		}
+	}
+}
+
+// LA PAGE DE TELECHARGEMENT NE BATIT AUCUN LIEN.
+//
+// C'est le defaut qu'elle a porte pendant deux versions : elle assemblait trois
+// URL de release GitHub a partir du seul numero de version, sans jamais
+// verifier que la release existe ni que les fichiers s'y trouvent. Mesure a
+// l'epoque contre l'API GitHub : le depot repondait 200, la release de la
+// version repondait 404, et les trois boutons de la page qui existe pour
+// telecharger etaient trois 404. Les noms de fichier etaient faux tous les
+// trois par-dessus le marche, ce que la garde « la release est-elle publiee »
+// ne pouvait pas voir.
+//
+// Le serveur tranche maintenant, une fois, en Go, ou cela se teste. La page
+// affiche ce qu'il rend et n'invente aucune adresse.
+func TestLaPageDeTelechargementNeBatitAucunLien(t *testing.T) {
+	js := string(lireAsset(t, "telecharger.js"))
+
+	if !strings.Contains(js, "/api/v1/telechargements") {
+		t.Error("telecharger.js ne demande pas au serveur ce qu'il a sous la main")
+	}
+	if strings.Contains(js, "releases/download") || strings.Contains(js, "github.com") {
+		t.Error("telecharger.js assemble une URL de release : c'est le serveur qui " +
+			"décide, parce que lui seul sait ce qui existe")
+	}
+	if !strings.Contains(js, "f.url") {
+		t.Error("telecharger.js n'utilise pas l'URL rendue par le serveur")
+	}
+
+	html := string(lireAsset(t, "telecharger.html"))
+	if strings.Contains(html, "data-dl") {
+		t.Error("telecharger.html porte encore des boutons écrits à la main")
+	}
+	if !strings.Contains(html, `id="liste-telechargements"`) {
+		t.Error("telecharger.html n'a plus le conteneur que le script remplit")
+	}
+}
+
+/* -------------------------------------------------------------------------- */
+/* Outillage des deux tests ci-dessus                                         */
+/* -------------------------------------------------------------------------- */
+
+func ligneDe(source string, octet int) int {
+	return strings.Count(source[:octet], "\n") + 1
+}
+
+// extrait rend le voisinage d'un octet, pour que le message dise OU chercher.
+func extrait(source string, octet int) string {
+	début := octet - 40
+	if début < 0 {
+		début = 0
+	}
+	fin := octet + 40
+	if fin > len(source) {
+		fin = len(source)
+	}
+	return source[début:fin]
+}
+
+type chaîneJS struct {
+	ligne int
+	texte string
+}
+
+// chaînesJS rend les littéraux de chaîne d'un source JavaScript.
+//
+// C'EST UN LECTEUR, PAS UN ANALYSEUR. Il suit les guillemets simples, doubles et
+// obliques, saute les commentaires de ligne et de bloc, et honore
+// l'échappement. Il ne comprend ni les expressions régulières littérales ni
+// l'interpolation, et il n'en a pas besoin : ce qu'on lui demande est de
+// répondre « ce point-virgule est-il dans une chaîne », et les quatre scripts du
+// site n'écrivent une barre oblique que dans un chemin, toujours entre
+// guillemets.
+//
+// Un analyseur complet serait plus juste et beaucoup plus long, pour une
+// question à laquelle celui-ci répond déjà sur ce corpus. S'il se met à mentir,
+// il mentira bruyamment : un littéral mal fermé fait diverger tout le reste du
+// fichier, donc le test échouera plutôt que de laisser passer.
+func chaînesJS(src string) []chaîneJS {
+	var out []chaîneJS
+	r := []rune(src)
+	ligne := 1
+	for i := 0; i < len(r); i++ {
+		c := r[i]
+		switch {
+		case c == '\n':
+			ligne++
+		case c == '/' && i+1 < len(r) && r[i+1] == '/':
+			for i < len(r) && r[i] != '\n' {
+				i++
+			}
+			ligne++
+		case c == '/' && i+1 < len(r) && r[i+1] == '*':
+			i += 2
+			for i+1 < len(r) && !(r[i] == '*' && r[i+1] == '/') {
+				if r[i] == '\n' {
+					ligne++
+				}
+				i++
+			}
+			i++
+		case c == '"' || c == '\'' || c == '`':
+			départ := ligne
+			var b strings.Builder
+			i++
+			for i < len(r) && r[i] != c {
+				if r[i] == '\\' {
+					i += 2
+					continue
+				}
+				if r[i] == '\n' {
+					ligne++
+				}
+				b.WriteRune(r[i])
+				i++
+			}
+			out = append(out, chaîneJS{ligne: départ, texte: b.String()})
+		}
+	}
+	return out
 }

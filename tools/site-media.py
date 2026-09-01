@@ -474,6 +474,45 @@ def humain(octets):
     return f"{octets / 1024:.0f} Kio" if octets < 1024 * 1024 else f"{octets / 1048576:.2f} Mio"
 
 
+def recompter(sortie):
+    """Réécrit le seul bloc « compte » du manifeste, depuis la scène."""
+    scene = lire_scene()
+    chemin = os.path.join(sortie, "media", "manifeste.json")
+    with open(chemin, encoding="utf-8") as f:
+        manifeste = json.load(f)
+
+    avant = dict(manifeste.get("compte") or {})
+    manifeste["compte"] = compte_depuis(manifeste, scene)
+
+    with open(chemin, "w", encoding="utf-8") as f:
+        json.dump(manifeste, f, ensure_ascii=False, indent=2, sort_keys=False)
+        f.write("\n")
+
+    etape("Décompte relu dans la scène")
+    for cle, valeur in manifeste["compte"].items():
+        ancien = avant.get(cle)
+        marque = "" if ancien == valeur else f"  (était {ancien})"
+        info(f"{cle:14s} {valeur}{marque}")
+    print()
+
+
+def compte_depuis(manifeste, scene):
+    """Les cinq chiffres du manifeste, à un seul endroit.
+
+    Deux appelants les écrivaient : la fin de main() et rien d'autre. En
+    ajouter un second sans partager le calcul aurait donné deux décomptes
+    capables de diverger, ce qui est précisément le défaut que le manifeste
+    existe pour empêcher.
+    """
+    return {
+        "bornes": len(manifeste["bornes"]),
+        "jeux": len(manifeste["jeux"]),
+        "luminaires": len(scene["lights"]),
+        "vues_nommees": len(scene["captures"]),
+        "props": len(scene["props"]),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description="Régénère le média du site Nineteen.")
     ap.add_argument("--binaire", default="build/macos-universal/bin/nineteen",
@@ -483,7 +522,26 @@ def main():
     ap.add_argument("--rapide", action="store_true",
                     help="plans courts et qualité basse : pour vérifier la chaîne, "
                          "PAS pour produire le média du site")
+    # LE DÉCOMPTE SEUL, sans rien rendre.
+    #
+    # Trois des cinq chiffres du manifeste — luminaires, vues nommées, props —
+    # sont LUS dans la scène et non mesurés sur une image. Ils se démodent donc
+    # dès qu'on touche à la scène, sans qu'aucune image ait bougé, et le test Go
+    # échoue en demandant une régénération complète de quarante minutes pour
+    # corriger deux entiers. C'est arrivé en ajoutant deux points de vue au
+    # couloir : la scène en déclarait 15, le manifeste en annonçait 13, et pas
+    # une image du site n'était périmée.
+    #
+    # Cette option relit la scène et réécrit ce seul bloc. Elle n'invente rien
+    # et n'ouvre pas le binaire du jeu : elle recopie ce que la scène dit.
+    ap.add_argument("--compte-seul", action="store_true",
+                    help="recalcule le bloc « compte » du manifeste depuis la "
+                         "scène, sans rien rendre")
     args = ap.parse_args()
+
+    if args.compte_seul:
+        recompter(args.sortie)
+        return
 
     for outil in ("ffmpeg", "ffprobe"):
         if shutil.which(outil) is None:
@@ -668,13 +726,7 @@ def main():
     # qu'il a RÉELLEMENT produit, le site le lit pour bâtir ses galeries, et le
     # test Go le confronte à la scène. Le site ne peut donc plus annoncer quinze
     # bornes quand la scène en déclare dix-neuf.
-    manifeste["compte"] = {
-        "bornes": len(manifeste["bornes"]),
-        "jeux": len(manifeste["jeux"]),
-        "luminaires": len(scene["lights"]),
-        "vues_nommees": len(scene["captures"]),
-        "props": len(scene["props"]),
-    }
+    manifeste["compte"] = compte_depuis(manifeste, scene)
     chemin_manifeste = os.path.join(dossier_media, "manifeste.json")
     with open(chemin_manifeste, "w", encoding="utf-8") as f:
         json.dump(manifeste, f, ensure_ascii=False, indent=2, sort_keys=False)

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nineteen — salle d'arcade</title>
-<meta name="description" content="Une salle d'arcade en 3D et ses huit mini-jeux. Écrite en 2020, reconstruite de fond en comble. Toutes les images de cette page sortent du moteur du jeu.">
+<title>Nineteen, salle d'arcade</title>
+<meta name="description" content="Une salle d'arcade en 3D, dix-neuf bornes, huit jeux, et un mode competitif ou le dernier est elimine toutes les quarante-cinq secondes. Telechargement libre pour Windows, macOS et Linux.">
 <meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="/style.css">
 <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
@@ -14,34 +14,26 @@
 <a class="skip" href="#contenu">Aller au contenu</a>
 
 <header class="topbar">
-  <a class="wordmark" href="/" aria-label="Nineteen, accueil">
-    <span class="wordmark-neon">nineteen</span>
-  </a>
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
   <nav aria-label="Navigation principale">
-    <a href="#salle">La salle</a>
-    <a href="#jeux">Les jeux</a>
-    <a href="#bornes">Les bornes</a>
-    <a href="#couperet">Le Couperet</a>
-    <a href="#classement">Classement</a>
-    <a href="/salon.html">En direct</a>
-    <a href="#telecharger">Télécharger</a>
+    <a href="/" aria-current="page">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
   </nav>
-  <div class="account" id="account">
-    <button type="button" class="btn btn-ghost" data-open="connexion">Se connecter</button>
-  </div>
+  <div class="compte-barre" id="compte-barre"></div>
 </header>
 
 <main id="contenu">
 
-  <!-- ================= Hero : la salle, en mouvement =================
-       La vidéo est décorative : le texte à côté dit tout ce qu'elle montre, et
+  <!-- La video est decorative : le texte a cote dit ce qu'elle montre, et
        l'affiche porte l'alternative pour qui ne la voit pas. `aria-hidden` lui
-       évite d'être annoncée deux fois.
+       evite d'etre annoncee deux fois.
 
-       `preload="metadata"` et non `auto` : le navigateur ne prend que l'entête
-       tant qu'il n'a pas décidé de lire. `playsinline` empêche iOS de passer en
-       plein écran tout seul, ce qui sortirait le visiteur de la page. -->
-  <section class="hero" id="salle">
+       `preload="metadata"` et non `auto` : le navigateur ne prend que l'entete
+       tant qu'il n'a pas decide de lire. `playsinline` empeche iOS de passer en
+       plein ecran tout seul, ce qui sortirait le visiteur de la page. -->
+  <section class="hero">
     <video class="hero-plate" id="video-salle"
            autoplay muted loop playsinline preload="metadata"
            poster="/media/salle-affiche.jpg"
@@ -50,77 +42,73 @@
       <source src="/media/salle.mp4" type="video/mp4">
     </video>
     <img class="hero-plate hero-plate-fixe" src="/media/salle-affiche.jpg"
-         alt="La salle d'arcade rendue par le moteur : deux rangées de bornes allumées de part et d'autre de l'allée centrale, le plafond lumineux, la moquette noire à motifs néon."
+         alt="La salle d'arcade rendue par le moteur : deux rangees de bornes allumees de part et d'autre de l'allee centrale, le plafond lumineux, la moquette noire a motifs neon."
          width="1280" height="720" fetchpriority="high">
     <div class="hero-veil" aria-hidden="true"></div>
 
     <div class="hero-text">
-      <p class="eyebrow">Projet d'études, 2020 &nbsp;→&nbsp; version <span data-chiffre="version">17.0.0</span></p>
-      <h1>Une salle<br>d'arcade,<br>rallumée.</h1>
+      <p class="eyebrow">Salle d'arcade 3D</p>
+      <h1>Dix-neuf bornes.<br>Une lame.</h1>
       <p class="lede">
-        <span data-chiffre="bornes">19</span>&nbsp;bornes, <span data-chiffre="jeux">8</span>&nbsp;jeux,
-        une salle modélisée pièce par pièce. Le contenu n'a pas changé&nbsp;; tout ce qui le fait
-        tourner a été refait — moteur de rendu, éclairage, physique, serveur.
+        Vous entrez, vous choisissez une machine, vous jouez. En mode Couperet, vos points ne
+        comptent qu'une fois la partie finie, et toutes les quarante-cinq secondes le dernier
+        du classement sort de la salle.
       </p>
-      <p class="lede-note">Tout ce que vous voyez ici est une capture du moteur, produite par
-         <code>tools/site-media.py</code>.</p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href="#telecharger">Télécharger</a>
-        <a class="btn btn-ghost" href="#jeux">Voir les jeux</a>
+        <a class="btn btn-primary" href="/telecharger.html">Telecharger le jeu</a>
+        <a class="btn" href="/couperet.html">Voir le mode competitif</a>
       </div>
     </div>
 
     <dl class="specs">
       <div><dt>Bornes</dt><dd data-chiffre="bornes">19</dd></div>
       <div><dt>Jeux</dt><dd data-chiffre="jeux">8</dd></div>
-      <div><dt>Luminaires déclarés</dt><dd data-chiffre="luminaires">26</dd></div>
-      <div><dt>Points de vue nommés</dt><dd data-chiffre="vues">13</dd></div>
+      <div><dt>Joueurs par manche</dt><dd>2 a 8</dd></div>
+      <div><dt>Prix</dt><dd>0</dd></div>
     </dl>
   </section>
 
   <div class="hazard" role="presentation"></div>
 
-  <!-- ================= Les huit jeux, en boucle ================= -->
-  <section class="section" id="jeux">
+  <section class="section">
     <div class="section-head">
       <h2>Les jeux</h2>
-      <p>Huit jeux, chacun filmé dans sa borne, en 3D, pendant qu'il se joue&nbsp;: l'enseigne,
-         la dalle et les mains sur les commandes. Survolez une vignette — ou donnez-lui le
-         clavier — pour lancer sa boucle.</p>
+      <p>Huit jeux, chacun filme dans sa borne, en 3D, pendant qu'il se joue. L'enseigne, la
+         dalle et les mains sur les commandes. Survolez une vignette, ou donnez-lui le clavier,
+         pour lancer sa boucle.</p>
     </div>
     <ul class="loops" id="galerie-jeux">
-      <li class="loops-attente">Chargement des boucles…</li>
+      <li class="note">Chargement des boucles.</li>
     </ul>
     <noscript>
-      <p class="note">Les boucles de jeu demandent JavaScript. Les vues de la salle,
-         plus bas, restent visibles sans.</p>
+      <p class="note">Les boucles de jeu demandent JavaScript. Les vues de la salle, plus bas,
+         restent visibles sans.</p>
     </noscript>
   </section>
 
   <div class="hazard" role="presentation"></div>
 
-  <!-- ================= La salle en plusieurs vues =================
-       Cette galerie-ci est écrite EN DUR dans la page, et c'est délibéré : elle
-       est ce qui reste quand JavaScript ne s'exécute pas. Les deux autres
-       galeries se construisent depuis le manifeste, donc suivent la scène ;
-       celle-ci suit la page, et le test Go vérifie que ses fichiers existent. -->
-  <section class="section" id="vues">
+  <!-- Cette galerie est ecrite EN DUR dans la page, et c'est delibere : elle
+       est ce qui reste quand JavaScript ne s'execute pas. Les deux autres
+       galeries se construisent depuis le manifeste, donc suivent la scene.
+       Celle-ci suit la page, et un test Go verifie que ses fichiers existent. -->
+  <section class="section">
     <div class="section-head">
       <h2>La salle</h2>
-      <p>Huit points de vue, tous déclarés par la scène elle-même, tous rendus au même cadrage
-         d'une version à l'autre&nbsp;: c'est ce qui permet de comparer deux états de la salle
-         sans discuter.</p>
+      <p>Huit points de vue, tous declares par la scene elle-meme, tous rendus au meme cadrage
+         d'une version a l'autre. C'est ce qui permet de comparer deux etats de la salle sans
+         discuter.</p>
     </div>
     <ul class="vues">
       <li><figure>
         <img src="/img/vue-allee.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="L'allée centrale, entre les deux rangées de bornes. Rendu par le moteur du jeu.">
-        <figcaption>L'allée centrale, entre les deux rangées de bornes.</figcaption>
+             alt="L'allee centrale, entre les deux rangees de bornes. Rendu par le moteur du jeu.">
+        <figcaption>L'allee centrale, entre les deux rangees de bornes.</figcaption>
       </figure></li>
       <li><figure>
         <img src="/img/vue-bar.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="Le comptoir, l'enseigne au néon et le tableau des scores. Rendu par le moteur du jeu.">
-        <figcaption>Le comptoir, l'enseigne au néon et le tableau des scores.</figcaption>
+             alt="Le comptoir, l'enseigne au neon et le tableau des scores. Rendu par le moteur du jeu.">
+        <figcaption>Le comptoir, l'enseigne au neon et le tableau des scores.</figcaption>
       </figure></li>
       <li><figure>
         <img src="/img/vue-classement.jpg" width="1280" height="720" loading="lazy" decoding="async"
@@ -129,8 +117,8 @@
       </figure></li>
       <li><figure>
         <img src="/img/vue-travee.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="La travée ouest : trois bornes de trois quarts, la corniche. Rendu par le moteur du jeu.">
-        <figcaption>La travée ouest&nbsp;: trois bornes de trois quarts, la corniche.</figcaption>
+             alt="La travee ouest : trois bornes de trois quarts, la corniche. Rendu par le moteur du jeu.">
+        <figcaption>La travee ouest, trois bornes de trois quarts sous la corniche.</figcaption>
       </figure></li>
       <li><figure>
         <img src="/img/vue-billard.jpg" width="1280" height="720" loading="lazy" decoding="async"
@@ -139,8 +127,8 @@
       </figure></li>
       <li><figure>
         <img src="/img/vue-entree.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="Le sas d'entrée, vu depuis le couloir. Rendu par le moteur du jeu.">
-        <figcaption>Le sas d'entrée, vu depuis le couloir.</figcaption>
+             alt="Le sas d'entree, vu depuis le couloir. Rendu par le moteur du jeu.">
+        <figcaption>Le sas d'entree, vu depuis le couloir.</figcaption>
       </figure></li>
       <li><figure>
         <img src="/img/vue-plafond.jpg" width="1280" height="720" loading="lazy" decoding="async"
@@ -157,316 +145,59 @@
 
   <div class="hazard" role="presentation"></div>
 
-  <!-- ================= Les dix-neuf bornes ================= -->
-  <section class="section" id="bornes">
+  <section class="section">
     <div class="section-head">
       <h2>Les bornes</h2>
-      <p>Dix-neuf meubles, photographiés un par un depuis les commandes. Six jeux occupent une
-         paire de bornes face à face — la rangée du fond en difficile, celle de devant en facile.
-         Dédale et Piano, les deux derniers arrivés, en occupent trois chacun. La dix-neuvième
-         n'est pas un jeu&nbsp;: c'est le classement.</p>
+      <p>Dix-neuf meubles, photographies un par un depuis les commandes. Six jeux occupent une
+         paire de bornes face a face, la rangee du fond en difficile, celle de devant en facile.
+         Dedale et Piano en occupent trois chacun. La dix-neuvieme n'est pas un jeu, c'est le
+         classement.</p>
     </div>
     <ul class="rail" id="galerie-bornes">
-      <li class="cab"><span class="cab-marquee">Chargement…</span></li>
+      <li class="cab"><span class="cab-marquee">Chargement</span></li>
     </ul>
   </section>
 
   <div class="hazard" role="presentation"></div>
 
-  <!-- ================= Le Couperet ================= -->
-  <section class="section" id="couperet">
+  <section class="section">
     <div class="section-head">
-      <h2>Le Couperet</h2>
-      <p>Le mode compétitif, de deux à huit joueurs dans la même salle. Une phrase suffit à le
-         décrire&nbsp;: <em>tes points ne comptent qu'une fois la partie finie, et toutes les
-         quarante-cinq secondes le couperet sort le dernier.</em></p>
-      <p>Tout le reste en découle, parce que les dix-neuf bornes ne durent pas le même temps. La
-         durée médiane d'une partie va de <strong>5,9&nbsp;s</strong> à <strong>180&nbsp;s</strong>,
-         mesurée sur vingt-quatre parties par borne et par régime. Enchaîner du court met en banque
-         deux fois entre deux lames&nbsp;; s'engager sur du long en traverse quatre sans avoir rien
-         encaissé — et les bornes longues paient près de <strong>quatre-vingts fois</strong> plus.
-         Le multiplicateur est écrit
-         sur le fronton, avant qu'on insère le jeton.</p>
-      <p>Six actions s'achètent avec des <em>fusibles</em>&nbsp;: brouiller l'image de quelqu'un,
-         inverser son manche, couper le courant de sa borne, se blinder, donner un fusible, renvoyer
-         la prochaine attaque. Être éliminé ne met pas à la porte&nbsp;: on devient
-         <em>spectre</em>, on ne joue plus, mais on garde ses fusibles et on continue d'agir.</p>
+      <h2>Se mesurer aux autres</h2>
+      <p>Deux tableaux, et ils ne disent pas la meme chose.</p>
     </div>
-
-    <ul class="vues">
-      <li><figure>
-        <img src="/img/couperet-allee.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="Une manche du Couperet vue depuis l'allée : les bornes tenues par des rivaux jouent leur partie. Rendu par le moteur du jeu.">
-        <figcaption>Les bornes que tiennent les rivaux jouent leur partie, pas une démo.</figcaption>
-      </figure></li>
-      <li><figure>
-        <img src="/img/couperet-bar.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="Le téléviseur du bar affichant le classement d'une manche du Couperet. Rendu par le moteur du jeu.">
-        <figcaption>Le téléviseur du bar passe au classement de la manche.</figcaption>
-      </figure></li>
-      <li><figure>
-        <img src="/img/couperet-verdict.jpg" width="1280" height="720" loading="lazy" decoding="async"
-             alt="La page de verdict à la fin d'une manche : rang, points, parties finies, coupures subies. Rendu par le moteur du jeu.">
-        <figcaption>Le verdict&nbsp;: votre rang, vos points, et ce que vous avez perdu sur coupure.</figcaption>
-      </figure></li>
-    </ul>
-
-    <div class="section-head">
-      <p><strong>L'équilibre est mesuré, pas affirmé.</strong> Le test ne simule pas les parties, il
-         les <em>joue</em>&nbsp;: les huit pilotes automatiques du jeu constituent un vivier de
-         durées et de scores réels, et deux cents manches de huit places sont jouées pour chaque
-         réglage. Celui qui s'engage l'emporte <strong>55&nbsp;%</strong> du temps contre celui qui
-         se presse, et 51&nbsp;/&nbsp;49&nbsp;/&nbsp;56&nbsp;% sur trois tirages indépendants. Les
-         six actions déplacent l'issue de <strong>38 points de pourcentage</strong>&nbsp;: sans
-         elles, l'engagement gagne neuf manches sur dix.</p>
-      <p>Les places libres sont tenues par des rivaux qui <em>jouent réellement</em> — ils allouent
-         un état de jeu et appellent le pilote automatique à chaque pas, comme vous. Rien ne
-         s'achète&nbsp;: ni saison, ni laissez-passer. Les fusibles naissent au coup d'envoi et
-         meurent au verdict.</p>
-    </div>
-  
-    <!--
-         COMMENT ON Y ENTRE, en quatre pas et sans jargon.
-
-         Cette liste comble un trou qui a dure longtemps : le site savait dire
-         ce qu'est le mode, et il ne disait nulle part comment y jouer avec
-         quelqu'un. La reponse tenait dans une option de ligne de commande
-         (`--couperet-en-ligne=hote:port,salon,place,places`) dont il fallait
-         convenir hors du jeu — autant dire qu'elle n'existait pas.
-
-         Elle est ici et pas dans la section « Telecharger » : c'est la
-         personne qui vient de lire ce qu'est une manche qui veut y entrer.
-    -->
-    <h3>Y jouer avec quelqu'un</h3>
-    <ol class="pas">
-      <li><strong>Créez un compte</strong> — ici avec « Se connecter » en haut de page,
-          ou dans le jeu, au comptoir. Les deux mènent au même compte.</li>
-      <li><strong>Ouvrez le comptoir</strong> dans le jeu avec <kbd>F1</kbd>. Il s'ouvre
-          aussi tout seul au premier lancement, tant que personne n'est connecté.</li>
-      <li><strong>Créez un salon</strong>, ou rejoignez-en un dans la liste. Un salon privé
-          n'est pas listé&nbsp;: il se rejoint par son code, et c'est tout l'intérêt.</li>
-      <li><strong>Donnez le code</strong> — six caractères, sans I, O, 0 ni 1 pour qu'il se
-          dicte à voix haute sans qu'on s'y trompe.</li>
-    </ol>
-
-    <!-- Le lien vers une manche en cours. Il est ICI et pas seulement dans la
-         barre du haut : quelqu'un qui vient de lire ce qu'est le Couperet est
-         exactement la personne qui veut en voir une se jouer. -->
-    <p class="cta-ligne">Une manche est peut-être en cours :
-       <a class="btn btn-ghost" href="/salon.html">la suivre en direct</a>
-       — ou entrez le code qu'un ami vous a envoyé.</p>
-  </section>
-
-  <!-- ================= Classement : traité comme un écran ================= -->
-  <section class="section" id="classement">
-    <div class="section-head">
-      <h2>Classement</h2>
-      <p>Les scores ne sont plus déclarés par le jeu. Le serveur ouvre la partie, tire la graine,
-         puis <em>recalcule</em> le score à partir du journal d'événements. Un score inventé ne
-         passe pas.</p>
-    </div>
-
-    <div class="crt">
-      <div class="crt-bar">
-        <label class="field">
-          <span>Jeu</span>
-          <select id="choix-jeu">
-            <option value="0">Classement général</option>
-          </select>
-        </label>
-        <p class="crt-status" id="statut-classement" role="status">Chargement…</p>
-      </div>
-
-      <div class="crt-screen">
-        <table class="board" id="tableau-classement">
-          <caption class="visually-hidden">Meilleurs scores</caption>
-          <thead>
-            <tr><th scope="col" class="c-rank">Rang</th><th scope="col">Joueur</th><th scope="col" class="c-score">Score</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="crt-scanlines" aria-hidden="true"></div>
-    </div>
-  </section>
-
-  <div class="hazard" role="presentation"></div>
-
-  <!-- ================= Téléchargement ================= -->
-  <section class="section" id="telecharger">
-    <div class="section-head">
-      <h2>Télécharger</h2>
-      <p>Un installateur par plateforme, produit par l'intégration continue à partir du même
-         arbre de sources. Rien à installer à côté.</p>
-    </div>
-
-    <!-- AVANT LES BOUTONS, ET PAS APRÈS.
-         Ces paquets ne sont pas signés, et macOS refuse de les ouvrir : le
-         propriétaire du dépôt a installé le .dmg de la 17.0.0 sur sa machine
-         et reçu « Apple could not verify "Nineteen" is free of malware… ». La
-         même chose est reproduite en laboratoire — application sortie du .dmg,
-         `com.apple.quarantine` posé, lancement tué. Cette page était le seul
-         endroit du parcours où on pouvait le lui dire avant le clic.
-
-         Le texte ne dit pas « ce paquet n'est pas signé » mais « si votre
-         système refuse » : il reste donc vrai le jour où un certificat arrive,
-         sans qu'il faille penser à modifier cette page. Ce qui tranche pour
-         un fichier donné, c'est le `SIGNATURE-<plateforme>.txt` publié à côté
-         de lui, et le paquet lui-même. -->
-    <div class="avertissement">
-      <h3>La première ouverture demande un geste de plus</h3>
-      <p>Ces paquets ne portent pas encore de signature payante&nbsp;: le certificat qui la
-         donne — <strong>Developer&nbsp;ID</strong> chez Apple, <strong>Authenticode</strong>
-         chez Windows — s'achète, et ce projet n'en a pas. Le jeu fonctionne&nbsp;; le système
-         demande simplement une confirmation la première fois.</p>
-      <dl class="gestes">
-        <dt>macOS</dt>
-        <dd>Le système affiche <em>« Apple could not verify "Nineteen" is free of malware…
-            »</em>. Après avoir glissé Nineteen dans <strong>Applications</strong>, ouvrir le
-            Terminal et coller cette ligne, une seule fois&nbsp;:
-            <code class="ligne">xattr -dr com.apple.quarantine /Applications/Nineteen.app</code>
-            Elle retire l'étiquette « téléchargé depuis Internet » posée par le navigateur, et
-            ne désactive aucune protection. Le même texte est dans le <code>.dmg</code>.</dd>
-        <dt>Windows</dt>
-        <dd>L'écran bleu SmartScreen s'affiche&nbsp;: cliquer sur <strong>Informations
-            complémentaires</strong>, puis sur <strong>Exécuter quand même</strong>. Le second
-            bouton n'apparaît qu'après le premier clic.</dd>
-        <dt>Linux</dt>
-        <dd>Rien à faire&nbsp;: aucun noyau Linux ne refuse un binaire non signé.</dd>
-      </dl>
-    </div>
-
-    <ul class="platforms">
+    <ul class="cartes">
       <li>
-        <h3>Windows</h3>
-        <p class="platform-detail">x64 · Vulkan</p>
-        <a class="btn btn-primary" data-dl="windows" href="#" rel="nofollow">Télécharger&nbsp;.exe</a>
+        <h3>Le classement general</h3>
+        <p>Il n'accepte que des parties recalculees par le serveur a partir de leur journal
+           d'evenements. Le jeu ne declare pas son score, il envoie ce qu'il a fait, et le
+           serveur refait le compte. Un score invente n'y entre pas.</p>
+        <p><a href="/classement.html">Voir le classement</a></p>
       </li>
       <li>
-        <h3>macOS</h3>
-        <p class="platform-detail">Apple Silicon &amp; Intel · Metal</p>
-        <a class="btn btn-primary" data-dl="macos" href="#" rel="nofollow">Télécharger&nbsp;.dmg</a>
+        <h3>Le Couperet</h3>
+        <p>De deux a huit joueurs dans la meme salle, avec une lame qui tombe toutes les
+           quarante-cinq secondes et six actions a se lancer a la figure. Les manches en cours
+           se suivent en direct depuis le site.</p>
+        <p><a href="/couperet.html">Comment ca se joue</a></p>
       </li>
       <li>
-        <h3>Linux</h3>
-        <p class="platform-detail">x64 · Vulkan</p>
-        <a class="btn btn-primary" data-dl="linux" href="#" rel="nofollow">Télécharger&nbsp;AppImage</a>
+        <h3>Un compte, deux entrees</h3>
+        <p>Le meme compte sert au site et au jeu. On le cree ici, ou au comptoir de la salle
+           avec la touche F1. Il ne sert qu'a tenir une place dans une manche et a signer un
+           score.</p>
+        <p><a href="/compte.html">Creer un compte</a></p>
       </li>
     </ul>
-    <p class="note" id="note-attente" hidden>Les paquets de cette version ne sont pas encore
-       publiés. D'ici là, le jeu se construit depuis les sources&nbsp;: la marche à suivre est
-       dans <code>docs/DEPLOY.md</code>.</p>
-    <p class="note" id="note-serveur" hidden>Pour brancher le jeu sur <em>ce</em> serveur, le
-       lancer avec&nbsp;: <code id="ligne-serveur"></code> — ou poser la variable
-       <code>NINETEEN_SERVER_URL</code> avec la même valeur. Sans adresse, le jeu se joue
-       hors ligne et n'ouvre aucune connexion.</p>
-    <p class="note" id="note-version">Version <span data-version data-chiffre="version">17.0.0</span>.
-       Sommes SHA-256 publiées avec chaque version.</p>
-  </section>
-
-  <!-- ================= Le chantier ================= -->
-  <section class="section" id="chantier">
-    <div class="section-head">
-      <h2>Le chantier</h2>
-      <p>Ce qui a réellement changé sous le capot, et pourquoi.</p>
-    </div>
-
-    <div class="ledger">
-      <article>
-        <h3>Rendu</h3>
-        <p class="before">OpenGL en mode immédiat, une lumière fixe, textures plates.</p>
-        <p class="after">Rendu différé PBR sur l'API GPU de SDL3 — Vulkan, Metal et Direct3D&nbsp;12
-           derrière la même API. Ombres et illumination globale lancées en compute sur un BVH.</p>
-      </article>
-      <article>
-        <h3>Éclairage</h3>
-        <p class="before">La lumière était peinte dans les textures&nbsp;: le plafond lumineux
-           n'éclairait rien.</p>
-        <p class="after">Les surfaces émissives sont devenues des sources étendues, d'intensité
-           proportionnelle à leur aire. Chaque borne projette la couleur de son jeu.</p>
-      </article>
-      <article>
-        <h3>Physique</h3>
-        <p class="before">Une simulation cadencée par l'affichage, des hitbox écrites en dur.</p>
-        <p class="after">Pas de temps fixe à 120&nbsp;Hz avec interpolation&nbsp;: le jeu se comporte
-           pareil à 30 comme à 240&nbsp;images par seconde. Collision en capsule contre la géométrie
-           réelle.</p>
-      </article>
-      <article>
-        <h3>Sécurité</h3>
-        <p class="before">Requêtes SQL concaténées, mots de passe en MD5 non salé, vérification
-           TLS désactivée côté client.</p>
-        <p class="after">Requêtes préparées, Argon2id, sessions opaques stockées hachées,
-           limitation de débit, CSRF, en-têtes stricts. <a href="#audit">L'audit complet</a> est publié.</p>
-      </article>
-    </div>
-
-    <div class="audit" id="audit">
-      <h3>L'audit du code d'origine</h3>
-      <p>
-        Vingt constats, dont cinq critiques, sur le code tel qu'il tournait en 2020. Il est
-        publié en entier, y compris ce qui était bien vu&nbsp;: le jeton anti-rejeu, la protection
-        mémoire du score et l'échappement des tickets montraient un vrai réflexe défensif. C'est
-        l'exécution qui manquait, pas l'intention.
-      </p>
-      <p class="audit-link"><a class="btn btn-ghost" href="https://github.com/griisemine/NineTeen/blob/master/docs/SECURITY_AUDIT.md">Lire l'audit</a></p>
-    </div>
   </section>
 
 </main>
 
 <footer class="footer">
-  <p>Nineteen — salle d'arcade. Écrit en 2020, reconstruit en 2026.</p>
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.0.0</span>.</p>
   <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
 </footer>
 
-<!-- ================= Connexion ================= -->
-<dialog id="connexion" class="modal" aria-labelledby="titre-connexion">
-  <form method="dialog" class="modal-close-row">
-    <button class="btn btn-ghost btn-small" value="fermer" aria-label="Fermer">Fermer</button>
-  </form>
-
-  <h2 id="titre-connexion">Votre compte</h2>
-
-  <div class="tabs" role="tablist">
-    <button type="button" role="tab" aria-selected="true"  aria-controls="onglet-connexion" id="tab-connexion">Connexion</button>
-    <button type="button" role="tab" aria-selected="false" aria-controls="onglet-inscription" id="tab-inscription">Créer un compte</button>
-  </div>
-
-  <form id="onglet-connexion" role="tabpanel" aria-labelledby="tab-connexion" class="form">
-    <label class="field">
-      <span>Identifiant</span>
-      <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="24">
-    </label>
-    <label class="field">
-      <span>Mot de passe</span>
-      <input type="password" name="password" autocomplete="current-password" required>
-    </label>
-    <p class="form-error" role="alert" hidden></p>
-    <button class="btn btn-primary" type="submit">Se connecter</button>
-  </form>
-
-  <form id="onglet-inscription" role="tabpanel" aria-labelledby="tab-inscription" class="form" hidden>
-    <label class="field">
-      <span>Identifiant</span>
-      <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="24"
-             pattern="[A-Za-z0-9_\-]+">
-      <small>3 à 24 caractères, lettres, chiffres, tiret et souligné.</small>
-    </label>
-    <label class="field">
-      <span>E-mail <em>(facultatif)</em></span>
-      <input type="email" name="email" autocomplete="email">
-    </label>
-    <label class="field">
-      <span>Mot de passe</span>
-      <input type="password" name="password" autocomplete="new-password" required minlength="12">
-      <small>12 caractères minimum. Accents, espaces et ponctuation bienvenus.</small>
-    </label>
-    <p class="form-error" role="alert" hidden></p>
-    <button class="btn btn-primary" type="submit">Créer le compte</button>
-  </form>
-</dialog>
-
-<script src="/app.js" defer></script>
+<script src="/nineteen.js" defer></script>
+<script src="/accueil.js" defer></script>
 </body>
 </html>

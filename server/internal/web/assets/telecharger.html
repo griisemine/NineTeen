@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telecharger Nineteen</title>
+<meta name="description" content="Le jeu pour Windows, macOS et Linux. Rien a installer a cote, et rien a payer.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html" aria-current="page">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <section class="section">
+    <p class="eyebrow">Version <span data-version>17.0.0</span></p>
+    <h1>Telecharger</h1>
+    <p class="lede">Un paquet par plateforme, produit a partir du meme arbre de sources. Rien a
+       installer a cote, aucun compte exige pour telecharger.</p>
+  </section>
+
+  <!-- ======================================================================
+       LES BOUTONS SONT BATIS PAR LE SERVEUR, PAS PAR CETTE PAGE.
+
+       Trois liens etaient ecrits ici a partir du seul numero de version, vers
+       une release GitHub qui n'existait pas : trois 404 sur la page qui existe
+       pour cela. Desormais /api/v1/telechargements rend ce que le serveur a
+       reellement sous la main, avec la taille et la somme SHA-256, et la page
+       affiche cette liste. Ce qui n'existe pas ne s'affiche pas.
+       ====================================================================== -->
+  <section class="section">
+    <p class="crt-etat" id="etat-telechargements" role="status">Chargement</p>
+    <ul class="platforms" id="liste-telechargements"></ul>
+    <div id="apres-telechargements"></div>
+    <noscript>
+      <p class="note">La liste des paquets se lit sur le serveur, ce qui demande JavaScript.
+         Sans lui, les fichiers restent accessibles en direct sous /telechargements/.</p>
+    </noscript>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <!-- AVANT L'USAGE, ET PAS APRES. Ces paquets ne sont pas signes, et macOS
+       refuse de les ouvrir. Le proprietaire du depot a installe le .dmg sur sa
+       machine et recu « Apple could not verify Nineteen is free of malware ».
+       La meme chose a ete reproduite en laboratoire, application sortie du
+       .dmg, com.apple.quarantine pose, lancement tue.
+
+       Le texte ne dit pas « ce paquet n'est pas signe » mais « si votre systeme
+       refuse » : il reste donc vrai le jour ou un certificat arrive, sans qu'il
+       faille penser a modifier cette page. Ce qui tranche pour un fichier
+       donne, c'est le SIGNATURE-<plateforme>.txt publie a cote de lui. -->
+  <section class="section">
+    <div class="encart">
+      <h3>La premiere ouverture demande un geste de plus</h3>
+      <p>Ces paquets ne portent pas de signature payante. Le certificat qui la donne, Developer
+         ID chez Apple et Authenticode chez Windows, s'achete, et ce projet n'en a pas. Le jeu
+         fonctionne, le systeme demande simplement une confirmation la premiere fois.</p>
+      <dl class="gestes">
+        <dt>macOS</dt>
+        <dd>Le systeme affiche <em>Apple could not verify Nineteen is free of malware</em>.
+            Apres avoir glisse Nineteen dans Applications, ouvrir le Terminal et coller cette
+            ligne, une seule fois.
+            <code class="ligne">xattr -dr com.apple.quarantine /Applications/Nineteen.app</code>
+            Elle retire l'etiquette « telecharge depuis Internet » posee par le navigateur, et
+            ne desactive aucune protection. Le meme texte est dans le .dmg.</dd>
+        <dt>Windows</dt>
+        <dd>L'ecran bleu SmartScreen s'affiche. Cliquer sur <strong>Informations
+            complementaires</strong>, puis sur <strong>Executer quand meme</strong>. Le second
+            bouton n'apparait qu'apres le premier clic.</dd>
+        <dt>Linux</dt>
+        <dd>Rien a faire, aucun noyau Linux ne refuse un binaire non signe. L'AppImage demande
+            seulement le droit d'execution.
+            <code class="ligne">chmod +x Nineteen-*.AppImage</code></dd>
+      </dl>
+    </div>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Jouer en ligne</h2>
+      <p>Le jeu se joue seul, hors ligne, sans ouvrir la moindre connexion. Pour le classement
+         et pour le Couperet, il lui faut l'adresse d'un serveur.</p>
+    </div>
+    <div id="bloc-serveur"></div>
+    <p class="note">L'ordre est toujours le meme, du plus faible au plus fort : le defaut cuit
+       au build, puis le fichier de configuration, puis la variable d'environnement, puis
+       l'option de ligne de commande. Vous gardez donc le dernier mot.</p>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Ce dont votre machine a besoin</h2>
+    </div>
+    <ul class="cartes">
+      <li>
+        <h3>Windows</h3>
+        <p>Windows 10 ou plus recent, en 64 bits. Le rendu passe par Direct3D 12 ou par Vulkan
+           selon ce que porte le pilote.</p>
+      </li>
+      <li>
+        <h3>macOS</h3>
+        <p>macOS 11 ou plus recent, Apple Silicon ou Intel. Le rendu passe par Metal. Le paquet
+           est universel, un seul fichier pour les deux.</p>
+      </li>
+      <li>
+        <h3>Linux</h3>
+        <p>Une glibc 2.34 ou plus recente, ce qui couvre Debian 12, Ubuntu 22.04 et leurs
+           descendants. Le rendu passe par Vulkan. Le chiffre est lu sur le binaire livre, pas
+           sur la machine qui l'a construit.</p>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.0.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+<script src="/telecharger.js" defer></script>
+</body>
+</html>

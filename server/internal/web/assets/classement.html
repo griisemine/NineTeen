@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classement de Nineteen</title>
+<meta name="description" content="Les meilleurs scores de la salle, recalcules par le serveur, et les manches du Couperet en cours suivies en direct.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html" aria-current="page">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <!-- ======================================================================
+       UNE SEULE PAGE, ET AUCUNE LIGNE ECRITE A LA MAIN.
+
+       La version precedente melangeait les deux : un tableau de classement
+       dont l'entete etait en HTML et les lignes en JavaScript, sur la page
+       d'accueil, plus une seconde page pour le direct. Personne ne pouvait
+       dire ou une colonne se decidait.
+
+       Ici, la page ne contient que des titres, un formulaire et des conteneurs
+       vides. Les trois tableaux sont bâtis par classement.js, par la meme
+       fonction, a partir de la meme description de colonnes. Ajouter une
+       colonne se fait a un seul endroit.
+       ====================================================================== -->
+
+  <section class="section">
+    <p class="eyebrow">Les meilleurs scores</p>
+    <h1>Classement</h1>
+    <p class="lede">Les scores ne sont pas declares par le jeu. Le serveur ouvre la partie, tire
+       la graine, puis recalcule le score a partir du journal d'evenements. Un score invente ne
+       passe pas.</p>
+  </section>
+
+  <section class="section" id="general">
+    <div class="crt">
+      <div class="crt-bar">
+        <label class="champ">
+          <span>Jeu</span>
+          <select id="choix-jeu">
+            <option value="0">Classement general</option>
+          </select>
+        </label>
+        <p class="crt-etat" id="etat-general" role="status">Chargement</p>
+      </div>
+      <div class="crt-ecran" id="ecran-general"></div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+    <p class="note">Vingt premieres places. Le classement general additionne les meilleurs
+       scores de chaque jeu, les autres ne regardent qu'une borne.</p>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section" id="direct">
+    <div class="section-head">
+      <h2>En direct</h2>
+      <p>Une manche du Couperet pendant qu'elle se joue : ce que chacun a marque, la borne qu'il
+         tient, ses fusibles, et qui est deja sorti. Ce tableau et celui du haut ne disent pas la
+         meme chose. Le classement general n'accepte que des parties recalculees, alors qu'ici ce
+         sont les joueurs qui publient leur ligne pendant la manche.</p>
+    </div>
+
+    <div class="crt">
+      <div class="crt-bar">
+        <form class="ligne-champs" id="forme-code">
+          <label class="champ">
+            <span>Code du salon</span>
+            <!-- `autocapitalize` et `spellcheck` : le code est en majuscules et
+                 n'est pas un mot. Sans cela, un telephone corrige la premiere
+                 lettre et le code cesse d'etre le bon. -->
+            <input id="champ-code" name="code" type="text" inputmode="latin"
+                   autocapitalize="characters" autocomplete="off" spellcheck="false"
+                   maxlength="10" placeholder="K7M3QP" required>
+          </label>
+          <button class="btn" type="submit">Suivre</button>
+        </form>
+        <p class="crt-etat" id="etat-manche" role="status">Entrez un code, ou choisissez une manche ci-dessous</p>
+      </div>
+      <div class="crt-ecran" id="ecran-manche"></div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+
+    <div class="section-head sous">
+      <h3>Les salons ouverts</h3>
+      <p class="note">Seuls les salons publics sont listes. Un salon prive se rejoint par son
+         code, et un salon dont la manche a commence ne se rejoint plus.</p>
+    </div>
+    <div class="crt">
+      <div class="crt-ecran" id="ecran-ouverts"></div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <noscript>
+    <section class="section">
+      <p class="note">Cette page lit le classement en direct depuis le serveur, ce qui demande
+         JavaScript. Le meme classement est visible dans le jeu, sur la dix-neuvieme borne.</p>
+    </section>
+  </noscript>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.0.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+<script src="/classement.js" defer></script>
+</body>
+</html>

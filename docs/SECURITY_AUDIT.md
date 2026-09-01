@@ -414,9 +414,10 @@ l'inscription, stocké, puis affiché à tous les visiteurs du classement. Un ps
 une balise de script s'exécute donc dans le navigateur de chaque joueur qui consulte le
 classement, avec accès au cookie de session — celui-ci n'étant pas `HttpOnly`.
 
-**Correction V15.** Le front n'utilise jamais `innerHTML` : tout passe par `textContent`
-(`server/internal/web/assets/app.js`). CSP stricte sans `unsafe-inline`, cookie de session
-`HttpOnly`.
+**Correction V15.** Le front n'utilise jamais `innerHTML` : tout passe par `textContent`.
+La règle est tenue par construction depuis la V17 — il n'existe qu'un constructeur d'élément
+pour tout le site, `elt()` dans `server/internal/web/assets/nineteen.js`, et il n'accepte
+que du texte. CSP stricte sans `unsafe-inline`, cookie de session `HttpOnly`.
 
 ---
 

@@ -616,10 +616,11 @@ cours de manche pour rejoindre celui qui mène.
 
 ### Regarder une manche sans y jouer
 
-`/salon.html` sur le serveur web suit une manche pendant qu'elle se joue — le camp,
-la borne tenue, les fusibles, les points, et qui est déjà sorti. L'adresse porte le
-code (`/salon.html?c=K7M3QP`) : c'est ce lien qu'on envoie à quelqu'un. La page
-liste aussi les salons publics ouverts.
+`/classement.html` sur le serveur web suit une manche pendant qu'elle se joue — le
+camp, la borne tenue, les fusibles, les points, et qui est déjà sorti. L'adresse
+porte le code dans son fragment (`/classement.html#salon-K7M3QP`) : c'est ce lien
+qu'on envoie à quelqu'un. La même page liste les salons publics ouverts, avec un
+bouton par salon, et porte le classement général au-dessus.
 
 Deux tableaux, deux sources, et la page le dit : le classement général n'accepte
 que des parties **recalculées** par le serveur, alors qu'ici ce sont les joueurs
