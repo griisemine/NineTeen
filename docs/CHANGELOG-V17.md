@@ -405,8 +405,14 @@ existé**.
 
 Et il en fabriquait encore. Mesuré contre l'API GitHub : le dépôt répond 200,
 `releases/tags/v17.0.0` répond 404, la liste des releases est vide. **Les trois
-boutons « Télécharger » étaient trois 404.** Ils disent « Bientôt » tant que
-`NINETEEN_RELEASE_PUBLIEE` n'est pas posé, avec la raison — la signature.
+boutons « Télécharger » étaient trois 404.**
+
+La page ne fabrique plus aucun lien. Le serveur lit un répertoire, `telechargements/`,
+et n'annonce que ce qui s'y trouve — voir `internal/telechargements` et
+`NINETEEN_TELECHARGEMENTS` dans [DEPLOY.md](DEPLOY.md). La pile Docker le remplit
+elle-même : son service `paquets` compile le jeu et y dépose l'AppImage, le `.deb`,
+l'archive et le manifeste. `NINETEEN_RELEASE_PUBLIEE` ne sert plus qu'au cas d'un
+déploiement qui n'héberge aucun paquet et compte sur la release GitHub.
 
 ### Ce qui portait encore une marque
 
@@ -778,11 +784,13 @@ a choisi de commencer, et en sortir ne coûte rien. La promesse de
    La signature est branchée et attend un secret ; sans elle macOS met en
    quarantaine et Windows affiche SmartScreen. **C'est le seul point qui bloque
    une vente au grand public.**
-2. **Publier une release et poser `NINETEEN_RELEASE_PUBLIEE=1`.** Le dépôt n'en
-   a aucune ; les trois boutons du site disent « Bientôt » et le resteront tant
-   que rien n'est publié. Les paquets, eux, sont prêts : un `.dmg` glissable,
-   une AppImage, un `.deb`, une archive, et l'installateur Windows que la CI
-   produit.
+2. **Publier une release**, si l'on veut que le site distribue depuis GitHub
+   plutôt que depuis son propre disque. Ce n'est plus un blocage : la pile
+   Docker fabrique ses paquets et le serveur les sert, donc un déploiement
+   distribue le jeu sans qu'aucune release existe. Ce que la release apporte,
+   c'est de ne pas faire porter 500 Mio par la machine qui héberge le site, et
+   l'installateur Windows que la CI produit — la seule des trois plateformes
+   qu'aucune machine du projet ne sait construire localement.
 3. **Trancher `ASTEROID`** : renommer, ou assumer le risque par écrit.
 4. **Décider du sort de `legacy/`** avant d'ouvrir le dépôt : le purger, ou
    garder le dépôt privé.
