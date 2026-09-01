@@ -259,6 +259,24 @@ bool ns_bvh_occluded(const ns_bvh *b, ns_v3 origin, ns_v3 dir, float max_distanc
  * poser les pieds sans annuler une chute qui vient de commencer. */
 #define NS_CAPSULE_SNAP_AIR 0.02f
 
+/*
+ * Retrait des sondes de FLANC par rapport à la surface de la capsule.
+ *
+ * Même raison que `NS_CAPSULE_STEP_MARGIN`, et c'est pourquoi c'est la même
+ * valeur : une sonde posée exactement sur la peau du corps donne un contact
+ * rasant. Le glissement laisse le joueur à `radius` d'un mur ; une sonde à
+ * `radius` pile serait alors DANS le plan de ce mur, et le rayon qui la longe
+ * deviendrait coplanaire aux triangles — cas dégénéré dont le résultat dépend
+ * des arrondis, et qui collerait le joueur au mur qu'il longe.
+ *
+ * Ce que ça coûte est connu et se calcule : le corps barre 2 x (0,32 - 0,02) =
+ * 0,60 m au lieu de ses 0,64 m. Le joueur passerait donc dans une fente de
+ * 0,62 m que la grille d'accessibilité, elle, lui refuse. Aucune fente de cette
+ * largeur n'existe dans la salle — la plus étroite mesurée est de 0,2864 m,
+ * entre les deux rangées dos à dos de l'îlot.
+ */
+#define NS_CAPSULE_SIDE_MARGIN 0.02f
+
 void ns_bvh_move_capsule(const ns_bvh *b, ns_capsule_move *m)
 {
     NS_ASSERT(m != NULL);
@@ -307,13 +325,48 @@ void ns_bvh_move_capsule(const ns_bvh *b, ns_capsule_move *m)
         ns_v3  nearest_normal = ns_v3_zero();
         bool   blocked = false;
 
+        /*
+         * LES SONDES DE FLANC, et pourquoi elles manquaient.
+         *
+         * Les trois sondes ci-dessous partaient toutes de l'AXE de la capsule.
+         * Le rayon n'était retranché qu'à l'arrivée, le long du déplacement :
+         * il empêchait d'entrer dans une surface de face, et rien d'autre. Le
+         * corps avait donc une épaisseur DEVANT lui et aucune sur les côtés —
+         * c'était un fil, pas un cylindre.
+         *
+         * Ce que ça donnait dans la salle : l'îlot central laisse 0,2864 m
+         * entre le dos des deux rangées, et la rangée ouest 0,1777 m entre son
+         * dos et le parement — mesures prises sur les boîtes englobantes que
+         * roomgen écrit dans `salle.scene.json`. Le joueur fait 0,64 m de
+         * large : aucune des deux fentes ne l'admet. Il y entrait pourtant, et
+         * les remontait sur toute leur longueur, parce qu'un fil passe partout
+         * où l'axe passe. C'est le défaut rapporté — « on peut marcher derrière
+         * la machine ».
+         *
+         * La grille d'accessibilité de roomgen, elle, érode le vide par un
+         * DISQUE de `personnage.rayon` (voir `reach_grid_solve`) : elle n'a
+         * jamais cru ces fentes praticables. Le jeu et son contrôle mesuraient
+         * deux corps différents ; c'est le jeu qui avait tort.
+         *
+         * Trois abscisses de flanc plutôt qu'une, aux mêmes trois hauteurs :
+         * la silhouette d'un cylindre qui avance est un rectangle, et ce sont
+         * ses deux bords qui décident s'il passe entre deux meubles.
+         */
+        const ns_v3 side = ns_v3_make(-dir.z, 0.0f, dir.x);
+        const float half = ns_maxf(radius - NS_CAPSULE_SIDE_MARGIN, 0.0f);
+        const float lateral[3] = { -half, 0.0f, half };
+
         for (int p = 0; p < 3; ++p) {
-            const ns_v3 origin = ns_v3_add(position, ns_v3_make(0.0f, probe_heights[p], 0.0f));
-            const ns_ray_hit h = ns_bvh_raycast(b, origin, dir, dist + radius);
-            if (h.hit && h.t < nearest) {
-                nearest = h.t;
-                nearest_normal = h.normal;
-                blocked = true;
+            const ns_v3 at_height = ns_v3_add(position,
+                                              ns_v3_make(0.0f, probe_heights[p], 0.0f));
+            for (int q = 0; q < 3; ++q) {
+                const ns_v3 origin = ns_v3_add(at_height, ns_v3_scale(side, lateral[q]));
+                const ns_ray_hit h = ns_bvh_raycast(b, origin, dir, dist + radius);
+                if (h.hit && h.t < nearest) {
+                    nearest = h.t;
+                    nearest_normal = h.normal;
+                    blocked = true;
+                }
             }
         }
 

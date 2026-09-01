@@ -7746,6 +7746,170 @@
         "applique_technique"
       ],
       "_traverse": "L'AMPOULE EST DANS LA CAGE, et c'est exactement ce que le controle de penetration ne sait pas exprimer : il teste si un sommet est DANS LE SOLIDE de l'autre, et une cage est creuse. Tout objet correctement place a l'interieur d'un autre lui parait donc fautif. C'est le cas que l'audit avait deja repere sous le nom « porte par », et il se declare avec le meme mot que la poutre sur son pilier."
+    },
+    {
+      "_": "LES CABLES D'ALIMENTATION. Une rangee de bornes sans un seul cable est ce qui trahit le decor de jeu : le courant doit venir de quelque part, et il se voit.\nOU ILS PASSENT : dans les trois CREUX que la salle possede deja, et nulle part ailleurs. L'ilot central laisse 0,2864 m entre le dos de ses deux rangees (z de 0,5493 a 0,8357) et la rangee ouest 0,1777 m entre son dos et le parement (x de -7,115 a -6,9373) — cotes relevees sur les boites englobantes que roomgen ecrit dans salle.scene.json. C'est par la que court le courant d'une vraie salle, et c'est le seul trace ou un cable ne traverse aucun passage.\nILS NE PEUVENT PAS GENER LE JOUEUR, et ce n'est pas un avis : un cable de 24 mm culmine a 0,024 m, une multiprise a 0,050 m. Les trois controles qui decident du passage ignorent, chacun par construction, tout ce qui est plus bas qu'eux — C-09 sous 0,30 m (RG_CLEARANCE_LOW), C-10 sous 0,35 m (RG_REACH_LOW, qui est la hauteur de marche), et la plus basse sonde horizontale de ns_bvh_move_capsule part a 0,37 m. Aucun des trois ne les voit. On ne trebuche pas dessus parce que rien, dans la chaine de collision, ne les consulte — et on ne s'y accroche pas parce qu'aucun ne depasse du creux.\nDepuis les sondes de flanc de ns_bvh_move_capsule, ces trois creux ne sont plus accessibles du tout : les cables s'y voient depuis les bouts de rangee et depuis l'allee centrale, on ne peut plus aller marcher dessus.",
+      "name": "cable_ilot_ouest",
+      "at": [
+        -3.19,
+        0.012,
+        0.6925
+      ],
+      "yaw": 0.0,
+      "_pose": "Pose au fond du creux, a egale distance des deux dos : 0,131 m de chaque cote pour un cable de 12 mm de rayon. Au centre plutot que contre une rangee, parce que c'est la seule position qui ne demande a personne de verifier qu'elle ne penetre rien.",
+      "pose": "sol",
+      "parts": [
+        {
+          "_": "roll -90 couche le cylindre sur +X : geo_cylinder le construit sur +Y, et R = Ry.Rx.Rz envoie l'axe local Y sur -X a roll +90.",
+          "type": "cylinder",
+          "material": "borne_noir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "roll": -90.0,
+          "radius": 0.012,
+          "height": 2.15,
+          "sides": 8
+        }
+      ]
+    },
+    {
+      "name": "multiprise_ilot_ouest",
+      "at": [
+        -3.35,
+        0.0,
+        0.6925
+      ],
+      "yaw": 0.0,
+      "_pose": "Le bout du cable, et ce qui lui donne une raison d'exister : il part de la et longe la rangee. Un cable qui s'arreterait en pleine tranchee n'irait nulle part. 10 mm de jeu entre la face de la multiprise et le premier anneau du cable — assez pour que le controle de penetration n'ait rien a arbitrer, invisible a 2,4 cm du sol.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "gris",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.3,
+            0.05,
+            0.06
+          ],
+          "chamfer": 0.006
+        }
+      ]
+    },
+    {
+      "name": "cable_ilot_est",
+      "at": [
+        1.04,
+        0.012,
+        0.6925
+      ],
+      "yaw": 0.0,
+      "_pose": "Le meme creux, moitie est : les six bornes x > 0 ont leur propre alimentation, l'allee centrale coupant la tranchee en deux.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "cylinder",
+          "material": "borne_noir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "roll": -90.0,
+          "radius": 0.012,
+          "height": 2.15,
+          "sides": 8
+        }
+      ]
+    },
+    {
+      "name": "multiprise_ilot_est",
+      "at": [
+        3.35,
+        0.0,
+        0.6925
+      ],
+      "yaw": 0.0,
+      "_pose": "Au bout oppose a celle de l'ouest : les deux moities de l'ilot se tournent le dos, leurs prises aussi.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "gris",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.3,
+            0.05,
+            0.06
+          ],
+          "chamfer": 0.006
+        }
+      ]
+    },
+    {
+      "name": "cable_rangee_ouest",
+      "at": [
+        -6.977,
+        0.012,
+        -2.99
+      ],
+      "yaw": 0.0,
+      "_pose": "PAS AU MILIEU DU CREUX, et c'est roomgen qui l'a tranche. Le creux du mur ouest fait 0,1777 m (x de -7,115 a -6,9373), mais les trois socles de pilastre y avancent jusqu'a x = -7,017 : au milieu, le cable penetrait « socle_pilier_ouest_2 », seul des trois a tomber dans la longueur posee ici. Il ne reste que 0,0797 m entre le nez des socles et le dos des bornes, et le cable s'y tient : axe a -6,977, donc 0,028 m de jeu de chaque cote. pitch 90 couche le cylindre sur +Z, le long des six bornes.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "cylinder",
+          "material": "borne_noir",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "pitch": 90.0,
+          "radius": 0.012,
+          "height": 5.05,
+          "sides": 8
+        }
+      ]
+    },
+    {
+      "name": "multiprise_rangee_ouest",
+      "at": [
+        -6.977,
+        0.0,
+        -3.15
+      ],
+      "yaw": 0.0,
+      "_pose": "Dans l'axe du cable, et donc decalee comme lui : une prise que le cable rejoindrait de biais sur 5 cm ne serait pas sa prise. 50 mm de large la, ou le cable n'a que 79,7 mm devant lui — 0,015 m de jeu de chaque cote. Aucun socle de pilastre ne descend jusqu'a ce z.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "gris",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.05,
+            0.3
+          ],
+          "chamfer": 0.006
+        }
+      ]
     }
   ],
   "_depart": "Le joueur entre par la porte du fond du couloir, descend les neuf metres du couloir et debouche dans le hall par la trouee du pan coupe nord-est — l'unique entree, comme en 2020. La position est celle des PIEDS : le moteur ajoute la hauteur d'oeil.",

@@ -80,6 +80,23 @@ static void add_quad(scratch_bvh *s, ns_v3 origin, ns_v3 u, ns_v3 v, ns_v3 norma
     add_tri(s, a, c, d, normal, mat);
 }
 
+/* Une boîte pleine, par ses deux coins. Les six faces, normales vers l'extérieur :
+ * un rayon qui part de l'intérieur doit trouver quelque chose en sortant, sans
+ * quoi un corps déjà engagé dans le meuble se croirait libre. */
+static void add_box(scratch_bvh *s, ns_v3 lo, ns_v3 hi, uint32_t mat)
+{
+    const float dx = hi.x - lo.x, dy = hi.y - lo.y, dz = hi.z - lo.z;
+    add_quad(s, lo, ns_v3_make(0, dy, 0), ns_v3_make(0, 0, dz), ns_v3_make(-1, 0, 0), mat);
+    add_quad(s, ns_v3_make(hi.x, lo.y, lo.z), ns_v3_make(0, dy, 0), ns_v3_make(0, 0, dz),
+             ns_v3_make(1, 0, 0), mat);
+    add_quad(s, lo, ns_v3_make(dx, 0, 0), ns_v3_make(0, dy, 0), ns_v3_make(0, 0, -1), mat);
+    add_quad(s, ns_v3_make(lo.x, lo.y, hi.z), ns_v3_make(dx, 0, 0), ns_v3_make(0, dy, 0),
+             ns_v3_make(0, 0, 1), mat);
+    add_quad(s, ns_v3_make(lo.x, hi.y, lo.z), ns_v3_make(dx, 0, 0), ns_v3_make(0, 0, dz),
+             ns_v3_make(0, 1, 0), mat);
+    add_quad(s, lo, ns_v3_make(dx, 0, 0), ns_v3_make(0, 0, dz), ns_v3_make(0, -1, 0), mat);
+}
+
 static void finish(scratch_bvh *s)
 {
     ns_aabb bounds;
@@ -433,6 +450,90 @@ static void test_camera(const ns_bvh *b)
     }
 }
 
+/* ==========================================================================
+ * L'INTERSTICE DERRIÈRE LES BORNES
+ * ==========================================================================
+ *
+ * Les deux rangées dos à dos de l'îlot central, aux cotes RELEVÉES sur les
+ * boîtes englobantes que roomgen écrit dans `salle.scene.json` : la rangée qui
+ * regarde +z occupe z de 0,8357 à 1,7269, celle qui regarde -z va de -0,348 à
+ * 0,5493. Il reste donc 0,2864 m entre les deux dos, pour un joueur qui fait
+ * 0,64 m de large.
+ *
+ * On ne rejoue ici que la moitié est de l'îlot — deux dalles de x = 0,952 à
+ * 3,558 — parce que c'est tout ce qu'il faut : le joueur arrive par l'allée
+ * centrale, à x = 0, et pousse vers +x. S'il entre, il remonte la fente sur
+ * toute sa longueur, ce qui est exactement la capture rapportée.
+ */
+static void build_island(scratch_bvh *s)
+{
+    memset(s, 0, sizeof *s);
+
+    add_quad(s, ns_v3_make(-5, 0, -5), ns_v3_make(10, 0, 0), ns_v3_make(0, 0, 10),
+             ns_v3_make(0, 1, 0), 0);
+
+    add_box(s, ns_v3_make(0.952f, 0.0f, 0.8357f), ns_v3_make(3.558f, 1.8497f, 1.7269f), 0);
+    add_box(s, ns_v3_make(0.952f, 0.0f, -0.348f), ns_v3_make(3.558f, 1.8497f, 0.5493f), 0);
+
+    finish(s);
+}
+
+static void test_interstice(const ns_bvh *b)
+{
+    /* --- on n'entre pas dans la fente dos à dos --- */
+    {
+        ns_v3 feet = ns_v3_make(0.0f, 0.0f, 0.69f);   /* l'allée, au milieu de la fente */
+        for (int i = 0; i < 80; ++i) {
+            const ns_capsule_move m = move(b, feet, ns_v3_make(0.05f, -0.01f, 0.0f), true);
+            feet = m.position;
+        }
+        /* La façade des dalles est à x = 0,952 ; le corps s'arrête un rayon avant. */
+        CHECK(feet.x <= 0.952f - 0.32f + 2e-2f,
+              "le corps est entré dans la fente de 0,2864 m : x = %.4f (limite %.4f)",
+              (double)feet.x, (double)(0.952f - 0.32f));
+    }
+
+    /* --- l'allée centrale, elle, reste franchissable ---
+     *
+     * Même poussée, mais à z = -1,2 : on longe l'îlot par le sud, au large. Sans
+     * ce second cas, un corps qui n'avance plus du tout passerait le premier. */
+    {
+        ns_v3 feet = ns_v3_make(0.0f, 0.0f, -1.2f);
+        for (int i = 0; i < 80; ++i) {
+            const ns_capsule_move m = move(b, feet, ns_v3_make(0.05f, -0.01f, 0.0f), true);
+            feet = m.position;
+        }
+        CHECK(feet.x > 3.0f,
+              "l'allée dégagée devrait se remonter librement : x = %.4f", (double)feet.x);
+    }
+
+    /* --- on LONGE une rangée sans y coller ---
+     *
+     * Le corps s'arrête à `radius` d'un meuble, et les sondes de flanc sont
+     * alors au ras de sa tôle. Si elles accrochaient, le joueur resterait planté
+     * là où il devrait glisser — ce serait une régression bien pire que le
+     * défaut corrigé. On pousse donc en biais contre la dalle sud et on vérifie
+     * qu'on avance quand même le long de sa face. */
+    {
+        ns_v3 feet = ns_v3_make(1.2f, 0.0f, -1.2f);
+        for (int i = 0; i < 120; ++i) {
+            const ns_capsule_move m = move(b, feet, ns_v3_make(0.0f, -0.01f, 0.04f), true);
+            feet = m.position;
+        }
+        CHECK(feet.z <= -0.348f - 0.32f + 2e-2f,
+              "le corps est entré dans la dalle sud : z = %.4f", (double)feet.z);
+        /* Puis on longe : poussée vers +x, collé à la dalle. */
+        const float x0 = feet.x;
+        for (int i = 0; i < 120; ++i) {
+            const ns_capsule_move m = move(b, feet, ns_v3_make(0.04f, -0.01f, 0.01f), true);
+            feet = m.position;
+        }
+        CHECK(feet.x > x0 + 1.5f,
+              "on devrait longer la rangée, pas y coller : x = %.4f -> %.4f",
+              (double)x0, (double)feet.x);
+    }
+}
+
 /* ========================================================================== */
 
 int main(void)
@@ -447,6 +548,10 @@ int main(void)
     test_occlusion_factor(&s.bvh);
     test_capsule(&s.bvh);
     test_camera(&s.bvh);
+
+    scratch_bvh island;
+    build_island(&island);
+    test_interstice(&island.bvh);
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

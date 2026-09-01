@@ -264,11 +264,12 @@ static bool has_headroom(const ns_bvh *bvh, ns_v3 feet, float from_height, float
  *
  * Ce qu'on veut balayer est donc un VOLUME. `ns_bvh` n'en propose pas : sa
  * seule fonction volumique, `ns_bvh_move_capsule`, n'est pas non plus un vrai
- * balayage — elle lance trois rayons à trois hauteurs et retranche le rayon de
- * la capsule. On fait ici la même chose en mieux adapté : un FAISCEAU de neuf
- * rayons parallèles, le centre plus huit répartis sur un cercle de rayon
- * `vue.rayonCamera` perpendiculaire à la direction, et on garde le plus court.
- * Le volume réellement balayé est le cylindre qui les contient.
+ * balayage — elle échantillonne la silhouette de la capsule par neuf rayons,
+ * trois hauteurs sur trois abscisses de flanc, et retranche le rayon de la
+ * capsule. On fait ici la même chose en mieux adapté à un objet ROND : un
+ * FAISCEAU de neuf rayons parallèles, le centre plus huit répartis sur un
+ * cercle de rayon `vue.rayonCamera` perpendiculaire à la direction, et on garde
+ * le plus court. Le volume réellement balayé est le cylindre qui les contient.
  *
  * Ce que ça couvre, et ce que ça ne couvre PAS
  * --------------------------------------------
