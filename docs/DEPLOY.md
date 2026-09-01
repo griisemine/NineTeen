@@ -95,7 +95,8 @@ NINETEEN_LOG=json \
 | `NINETEEN_SECURE` | à définir derrière HTTPS : active les cookies `Secure` et HSTS |
 | `NINETEEN_LOG` | `text` ou `json` |
 | `NINETEEN_PUBLIC_URL` | l'adresse que **le jeu** doit viser, annoncée au joueur sur la page de téléchargement. Vide = rien n'est annoncé. Voir ci-dessous |
-| `NINETEEN_RELEASE_PUBLIEE` | à `1`, la page rallume ses trois boutons de téléchargement |
+| `NINETEEN_TELECHARGEMENTS` | le répertoire des paquets **que ce serveur sert lui-même**. Ce qui s'y trouve est offert, ce qui ne s'y trouve pas n'est pas annoncé : la page lit un `os.ReadDir`, pas une variable. Vide = ce serveur n'héberge aucun paquet. Voir ci-dessous |
+| `NINETEEN_RELEASE_PUBLIEE` | à `1`, **et seulement si le répertoire ci-dessus est vide**, la page donne les liens de la release GitHub |
 | `NINETEEN_DUEL_ADDR` | adresse d'écoute du **relais temps réel** (duel à deux et arène à N places), sur son propre port. **Vide par défaut : rien ne s'ouvre.** Voir ci-dessous |
 | `NINETEEN_DUEL_PUBLIC` | l'adresse `hote:port` du relais **telle qu'on l'annonce aux joueurs**, distincte de celle d'écoute comme `NINETEEN_PUBLIC_URL` l'est de `NINETEEN_ADDR`. **C'est elle qui ouvre les salons du Couperet** ; vide, les routes `/api/v1/salons` répondent 503. Voir ci-dessous |
 | `NINETEEN_BIND`, `NINETEEN_PORT` | *(docker-compose seulement)* interface et port **publiés** sur l'hôte. Défaut `127.0.0.1` et `8080` : le service ne sort pas de la machine tant que personne ne l'a demandé |
@@ -123,9 +124,51 @@ démarrage et **refuse de l'annoncer** si elle ne convient pas, en disant pourqu
 level=ERROR msg="NINETEEN_PUBLIC_URL en https : le jeu ne sait pas l'ouvrir, rien ne sera annoncé"
 ```
 
-Le reste du site, lui, n'a besoin de rien : `app.js` appelle l'API en relatif avec
+Le reste du site, lui, n'a besoin de rien : ses scripts appellent l'API en relatif avec
 `credentials: "same-origin"`, donc il fonctionne sur n'importe quel hôte sans savoir son propre
 nom. `TestLeSiteNeSupposePasSonPropreHote` interdit qu'un `localhost` y revienne.
+
+**Elle sert une seconde fois, et c'est ce qui change l'ordre des opérations.** Le service
+`paquets` du `docker-compose` la passe à `-DNINETEEN_SERVER_URL` : le binaire livré vise donc
+déjà ce serveur, sans que le joueur ait rien à taper. Une adresse ne se pose pas après coup sur
+un paquet déjà fabriqué, donc le jeu est construit **par** la pile et non avant elle. Le joueur
+garde le dernier mot : la configuration, la variable d'environnement et `--server=` battent ce
+défaut, dans cet ordre.
+
+#### `NINETEEN_TELECHARGEMENTS` — les paquets servis par ce serveur
+
+La page bâtissait trois liens vers `github.com/.../releases/download/v<version>/…` à partir du
+seul numéro de version. Conséquence mesurée : qui montait la pile avec `docker compose up
+--build` obtenait un site complet et **zéro bouton de téléchargement**, parce qu'aucune release
+n'existe pour la version qu'il vient de construire. Le projet se lançait, et ne se distribuait
+pas.
+
+La vérité est maintenant un répertoire.
+
+```
+GET /api/v1/telechargements
+{"ok":true,"version":"17.0.0","source":"locale","serveur":"http://localhost:8080",
+ "fichiers":[{"nom":"nineteen_17.0.0_arm64.deb","url":"/telechargements/nineteen_17.0.0_arm64.deb",
+              "plateforme":"linux","arch":"arm64","format":"paquet .deb",
+              "octets":175580032,"sha256":"dea235e8…"}],
+ "manifestes":[{"nom":"SIGNATURE-linux.txt","url":"/telechargements/SIGNATURE-linux.txt","octets":874}]}
+```
+
+`source` vaut `locale` (un répertoire garni), `github` (rien en local, mais
+`NINETEEN_RELEASE_PUBLIEE=1`) ou `aucune`. **Le serveur tranche, la page affiche.** C'est le
+déplacement qui compte : la décision se prend une fois, en Go, là où elle se teste.
+
+La plateforme et l'architecture sont lues **dans le nom du fichier**, et nulle part ailleurs
+(`telechargements.Classer`). La somme SHA-256 est calculée par le serveur en fond, une fois par
+fichier, et republiée sur la page. Un paquet qui vient d'apparaître s'affiche donc avant sa
+somme, pendant quelques secondes : un fichier téléchargeable tout de suite vaut mieux qu'un
+fichier retenu le temps d'un calcul.
+
+Le délai d'écriture de `http.Server` est **levé sur cette route seule**. Les 60 s par défaut sont
+le bon réglage pour une API JSON et une coupure nette pour un fichier de 175,6 Mio : le tenir
+demanderait 2,9 Mio/s soutenus, soit 23 Mbit/s, et toute connexion plus lente recevrait un
+fichier tronqué sans le moindre message. La route accepte aussi les requêtes par plage, donc la
+reprise d'un téléchargement interrompu.
 
 Les identifiants ne sont jamais dans le code. Le dépôt d'origine les gardait en clair dans un
 fichier commité — ils sont donc encore dans l'historique git et **doivent être changés**.

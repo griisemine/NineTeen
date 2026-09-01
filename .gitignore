@@ -19,6 +19,12 @@ install/
 # ---- Assets dérivés (régénérés par tools/, jamais commités) ----
 assets/generated/
 
+# ---- Paquets fabriques par la pile Docker ----
+# Le repertoire EXISTE dans le depot (voir son LISEZ-MOI), son contenu non :
+# ce sont des centaines de mebioctets refabricables en une commande.
+telechargements/*
+!telechargements/LISEZ-MOI.txt
+
 # ---- Serveur Go ----
 server/nineteend
 server/coverage.out

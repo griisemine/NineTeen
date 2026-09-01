@@ -36,10 +36,43 @@ set -eu
 
 RACINE="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="${BUILD:-$RACINE/build/linux-x64}"
-SORTIE="$BUILD/paquets"
+# SORTIE est reglable : la composition Docker la pointe sur le repertoire que le
+# serveur sert, pour que les paquets fabriques ici deviennent telechargeables
+# sans qu'on ait a les recopier. Voir `telechargements/` et docker-compose.yml.
+SORTIE="${SORTIE:-$BUILD/paquets}"
 APPDIR="$BUILD/AppDir"
+VERSION_SOURCE="$(sed -n 's/^ *VERSION *\([0-9][0-9.]*\)$/\1/p' "$RACINE/CMakeLists.txt" | head -1)"
 
 cd "$RACINE"
+
+# --------------------------------------------------------------------------
+# 0. Y a-t-il seulement quelque chose a faire ?
+# --------------------------------------------------------------------------
+# La composition Docker relance ce script a CHAQUE `docker compose up`. Sans
+# cette garde, elle recompilerait et recompresserait 500 Mio de paquets a chaque
+# demarrage de la pile, pour reproduire a l'octet pres ce qui est deja la.
+#
+# La garde est volontairement bete : elle regarde si les trois paquets de LA
+# VERSION DECLAREE existent deja dans la sortie. Elle ne compare aucune date de
+# source, parce qu'une comparaison de dates qui se trompe dans un sens livre un
+# paquet perime, et personne ne s'en apercevrait. Changer la version, ou vider
+# le repertoire, refabrique.
+if [ "${NINETEEN_PAQUETS_SI_ABSENT:-0}" = "1" ] && [ -n "$VERSION_SOURCE" ]; then
+    ARCH_ICI="$(uname -m)"
+    DEJA=1
+    for motif in \
+        "$SORTIE/Nineteen-${VERSION_SOURCE}-${ARCH_ICI}.AppImage" \
+        "$SORTIE/nineteen-${VERSION_SOURCE}-linux-${ARCH_ICI}.tar.gz" \
+        "$SORTIE/SIGNATURE-linux.txt"
+    do
+        [ -f "$motif" ] || DEJA=0
+    done
+    if [ "$DEJA" = "1" ]; then
+        echo "paquets $VERSION_SOURCE deja presents dans $SORTIE, rien a refaire."
+        ls -la "$SORTIE"
+        exit 0
+    fi
+fi
 
 echo "=== Ce qui construit ==="
 ldd --version | head -1
@@ -57,6 +90,26 @@ echo
 CONFIGURE="-DCMAKE_BUILD_TYPE=Release"
 if [ -n "${NINETEEN_SDL3_SRC:-}" ]; then
     CONFIGURE="$CONFIGURE -DFETCHCONTENT_SOURCE_DIR_SDL3=$NINETEEN_SDL3_SRC"
+fi
+
+# LE DOMAINE, CUIT DANS LE BINAIRE, ET C'EST ICI QUE LA FENETRE S'OUVRE.
+#
+# `-DNINETEEN_SERVER_URL=` pose le defaut compile : le joueur qui lance le jeu
+# sans rien taper vise DEJA le bon serveur. Sans lui, on livrait un binaire et
+# une consigne, « ajoutez --server=http://... », que la moitie des gens ne
+# lisent pas et que l'autre moitie tape de travers.
+#
+# Le moment compte : ce defaut ne peut pas etre pose apres coup sur un paquet
+# deja fabrique. C'est pour cela que la composition Docker fabrique le jeu APRES
+# qu'on lui a donne son adresse publique, et pas avant.
+#
+# Le joueur garde le dernier mot : la config, la variable d'environnement et
+# `--server=` battent ce defaut, dans cet ordre. Voir engine/net/ns_online.h.
+if [ -n "${NINETEEN_SERVER_URL:-}" ]; then
+    CONFIGURE="$CONFIGURE -DNINETEEN_SERVER_URL=$NINETEEN_SERVER_URL"
+    echo "serveur cuit dans le binaire : $NINETEEN_SERVER_URL"
+else
+    echo "serveur cuit dans le binaire : aucun (le jeu demarrera hors ligne)"
 fi
 
 # shellcheck disable=SC2086
@@ -89,8 +142,23 @@ fi
 # ---------------------------------------------------------------------------
 # 2. .tar.gz et .deb — CPack sait les faire
 # ---------------------------------------------------------------------------
-rm -rf "$SORTIE"
+# ON N'EFFACE QUE CE QU'ON PRODUIT, et cette precision a ete payee deux fois.
+#
+# `rm -rf "$SORTIE"` echouerait sous la composition Docker, ou la sortie est un
+# point de montage : on ne demonte pas un volume avec `rm`. Et `rm -rf
+# "$SORTIE"/*` emporterait deux choses qui ne nous appartiennent pas : le
+# LISEZ-MOI versionne du repertoire, et surtout le .dmg ou le .exe que
+# l'exploitant y a depose a la main. Aucune machine ne fabrique les trois
+# plateformes, donc une fabrication Linux qui efface le paquet macOS d'a cote
+# est exactement le defaut a ne pas avoir.
+mkdir -p "$SORTIE"
+rm -rf "$SORTIE"/_CPack_Packages
+rm -f "$SORTIE"/*.AppImage "$SORTIE"/*.deb "$SORTIE"/*.rpm "$SORTIE"/*.tar.gz \
+      "$SORTIE"/SIGNATURE-linux.txt "$SORTIE"/*.asc
 cpack --config "$BUILD/CPackConfig.cmake" -B "$SORTIE"
+# CPack laisse son arbre de travail derriere lui. Il ne genait pas quand la
+# sortie etait un repertoire de build ; ici c'est un repertoire servi au public.
+rm -rf "$SORTIE"/_CPack_Packages
 
 # ---------------------------------------------------------------------------
 # 3. L'AppImage — un AppDir, puis appimagetool
@@ -240,7 +308,16 @@ fi
 } > "$MANIFESTE"
 
 # ---------------------------------------------------------------------------
-# 5. Ce qu'on vient de fabriquer, en chiffres
+# 5. Lisibles par qui les sert
+# ---------------------------------------------------------------------------
+# Ce script tourne en root dans un conteneur, et le serveur qui sert ces
+# fichiers tourne en `nonroot` dans un autre. Sans ce chmod, la page listerait
+# des paquets que le telechargement rendrait en 404.
+chmod a+r "$SORTIE"/* 2>/dev/null || true
+chmod a+rx "$SORTIE" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 6. Ce qu'on vient de fabriquer, en chiffres
 # ---------------------------------------------------------------------------
 echo
 echo "=== Signature ==="

@@ -28,6 +28,7 @@ import (
 	"nineteen/internal/migrations"
 	"nineteen/internal/salons"
 	"nineteen/internal/store"
+	"nineteen/internal/telechargements"
 	"nineteen/internal/web"
 )
 
@@ -103,6 +104,16 @@ func main() {
 		// le bloc.
 		publicURL = flag.String("public-url", envOr("NINETEEN_PUBLIC_URL", ""),
 			"URL publique du serveur, annoncée au joueur pour --server= (vide = rien n'est annoncé)")
+		// LE REPERTOIRE DES PAQUETS, que ce serveur sert lui-meme.
+		//
+		// Ce qui s'y trouve est offert au telechargement, ce qui ne s'y trouve
+		// pas n'est pas annonce. Aucune variable ne le decrit, parce qu'une
+		// variable peut mentir : la page lit un `os.ReadDir`.
+		//
+		// Vide par defaut. La page se rabat alors sur la release GitHub si
+		// NINETEEN_RELEASE_PUBLIEE=1, et n'offre rien sinon.
+		telech = flag.String("telechargements", envOr("NINETEEN_TELECHARGEMENTS", ""),
+			"répertoire des paquets du jeu servis par ce serveur (vide = aucun)")
 	)
 	flag.Parse()
 
@@ -174,6 +185,17 @@ func main() {
 		}
 	}
 
+	// Le depot de paquets. Il est ouvert meme si le repertoire n'existe pas
+	// encore : la composition Docker fabrique les paquets EN PARALLELE du
+	// serveur, et le site doit rester servi pendant ce temps. Ce qui apparait
+	// dans le repertoire apparait sur la page, sans redemarrage.
+	depot := telechargements.Ouvrir(*telech)
+	if depot.Actif() {
+		paquets, _ := depot.Liste()
+		logger.Info("paquets servis par ce serveur",
+			"répertoire", *telech, "fichiers", len(paquets))
+	}
+
 	assets, err := staticHandler()
 	if err != nil {
 		logger.Error("front embarqué illisible", "err", err)
@@ -188,6 +210,7 @@ func main() {
 		Publiee:   os.Getenv("NINETEEN_RELEASE_PUBLIEE") == "1",
 		PublicURL: *publicURL,
 		Relais:    relaisPublic,
+		Depot:     depot,
 		Assets:    assets,
 	})
 
@@ -206,6 +229,10 @@ func main() {
 	}
 
 	go housekeeping(ctx, db, logger)
+	// Les sommes SHA-256, calculees en fond. Trente secondes entre deux tours :
+	// le repertoire ne change qu'a une fabrication, et un tour ne relit que la
+	// liste tant que rien n'a bouge.
+	go depot.Chauffer(ctx, logger, 30*time.Second)
 
 	errCh := make(chan error, 1)
 

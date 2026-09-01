@@ -18,6 +18,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"nineteen/internal/runs"
 	"nineteen/internal/salons"
 	"nineteen/internal/store"
+	"nineteen/internal/telechargements"
 )
 
 const (
@@ -44,9 +46,11 @@ type Server struct {
 	mux     *http.ServeMux
 	secure  bool // cookies marqués Secure : vrai dès que le service est en HTTPS
 	version string
-	// Le paquet de cette version est-il PUBLIE ? Voir handleVersion : sans ça,
-	// la page bâtissait trois liens de téléchargement vers une release qui
-	// n'existe pas.
+	// Le paquet de cette version est-il PUBLIE sur GitHub ?
+	//
+	// N'entre en jeu que si `depot` ne contient rien : un serveur qui heberge
+	// ses propres paquets n'a aucune raison d'envoyer ailleurs. Voir
+	// handleTelechargements.
 	publiee bool
 	// L'adresse PUBLIQUE du serveur, celle que le joueur passe à `--server=`.
 	// Vide quand `NINETEEN_PUBLIC_URL` n'est pas posée : la page cache alors le
@@ -66,6 +70,12 @@ type Server struct {
 	// qu'on ne peut pas jouer, et l'ouvrir quand meme donnerait au joueur un code
 	// et aucun moyen de s'en servir.
 	relais RelaisPublic
+	// LE REPERTOIRE DES PAQUETS, quand ce serveur les heberge lui-meme.
+	//
+	// Nil ou vide, la page de telechargement se rabat sur la release GitHub, et
+	// n'offre rien du tout si celle-ci n'est pas publiee non plus. C'est l'etat
+	// qu'avait la pile Docker : elle se montait entiere et ne distribuait rien.
+	depot  *telechargements.Depot
 	assets http.Handler
 }
 
@@ -86,6 +96,7 @@ type Config struct {
 	Publiee   bool
 	PublicURL string
 	Relais    RelaisPublic
+	Depot     *telechargements.Depot
 	Assets    http.Handler
 }
 
@@ -99,6 +110,7 @@ func New(cfg Config) *Server {
 		publiee:   cfg.Publiee,
 		publicURL: cfg.PublicURL,
 		relais:    cfg.Relais,
+		depot:     cfg.Depot,
 		assets:    cfg.Assets,
 	}
 	s.routes()
@@ -144,6 +156,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/v1/salons/{code}", s.handleSalonFermer)
 	s.mux.HandleFunc("POST /api/v1/salons/{code}/beat", s.handleSalonBattre)
 	s.mux.HandleFunc("GET /api/v1/salons/{code}/live", s.handleSalonLive)
+
+	// LES PAQUETS DU JEU. La liste est publique et la route de fichier aussi :
+	// telecharger le jeu ne demande pas de compte, et en demander un serait
+	// prendre le probleme a l'envers. On s'inscrit pour jouer en ligne, pas
+	// pour obtenir le binaire.
+	s.mux.HandleFunc("GET /api/v1/telechargements", s.handleTelechargements)
+	s.mux.HandleFunc("GET /telechargements/{nom}", s.handleTelechargementFichier)
 
 	s.mux.HandleFunc("GET /api/v1/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/v1/health", s.handleHealth)
@@ -1692,34 +1711,129 @@ func (s *Server) handleSalonLive(w http.ResponseWriter, r *http.Request) {
 /* Divers                                                                     */
 /* ========================================================================== */
 
-// La version, ET si son paquet est publié.
+// La version, l'etat de publication, et l'adresse a viser.
 //
-// Le second champ existe parce que la page s'en passait : `app.js` bâtissait
-// trois liens vers `github.com/.../releases/download/v<version>/…` à partir du
-// seul numéro de version, en supposant que la release existe. Mesuré contre
-// l'API GitHub : le dépôt répond 200, `releases/tags/v17.0.0` répond 404, et la
-// liste des releases est vide. Les trois boutons « Télécharger » — la raison
-// d'être de la page — étaient donc trois 404.
+// `publiee` ne sert plus qu'a UN cas depuis que le serveur peut heberger ses
+// propres paquets : celui d'un deploiement qui n'en heberge aucun et compte sur
+// la release GitHub. Voir handleTelechargements, qui tranche les trois etats.
+// Faux par defaut, et c'est le sens sur : un serveur qu'on lance sans rien dire
+// n'affirme pas qu'un paquet existe.
 //
-// Faux par défaut, et c'est le sens sûr : un serveur qu'on lance sans rien dire
-// n'affirme pas qu'un paquet existe. Le jour où la release est publiée,
-// NINETEEN_RELEASE_PUBLIEE=1 rallume les boutons — une variable, pas un
-// redéploiement du site.
 // `serveur` : l'adresse que le JEU doit viser, et que lui seul ignore.
 //
-// Le site, lui, n'en a aucun besoin — `app.js` appelle l'API en relatif et
-// `credentials: "same-origin"`, donc il fonctionne sur n'importe quel hôte sans
-// rien savoir de son propre nom. Ce champ ne sert pas à l'API du site : il sert
-// à ce que la page de téléchargement puisse écrire, sous le bouton, la ligne
-// exacte à taper. Sans lui le joueur repart avec un binaire et aucune adresse.
+// Le site, lui, n'en a aucun besoin. Ses scripts appellent l'API en relatif avec
+// `credentials: "same-origin"`, donc il fonctionne sur n'importe quel hote sans
+// rien savoir de son propre nom. Ce champ sert a ce que la page de
+// telechargement ecrive, sous le bouton, la ligne exacte a taper. Sans lui le
+// joueur repart avec un binaire et aucune adresse.
 //
-// Vide quand `NINETEEN_PUBLIC_URL` n'est pas posée. La page cache alors le bloc
-// — un serveur qu'on lance sans rien dire n'annonce rien, comme pour `publiee`.
+// Vide quand `NINETEEN_PUBLIC_URL` n'est pas posee. La page dit alors que le
+// serveur n'annonce rien, au lieu d'afficher une ligne a trou.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "version": s.version, "publiee": s.publiee,
 		"serveur": s.publicURL,
 	})
+}
+
+// LES PAQUETS DU JEU, tels que CE serveur peut les fournir.
+//
+// Trois etats, et la page n'en decide aucun : c'est ici que la question se
+// tranche, une fois, en Go, ou elle se teste.
+//
+//	« locale »  un repertoire est monte et contient des paquets. C'est le cas
+//	            de la composition Docker, qui les fabrique a cote du serveur.
+//	« github »  aucun paquet local, mais la release de cette version est
+//	            declaree publiee. On donne les liens du depot.
+//	« aucune »  ni l'un ni l'autre. La page le dit et n'affiche pas de bouton
+//	            mort : un bouton qui rend 404 fait douter du reste de la page.
+//
+// LE NAVIGATEUR NE CHOISISSAIT PAS BIEN. `app.js` batissait les trois URL de
+// release a partir du seul numero de version, donc trois 404 tant que la
+// release n'existait pas, et rien du tout quand la pile hebergeait pourtant les
+// fichiers a cote d'elle. Le serveur est le seul a savoir ce qu'il a sous la
+// main.
+func (s *Server) handleTelechargements(w http.ResponseWriter, r *http.Request) {
+	paquets, annexes := s.depot.Liste()
+	source := "locale"
+
+	if len(paquets) == 0 {
+		annexes = nil
+		if s.publiee {
+			paquets, source = telechargements.SurGitHub(s.version), "github"
+		} else {
+			source = "aucune"
+		}
+	}
+
+	// Jamais nil dans le JSON : une page qui doit distinguer `null` de `[]`
+	// avant de compter est une page ou l'on finit par oublier le cas.
+	if paquets == nil {
+		paquets = []telechargements.Fichier{}
+	}
+	if annexes == nil {
+		annexes = []telechargements.Annexe{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"version":    s.version,
+		"source":     source,
+		"serveur":    s.publicURL,
+		"fichiers":   paquets,
+		"manifestes": annexes,
+	})
+}
+
+// UN PAQUET, en octets.
+//
+// LE DELAI D'ECRITURE EST LEVE ICI, ET IL LE FAUT. `http.Server` porte
+// `WriteTimeout: 60s`, ce qui est le bon reglage pour une API JSON et une
+// coupure nette pour un fichier de 175,6 Mio : le tenir demanderait 2,9 Mio/s
+// soutenus, soit 23 Mbit/s, et toute connexion plus lente recevrait un fichier
+// TRONQUE sans le moindre message. Le controleur de reponse retire l'echeance
+// pour cette route seule, et la borne redevient celle du reseau.
+func (s *Server) handleTelechargementFichier(w http.ResponseWriter, r *http.Request) {
+	nom := r.PathValue("nom")
+	chemin, ok := s.depot.Chemin(nom)
+	if !ok {
+		s.fail(w, r, http.StatusNotFound, "paquet inconnu", nil)
+		return
+	}
+
+	f, err := os.Open(chemin)
+	if err != nil {
+		s.fail(w, r, http.StatusNotFound, "paquet inconnu", err)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		s.fail(w, r, http.StatusInternalServerError, "paquet illisible", err)
+		return
+	}
+
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		// Le serveur de test n'expose pas toujours le controleur. On continue :
+		// la seule consequence est le delai de 60 s ci-dessus, et un echec ici
+		// serait une mauvaise raison de refuser un telechargement.
+		s.log.Debug("delai d'ecriture non levable", "err", err)
+	}
+
+	// `attachment` et pas `inline` : un .deb ou un .AppImage n'a rien a faire
+	// dans un onglet. Le nom est deja passe par `nomSain`, qui n'accepte ni
+	// guillemet ni saut de ligne, donc il ne peut pas casser l'en-tete.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+nom+`"`)
+	// Une heure, et pas un jour : ces fichiers sont reecrits par une
+	// refabrication sans changer de nom.
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	// `ServeContent` et non `io.Copy` : il gere les requetes par plage, donc la
+	// reprise d'un telechargement interrompu de 175 Mio, et les requetes
+	// conditionnelles.
+	http.ServeContent(w, r, nom, info.ModTime(), f)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

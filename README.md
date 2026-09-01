@@ -91,17 +91,40 @@ pour inspecter une cible intermédiaire, `--scale=0.75` pour l'échelle de rendu
 
 ---
 
-## Le serveur
+## Le serveur, le site et les paquets, en une commande
 
 ```sh
 cd server
 docker compose up --build          # site sur http://localhost:8080
 ```
 
+Quatre services : PostgreSQL migré, le serveur, le relais des salons, **et la fabrication du
+jeu**. Le premier lancement compile le jeu, ce qui est long. Les suivants ne refont rien tant
+que la version n'a pas changé. Ce qui sort part dans `telechargements/`, que le serveur sert
+sur sa page « Télécharger ».
+
+Pour monter le serveur seul, sans fabriquer :
+
+```sh
+docker compose up --build db server duelrelay
+```
+
+**Le jeu est construit par la pile et non avant elle**, parce que son binaire porte l'adresse
+du serveur, cuite au build par `-DNINETEEN_SERVER_URL`. Elle vient de `NINETEEN_PUBLIC_URL`,
+qui sert aussi au serveur pour l'annoncer sur la page. Une adresse ne se pose pas après coup
+sur un paquet déjà fait, donc l'ordre compte : on dit d'abord à la pile quel est son domaine,
+elle fabrique ensuite. Sans rien régler, elle prend `http://localhost:8080`, l'adresse
+qu'elle publie elle-même.
+
+Aucune machine ne fabrique les trois plateformes. Le `.dmg` se construit sur un Mac,
+l'installateur `.exe` sous Windows. On les dépose dans `telechargements/` et la page les
+affiche sans qu'on touche à quoi que ce soit, voir `telechargements/LISEZ-MOI.txt`.
+
 Sans Docker :
 
 ```sh
 NINETEEN_DB_URL='postgres://user:motdepasse@localhost:5432/nineteen?sslmode=require' \
+NINETEEN_TELECHARGEMENTS=/chemin/vers/telechargements \
   go run ./cmd/nineteend
 ```
 

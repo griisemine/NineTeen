@@ -1,0 +1,58 @@
+CE REPERTOIRE EST CE QUE LE SITE OFFRE AU TELECHARGEMENT
+========================================================
+
+Le serveur le lit a chaque affichage de la page « Telecharger ». Ce qui s'y
+trouve est offert, ce qui ne s'y trouve pas n'est pas annonce. Il n'y a aucune
+variable a poser pour rallumer un bouton : il y a un fichier, ou il n'y en a
+pas.
+
+CE QUI LE REMPLIT TOUT SEUL
+---------------------------
+Le service « paquets » de server/docker-compose.yml. Il compile le jeu dans un
+conteneur Ubuntu 22.04 et depose ici l'AppImage, le .deb, le .tar.gz et le
+manifeste SIGNATURE-linux.txt. Il ne refabrique rien tant que la version n'a
+pas change.
+
+    cd server && docker compose up --build
+
+CE QU'IL FAUT Y DEPOSER A LA MAIN
+----------------------------------
+Aucune machine ne sait fabriquer les trois plateformes. Le .dmg se construit
+sur un Mac, l'installateur .exe sur Windows ou sous mingw. On les copie ici, et
+la page les affiche sans qu'on touche a quoi que ce soit. La fabrication Linux
+ne les efface pas : elle ne retire que ce qu'elle produit elle-meme.
+
+    cmake --preset macos-universal
+    cmake --build --preset macos-universal --target nineteen
+    cpack --config build/macos-universal/CPackConfig.cmake -B build/macos-universal/paquets
+    cp build/macos-universal/paquets/*.dmg build/macos-universal/paquets/SIGNATURE-macos.txt telechargements/
+
+CE QUE LE SERVEUR DEDUIT DU NOM DE FICHIER
+-------------------------------------------
+La plateforme et l'architecture sont lues dans le nom, et nulle part ailleurs.
+
+    .exe .msi .zip                 -> Windows
+    .dmg .pkg                      -> macOS
+    .AppImage .deb .rpm .tar.gz    -> Linux
+    universal                      -> universel
+    aarch64 arm64                  -> arm64
+    x86_64 amd64 x64               -> x86_64
+
+Un fichier dont le nom ne dit aucune de ces choses n'est pas liste. Les
+manifestes (SIGNATURE-*.txt) et les signatures detachees (*.asc) sont listes a
+part, sous les paquets.
+
+LA SOMME SHA-256
+----------------
+Elle est calculee par le serveur en fond, une fois par fichier, et republiee
+sur la page. Un paquet qui vient d'apparaitre s'affiche donc avant sa somme,
+pendant quelques secondes. C'est voulu : un fichier telechargeable tout de
+suite vaut mieux qu'un fichier retenu le temps d'un calcul.
+
+L'ADRESSE DU SERVEUR DANS LE BINAIRE
+-------------------------------------
+Le jeu fabrique par la pile porte l'adresse publique qu'on lui a donnee, cuite
+au build par -DNINETEEN_SERVER_URL. Elle vient de NINETEEN_PUBLIC_URL dans
+server/.env, et le meme reglage sert au serveur pour l'annoncer sur la page.
+C'est pour cela que le jeu est construit PAR la pile et pas avant elle : cette
+adresse ne se pose pas apres coup sur un paquet deja fait.
