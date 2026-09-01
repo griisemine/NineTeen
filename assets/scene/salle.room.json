@@ -1947,7 +1947,7 @@
     {
       "name": "applique_entree",
       "at": [
-        5.785,
+        5.549,
         2.285,
         5.6
       ],
@@ -2101,7 +2101,7 @@
       "_": "AUDIT P-03. La source suit son luminaire : elle eclairait le trottoir, a 1,11 m au-dela du parement interieur, pendant que le sas restait au noir.",
       "name": "applique_sas",
       "at": [
-        6.455,
+        6.688,
         2.285,
         8.2
       ],
@@ -2113,8 +2113,7 @@
       "intensity": 62.0,
       "range": 4.2,
       "radius": 0.1,
-      "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13).",
-      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, donc a 0,265 m devant la platine, exactement comme « applique_sud » dont la source est a z -6,748 pour une platine a -7,013. Elle a suivi le demi-tour du luminaire : la platine etant passee de 6,720 a 6,953 et les cages de +X a -X, le barycentre est passe de 6,455 a 6,688. Le laisser a 6,455 aurait mis la lumiere 23 cm DEVANT la gueule des cages, c'est-a-dire nulle part."
     },
     {
       "_": "Les quatre sources des appliques du mur sud. 48 et non 62 comme celle du couloir : elles sont quatre sur un mur de 14,4 m deja borde par les bancs et le tableau, et le sud etait la seule paroi du hall sans eclairage propre.",
@@ -5633,10 +5632,11 @@
     },
     {
       "name": "affiche_ouest_b",
+      "_aplomb": "MEME GARDE QUE SA JUMELLE « affiche_est_b », et pour la meme raison : posee elle aussi sur la mediane plus la demi-epaisseur, elle ne tenait devant le parement que par 0,225 mm. Elle passait, mais du meme cote d'un plan que rien ne l'obligeait a choisir. Portee a +15 mm le long de sa normale (0,9076 ; -0,4198), elle cesse d'etre coplanaire au mur.",
       "at": [
-        -5.175,
+        -5.1616,
         1.6575,
-        4.795
+        4.7888
       ],
       "yaw": 114.8,
       "pose": "mur",
@@ -5791,10 +5791,11 @@
     },
     {
       "name": "affiche_est_b",
+      "_aplomb": "ELLE ETAIT DANS LE MUR, de 18 MICRONS, et c'est tout ce qu'il fallait pour la couper en deux.\nLES DEUX AFFICHES DES PANS COUPES ont ete posees en projetant le point sur la mediane et en ajoutant la demi-epaisseur, sans un millimetre de garde : celle-ci tombait a 0,018 mm DERRIERE le parement, sa jumelle « affiche_ouest_b » a 0,225 mm devant. C'est l'arrondi de la troisieme decimale qui a decide de quel cote du plan chacune se trouvait. Un panneau d'epaisseur nulle exactement coplanaire au mur ne gagne le test de profondeur que la ou l'arrondi du rasteriseur lui donne raison : d'ou l'affiche tranchee net sur une verticale, moitie visible, moitie mangee par le parement — le defaut rapporte par le joueur.\nLES QUATRE AFFICHES ORTHOGONALES n'ont jamais eu le probleme parce qu'elles portent une garde franche, mesurees ici : ouest +15 mm, sud +5 mm, est +15 mm, nord +20 mm. Celle-ci reprend la garde la plus courante, +15 mm, ce qui la met a 0,115 m de la mediane du pan coupe le long de sa normale (-0,9076 ; -0,4198).\nLA POSITION SUR LE TRUMEAU NE CHANGE PAS : elle reste centree entre l'angle du pan coupe et le jambage de la trouee « about_couloir », qui laissent 1,219 m entre eux sur la mediane.",
       "at": [
-        5.982,
+        5.9684,
         1.28,
-        3.051
+        3.0447
       ],
       "yaw": 245.2,
       "pose": "mur",
@@ -5980,17 +5981,17 @@
       "_audit": "AUDIT P-03. Elle etait vissee sur la face EXTERIEURE du mur de brique, 1,38 m dehors, avec son ampoule et deux sources qui eclairaient le trottoir — et le sas etait au noir. Le commentaire ci-dessous raconte lui-meme l'origine : on l'avait poussee le long de X pour sortir de la capsule du joueur, et elle est sortie du batiment. Ici, mur ouest du sas, a 1,71 m du point de vue `entree` : hors de la capsule sans etre hors du mur.",
       "name": "applique_sas",
       "at": [
-        6.72,
+        6.953,
         2.15,
         8.2
       ],
-      "yaw": 90.0,
-      "_pose": "« libre » et non « mur », et c'est une LIMITE DE C-04 mesurée sur ce modèle. L'applique touche bien son parement — sa platine y est noyée — mais la convention « un prop regarde son +Z local » est FAUSSE pour `industrial_caged_sconce` : c'est la PLATINE qui occupe son +Z local (z local 0 à 0,3285, platine en +0,3285) et la cage qui sort en -Z. Les quatre appliques donnent donc toutes un produit scalaire de -1,00, quel que soit le mur, et C-04 les refuserait alors qu'elles sont correctement posées. Voir le rapport.",
+      "yaw": 270.0,
+      "_pose": "« libre » et non « mur » : la clé « mur » n'est déclarée par aucun des 134 solides de cette salle, et la brancher ici seule ferait juger cette applique par un contrôle que rien d'autre ne subit.",
       "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
-      "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall. Deplacee de 6,72 a 8,90 : le controle de roomgen a refuse le premier emplacement parce que le point de vue nomme « entree » tombait dedans — a 24 cm au-dessus et 22 cm derriere l'oeil, l'applique aurait ete dans la capsule du joueur.",
-      "_platine": "DEFAUT MESURE, NON CORRIGE ICI — la platine FLOTTE a 23,6 cm du mur.\nIl l'etait aussi sur les quatre appliques du mur sud, ou il A ete corrige : leur cap etait en plus retourne, et les remettre a plat sur la face des piliers (z -7,013) reglait les deux d'un coup. Les deux appliques du couloir n'ont pas cette chance, pour la raison ci-dessous.\nLe commentaire ci-dessus dit « le modele deborde de 0,31 m vers l'arriere » et en tire ce recul. Mesure sur le maillage (3961 sommets) : le modele occupe Z 0,000 a 0,329 en repere LOCAL — il n'y a rien derriere son origine. La platine est le disque de 0,21 m qui occupe Z 0,000 a 0,033 ; le bras et les deux cages sont tous DEVANT. Le meuble ne deborde donc pas vers l'arriere, et la crainte qui a fait reculer l'applique — « a 5,30 la cage sortait de 11 cm dans la rue » — repose sur le meme signe inverse.\nCE QUE CA COUTE, vu sur une capture frontale a 0,80 m : la platine est eclairee des deux cotes par ses propres ampoules et rien ne la relie a la cloison.\nPOURQUOI CE N'EST PAS CORRIGE ICI : ramener l'origine au parement (5,284 et 6,953) fait echouer le controle des sorties — « applique_sas est a 0,33 m AU-DELA du parement interieur (0,13 m dehors) » — alors que le meuble, a ce cap, entre dans le couloir. Le controle et la mise en place ne sont pas d'accord sur le SENS du modele, et trancher demande d'ouvrir la convention de cap de roomgen pour les props « model », ce qui depasse ce lot. La cote a corriger est ecrite ici pour que le prochain n'ait pas a la remesurer : origine x = 5,284 pour l'entree, 6,953 pour le sas."
+      "_": "Le sas d'entree, c'est la premiere chose qu'on voit du jeu, et il etait au tiers de la luminance du hall.",
+      "_platine": "LA PLATINE EST SUR LE MUR, et c'est un demi-tour qui l'y a mise, pas un recul.\nCE QUE DISAIT LE COMMENTAIRE PRECEDENT, et qui etait faux : que le modele porte sa platine en +Z local et sa cage en -Z. Remesure sur les 3961 sommets du gltf : le modele occupe Z 0,000 a 0,329 en local, la platine est le disque de rayon 0,107 qui occupe Z 0,000 a 0,033, et les deux cages sont a Z 0,198..0,329, c'est-a-dire DEVANT. L'origine du meuble EST sa platine. Les deux ampoules le confirment sans qu'on ait a croire personne : elles sont posees a z local +0,265, et elles sont dans les cages.\nCE QUE COUTAIT LE SIGNE INVERSE. Un prop regarde (sin lacet, cos lacet) — `roomgen.c` le dit a C-04. A lacet 90 cette applique envoyait donc ses cages vers +X, c'est-a-dire DANS la joue est, et il ne restait dans le couloir que le disque de la platine, flottant a 23,3 cm du parement (6,953 - 6,720) et eclaire des deux cotes par ses propres ampoules. C'est le « disque blanc detache du mur » du rapport de jeu.\nLA CORRECTION est donc le demi-tour, 90 -> 270, et l'origine ramenee sur le parement est (6,953). La cage sort alors dans le couloir jusqu'a 6,624, et le controle des sorties ne trouve plus rien dehors — ce qu'il trouvait quand on deplacait l'origine SANS retourner le cap, seule manoeuvre qui ait ete tentee jusqu'ici."
     },
     {
       "_": "LES QUATRE APPLIQUES DU MUR SUD, absentes. 2020 en a SIX : quatre au sud (sconce_02, .001, .002, .003 — x -4,782 / -1,653 / 1,652 / 4,809, z = -6,874) et deux a l'ouest, ces dernieres deja reprises a 0,03 et 0,67 m pres par « neon_mur_ouest ». Ampoule de 2,048 a 2,439 m.\nLe pas de 2020 n'est pas regulier (3,129 / 3,305 / 3,157) ; celui-ci l'est a 3,197, ce qui pose les quatre a 0,00 / 0,07 / 0,04 / 0,00 m de leurs originales. z = -6,90 : le parement sud est a -7,035 et le modele de cage sort de 0,135, comme « applique_sas » sur la joue du couloir.\nELLES SONT SUR LES PILIERS, et ce n'est pas un hasard de cote : les quatre x de 2020 (-4,782 / -1,653 / 1,652 / 4,809) sont ceux des quatre piliers engages du mur sud (-4,804 / -1,648 / 1,648 / 4,804), a 2 cm pres. Le pilier deborde de 2,2 cm devant le parement ; la cage de l'applique y entre. L'assemblage est donc declare : \"traverse\": [\"pilier_sud\"].",
@@ -6088,11 +6089,11 @@
     {
       "name": "ampoule_sas",
       "at": [
-        6.72,
+        6.953,
         2.15,
         8.2
       ],
-      "yaw": 90.0,
+      "yaw": 270.0,
       "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "parts": [
@@ -7617,12 +7618,12 @@
       "_": "LES DEUX APPLIQUES DU COULOIR, que C-07 a nommees d'une phrase : « s'appelle applique et n'en a pas ». `applique_entree` posait deux sources a 1,24 et 1,38 m du premier triangle. Meme modele et meme materiau que `applique_sas`, en vis-a-vis sur la joue ouest.\nx 5,52 et non 5,30 : le modele deborde de 0,31 m vers l'arriere, et le parement de la joue ouest est a 5,284 — a 5,30 la cage sortait de 11 cm dans la rue, et le controle des sorties l'a dit avant qu'une capture ne le montre. 5,52 est le symetrique exact de `applique_sas`, qui est a 0,233 m de son propre parement.",
       "name": "applique_entree",
       "at": [
-        5.52,
+        5.284,
         2.15,
         5.6
       ],
-      "yaw": 270.0,
-      "_pose": "Même cas que « applique_sas » : la platine du modèle est en +Z local, C-04 lit -1,00.",
+      "yaw": 90.0,
+      "_pose": "Même cas que « applique_sas » : « libre » parce qu'aucun solide de la salle ne déclare « mur ».",
       "pose": "libre",
       "model": "models/industrial_caged_sconce/industrial_caged_sconce.gltf",
       "material": "applique_cage",
@@ -7634,16 +7635,16 @@
           2.4
         ]
       },
-      "_platine": "DEFAUT MESURE, NON CORRIGE ICI — la platine FLOTTE a 23,6 cm du mur.\nIl l'etait aussi sur les quatre appliques du mur sud, ou il A ete corrige : leur cap etait en plus retourne, et les remettre a plat sur la face des piliers (z -7,013) reglait les deux d'un coup. Les deux appliques du couloir n'ont pas cette chance, pour la raison ci-dessous.\nLe commentaire ci-dessus dit « le modele deborde de 0,31 m vers l'arriere » et en tire ce recul. Mesure sur le maillage (3961 sommets) : le modele occupe Z 0,000 a 0,329 en repere LOCAL — il n'y a rien derriere son origine. La platine est le disque de 0,21 m qui occupe Z 0,000 a 0,033 ; le bras et les deux cages sont tous DEVANT. Le meuble ne deborde donc pas vers l'arriere, et la crainte qui a fait reculer l'applique — « a 5,30 la cage sortait de 11 cm dans la rue » — repose sur le meme signe inverse.\nCE QUE CA COUTE, vu sur une capture frontale a 0,80 m : la platine est eclairee des deux cotes par ses propres ampoules et rien ne la relie a la cloison.\nPOURQUOI CE N'EST PAS CORRIGE ICI : ramener l'origine au parement (5,284 et 6,953) fait echouer le controle des sorties — « applique_sas est a 0,33 m AU-DELA du parement interieur (0,13 m dehors) » — alors que le meuble, a ce cap, entre dans le couloir. Le controle et la mise en place ne sont pas d'accord sur le SENS du modele, et trancher demande d'ouvrir la convention de cap de roomgen pour les props « model », ce qui depasse ce lot. La cote a corriger est ecrite ici pour que le prochain n'ait pas a la remesurer : origine x = 5,284 pour l'entree, 6,953 pour le sas."
+      "_platine": "MEME DEMI-TOUR QUE « applique_sas », en miroir : voir la mesure du maillage qui y est ecrite. Cette applique-ci est sur la joue OUEST, dont le parement est a 5,284 ; sa cage doit donc sortir vers +X, ce qui est le lacet 90. A 270 elle l'envoyait dans la joue et laissait la platine flotter a 23,6 cm (5,520 - 5,284).\nLE RECUL VENAIT DU MEME SIGNE INVERSE. Le commentaire d'origine justifiait x = 5,52 par « le modele deborde de 0,31 m vers l'arriere » : il ne deborde pas vers l'arriere, il n'y a rien derriere son origine, et la cage qu'on croyait sortir dans la rue sortait en fait dans le couloir."
     },
     {
       "name": "ampoule_entree",
       "at": [
-        5.52,
+        5.284,
         2.15,
         5.6
       ],
-      "yaw": 270.0,
+      "yaw": 90.0,
       "_pose": "Portee par son luminaire, sans support sous elle : elle est DANS la cage.",
       "pose": "libre",
       "repeat": {
@@ -7900,6 +7901,28 @@
       "yaw": 120.0,
       "pitch": -5.0,
       "_cap": "Cap 90 -> 120, VU EN CAPTURE. La vue annonce « les trois bornes du mur ouest DE TROIS QUARTS, le mur, la corniche ». A 90 la camera regarde +Z, c'est-a-dire PARALLELEMENT au mur ouest : les bornes sont alors rasantes au bord droit du cadre, deux d'entre elles coupees, et la moitie gauche est occupee par le comptoir et le babyfoot, qui appartiennent a d'autres vues. On ne voit pas de trois quarts un alignement qu'on longe. A 120 l'axe croise le mur a 30 degres : les trois caissons se decalent en escalier avec leurs enseignes lisibles, le parement et la corniche tiennent le tiers gauche, et la palette du poste 15 — creme du mur, violet et jaune des caisses, moquette noire — est entiere dans le cadre. La mediane de luminance de SPEC-ATMOSPHERE pour « travee » est a refaire."
+    },
+    {
+      "name": "couloir",
+      "_": "L'AXE DU COULOIR VERS LA PORTE, et le couloir n'en avait aucune. « entree » y est bien posee, mais son tangage la fait cadrer la moquette et le bas de la porte : le premier decor que le joueur traverse n'etait donc regarde par aucune des vues nommees, et c'est la que les defauts se sont accumules. Point pris sur l'axe du couloir, x 6,1185, milieu des deux parements mesures (5,284 et 6,953). z 7,00 et non 6,20 : le bureau occupe x 6,13..6,95 sur z 4,34..6,06 une fois son lacet de 270 applique, et le controle d'accessibilite a refuse le premier point, qui tombait a son bord. A 7,00 on est au nord du meuble, avec 5,66 m de couloir jusqu'a la porte.",
+      "position": [
+        6.118,
+        1.7,
+        7.0
+      ],
+      "yaw": 90.0,
+      "pitch": 0.0
+    },
+    {
+      "name": "couloir_joues",
+      "_": "LE RETOUR VERS LE HALL, EN RASANT LA JOUE OUEST : c'est la vue qui montre les appliques et le parement du couloir, que rien ne cadrait. Cap 250 et non 270, parce qu'un mur qu'on longe ne se lit pas de face — c'est la lecon deja ecrite pour « travee ». Tangage +3 pour monter jusqu'aux appliques, dont l'axe est a 2,15 m pour un oeil a 1,70 ; les trois sont dans le cadre, les deux de la joue ouest (z 5,60 et 8,00) et celle de la joue est (z 8,20).",
+      "position": [
+        6.6,
+        1.7,
+        10.6
+      ],
+      "yaw": 250.0,
+      "pitch": 3.0
     },
     {
       "name": "orbite",
