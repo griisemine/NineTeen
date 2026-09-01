@@ -20,10 +20,12 @@ RUN go mod download
 COPY . .
 # CGO désactivé : le binaire est statique, donc exécutable dans une image vide.
 # Les symboles de débogage sont retirés (-s -w) : 30 % de moins à transférer.
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nineteend ./cmd/nineteend
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /nineteend ./cmd/nineteend \
+	&& CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /duelrelay ./cmd/duelrelay
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /nineteend /nineteend
+COPY --from=build /duelrelay /duelrelay
 # Utilisateur non privilégié fourni par l'image de base.
 USER nonroot:nonroot
 EXPOSE 8080

@@ -62,6 +62,10 @@ services:
       # Les paquets de cette version sont-ils publiés sur GitHub ? À 1, la page
       # rallume ses trois boutons de téléchargement.
       NINETEEN_RELEASE_PUBLIEE: ${NINETEEN_RELEASE_PUBLIEE:-}
+      # Adresse TCP que les clients reçoivent en créant ou rejoignant un salon.
+      # En développement elle reste sur la machine ; un déploiement réseau doit
+      # fournir son DNS ou son IP joignable dans NINETEEN_DUEL_PUBLIC.
+      NINETEEN_DUEL_PUBLIC: ${NINETEEN_DUEL_PUBLIC:-127.0.0.1:8081}
     ports:
       # 127.0.0.1 PAR DÉFAUT, et c'est le choix qui compte dans cette ligne :
       # le service ne sort pas de la machine tant que personne ne l'a demandé.
@@ -74,6 +78,18 @@ services:
       - "${NINETEEN_BIND:-127.0.0.1}:${NINETEEN_PORT:-8080}:8080"
     restart: unless-stopped
     # Durcissement du conteneur : rien de tout cela n'est nécessaire au service.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  duelrelay:
+    build: .
+    entrypoint: ["/duelrelay"]
+    command: ["-addr", "0.0.0.0:8081"]
+    ports:
+      - "${NINETEEN_DUEL_BIND:-127.0.0.1}:${NINETEEN_DUEL_PORT:-8081}:8081"
+    restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     security_opt:
