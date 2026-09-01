@@ -50,6 +50,47 @@
 #define NS_VM_FORE_M   0.270f    /* coude -> poignet */
 #define NS_VM_HAND_M   0.135f    /* poignet -> bout du majeur, DOIGTS REPLIÉS */
 
+/*
+ * CE QUE PORTE LA COORDONNÉE DE TEXTURE, ET POURQUOI ELLE NE PORTE PAS UN UV.
+ *
+ * Le viewmodel n'échantillonne AUCUNE texture — `viewmodel.frag` n'a pas de
+ * descripteur d'image, et lui en donner un obligerait à inventer un atlas, un
+ * dépliage et un outil pour le peindre, pour sept segments dont on ne voit
+ * jamais que le dos de la main. Le `uv` du sommet était donc écrit et jamais
+ * lu.
+ *
+ * Il sert maintenant à dire au fragment OÙ IL EST SUR LA MAIN, ce qui est la
+ * seule chose dont une peinture procédurale a besoin :
+ *
+ *   uv.x — la DORSALITÉ : 0 côté paume, 1 côté dos. Elle vaut pour toutes les
+ *          pièces parce qu'elles sont toutes balayées vers −Z, donc leur
+ *          binormale pointe toujours du même côté ; c'est ce qui permet de
+ *          poser un ongle sans savoir de quel doigt il s'agit.
+ *   uv.y — le CODE DE PIÈCE (partie entière) et l'AVANCEMENT le long de la
+ *          pièce (partie fractionnaire, 0 à la base, 1 au bout).
+ *
+ * Un code de pièce plutôt qu'une texture par pièce : c'est lui qui distingue
+ * une phalange distale — là où va l'ongle — d'un pli de paume, sans qu'aucun
+ * sommet n'ait à porter d'attribut supplémentaire.
+ */
+typedef enum ns_viewmodel_part {
+    NS_VM_PART_LIMB = 0,   /* manche et avant-bras : de la toile */
+    NS_VM_PART_PALM,
+    NS_VM_PART_THENAR,
+    NS_VM_PART_FINGER,
+    NS_VM_PART_THUMB,
+    NS_VM_PART_TOKEN
+} ns_viewmodel_part;
+
+/*
+ * L'avancement est comprimé dans cette fraction avant d'être ajouté au code de
+ * pièce, pour qu'un bout de pièce (avancement 1) ne déborde jamais sur le code
+ * suivant. `viewmodel.frag` DIVISE par la même valeur après `fract()` — les
+ * deux doivent rester d'accord, et c'est la raison pour laquelle elle est
+ * déclarée ici plutôt qu'écrite deux fois.
+ */
+#define NS_VM_PART_SPAN 0.99f
+
 typedef enum ns_viewmodel_segment {
     NS_VM_SLEEVE_L = 0,   /* manche : de l'épaule au coude */
     NS_VM_FOREARM_L,      /* avant-bras : du coude au poignet */

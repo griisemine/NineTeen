@@ -2169,16 +2169,22 @@ int main(int argc, char **argv)
      * mètres et la convertir vaut pour les deux salles.
      */
     const float upm = scene.units_per_metre > 0.0f ? scene.units_per_metre : 1.0f;
-    const float eye_height = 1.70f * upm;
+
+    /*
+     * On part des PIEDS, et non de l'œil.
+     *
+     * La hauteur d'yeux n'est pas connue ici : c'est `room_camera_init` qui la
+     * lit dans `nineteen.env`, et la relire une seconde fois à cet endroit
+     * installerait deux lectures de la même clé qu'un jour l'une des deux
+     * oublierait de suivre. L'ordonnée du point de vue est donc posée plus bas,
+     * une fois les cotes connues et mises à l'échelle.
+     */
+    const ns_v3 pieds = scene.has_player_start
+        ? ns_v3_make(scene.player_start.x, scene.player_start.y, scene.player_start.z)
+        : ns_v3_make(centre.x, floor_y, centre.z + extent.z * 0.28f);
 
     room_camera cam;
-    room_camera_init(&cam,
-                     scene.has_player_start
-                       ? ns_v3_make(scene.player_start.x,
-                                    scene.player_start.y + eye_height,
-                                    scene.player_start.z)
-                       : ns_v3_make(centre.x, floor_y + eye_height,
-                                    centre.z + extent.z * 0.28f),
+    room_camera_init(&cam, pieds,
                      scene.has_player_start ? scene.player_yaw : -90.0f * NS_DEG2RAD);
 
     /* Sensibilité de la souris : `input.mouseSensitivity` existait depuis M1 et
@@ -2190,25 +2196,41 @@ int main(int argc, char **argv)
     float mouse_sens_mult = ns_clampf(ns_config_get_float(NS_CFG_MOUSE_SENS, 1.0f), 0.1f, 8.0f);
     cam.mouse_sensitivity = mouse_sens_base * mouse_sens_mult;
     /*
-     * Le corps du joueur, en mètres, converti à l'échelle du décor chargé.
+     * Le corps du joueur, CONVERTI à l'échelle du décor chargé — converti, et
+     * non réécrit. C'est toute la correction, et elle vaut d'être expliquée.
      *
-     * Les proportions sont celles de l'auteur de 2020 — 3,5 unités debout,
-     * 2,7 accroupi (legacy/room/room.c:90-91), soit un rapport de 0,771 que l'on
-     * conserve. Tout ce qui suit se déduit d'une taille d'adulte, et non de
-     * constantes choisies au jugé.
+     * Ces onze cotes étaient RECOPIÉES ici en dur, à l'identique des défauts de
+     * `room_camera_init`. Or `room_camera_init` venait de les LIRE dans
+     * `nineteen.env` : chaque affectation jetait donc la valeur réglée et
+     * remettait le défaut. Toute la section « LE PERSONNAGE » du fichier était
+     * sans effet sur le joueur.
+     *
+     * Et c'était INVISIBLE, pour trois raisons qui se cumulent : la salle
+     * générée vaut un mètre par unité, donc les deux jeux de valeurs
+     * coïncidaient au chiffre près ; les clés étaient bel et bien consommées,
+     * donc le contrôle de démarrage — qui signale une clé inconnue — ne voyait
+     * rien à redire ; et un réglage qui ne change rien ne produit aucun message,
+     * seulement l'impression de n'avoir pas assez poussé la valeur.
+     *
+     * Multiplier au lieu d'affecter garde la conversion d'unités, qui est la
+     * raison d'être de ce bloc — l'ancienne salle est en unités Blender —, et
+     * rend au fichier l'autorité que sa propre chaîne de préséance lui promet.
      */
-    cam.eye_height = cam.prev_eye_height = eye_height;
-    cam.eye_height_stand  = eye_height;
-    cam.eye_height_crouch = 1.31f * upm;
-    cam.body_radius       = 0.32f * upm;
-    cam.body_height_stand = 1.82f * upm;   /* le crâne, pas les yeux */
-    cam.body_height_crouch = 1.42f * upm;
-    cam.step_height       = 0.35f * upm;
-    cam.gravity           = 9.81f * upm;
-    cam.jump_speed        = 3.0f * upm;
-    cam.speed_walk   = 1.4f * upm;    /* marche tranquille */
-    cam.speed_run    = 3.3f * upm;    /* pas pressé, pas un sprint d'athlète */
-    cam.speed_crouch = 0.75f * upm;
+    cam.eye_height_stand   *= upm;
+    cam.eye_height_crouch  *= upm;
+    cam.body_radius        *= upm;
+    cam.body_height_stand  *= upm;   /* le crâne, pas les yeux */
+    cam.body_height_crouch *= upm;
+    cam.step_height        *= upm;
+    cam.gravity            *= upm;
+    cam.jump_speed         *= upm;
+    cam.speed_walk         *= upm;
+    cam.speed_run          *= upm;
+    cam.speed_crouch       *= upm;
+
+    /* L'œil se pose maintenant qu'on sait à quelle hauteur il est. */
+    cam.eye_height = cam.prev_eye_height = cam.eye_height_stand;
+    cam.position.y = cam.prev_position.y = pieds.y + cam.eye_height_stand;
     cam.mode = opt.camera_mode;
     cam.orbit_angle = opt.camera_angle;
 

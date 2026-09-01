@@ -44,8 +44,16 @@ typedef struct vm_build {
     uint32_t   vertex_count, vertex_cap;
     uint32_t   index_count, index_cap;
     float      zlen;      /* longueur du segment en cours, en mètres */
+    /* La pièce en cours de construction, telle que `ns_viewmodel.h` la définit.
+     * Portée par le constructeur et non passée en paramètre : chaque pièce est
+     * bâtie d'un bloc, et un balayage qui changerait de code en cours de route
+     * n'aurait aucun sens. */
+    float      part;
 } vm_build;
 
+/* `u` est la dorsalité et `v` l'avancement : voir `ns_viewmodel_part`. Le code
+ * de pièce est ajouté ICI, une fois, pour qu'aucun appelant n'ait à connaître
+ * l'encodage. */
 static void vm_vertex(vm_build *b, ns_v3 p, ns_v3 n, float u, float v)
 {
     if (b->vertex_count >= b->vertex_cap) return;
@@ -59,7 +67,7 @@ static void vm_vertex(vm_build *b, ns_v3 p, ns_v3 n, float u, float v)
      */
     o->position[0] = p.x; o->position[1] = p.y; o->position[2] = p.z / b->zlen;
     o->normal[0] = n.x; o->normal[1] = n.y; o->normal[2] = n.z;
-    o->uv[0] = u; o->uv[1] = v;
+    o->uv[0] = u; o->uv[1] = b->part + v * NS_VM_PART_SPAN;
     /* Aucune normal map sur le viewmodel : la tangente doit être finie et
      * orthogonale, pas exacte. Une tangente nulle rendrait la base dégénérée si
      * un shader venait à s'en servir. */
@@ -108,6 +116,23 @@ typedef struct vm_node {
  */
 typedef enum vm_cap { VM_CAP_NONE = 0, VM_CAP_FLAT, VM_CAP_DOME } vm_cap;
 
+/*
+ * La DORSALITÉ d'un point de l'anneau, à partir de son angle seul.
+ *
+ * Toutes les pièces sont balayées vers −Z, donc leur binormale `V = T x X` a
+ * toujours une composante en Y NÉGATIVE — elle pointe du côté de la paume,
+ * celui vers lequel les doigts se replient. Le dos est donc toujours à
+ * l'opposé, et un seul sinus le dit, sans que le balayage ait à savoir s'il
+ * construit un doigt, un pouce ou un avant-bras.
+ *
+ * C'est ce qui permet à `viewmodel.frag` de poser un ongle du bon côté sans
+ * qu'aucune pièce ne porte d'orientation explicite.
+ */
+static float vm_dorsal(float a)
+{
+    return 0.5f - 0.5f * sinf(a);
+}
+
 static ns_v3 vm_ring_point(const vm_node *n, ns_v3 u, ns_v3 v, float a)
 {
     const float ca = cosf(a), sa = sinf(a);
@@ -145,7 +170,7 @@ static void vm_sweep(vm_build *b, const vm_node *nodes, int count, int sides,
             const float nu = cosf(a) / ns_maxf(nodes[k].rx, 1e-4f);
             const float nv = sinf(a) / ns_maxf(nodes[k].ry, 1e-4f);
             const ns_v3 nrm = ns_v3_norm(ns_v3_add(ns_v3_scale(U, nu), ns_v3_scale(V, nv)));
-            vm_vertex(b, pos, nrm, (float)i / (float)sides, (float)k / (float)(count - 1));
+            vm_vertex(b, pos, nrm, vm_dorsal(a), (float)k / (float)(count - 1));
         }
     }
 
@@ -164,6 +189,10 @@ static void vm_sweep(vm_build *b, const vm_node *nodes, int count, int sides,
         if (cap == VM_CAP_NONE) continue;
 
         const int k = end ? count - 1 : 0;
+        /* Un bouchon prolonge sa pièce : il en garde l'avancement du bout
+         * auquel il se raccorde, sinon l'ongle s'arrêterait net avant la pulpe
+         * — c'est-à-dire exactement là où on le regarde. */
+        const float along = end ? 1.0f : 0.0f;
         const vm_node *n = &nodes[k];
         const vm_node *p = &nodes[k > 0 ? k - 1 : 0];
         const vm_node *q = &nodes[k < count - 1 ? k + 1 : count - 1];
@@ -175,11 +204,10 @@ static void vm_sweep(vm_build *b, const vm_node *nodes, int count, int sides,
 
         if (cap == VM_CAP_FLAT) {
             const uint32_t centre = b->vertex_count;
-            vm_vertex(b, ns_v3_make(n->x, n->y, n->z), T, 0.5f, 0.5f);
+            vm_vertex(b, ns_v3_make(n->x, n->y, n->z), T, 0.5f, along);
             for (int i = 0; i <= sides; ++i) {
                 const float a = (float)i / (float)sides * NS_TAU;
-                vm_vertex(b, vm_ring_point(n, U, V, a), T,
-                          0.5f + cosf(a) * 0.5f, 0.5f + sinf(a) * 0.5f);
+                vm_vertex(b, vm_ring_point(n, U, V, a), T, vm_dorsal(a), along);
             }
             for (int i = 0; i < sides; ++i) {
                 if (end) vm_tri(b, centre, centre + 1u + (uint32_t)i, centre + 2u + (uint32_t)i);
@@ -213,7 +241,7 @@ static void vm_sweep(vm_build *b, const vm_node *nodes, int count, int sides,
                 ns_v3 nrm = ns_v3_add(ns_v3_add(ns_v3_scale(U, nu), ns_v3_scale(V, nv)),
                                       ns_v3_scale(T, sh / ns_maxf(ns_minf(n->rx, n->ry), 1e-4f)));
                 nrm = ns_v3_norm(nrm);
-                vm_vertex(b, pos, nrm, (float)i / (float)sides, t);
+                vm_vertex(b, pos, nrm, vm_dorsal(a), along);
             }
         }
         /* L'anneau du bord appartient au balayage : le dôme s'y raccorde. */
@@ -252,6 +280,7 @@ static void vm_limb(vm_build *b, float r0, float rmid, float r1, float flatten)
         { 0.0f, 0.0f, -b->zlen * 0.34f,  rmid, rmid * flatten },
         { 0.0f, 0.0f, -b->zlen,          r1,   r1   * flatten },
     };
+    b->part = (float)NS_VM_PART_LIMB;
     vm_sweep(b, n, 3, VM_SIDES, VM_CAP_DOME, VM_CAP_NONE);
 }
 
@@ -347,6 +376,7 @@ static void vm_finger(vm_build *b, float sx, int i)
 {
     vm_node n[4];
     vm_finger_nodes(sx, i, n);
+    b->part = (float)NS_VM_PART_FINGER;
     vm_sweep(b, n, 4, VM_DIGIT_SIDES, VM_CAP_NONE, VM_CAP_DOME);
 }
 
@@ -369,6 +399,7 @@ static void vm_hand(vm_build *b, bool right)
         { 0.0f, -0.0060f, -0.082f, 0.0410f, 0.0158f },
         { 0.0f, -0.0050f, VM_KNUCKLE_Z, 0.0385f, 0.0150f },
     };
+    b->part = (float)NS_VM_PART_PALM;
     vm_sweep(b, palm, 5, VM_SIDES, VM_CAP_NONE, VM_CAP_DOME);
 
     /*
@@ -382,6 +413,7 @@ static void vm_hand(vm_build *b, bool right)
         { 0.026f * sx, -0.009f, -0.032f, 0.0175f, 0.0140f },
         { 0.024f * sx, -0.011f, -0.056f, 0.0130f, 0.0105f },
     };
+    b->part = (float)NS_VM_PART_THENAR;
     vm_sweep(b, thenar, 3, VM_DIGIT_SIDES, VM_CAP_DOME, VM_CAP_DOME);
 
     for (int i = 0; i < 4; ++i) vm_finger(b, sx, i);
@@ -405,6 +437,7 @@ static void vm_hand(vm_build *b, bool right)
         t[k + 1] = (vm_node){ x, y, z, (k == 0) ? 0.0108f : 0.0092f,
                                        (k == 0) ? 0.0100f : 0.0086f };
     }
+    b->part = (float)NS_VM_PART_THUMB;
     vm_sweep(b, t, 3, VM_DIGIT_SIDES, VM_CAP_NONE, VM_CAP_DOME);
 }
 
@@ -415,6 +448,10 @@ static void vm_token(vm_build *b)
 {
     const float R = 0.012f, H = 0.001f;
     const uint32_t base = b->vertex_count;
+
+    /* Le jeton est du laiton, pas de la peau : son code de pièce existe pour
+     * que la peinture procédurale le LAISSE tranquille. */
+    b->part = (float)NS_VM_PART_TOKEN;
 
     for (int i = 0; i <= VM_SIDES; ++i) {
         const float a = (float)i / (float)VM_SIDES * NS_TAU;

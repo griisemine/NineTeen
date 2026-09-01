@@ -99,7 +99,7 @@ typedef struct viewmodel_fs_ubo {
     float   base_color[4];  /* rgb + rugosité */
     float   camera[4];      /* xyz + métallicité */
     float   ambient[4];
-    int32_t counts[4];
+    int32_t counts[4];      /* x : lumières, y : nature du segment, zw : libres */
 } viewmodel_fs_ubo;
 
 /*
@@ -2032,14 +2032,21 @@ static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
      * cette luminance doit donc partir plus saturée que la mesure d'un
      * nuancier : 1 : 0,51 : 0,36.
      */
-    static const struct { float rgb[3], roughness, metallic; } vm_material[NS_VM_SEGMENT_COUNT] = {
-        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },   /* manche : toile sombre */
-        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
-        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f },   /* main : peau — voir plus bas */
-        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
-        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f },
-        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f },
-        { { 0.72f,  0.56f,  0.24f  }, 0.28f, 0.9f },   /* jeton : laiton */
+    /*
+     * `kind` dit à `viewmodel.frag` LAQUELLE des quatre natures il peint. Le
+     * code de pièce porté par le maillage ne suffit pas : la manche d'épaule et
+     * l'avant-bras sont la même pièce de toile, et seul l'avant-bras a un
+     * poignet, donc un revers. Les valeurs sont celles des `SEG_*` du shader.
+     */
+    static const struct { float rgb[3], roughness, metallic; int32_t kind; }
+    vm_material[NS_VM_SEGMENT_COUNT] = {
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f, 0 },   /* manche : toile sombre */
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f, 1 },
+        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f, 2 },   /* main : peau — voir plus bas */
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f, 0 },
+        { { 0.085f, 0.095f, 0.125f }, 0.88f, 0.0f, 1 },
+        { { 0.360f, 0.185f, 0.130f }, 0.55f, 0.0f, 2 },
+        { { 0.72f,  0.56f,  0.24f  }, 0.28f, 0.9f, 3 },   /* jeton : laiton */
     };
 
     for (int i = 0; i < NS_VM_SEGMENT_COUNT; ++i) {
@@ -2058,6 +2065,7 @@ static void pass_viewmodel(ns_rhi *r, ns_renderer *rd, const ns_camera *cam,
         SDL_memcpy(fu.ambient, rd->settings.ambient, sizeof(float) * 3);
         fu.ambient[3] = rd->settings.ambient_intensity;
         fu.counts[0] = (int32_t)light_count;
+        fu.counts[1] = vm_material[i].kind;
         SDL_PushGPUFragmentUniformData(cmd, 0, &fu, sizeof fu);
 
         viewmodel_vs_ubo vu;

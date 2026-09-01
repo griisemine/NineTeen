@@ -20,6 +20,19 @@ layout(location = 3) in vec4 a_tangent;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+/*
+ * La position DANS LE SEGMENT, en mètres, et c'est le mot important.
+ *
+ * Le grain de la peau se tire d'un bruit, et un bruit a besoin d'un repère.
+ * Celui du monde bouge avec la main : le grain se mettrait à couler sur les
+ * doigts à chaque geste, ce qui se remarque bien plus qu'une peau lisse. Le
+ * repère du segment, lui, est fixe — le grain reste collé à la peau.
+ *
+ * En mètres plutôt qu'en unités de maillage pour que la taille du grain soit la
+ * même sur un doigt et sur un avant-bras, dont les longueurs de référence
+ * diffèrent d'un facteur deux.
+ */
+layout(location = 3) out vec3 v_local;
 
 layout(set = 1, binding = 0) uniform Segment {
     mat4 u_viewProj;      /* vue de la scène, projection étroite */
@@ -33,6 +46,7 @@ void main()
      * porte la vraie longueur. Mettre l'échelle ici plutôt que dans la matrice
      * évite d'avoir à corriger les normales d'une échelle non uniforme. */
     vec3 local = vec3(a_position.xy, a_position.z * u_params.x);
+    v_local = local;
 
     vec4 world = u_model * vec4(local, 1.0);
     v_world = world.xyz;

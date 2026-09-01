@@ -125,8 +125,10 @@ void room_camera_init(room_camera *c, ns_v3 start, float yaw)
      * Proportions de l'auteur de 2020, en mètres : il avait écrit
      * HAUTEUR_CAMERA_DEBOUT 3.5F et HAUTEUR_CAMERA_ACCROUPI 2.7F
      * (legacy/room/room.c:90-91), soit un rapport de 0,771. On garde ce rapport.
-     * `room/main.c` remplace ces valeurs par les mêmes converties à l'échelle du
-     * décor chargé — l'ancienne salle est en unités Blender, pas en mètres.
+     * `room/main.c` MET CES VALEURS À L'ÉCHELLE du décor chargé — l'ancienne
+     * salle est en unités Blender, pas en mètres. Il les met à l'échelle et ne
+     * les remplace pas : il l'a fait, et le fichier de réglages était alors
+     * sans effet sans que rien ne le dise.
      */
     /*
      * TOUTES CES COTES SONT RÉGLABLES SANS RECOMPILER, par `nineteen.env`.
