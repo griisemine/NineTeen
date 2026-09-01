@@ -475,13 +475,23 @@ def humain(octets):
 
 
 def recompter(sortie):
-    """Réécrit le seul bloc « compte » du manifeste, depuis la scène."""
+    """Réécrit le bloc « compte » et le numéro de version, sans rien rendre.
+
+    LA VERSION AUSSI, et c'est venu d'un manque : le mode `--compte-seul`
+    existe pour éviter quarante minutes de rendu quand seuls les chiffres ont
+    bougé, mais il laissait le numéro de version tel quel. Or c'est le
+    manifeste qui fait autorité sur ce numéro — le pied de chaque page du site
+    lui est comparé par un test Go —, si bien qu'un projet passé en 17.1.0
+    n'avait aucun moyen de le dire au site sans refaire toutes les images.
+    """
     scene = lire_scene()
     chemin = os.path.join(sortie, "media", "manifeste.json")
     with open(chemin, encoding="utf-8") as f:
         manifeste = json.load(f)
 
     avant = dict(manifeste.get("compte") or {})
+    version_avant = manifeste.get("version")
+    manifeste["version"] = lire_version()
     manifeste["compte"] = compte_depuis(manifeste, scene)
 
     with open(chemin, "w", encoding="utf-8") as f:
@@ -489,6 +499,8 @@ def recompter(sortie):
         f.write("\n")
 
     etape("Décompte relu dans la scène")
+    marque_v = "" if version_avant == manifeste["version"] else f"  (était {version_avant})"
+    info(f"{'version':14s} {manifeste['version']}{marque_v}")
     for cle, valeur in manifeste["compte"].items():
         ancien = avant.get(cle)
         marque = "" if ancien == valeur else f"  (était {ancien})"

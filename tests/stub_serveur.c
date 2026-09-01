@@ -50,6 +50,7 @@ static struct {
     char           maj_contenu[256];
     char           maj_somme[80];
     char           maj_voisin[128];
+    SDL_AtomicInt  coupe;
     SDL_AtomicInt  servis;
 } s;
 
@@ -264,6 +265,10 @@ static void repondre_telechargements(stub_socket c)
 static void repondre_fichier(stub_socket c, const char *requete)
 {
     SDL_AddAtomicInt(&s.servis, 1);
+    if (SDL_GetAtomicInt(&s.coupe)) {
+        envoyer(c, 503, "Service Unavailable", "{\"ok\":false}");
+        return;
+    }
 
     SDL_LockMutex(s.verrou);
     char contenu[256];
@@ -449,5 +454,7 @@ void stub_poser_maj_voisin(const char *nom)
     SDL_strlcpy(s.maj_voisin, nom ? nom : "", sizeof s.maj_voisin);
     SDL_UnlockMutex(s.verrou);
 }
+
+void stub_couper_fichier(bool coupe) { SDL_SetAtomicInt(&s.coupe, coupe ? 1 : 0); }
 
 uint32_t stub_fichiers_servis(void) { return (uint32_t)SDL_GetAtomicInt(&s.servis); }

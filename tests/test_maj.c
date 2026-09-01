@@ -346,6 +346,50 @@ static void test_empreinte_fausse(const char *url)
     ns_maj_set_repertoire(NULL);
 }
 
+/*
+ * UN TRANSFERT QUI A ÉCHOUÉ SE RÉESSAIE, sans relancer le jeu.
+ *
+ * Sans ça, une coupure de réseau condamnait la mise à jour jusqu'au prochain
+ * lancement, et la touche cessait de répondre — ce qui, pour le joueur, est
+ * indiscernable d'une touche cassée.
+ */
+static void test_reprise_apres_echec(const char *url)
+{
+    char dossier[1024];
+    repertoire_d_essai(dossier, sizeof dossier);
+    ns_maj_set_repertoire(dossier);
+
+    char somme[65];
+    empreinte(CONTENU, somme);
+    stub_poser_maj("17.1.0", nom_de_paquet(), CONTENU, somme);
+    /* Le serveur tombe pendant le transfert : 503, la panne ordinaire d'un
+     * paquet de 175 Mio sur une ligne domestique. */
+    stub_couper_fichier(true);
+
+    ns_maj_config c;
+    SDL_zero(c);
+    c.server_url = url;
+    c.version = "17.0.0";
+    c.auto_transfert = true;
+    CHECK(ns_maj_init(&c), "le fil démarre");
+
+    bool vu = false;
+    ATTENDRE(ns_maj_etat_courant() == NS_MAJ_ECHEC, 8000, vu);
+    CHECK(vu, "le premier essai échoue (%s)", ns_maj_message());
+    CHECK(ns_maj_version_offerte()[0] != '\0',
+          "mais la version reste connue, donc l'échec est rattrapable");
+
+    /* Le serveur revient. Le fil doit encore être là pour s'en apercevoir. */
+    stub_couper_fichier(false);
+    ns_maj_telecharger();
+    ATTENDRE(ns_maj_etat_courant() == NS_MAJ_PRETE, 8000, vu);
+    CHECK(vu, "et le second essai aboutit sans relancer le jeu (%s)", ns_maj_message());
+
+    ns_maj_shutdown();
+    SDL_RemovePath(ns_maj_paquet());
+    ns_maj_set_repertoire(NULL);
+}
+
 /* Une version plus récente sans paquet pour cette machine : on le DIT, au lieu
  * de laisser croire qu'on est à jour. */
 static void test_pas_de_paquet_ici(const char *url)
@@ -393,6 +437,7 @@ int main(void)
         test_a_jour(bouchon);
         test_chaine(bouchon);
         test_empreinte_fausse(bouchon);
+        test_reprise_apres_echec(bouchon);
         test_pas_de_paquet_ici(bouchon);
         stub_arreter();
     } else {

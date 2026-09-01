@@ -44,7 +44,7 @@ import (
 // echoue si les deux divergent. Le serveur Go ne peut pas lire ce fichier au
 // demarrage — le conteneur ne contient que `server/` — donc la copie reste, mais
 // elle est desormais CONTROLEE.
-const version = "17.0.0"
+const version = "17.1.0"
 
 // isLoopbackAddr dit si une adresse d'ecoute ne sort pas de la machine.
 //

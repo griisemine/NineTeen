@@ -27,7 +27,7 @@
 <main id="contenu">
 
   <section class="section">
-    <p class="eyebrow">Version <span data-version>17.0.0</span></p>
+    <p class="eyebrow">Version <span data-version>17.1.0</span></p>
     <h1>Telecharger</h1>
     <p class="lede">Un paquet par plateforme, produit a partir du meme arbre de sources. Rien a
        installer a cote, aucun compte exige pour telecharger.</p>
@@ -92,6 +92,41 @@
 
   <div class="hazard" role="presentation"></div>
 
+  <!-- LA MISE A JOUR, dite ici parce que c'est ici qu'on telecharge. Le texte
+       insiste sur ce que le jeu NE fait pas : il ne remplace pas son binaire et
+       il n'execute rien. C'est ce qu'un lecteur veut savoir avant d'installer
+       un logiciel qui parle a un serveur. -->
+  <section class="section">
+    <div class="section-head">
+      <h2>Une fois installe, il se tient a jour</h2>
+      <p>Au lancement, si vous lui avez donne l'adresse d'un serveur, le jeu lui demande s'il
+         existe une version plus recente. La question part sur un fil separe. Le jeu demarre,
+         se joue et se ferme sans jamais attendre la reponse.</p>
+    </div>
+    <ul class="cartes">
+      <li>
+        <h3>Il propose, vous decidez</h3>
+        <p>Un bandeau apparait en haut a gauche. F11 telecharge le paquet de votre machine,
+           F11 une seconde fois le confie a votre systeme. Maj+F11 ecarte la version, et elle
+           ne sera plus jamais reproposee.</p>
+      </li>
+      <li>
+        <h3>Il verifie avant de proposer</h3>
+        <p>Le paquet recu est compare a l'empreinte SHA-256 publiee a cote de lui. Si elle ne
+           tombe pas juste, le fichier est efface et rien ne vous est propose. Un transfert
+           coupe reprend ou il en etait au lancement suivant.</p>
+      </li>
+      <li>
+        <h3>Il ne s'installe pas tout seul</h3>
+        <p>Le jeu ne remplace jamais son propre binaire et n'execute rien. Il ouvre le paquet
+           avec votre systeme, qui applique ses propres controles. Rien ne se telecharge non
+           plus sans que vous l'ayez demande.</p>
+      </li>
+    </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
   <section class="section">
     <div class="section-head">
       <h2>Jouer en ligne</h2>
@@ -133,7 +168,7 @@
 </main>
 
 <footer class="footer">
-  <p>Nineteen, salle d'arcade. Version <span data-version>17.0.0</span>.</p>
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.1.0</span>.</p>
   <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
 </footer>
 

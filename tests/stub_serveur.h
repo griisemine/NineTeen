@@ -83,6 +83,13 @@ void stub_poser_maj(const char *version, const char *nom,
  */
 void stub_poser_maj_voisin(const char *nom);
 
+/*
+ * COUPER LE FICHIER : la route rend alors 503, comme un serveur qui vient de
+ * tomber. C'est la panne ordinaire d'un transfert de 175 Mio, et le seul moyen
+ * de vérifier qu'elle se rattrape sans relancer le jeu.
+ */
+void stub_couper_fichier(bool coupe);
+
 /* Combien de fois le fichier a été demandé. Une reprise en compte deux. */
 uint32_t stub_fichiers_servis(void);
 

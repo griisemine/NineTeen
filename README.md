@@ -174,9 +174,13 @@ qui ne montre que ses succès n'est pas vérifiable.
 
 ## État des travaux
 
-Le portage des mini-jeux depuis `SDL_Renderer` vers la couche sprite du nouveau moteur est en
-cours ; le journal des versions ([docs/CHANGELOG-V15.md](docs/CHANGELOG-V15.md)) dit
-précisément ce qui tourne et ce qui reste à faire.
+Le journal des versions dit précisément ce qui tourne et ce qui reste à faire, une version par
+fichier : [17.1.0](docs/CHANGELOG-V17.1.md) — le classement mondial remonte enfin, et le jeu se
+met à jour tout seul —, puis [17.0.0](docs/CHANGELOG-V17.md),
+[16.0.0](docs/CHANGELOG-V16.md) et [15.0.0](docs/CHANGELOG-V15.md).
+
+Le dernier en date est aussi le seul à lire pour savoir où en est le projet : il reprend, à sa
+fin, les six décisions encore ouvertes.
 
 ---
 

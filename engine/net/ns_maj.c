@@ -423,15 +423,36 @@ static int SDLCALL fil_maj(void *inutile)
 
         SDL_LockMutex(g.verrou);
         const ns_maj_etat etat = g.etat;
+        /*
+         * UN ÉCHEC DE TRANSFERT RESTE RATTRAPABLE, et c'est ce qui distingue
+         * les deux échecs possibles.
+         *
+         * Si `interroger` a échoué, on ne sait rien : pas d'adresse, rien à
+         * réessayer, le fil s'éteint. Mais un transfert coupé au milieu, lui,
+         * a tout ce qu'il faut pour recommencer — et il recommencera là où il
+         * s'est arrêté, puisque le fichier partiel est resté. Sans ce cas, une
+         * coupure de réseau condamnait la mise à jour jusqu'au prochain
+         * lancement du jeu, et la touche ne répondait plus.
+         */
+        const bool rattrapable = g.adresse[0] != '\0';
         SDL_UnlockMutex(g.verrou);
 
         const bool demande = SDL_CompareAndSwapAtomicInt(&g.veut_transfert, 1, 0);
         if (etat == NS_MAJ_DISPONIBLE && (demande || g.auto_transfert)) {
             transferer();
-        } else if (etat != NS_MAJ_DISPONIBLE) {
+        } else if (etat == NS_MAJ_ECHEC && rattrapable && demande) {
+            transferer();
+        } else if (etat != NS_MAJ_DISPONIBLE
+                   && !(etat == NS_MAJ_ECHEC && rattrapable)) {
             return 0;   /* plus rien à faire : le fil s'éteint */
         }
-        SDL_Delay(100);
+        /*
+         * 200 ms. Le fil n'attend qu'un appui sur une touche, et un quart de
+         * seconde avant qu'un téléchargement de plusieurs minutes ne démarre ne
+         * se voit pas. À 100 ms on réveillait le processeur dix fois par
+         * seconde pour toute la durée d'une session, sans rien y gagner.
+         */
+        SDL_Delay(200);
     }
 }
 
@@ -509,7 +530,10 @@ float ns_maj_avancement(void)
 
 void ns_maj_telecharger(void)
 {
-    if (ns_maj_etat_courant() != NS_MAJ_DISPONIBLE) return;
+    const ns_maj_etat e = ns_maj_etat_courant();
+    /* Un échec de transfert se réessaie : voir `fil_maj`. Le fichier partiel
+     * est resté, et la reprise repart de là. */
+    if (e != NS_MAJ_DISPONIBLE && !(e == NS_MAJ_ECHEC && g.adresse[0])) return;
     SDL_SetAtomicInt(&g.veut_transfert, 1);
 }
 

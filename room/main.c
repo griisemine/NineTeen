@@ -3852,6 +3852,13 @@ play_at_done: ;
                                     ns_maj_paquet());
                         }
                         break;
+                    case NS_MAJ_ECHEC:
+                        /* Un transfert coupé se réessaie, et il reprend là où
+                         * il s'est arrêté. `ns_maj_telecharger` refuse d'elle-
+                         * même si l'échec venait d'ailleurs. */
+                        if (ecarter) ns_maj_refuser();
+                        else         ns_maj_telecharger();
+                        break;
                     default:
                         NS_INFO("mise à jour : %s", ns_maj_message());
                         break;
@@ -6306,28 +6313,32 @@ play_at_done: ;
                                      ns_maj_version_offerte());
                         hud.maj_texte = maj_ligne;
                         break;
-                    /* Les quatre autres états ne s'affichent pas. « À jour »
-                     * n'est pas une nouvelle, et un échec de mise à jour n'a
-                     * rien à faire au milieu d'une salle d'arcade : il est dans
-                     * le journal, où on va le chercher quand on le cherche. */
+                    case NS_MAJ_ECHEC:
+                        /*
+                         * L'échec ne s'affiche QUE s'il est rattrapable, et
+                         * c'est ce que dit `ns_maj_version_offerte` : elle
+                         * n'est remplie que si un paquet a été identifié. Un
+                         * serveur injoignable au lancement ne mérite pas un
+                         * bandeau au milieu d'une salle d'arcade, il est dans
+                         * le journal. Un téléchargement coupé, si : le joueur
+                         * l'a demandé, il attend quelque chose.
+                         */
+                        if (ns_maj_version_offerte()[0]) {
+                            SDL_snprintf(maj_ligne, sizeof maj_ligne,
+                                         "MISE A JOUR INTERROMPUE - F11 POUR REPRENDRE");
+                            hud.maj_texte = maj_ligne;
+                        }
+                        break;
+                    /* Les trois autres ne s'affichent pas : « à jour » n'est
+                     * pas une nouvelle, et les deux premiers ne durent qu'un
+                     * instant. */
                     case NS_MAJ_INACTIVE:
                     case NS_MAJ_QUESTION:
                     case NS_MAJ_A_JOUR:
-                    case NS_MAJ_ECHEC:
                         break;
                     }
                 }
 
-                /*
-                 * LE PRIX DE LA BORNE QU'ON APPROCHE, pendant une manche.
-                 *
-                 * Le régime vient de la BORNE et non de `game_hard` : on n'est
-                 * pas encore en train de jouer, et `game_hard` porte celui de la
-                 * partie précédente. Annoncer le multiplicateur du mauvais
-                 * régime devant la fente serait pire que ne rien annoncer — les
-                 * deux régimes d'une même borne ne durent pas du tout la même
-                 * chose (7,1 s contre 25,4 s pour le démineur).
-                 */
                 /*
                  * VISER EN SE PLANTANT DEVANT LA MACHINE.
                  *
@@ -6344,6 +6355,16 @@ play_at_done: ;
                     if (p < ROOM_CP_MAX_PLACES && p != cp_moi) cp_cible = p;
                 }
 
+                /*
+                 * LE PRIX DE LA BORNE QU'ON APPROCHE, pendant une manche.
+                 *
+                 * Le régime vient de la BORNE et non de `game_hard` : on n'est
+                 * pas encore en train de jouer, et `game_hard` porte celui de la
+                 * partie précédente. Annoncer le multiplicateur du mauvais
+                 * régime devant la fente serait pire que ne rien annoncer — les
+                 * deux régimes d'une même borne ne durent pas du tout la même
+                 * chose (7,1 s contre 25,4 s pour le démineur).
+                 */
                 hud.cp_multiplicateur = 0.0f;
                 hud.cp_duree = 0.0f;
                 if (cp_actif && hud.near && hud.near->game[0]) {
