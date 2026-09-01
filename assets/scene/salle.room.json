@@ -1072,10 +1072,25 @@
       "_": "« toilet.jpg » n'est pas de la porcelaine : c'est un panneau bleu « RESTROOMS » avec deux pictogrammes. Il s'appelait `cuvette` et enrobait les cuvettes en mode `fit`, donc chaque cuvette portait le panneau sur ses six faces — et les faces opposées d'une boîte se retrouvent en miroir. C'est ça, le « RESTROOMS » à l'envers de la capture : pas un défaut de générateur, une texture sur le mauvais objet."
     },
     {
-      "name": "chasse",
+      "name": "plaque_pousser",
       "texture": "toilette_push.jpg",
       "roughness": 0.3,
-      "fit": true
+      "fit": true,
+      "_": "IL S'APPELAIT `chasse`, ET C'ETAIT UNE PREMISSE FAUSSE — la meme faute que celle que `panneau_toilettes` raconte juste au-dessus, sur la texture d'a cote. Ouverte et regardee : « toilette_push.jpg » n'est pas une plaque de chasse, c'est une PLAQUE DE PORTE — fond brun, un bonhomme qui pousse un vantail, et le mot PUSH dessous. Le nom disait « chasse d'eau » et le dessin dit « poussez la porte » ; c'est parce qu'on croyait tenir une plaque de chasse qu'on l'a collee au mur du fond des cabines, ou le proprietaire l'a trouvee.\nElle va donc sur le seul ouvrant a la francaise du bloc, a hauteur de main, du cote qu'on pousse : les deux vantaux de cabine. Les deux portes du refend, elles, COULISSENT — une plaque « PUSH » sur une porte coulissante serait la meme erreur d'un cran plus loin.\nLa vraie plaque de chasse est desormais un `panel` de chrome sur le reservoir de chaque cuvette ; elle ne porte pas d'image parce qu'aucune texture du depot n'en est une."
+    },
+    {
+      "name": "porcelaine",
+      "texture": "marbre_toilettes.jpg",
+      "baseColor": [
+        1.0,
+        1.0,
+        1.02,
+        1.0
+      ],
+      "roughness": 0.14,
+      "metallic": 0.0,
+      "uvMetres": 2.6,
+      "_": "L'EMAIL SANITAIRE : cuvette, abattant, reservoir. Aucune texture du depot n'est de la porcelaine — c'est ce que dit deja `panneau_toilettes` de « toilet.jpg », qui est un panneau et non une vasque — et l'on n'en ajoute pas une pour trois pieces.\nC'est donc la RECETTE DU MIROIR, prise a l'envers : la ou le miroir cherche du sombre et uni, on cherche du CLAIR et uni, et « marbre_toilettes.jpg » est le seul blanc de l'arbre — 232 sur 255 mesures en moyenne, soit 0,807 de reflectance lineaire, contre 0,020 pour `lavabo.jpg` qui habillait la cuvette et qui est une pierre presque noire. Le pavage est porte de 1,6 m (`marbre`, le plan du lavabo) a 2,6 m : sur une cuve de 0,36 m on ne voit plus qu'un septieme de tuile, donc une veine large et molle au lieu d'un marbrage, ce qui est exactement l'aspect d'un email.\nRugosite 0,14 et non 0,22 : une faience vernie a un reflet plus serre qu'un plan de marbre poli, et c'est ce reflet-la qui distingue un appareil sanitaire d'un bloc de pierre. Metal reste a zero — une porcelaine plus metallique sortirait noire, faute de quoi que ce soit a reflechir, et c'est la mesure du miroir qui borne encore ce reglage."
     },
     {
       "name": "radio",
@@ -3946,12 +3961,27 @@
       "yaw": 0.0,
       "_pose": "C-06 : « le câble ne tient à rien », 94 mm mesurés pour 50 tolérés. P-10 n'était corrigé qu'à moitié — les deux chaînes en V avaient bien été remplacées par un câble, mais ce câble s'arrêtait à 2,990 m pour une sous-face de rails à 3,084 m. Le commentaire de `check_hanging` chiffrait déjà ce vide (« deux câbles, comptoir et salon, s'arrêtent à 2,990 m, soit 9,4 cm de vide ») sans pouvoir le refuser, faute de la clé. hauteur 1.13 -> 1.24 m : le sommet passe de 2,990 à 3,100, c'est-à-dire le plan des dalles, et entre de 1,6 cm dans les rails — exactement la cote des six tiges de « suspension_banc_* », qui montent toutes à 3,100.",
       "pose": "suspendu",
+      "_tiges": "DEUX TIGES, UNE PAR PLATINE, et c'est le defaut que le proprietaire signale : « des lampes accrochees a une seule tige ».\n« caged_hanging_light.gltf » porte SA PROPRE suspension. Mesure sur son maillage : DEUX platines circulaires de 65 mm de diametre, centrees a x = +/-0,08942 dans le repere du modele, leur face haute exactement sur le plan y = 0 de ce repere, et deux chaines qui descendent le corps du luminaire a 0,315 m dessous. Entre les deux platines, a x = 0, le modele n'a RIEN : la tige unique posee la ne touchait aucune de ses pieces. Ce qu'on voyait etait donc juste — deux lanternes pendues a une seule tige, l'une derriere l'autre — et ce n'etait pas une illusion mais la geometrie.\nC'est la lecon deja ecrite chez « ampoule_sas » a propos de l'applique double, appliquee au second modele a deux corps du depot : le centre de la boite englobante d'un luminaire jumele est le VIDE entre ses deux moities. Une cote se prend sur le maillage, jamais sur l'emprise.\nLE LUMINAIRE NE BOUGE PAS D'UN MILLIMETRE. Meme `at`, meme corps, meme ampoule, donc meme eclairement : seule la suspension change.",
       "parts": [
         {
+          "_": "tige de la platine ouest",
           "type": "cylinder",
           "material": "bois_noir",
           "at": [
+            -0.08942,
             0.0,
+            0.0
+          ],
+          "radius": 0.008,
+          "height": 1.24,
+          "sides": 8
+        },
+        {
+          "_": "tige de la platine est",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0.08942,
             0.0,
             0.0
           ],
@@ -3968,15 +3998,30 @@
         1.98,
         -4.4
       ],
-      "yaw": 0.0,
+      "yaw": 14.0,
       "_pose": "C-06 : « le câble ne tient à rien », 94 mm mesurés pour 50 tolérés. P-10 n'était corrigé qu'à moitié — les deux chaînes en V avaient bien été remplacées par un câble, mais ce câble s'arrêtait à 2,990 m pour une sous-face de rails à 3,084 m. Le commentaire de `check_hanging` chiffrait déjà ce vide (« deux câbles, comptoir et salon, s'arrêtent à 2,990 m, soit 9,4 cm de vide ») sans pouvoir le refuser, faute de la clé. hauteur 1.01 -> 1.12 m : le sommet passe de 2,990 à 3,100, c'est-à-dire le plan des dalles, et entre de 1,6 cm dans les rails — exactement la cote des six tiges de « suspension_banc_* », qui montent toutes à 3,100.",
       "pose": "suspendu",
+      "_tiges": "Meme correction que « cable_comptoir », memes cotes de platines, et UN LACET A REPRENDRE EN PLUS : « suspension_salon » est posee a 14 degres, donc ses deux platines ne sont pas alignees sur l'axe X du monde. Une tige unique posee au centre n'avait aucun cap a porter ; deux tiges en ont un. A lacet 0 elles tomberaient a 2,2 cm des platines — 2 x 0,08942 x sin 7 deg —, ce qui est petit sur le papier et se voit tout de suite sur une piece de 65 mm.",
       "parts": [
         {
+          "_": "tige de la platine ouest du modele",
           "type": "cylinder",
           "material": "bois_noir",
           "at": [
+            -0.08942,
             0.0,
+            0.0
+          ],
+          "radius": 0.008,
+          "height": 1.12,
+          "sides": 8
+        },
+        {
+          "_": "tige de la platine est du modele",
+          "type": "cylinder",
+          "material": "bois_noir",
+          "at": [
+            0.08942,
             0.0,
             0.0
           ],
@@ -5203,34 +5248,95 @@
           "chamfer": 0.006
         },
         {
+          "_": "le fond",
           "type": "box",
-          "material": "lavabo",
+          "material": "cabine_panneau",
           "at": [
             0.0,
-            0.0,
-            -0.373
+            0.113,
+            -0.63
           ],
           "size": [
-            0.36,
-            0.42,
-            0.54
+            0.996,
+            1.9,
+            0.04
           ],
-          "chamfer": 0.03
+          "chamfer": 0.006
         },
         {
-          "type": "panel",
-          "material": "chasse",
+          "_": "le pied de la cuvette, evase",
+          "type": "cylinder",
+          "material": "porcelaine",
           "at": [
             0.0,
-            0.81,
-            -0.604
+            0.0,
+            -0.27
+          ],
+          "radius": 0.115,
+          "radiusTop": 0.15,
+          "height": 0.36,
+          "sides": 16
+        },
+        {
+          "_": "la cuve",
+          "type": "cylinder",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.34,
+            -0.27
+          ],
+          "radius": 0.15,
+          "radiusTop": 0.178,
+          "height": 0.07,
+          "sides": 20
+        },
+        {
+          "_": "l'abattant",
+          "type": "cylinder",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.41,
+            -0.27
+          ],
+          "radius": 0.18,
+          "height": 0.025,
+          "sides": 20
+        },
+        {
+          "_": "le reservoir, adosse au fond de la cabine",
+          "type": "box",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.41,
+            -0.53
           ],
           "size": [
-            0.24,
-            0.18
+            0.38,
+            0.37,
+            0.16
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "_": "la plaque de chasse, sur le reservoir et non au mur",
+          "type": "panel",
+          "material": "borne_chrome",
+          "at": [
+            0.0,
+            0.72,
+            -0.442
+          ],
+          "size": [
+            0.12,
+            0.07
           ]
         }
       ],
+      "_cuvette": "LA CUVETTE, ET LA CAUSE EXACTE DU « BLOC DE PIERRE » SIGNALE PAR LE PROPRIETAIRE. Elle n'a jamais ete dessinee : depuis l'origine c'est UNE BOITE de 0,36 x 0,42 x 0,54, et les deux corrections successives n'ont change que l'image tendue dessus. `panneau_toilettes` raconte la premiere — le materiau s'appelait `cuvette`, portait « toilet.jpg » et ecrivait RESTROOMS a l'envers sur les six faces. La seconde lui a donne `lavabo`, dont la texture mesure 0,020 de reflectance lineaire, c'est-a-dire une PIERRE PRESQUE NOIRE. Le defaut d'origine — un appareil sanitaire fait d'un parallelepipede — a traverse les deux.\nElle est donc dessinee, avec les primitives que le fichier emploie partout ailleurs : pied evase, cuve, abattant, reservoir. Aux cotes d'un appareil courant — assise a 0,435 m, reservoir de 0,37 m de haut adosse au fond, 0,52 m de profondeur hors tout, ce qui la garde dans l'emprise de la boite qu'elle remplace (0,54).\nLA PLAQUE DE CHASSE est sur le reservoir, ou une plaque de chasse se trouve, et elle est en CHROME : voir `plaque_pousser` pour ce que portait l'ancienne et pourquoi elle n'a jamais ete une plaque de chasse.",
+      "_fond": "LE FOND, QUI MANQUAIT — et c'est lui qui explique le reste de ce que le proprietaire decrit. La cabine n'etait faite que de DEUX JOUES : ni fond, ni linteau. On la traversait du regard de part en part jusqu'au parement du bloc, 1,08 m plus loin, et la plaque « PUSH » collee a 0,72 m flottait dans ce vide. Une porte devant deux panneaux paralleles n'a rien a fermer : c'est de la que vient l'impression qu'elle est DETACHEE, et aucune retouche de la porte seule ne l'aurait dissipee.\n0,996 m entre les faces exterieures des deux joues (2 x 0,478 + 0,04), 0,04 m d'epaisseur comme elles, meme materiau, meme allege de 0,113 m : c'est le troisieme panneau de la meme cabine, pas une cloison de plus.",
       "_": "LA CABINE DU BLOC HOMMES. Elles etaient DEUX, cote a cote en (9,6 ; -4,6) et (10,6 ; -4,6), donc 1,996 m de large en travers d'un bloc qui n'avait pas encore ses cloisons. 2020 n'en a qu'une par bloc : les deux appareils sanitaires mesurables sont Cube.129_Cube.039 cote hommes (x 9,391..10,147 ; z -3,235..-2,416) et Cube.165_Cube.011 cote femmes (x 9,385..10,142 ; z -2,198..-1,379). Leur axe x, 9,77, est repris ici tel quel.\nSON z NE L'EST PAS, et la raison est mesuree : a z = -2,83 la cabine, joues comprises, occupe z -3,48 a -2,18 et recouvre 0,59 m de la baie « porte_toilettes_2 » (z -3,60..-2,65), qui n'en fait que 0,95. Reculee a -4,30, elle laisse la baie entiere et garde 1,08 m au sud pour le contournement du refend, celui que 2020 mesure a 1,381 m (releve § 4.3). Elle ouvre au NORD, face a sa baie."
     },
     {
@@ -5274,50 +5380,112 @@
           "chamfer": 0.006
         },
         {
+          "_": "le fond",
           "type": "box",
-          "material": "lavabo",
+          "material": "cabine_panneau",
           "at": [
             0.0,
-            0.0,
-            -0.373
+            0.113,
+            -0.63
           ],
           "size": [
-            0.36,
-            0.42,
-            0.54
+            0.996,
+            1.9,
+            0.04
           ],
-          "chamfer": 0.03
+          "chamfer": 0.006
         },
         {
-          "type": "panel",
-          "material": "chasse",
+          "_": "le pied de la cuvette, evase",
+          "type": "cylinder",
+          "material": "porcelaine",
           "at": [
             0.0,
-            0.81,
-            -0.604
+            0.0,
+            -0.27
+          ],
+          "radius": 0.115,
+          "radiusTop": 0.15,
+          "height": 0.36,
+          "sides": 16
+        },
+        {
+          "_": "la cuve",
+          "type": "cylinder",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.34,
+            -0.27
+          ],
+          "radius": 0.15,
+          "radiusTop": 0.178,
+          "height": 0.07,
+          "sides": 20
+        },
+        {
+          "_": "l'abattant",
+          "type": "cylinder",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.41,
+            -0.27
+          ],
+          "radius": 0.18,
+          "height": 0.025,
+          "sides": 20
+        },
+        {
+          "_": "le reservoir, adosse au fond de la cabine",
+          "type": "box",
+          "material": "porcelaine",
+          "at": [
+            0.0,
+            0.41,
+            -0.53
           ],
           "size": [
-            0.24,
-            0.18
+            0.38,
+            0.37,
+            0.16
+          ],
+          "chamfer": 0.012
+        },
+        {
+          "_": "la plaque de chasse, sur le reservoir et non au mur",
+          "type": "panel",
+          "material": "borne_chrome",
+          "at": [
+            0.0,
+            0.72,
+            -0.442
+          ],
+          "size": [
+            0.12,
+            0.07
           ]
         }
       ],
+      "_meme_cabine": "MEME CABINE QUE « cabine_toilettes », piece pour piece et cote pour cote : fond, cuvette dessinee, plaque de chasse en chrome. Les raisons sont ecrites la-bas, dans `_fond` et `_cuvette`, et ne sont pas repetees ici. Seul le cap change, 180 au lieu de 0, parce que celle-ci ouvre au sud.",
       "_": "LA CABINE DU BLOC FEMMES, absente : le bloc n'avait que celles du sud. Meme axe x que 2020 (9,77) ; z = -0,30 pour laisser libres a la fois la baie « porte_toilettes » (z -2,05..-1,10) et le contournement nord du refend (z 0,253..1,436), qui gardent respectivement 0,95 et 1,09 m. Elle ouvre au SUD, face a sa baie."
     },
     {
       "_audit": "AUDIT P-06. Les vantaux etaient SUSPENDUS a 1,02 m du sol et depassaient leurs joues de 77 cm. 15 cm de jeu sous la porte est la cote d'une cabine sanitaire courante, et le vantail reste alors sous les joues.",
       "name": "porte_cabine_1",
       "at": [
-        9.27,
+        9.33,
         0.0,
-        -3.62
+        -3.6675
       ],
       "yaw": 0.0,
-      "_pose": "Un vantail pendu à ses gonds. Il n'est ni au sol (il commence à y = 0,150, le jeu réglementaire d'une cabine sanitaire), ni sur un meuble — son empreinte tombe 4 cm au-delà de celle de « cabine_toilettes » (z -3,610 pour une cabine qui s'arrête à -3,650, et cet écart est voulu : à la cote exacte de la joue, ses 35 mm d'épaisseur y entraient de 17 mm) — ni contre un parement, dont il est à 17,0 cm. Les trois messages ont été obtenus en le déclarant.",
+      "_pose": "Un vantail pendu à ses gonds. Il n'est ni au sol (il commence à y = 0,150, le jeu réglementaire d'une cabine sanitaire), ni sur un meuble, ni contre un parement, dont il est à 17,0 cm. Les trois messages ont été obtenus en le déclarant.",
       "pose": "libre",
-      "_": "Fermee, devant la cabine du bloc hommes ; son gond est contre la joue ouest. z = -3,62 et non -3,65 : a la cote exacte de la joue, ses 35 mm d'epaisseur y entraient de 17 mm et roomgen arrete le build.",
+      "_": "Fermee, devant la cabine du bloc hommes ; son gond est contre la joue ouest.",
+      "_baie": "REPOSE DANS SA BAIE, ET NON DEVANT ELLE — c'est la moitie « portes detachees » de ce que le proprietaire rapporte.\nCE QUI ETAIT MESURE. La baie libre de la cabine est l'ecart entre les faces interieures des deux joues : x 9,312 a 10,228, soit 0,916 m. Le vantail fait 0,88 m et il partait de x = 9,270, c'est-a-dire 2 mm A L'EXTERIEUR de la joue ouest (9,272) : il la RECOUVRAIT sur toute sa largeur et laissait, a l'autre bout, une fente ouverte de 78 mm entre son bord et la joue est. Un vantail decale d'un cote et fendu de l'autre ne se lit pas comme une porte fermee, mais comme un panneau pose devant.\nEn PROFONDEUR, meme histoire : il etait centre sur z = -3,620 quand les joues s'arretent a -3,650, donc entierement en avant d'elles, 12,5 mm dans le vide.\nCE QUI EST POSE ICI. Gond a x = 9,330 : le vantail occupe 9,330..10,210 et laisse 18 mm de jeu de CHAQUE cote, ce qui est le jeu d'une porte de cabine. Axe a z = -3,6675 : ses 35 mm d'epaisseur occupent -3,685..-3,650 et affleurent la face avant des joues sans la depasser — la porte est DANS la baie.\nLes 4 cm d'ecart que l'ancien commentaire de `_pose` justifiait n'ont plus lieu d'etre : ce n'est pas la porte qui devait s'ecarter de la joue, c'est sa largeur qui devait tenir dans la baie.",
       "parts": [
         {
+          "_": "le vantail",
           "type": "box",
           "material": "cabine_panneau",
           "at": [
@@ -5333,6 +5501,7 @@
           "chamfer": 0.006
         },
         {
+          "_": "la poignee",
           "type": "box",
           "material": "borne_chrome",
           "at": [
@@ -5346,8 +5515,55 @@
             0.022
           ],
           "chamfer": 0.004
+        },
+        {
+          "_": "gond bas",
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.005,
+            0.42,
+            0.0
+          ],
+          "size": [
+            0.038,
+            0.1,
+            0.04
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "gond haut",
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.005,
+            1.52,
+            0.0
+          ],
+          "size": [
+            0.038,
+            0.1,
+            0.04
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "la plaque de porte, du cote qu'on pousse",
+          "type": "panel",
+          "material": "plaque_pousser",
+          "at": [
+            0.6,
+            1.35,
+            0.02
+          ],
+          "size": [
+            0.15,
+            0.15
+          ]
         }
-      ]
+      ],
+      "_gonds": "DEUX GONDS VISIBLES, et ce n'est pas de l'ornement : le proprietaire ecrit que les vantaux sont « a un angle qui ne correspond a aucune charniere ». Une porte sans gond ne dit pas de quel cote elle tourne, et l'oeil ne peut alors que la lire comme une plaque posee la. Ils occupent x local -0,014 a +0,024, c'est-a-dire le jeu de 18 mm entre le vantail et la joue, sans mordre dedans — la face interieure de la joue est a 4 mm du gond le plus proche, pour 5 mm de recouvrement toleres par le controle de penetration."
     },
     {
       "name": "porte_cabine_2",
