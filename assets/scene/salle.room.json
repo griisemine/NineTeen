@@ -3946,6 +3946,95 @@
       ],
       "_": "Parcouru dans l'autre sens que les murs, pour que le profil déborde vers l'extérieur de la plate-forme.",
       "_defaut": "Ce nez traçait un rectangle de 6,09 x 4,44 m allant de (-3,043 ; -1,333) à (3,043 ; 3,111), alors que l'estrade qu'il est censé border occupe x de -1,2 a 1,2 et z de -4,3 a -1,9. Les deux emprises sont DISJOINTES : la moulure ne bordait rien, elle traversait la moquette du hall. Recalée sur l'emprise exacte de la boîte estrade. PUIS RECALE UNE SECONDE FOIS, sur l'estrade de 2020 : x +/-1,2135 et z -6,379 a -2,981, y 0,198 — trois centimetres sous l'arete, comme les 0,09 l'etaient sous les 0,12."
+    },
+    {
+      "_": "LE COULOIR N'AVAIT AUCUNE MOULURE, et c'est toute la raison de « un couloir sans relief avec une seule texture qui se repete ». Le hall en porte TROIS — plinthe a 0, cimaise a 2,42, corniche a 3,10 — et le sas, qui est la premiere chose qu'on voit du jeu, n'en portait pas une. Le crepi y revenait donc seul, a l'identique, tous les 0,8 m (`uvMetres` du materiau `mur`) sur neuf metres de long : onze repetitions sans une ligne pour les couper.\nON N'A PAS TOUCHE AU MATERIAU. Changer `uvMetres` aurait retouche TOUTES les parois de la salle pour un defaut local, et le remede aurait ete une regression. Ce qui manquait n'etait pas la texture, c'etait l'architecture.\nMEMES MATERIAUX, MEMES PROFILS ET MEMES SECTIONS QUE LE HALL : le couloir parle la langue de la piece dans laquelle il debouche, il ne s'invente pas la sienne.\nLA CIMAISE EST A 1,02 m ET NON A 2,42. Celle du hall est haute parce que le hall l'est ; le couloir plafonne a 2,92 et une ligne posee a 2,42 y passerait au-dessus du regard. A 1,02 elle tombe a hauteur de main — la cote d'une cimaise de couloir — et elle coupe la paroi en deux bandes qu'on voit defiler en avancant, ce qui est exactement ce qu'on demande a du relief.\nLES DEUX JOUES SEULEMENT. Le fond nord porte la porte, la paroi oblique porte la bouche sur le hall : une moulure y traverserait une baie.",
+      "name": "plinthe_couloir_est",
+      "material": "bois_noir",
+      "profile": "plinthe",
+      "section": [
+        0.022,
+        0.14
+      ],
+      "y": 0.0,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          7.053,
+          12.738
+        ],
+        [
+          7.053,
+          3.646
+        ]
+      ]
+    },
+    {
+      "name": "plinthe_couloir_ouest",
+      "material": "bois_noir",
+      "profile": "plinthe",
+      "section": [
+        0.022,
+        0.14
+      ],
+      "y": 0.0,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          5.184,
+          5.0143
+        ],
+        [
+          5.184,
+          12.738
+        ]
+      ]
+    },
+    {
+      "name": "cimaise_couloir_est",
+      "material": "bois",
+      "profile": "cimaise",
+      "section": [
+        0.028,
+        0.06
+      ],
+      "y": 1.02,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          7.053,
+          12.738
+        ],
+        [
+          7.053,
+          3.646
+        ]
+      ]
+    },
+    {
+      "name": "cimaise_couloir_ouest",
+      "material": "bois",
+      "profile": "cimaise",
+      "section": [
+        0.028,
+        0.06
+      ],
+      "y": 1.02,
+      "offset": 0.1,
+      "closed": false,
+      "points": [
+        [
+          5.184,
+          5.0143
+        ],
+        [
+          5.184,
+          12.738
+        ]
+      ]
     }
   ],
   "_props": "Le mobilier et le décor. Chaque objet est une composition de boîtes et de panneaux décrits DANS SON PROPRE REPÈRE, puis posé d'un bloc : on déplace un billard sans recalculer dix lignes. Ceux qui portent un « poi » deviennent des lieux d'interaction déclarés — le moteur les repérait jusqu'ici en cherchant des sous-chaînes dans les noms de nœuds du glTF.",
