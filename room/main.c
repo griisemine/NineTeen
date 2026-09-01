@@ -1270,6 +1270,42 @@ static ns_arene *couperet_en_ligne(const char *spec, const char *pseudo,
                               pseudo, "--couperet-en-ligne", places_out, place_out);
 }
 
+/*
+ * LE RÉGIME D'UNE BORNE, et le seul endroit qui le décide.
+ *
+ * Une borne DÉCLARE sa difficulté dans `salle.room.json` — six caissons portent
+ * « easy », six « hard », six « normal » — et ce n'est PAS toujours le régime
+ * auquel on va jouer : le lot `REGIME DIFFICILE`, une fois acheté, ouvre le
+ * régime dur sur les dix-neuf. Entre ce que la borne dit et ce que la partie
+ * fait, il y a donc deux vocabulaires et un achat.
+ *
+ * Trois endroits avaient besoin de la réponse et la recalculaient chacun à leur
+ * façon : la partie qu'on lance, le billet qu'on demande au serveur avant de la
+ * lancer, et le multiplicateur qu'on affiche devant la fente. Les deux derniers
+ * lisaient la déclaration seule. Conséquences mesurées :
+ *
+ *  - le billet était demandé pour « demineur/easy » quand la partie réclamait
+ *    « demineur/hard », donc jamais délivré, donc aucun score de cette borne
+ *    n'atteignait le classement mondial ;
+ *  - le bandeau annonçait le multiplicateur de l'autre régime, alors que les
+ *    deux ne durent pas la même chose (7,1 s contre 25,4 s pour le démineur).
+ *
+ * Une seule fonction, donc, et les trois appelants ne peuvent plus diverger.
+ */
+static bool borne_en_regime_dur(const ns_cabinet *borne)
+{
+    if (!borne) return false;
+    return SDL_strcasecmp(borne->difficulty, "hard") == 0
+        || room_eco_lot_acquis(room_eco_salle(), ROOM_ECO_LOT_DIFFICILE);
+}
+
+/*
+ * Le nom que `ns_online` et `ns_scores` donnent à ce régime. Les deux ne
+ * connaissent que « hard » et « normal » : « easy » est une enseigne de la
+ * salle, pas un tableau de scores — voir `ns_scores_bucket`.
+ */
+static const char *regime_nom(bool dur) { return dur ? "hard" : "normal"; }
+
 static void start_run(const ns_game_api *api, void *game, ns_runlog *log,
                       uint64_t seed, bool hard, bool demo, duel_ghost *duel)
 {
@@ -2609,6 +2645,26 @@ int main(int argc, char **argv)
              * et le serveur répondait sur un jeu qui n'existe plus — le panneau
              * mondial restait vide, sans erreur. */
             ns_online_request_board("envol", "normal");
+
+            /*
+             * ET LE BILLET DE `--game=`, ICI ET PAS PLUS TARD.
+             *
+             * Ce mode connaît sa borne dès la ligne de commande, et pourtant il
+             * ne demandait son billet qu'à l'instant de lancer la partie —
+             * c'est-à-dire trop tard, comme le disait déjà le commentaire à cet
+             * endroit. La première partie se jouait donc toujours hors ligne,
+             * et avec `--warmup=` qui ne dort pas, TOUTES se jouaient hors
+             * ligne : la seule façon de faire remonter un score depuis une
+             * ligne de commande n'en faisait jamais remonter.
+             *
+             * Mesuré : cinq secondes séparent ce point du premier pas de jeu,
+             * le temps de charger la salle et ses trente-huit sons. Un
+             * aller-retour HTTP en prend quelques dizaines de millisecondes.
+             * Personne n'attend, et le billet est là.
+             */
+            if (opt.game && opt.game[0]) {
+                ns_online_prefetch_ticket(opt.game, "normal");
+            }
         }
 
         /*
@@ -3312,7 +3368,6 @@ play_at_done: ;
                 const uint64_t seed = warm_seed + 0x9E3779B97F4A7C15ull * (uint64_t)runs;
                 start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
                 run_ms = 0;
-            run_tick = 0; pending_press = 0;
                 run_tick = 0; pending_press = 0;
             }
         }
@@ -4020,7 +4075,6 @@ play_at_done: ;
                         }
                         const uint64_t seed = room_eco_salle_graine(game_api->id);
                         start_run(game_api, game, runlog, seed, game_hard, opt.autoplay, &duel);
-                    room_cp_partie_debut(&couperet, cp_moi, game_api->id, game_hard);
                         room_cp_partie_debut(&couperet, cp_moi, game_api->id, game_hard);
                         run_ms = 0;
                         run_tick = 0; pending_press = 0;
@@ -4310,9 +4364,7 @@ play_at_done: ;
                      * ce qui est la seule chose qu'un joueur puisse acheter et
                      * qui change ce qu'il JOUE — et qui paie 25 % de plus.
                      */
-                    const bool hard = (SDL_strcasecmp(near->difficulty, "hard") == 0)
-                                   || room_eco_lot_acquis(room_eco_salle(),
-                                                          ROOM_ECO_LOT_DIFFICILE);
+                    const bool hard = borne_en_regime_dur(near);
                     /* LA PARTIE DU JOUR : la graine vient de la date, pas de
                      * l'horloge à haute résolution. Voir `room_economie.h`. */
                     const uint64_t seed = room_eco_salle_graine(near->game);
@@ -4519,8 +4571,33 @@ play_at_done: ;
         if (!in_game && cam.mode == ROOM_CAM_PLAYER) {
             const ns_cabinet *ahead = room_viewmodel_target(&scene, &cam);
             if (ahead && ahead->game[0]) {
-                ns_online_prefetch_ticket(ahead->game, ahead->difficulty);
+                /* Le créneau demandé est celui qu'on JOUERA, pas celui que la
+                 * borne affiche : un billet tiré sur l'autre régime ne sera
+                 * jamais réclamé, et la partie partira hors ligne. */
+                ns_online_prefetch_ticket(ahead->game,
+                                          regime_nom(borne_en_regime_dur(ahead)));
             }
+        }
+
+        /*
+         * ET PENDANT L'ÉCRAN DE FIN, parce que c'est là qu'on décide de rejouer.
+         *
+         * Le quitte ou double fait basculer la partie suivante en régime DUR,
+         * quelle que soit la borne. Sans cette demande, elle se jouait toujours
+         * hors ligne : le billet en réserve est celui du régime qu'on vient de
+         * jouer, et un billet du mauvais créneau ne se prend pas. C'est la
+         * partie qui rapporte le plus — celle qu'on paie pour doubler la mise —
+         * et c'était la seule qui ne pouvait jamais se classer.
+         *
+         * L'écran de fin dure le temps qu'on lise son score et qu'on retrouve
+         * un jeton, soit plusieurs secondes ; l'aller-retour en prend quelques
+         * dizaines de millisecondes sur la même machine. Refuser l'offre
+         * rearme le régime de la borne dans la même image, et la relance
+         * ordinaire retrouve son billet avant que le jeton soit tombé.
+         */
+        if (in_game && game && game_api && game_api->dead(game, NULL)) {
+            ns_online_prefetch_ticket(game_api->id,
+                                      regime_nom(room_eco_salle_offre() || game_hard));
         }
 
         /*
@@ -6149,7 +6226,7 @@ play_at_done: ;
                 hud.cp_multiplicateur = 0.0f;
                 hud.cp_duree = 0.0f;
                 if (cp_actif && hud.near && hud.near->game[0]) {
-                    const bool dur = (SDL_strcasecmp(hud.near->difficulty, "hard") == 0);
+                    const bool dur = borne_en_regime_dur(hud.near);
                     hud.cp_multiplicateur = room_cp_multiplicateur(hud.near->game, dur);
                     hud.cp_duree = room_cp_duree_mediane(hud.near->game, dur);
                 }

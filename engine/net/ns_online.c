@@ -700,6 +700,34 @@ static void arm_ticket(const char *game, const char *diff)
                  (diff && diff[0]) ? diff : "normal");
     SDL_snprintf(g.last_ticket, sizeof g.last_ticket, "%s", g.want_ticket);
     SDL_snprintf(g.last_ticket_diff, sizeof g.last_ticket_diff, "%s", g.want_ticket_diff);
+
+    /*
+     * UN BILLET PRÊT POUR UN AUTRE CRÉNEAU EST JETÉ ICI, et cette ligne est
+     * toute la panne « aucun score ne remonte ».
+     *
+     * Le fil ne tire un billet que si `g.want_ticket` est armé ET qu'aucun
+     * billet n'est prêt — la seconde condition existe pour ne pas en garder
+     * deux. Mais un billet prêt pour « demineur/easy » n'est PAS un billet pour
+     * « demineur/hard » : `ticket_matches` le refuse, `ns_online_take_ticket`
+     * ne le consomme donc pas, et il reste prêt. Le fil, lui, voit un billet
+     * prêt et ne va jamais chercher celui qu'on vient de demander. Les deux
+     * conditions se bloquaient l'une l'autre, définitivement : la borne ne
+     * recevait plus jamais de billet, la partie se jouait hors ligne, et
+     * `ns_runlog_enqueue` la refusait comme il doit le faire. Aucune erreur
+     * nulle part, et un classement mondial qui reste vide.
+     *
+     * Mesuré sur la pile réelle avant correction : 7 parties ouvertes sur le
+     * serveur, 0 soumise, 0 score — dont 5 sur un créneau « easy » qu'aucune
+     * partie ne pouvait réclamer.
+     *
+     * Le jeter coûte un aller-retour HTTP que personne n'attend, et c'est le
+     * prix juste : un billet qu'aucune partie ne peut prendre ne vaut rien, et
+     * le garder empêche d'en obtenir un qui vaut quelque chose.
+     */
+    if (g.ticket_ready && !ticket_matches(g.want_ticket, g.want_ticket_diff)) {
+        g.ticket_ready = false;
+        SDL_zero(g.ticket);
+    }
 }
 
 void ns_online_prefetch_ticket(const char *game, const char *difficulty)

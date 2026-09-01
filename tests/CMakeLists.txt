@@ -474,7 +474,11 @@ add_test(NAME menu COMMAND ns_test_menu "$<TARGET_FILE_DIR:ns_test_menu>")
 # complète contre le vrai serveur Go et sa base — billet, sceau, envoi,
 # classement. Ça demande PostgreSQL, donc ça ne s'ajoute pas ici : la marche à
 # suivre est en tête de `test_online.c`.
-add_executable(ns_test_online test_online.c)
+# `stub_serveur.c` : un serveur HTTP de quatre routes, dans le test lui-même.
+# Sans lui, la chaîne du classement n'était vérifiée QUE face à un vrai
+# `nineteend` lancé à la main — c'est-à-dire jamais dans l'intégration
+# continue, et c'est là qu'une panne a vécu des semaines sans rien allumer.
+add_executable(ns_test_online test_online.c stub_serveur.c)
 target_link_libraries(ns_test_online PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_online)
 nineteen_apply_sanitizers(ns_test_online)

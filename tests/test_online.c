@@ -10,9 +10,10 @@
  *
  *   ns_test_online
  *       découpage d'URL, ORDRE DE PRÉSÉANCE des quatre sources d'adresse,
- *       verrou `--offline`, serveur mort. C'est ce que fait la CI, et ça ne
- *       demande rien — pas même une socket, pour la partie préséance, qui est
- *       du calcul pur.
+ *       verrou `--offline`, serveur mort, PUIS la chaîne entière contre le
+ *       bouchon de `stub_serveur.c`, qui répond comme le vrai serveur aux
+ *       quatre routes dont le client se sert. C'est ce que fait la CI, et ça
+ *       ne demande ni base ni Docker.
  *
  *   ns_test_online <url>
  *       + le classement mondial, contre un serveur qui répond comme le vrai.
@@ -36,6 +37,7 @@
 #include "ns_http.h"
 #include "ns_online.h"
 #include "ns_runlog.h"
+#include "stub_serveur.h"
 
 #include <SDL3/SDL.h>
 
@@ -409,6 +411,155 @@ static void test_partie_en_ligne(const char *url, const char *token)
     ns_online_shutdown();
 }
 
+/* ==========================================================================
+ * La chaîne, contre le bouchon — c'est-à-dire dans l'intégration continue
+ * ========================================================================== */
+
+/*
+ * Attend qu'une condition devienne vraie, jusqu'à `limite_ms`, et pose le
+ * verdict dans `ou`. Le fil de `ns_online` travaille à son rythme : un test qui
+ * dort une durée fixe est un test qui échouera un jour sur une machine chargée.
+ *
+ * Un `do { } while (0)` et pas une expression de bloc : ces dernières sont une
+ * extension GCC que MSVC ne compile pas, et l'intégration continue passe par
+ * Windows.
+ */
+#define ATTENDRE(cond, limite_ms, ou)                                         \
+    do {                                                                      \
+        (ou) = false;                                                         \
+        for (int _i = 0; _i * 20 < (limite_ms); ++_i) {                       \
+            if (cond) { (ou) = true; break; }                                 \
+            SDL_Delay(20);                                                    \
+        }                                                                     \
+    } while (0)
+
+static void demarrer_reseau(const char *url, const char *jeton)
+{
+    ns_online_config cfg;
+    SDL_zero(cfg);
+    cfg.server_url = url;
+    cfg.token = jeton;
+    ns_online_init(&cfg);
+}
+
+/*
+ * LA RÉGRESSION QUI A COÛTÉ LE CLASSEMENT MONDIAL.
+ *
+ * Une borne déclare « easy », la partie se joue en « normal » ou en « hard »
+ * selon le lot acheté, et le billet doit suivre la partie. Quand il ne la
+ * suivait pas, deux gardes se bloquaient l'une l'autre : `take_ticket` ne
+ * consomme pas un billet d'un autre créneau, et le fil ne tire un billet que
+ * si aucun n'est prêt. Le billet inutile restait donc prêt POUR TOUJOURS, et
+ * la borne ne recevait plus jamais rien.
+ *
+ * Mesuré sur la pile réelle avant correction : 7 parties ouvertes côté
+ * serveur, 0 soumise, 0 score.
+ */
+static void test_changement_de_creneau(const char *url)
+{
+    demarrer_reseau(url, STUB_JETON);
+
+    bool vu = false;
+    ns_online_prefetch_ticket("demineur", "easy");
+    ATTENDRE(stub_parties_ouvertes() >= 1, 4000, vu);
+    CHECK(vu, "le bouchon ouvre la partie demandée (%s)", ns_online_status());
+    CHECK(SDL_strcmp(stub_dernier_creneau(), "demineur-easy") == 0,
+          "sur le créneau « demineur-easy » et pas un autre (« %s »)",
+          stub_dernier_creneau());
+
+    /* La partie, elle, se joue en régime dur : ce billet-là ne lui sert pas. */
+    ns_online_ticket t;
+    CHECK(!ns_online_take_ticket("demineur", "hard", &t),
+          "un billet « easy » n'ouvre pas une partie « hard »");
+
+    /* Et c'est ici que tout se jouait : le client DOIT aller en chercher un
+     * autre. Sans la correction, cette attente ne se terminait jamais. */
+    ATTENDRE(SDL_strcmp(stub_dernier_creneau(), "demineur-hard") == 0, 4000, vu);
+    CHECK(vu, "le client redemande aussitôt un billet pour le bon créneau (« %s »)",
+          stub_dernier_creneau());
+    ATTENDRE(ns_online_take_ticket("demineur", "hard", &t), 4000, vu);
+    CHECK(vu, "et la partie suivante l'obtient");
+    CHECK(t.run_id[0] != '\0' && t.secret_len == 32,
+          "avec identifiant et secret (%s, %zu octets)", t.run_id, t.secret_len);
+
+    ns_online_shutdown();
+}
+
+/* La chaîne complète, sans base ni conteneur : billet, sceau, file, envoi,
+ * classement. C'est `test_partie_en_ligne` en version portable. */
+static void test_chaine_contre_bouchon(const char *url)
+{
+    char file[1024];
+    char *cwd = SDL_GetCurrentDirectory();
+    SDL_snprintf(file, sizeof file, "%stest-bouchon-file", cwd ? cwd : "./");
+    SDL_free(cwd);
+    ns_runlog_set_queue_dir(file);
+
+    demarrer_reseau(url, STUB_JETON);
+
+    ns_online_prefetch_ticket("envol", "normal");
+    ns_online_ticket t;
+    bool vu = false;
+    ATTENDRE(ns_online_take_ticket("envol", "normal", &t), 4000, vu);
+    CHECK(vu, "un billet arrive pour « envol/normal » (%s)", ns_online_status());
+    CHECK(SDL_strcmp(stub_dernier_creneau(), "envol-easy") == 0,
+          "traduit en « envol-easy », le nom que la base emploie (« %s »)",
+          stub_dernier_creneau());
+    /* La graine du bouchon garde ses bits de poids faible : une relecture en
+     * flottant se verrait ici. */
+    CHECK((t.seed & 0xFFFFull) != 0, "et la graine est entière (%lld)",
+          (long long)t.seed);
+
+    ns_runlog *r = ns_runlog_create(32);
+    ns_runlog_begin(r, "envol", "normal", t.seed, t.secret, t.secret_len);
+    ns_runlog_set_run_id(r, t.run_id);
+    for (int i = 0; i < 4; ++i) ns_runlog_event(r, 2000 + i * 1500, "pipe", 0);
+    ns_runlog_event(r, 8000, "death", 0);
+    ns_runlog_end(r, 8000, 4);
+    CHECK(ns_runlog_enqueue(r), "la partie entre dans la file");
+    ns_runlog_destroy(r);
+
+    ns_online_flush_queue();
+    uint32_t envoyees = 0, refusees = 0;
+    ATTENDRE((ns_online_stats(&envoyees, &refusees), envoyees || refusees), 4000, vu);
+    CHECK(vu, "l'envoi aboutit à un verdict");
+    CHECK(envoyees == 1 && refusees == 0,
+          "elle est acceptée (%u envoyée(s), %u refusée(s), %s)",
+          envoyees, refusees, ns_online_status());
+    CHECK(stub_parties_soumises() == 1,
+          "et le serveur l'a bien reçue (%u)", stub_parties_soumises());
+    /* L'enveloppe est celle que le serveur attend : `submission` seule. Le
+     * bouchon rend 400 sur tout le reste, ce qui se lirait en « refusée ». */
+    CHECK(stub_dernier_score() == 4,
+          "avec le score annoncé (%d)", stub_dernier_score());
+    CHECK(ns_runlog_pending() == 0, "et la file est vide (%u)", ns_runlog_pending());
+
+    ns_online_request_board("envol", "normal");
+    ns_online_board b;
+    ATTENDRE(ns_online_board_get("envol", "normal", &b), 4000, vu);
+    CHECK(vu, "le classement mondial revient");
+    CHECK(b.count == 1 && b.row[0].score == 4,
+          "avec la ligne du score (%u ligne(s))", b.count);
+
+    ns_online_shutdown();
+    ns_runlog_set_queue_dir(NULL);
+}
+
+/* Sans jeton, le serveur répond 401 et le jeu reste jouable : c'est la règle
+ * qui prime sur tout le reste, et elle se vérifie ici plutôt que de se
+ * raconter. */
+static void test_sans_jeton_contre_bouchon(const char *url)
+{
+    demarrer_reseau(url, NULL);
+    ns_online_prefetch_ticket("envol", "normal");
+    ns_online_ticket t;
+    SDL_Delay(400);
+    CHECK(!ns_online_take_ticket("envol", "normal", &t),
+          "aucun billet sans jeton de session");
+    CHECK(ns_online_enabled(), "et le réseau reste actif pour le classement");
+    ns_online_shutdown();
+}
+
 int main(int argc, char **argv)
 {
     ns_log_set_level(NS_LOG_ERROR);
@@ -418,9 +569,24 @@ int main(int argc, char **argv)
     test_verrou_hors_ligne();
     test_serveur_mort();
 
+    /*
+     * Le bouchon d'abord, et sans condition : c'est lui qui couvre la chaîne
+     * dans l'intégration continue, là où il n'y a ni base ni conteneur.
+     */
+    char bouchon[64];
+    if (stub_demarrer(bouchon, sizeof bouchon)) {
+        printf("  bouchon HTTP sur %s\n", bouchon);
+        test_changement_de_creneau(bouchon);
+        test_chaine_contre_bouchon(bouchon);
+        test_sans_jeton_contre_bouchon(bouchon);
+        stub_arreter();
+    } else {
+        printf("  (pile réseau indisponible : le bouchon est sauté)\n");
+    }
+
     if (argc > 2)      test_partie_en_ligne(argv[1], argv[2]);
     else if (argc > 1) test_classement_en_ligne(argv[1]);
-    else printf("  (pas d'URL fournie : le test en ligne est sauté)\n");
+    else printf("  (pas d'URL fournie : le vrai serveur n'est pas interrogé)\n");
 
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
