@@ -5657,16 +5657,17 @@
     {
       "name": "porte_cabine_2",
       "at": [
-        10.25,
+        10.21,
         0.0,
-        -0.98
+        -0.95
       ],
-      "yaw": 142.0,
+      "yaw": 180.0,
       "_pose": "Même cas que « porte_cabine_1 » : un vantail pendu à la joue de sa cabine.",
       "pose": "libre",
-      "_": "Entrouverte de 38 degres, devant la cabine du bloc femmes. Elle etait a (-7,14 ; -5,45), c'est-a-dire DANS LE MUR OUEST DU HALL, a 13,4 m de la cabine qu'elle est censee fermer et de l'autre cote du batiment. C'est le detail qui fait la difference entre un bloc sanitaire et un placard : on voit qu'il y a quelque chose derriere.",
+      "_": "LES DEUX PORTES DE CABINE, REFERMEES SUR LEUR BAIE. Le joueur les a vues « flottantes devant les cloisons, a un angle qui ne correspond a aucune charniere ».\nCE QU'IL VOYAIT ETAIT EXACT. Celle-ci pendait a 142 degres : un vantail ouvert aux deux tiers, dont le bord libre part a 0,88 m de son gond dans la piece, sans que rien ne le tienne. Et elle etait INCOMPLETE — deux pieces sur cinq, ni gonds ni plaque — parce que le lot qui la reprenait a ete interrompu au milieu.\nLES DEUX SONT DESORMAIS FERMEES, et c'est un choix plutot qu'un defaut de paresse : une porte entrebaillee demande un angle, et un angle demande de savoir de quel cote elle bat. La cabine est profonde de 1,28 m pour 0,916 m de passage libre — un vantail de 0,88 ouvert vers l'interieur toucherait la cuvette, ouvert vers l'exterieur il barrerait le passage devant les lavabos. Fermees, elles sont justes dans les deux cas.\nLA COTE DU GOND VIENT DE LA BAIE, pas de l'oeil : les deux joues de la cabine occupent x 9,272..9,312 et 10,228..10,268, ce qui laisse 0,916 m de passage. Le gond est pose sur 10,210, exactement en MIROIR de « porte_cabine_1 » qui pose le sien sur 9,330 : dix-huit millimetres dans la baie, la ou la ferrure se visse. Pose sur 10,228, c'est-a-dire sur la face meme de la joue, roomgen l'a refusee au sommet pres — « le sommet (10.228, 0.156, -0.938) est dans le solide de cabine_toilettes_2 » — et il avait raison : un gond ne se visse pas DANS le panneau, il se visse dessus. Le vantail de 0,88 va donc de 9,330 a 10,210.",
       "parts": [
         {
+          "_": "le vantail",
           "type": "box",
           "material": "cabine_panneau",
           "at": [
@@ -5682,6 +5683,7 @@
           "chamfer": 0.006
         },
         {
+          "_": "la poignee",
           "type": "box",
           "material": "borne_chrome",
           "at": [
@@ -5695,6 +5697,52 @@
             0.022
           ],
           "chamfer": 0.004
+        },
+        {
+          "_": "gond bas",
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.005,
+            0.42,
+            0.0
+          ],
+          "size": [
+            0.038,
+            0.1,
+            0.04
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "gond haut",
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.005,
+            1.52,
+            0.0
+          ],
+          "size": [
+            0.038,
+            0.1,
+            0.04
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "_": "la plaque de porte, du cote qu'on pousse",
+          "type": "panel",
+          "material": "plaque_pousser",
+          "at": [
+            0.6,
+            1.35,
+            0.02
+          ],
+          "size": [
+            0.15,
+            0.15
+          ]
         }
       ]
     },
@@ -5740,6 +5788,22 @@
             0.05
           ],
           "chamfer": 0.004
+        },
+        {
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.0,
+            2.05,
+            0.275
+          ],
+          "size": [
+            0.05,
+            0.05,
+            1.6
+          ],
+          "chamfer": 0.004,
+          "_": "LE RAIL, QUI MANQUAIT. Ces deux portes sont COULISSANTES — la scene le dit depuis toujours, les baies `porte_toilettes` font 0,95 m pour un vantail de 1,05 qui les recouvre, et le vantail est pose 0,145 m DEVANT la cloison, ce qui est precisement la place d'une porte qui glisse. Mais rien ne le montrait : sans rail, un vantail pose devant un mur n'est pas une porte coulissante, c'est un panneau noir appuye la, et c'est ce que le joueur a vu.\nLE RAIL VA DE 2,05 A 2,10 m, c'est-a-dire qu'il s'arrete PILE sous le linteau de la baie (head 2,10) : un millimetre de plus et il traverserait la maconnerie. Il fait 1,60 m de long pour un vantail de 1,05 — il faut bien que la porte ait ou aller."
         }
       ]
     },
@@ -5783,6 +5847,21 @@
             0.022,
             0.14,
             0.05
+          ],
+          "chamfer": 0.004
+        },
+        {
+          "type": "box",
+          "material": "borne_chrome",
+          "at": [
+            0.0,
+            2.05,
+            -0.275
+          ],
+          "size": [
+            0.05,
+            0.05,
+            1.6
           ],
           "chamfer": 0.004
         }
