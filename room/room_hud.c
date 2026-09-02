@@ -448,7 +448,91 @@ void room_hud_draw(ns_sprite *s, const room_hud_state *st)
 /* L'écran de la borne de classement                                          */
 /* ========================================================================== */
 
-void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds)
+/*
+ * LA PAGE DE SAISON, sur la dalle de la borne de classement.
+ *
+ * Elle repond a une question que les records locaux ne posent meme pas : « qui
+ * est fort EN CE MOMENT, et ou est-ce que j'en suis ». Un record de toujours ne
+ * donne envie de rien a qui arrive, parce qu'il est deja pris depuis des mois.
+ * Une saison qui se termine dans vingt-huit jours, si.
+ *
+ * GROS ET PEU, comme le reste de cette dalle : elle fait 62 cm et se lit a deux
+ * metres et demi. Cinq lignes, pas six. Le conseil detaille — « marquez 4 401
+ * sur Piano » — ne tient pas a cette taille et vit sur le site, qui a la place.
+ */
+static void draw_saison(ns_sprite *s, float w, float u, const ns_saison *sa)
+{
+    static const float title[4] = { 0.66f, 0.95f, 1.00f, 1.0f };
+    static const float head[4]  = { 1.00f, 0.82f, 0.35f, 1.0f };
+    static const float row[4]   = { 0.88f, 0.94f, 1.00f, 1.0f };
+    static const float dim[4]   = { 0.44f, 0.56f, 0.70f, 1.0f };
+    static const float moi[4]   = { 0.21f, 0.88f, 0.63f, 1.0f };
+
+    static const float filet[4] = { 0.18f, 0.46f, 0.68f, 1.0f };
+    ns_sprite_rect(s, w * 0.08f, 46.0f * u, w * 0.84f, 2.0f * u, filet);
+    ns_sprite_rect(s, w * 0.08f, 196.0f * u, w * 0.84f, 2.0f * u, filet);
+
+    centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "SAISON");
+
+    char ligne[64];
+    /* Le mois EN MAJUSCULES : tout le reste de cette dalle l'est, et une
+     * minuscule au milieu se lit comme une faute a cette distance. */
+    char mois[32];
+    SDL_strlcpy(mois, sa->libelle[0] ? sa->libelle : "EN COURS", sizeof mois);
+    for (char *p = mois; *p; ++p) {
+        if (*p >= 'a' && *p <= 'z') *p = (char)(*p - 32);
+    }
+    if (sa->jours_restants > 0) {
+        SDL_snprintf(ligne, sizeof ligne, "%s   %d JOURS", mois, sa->jours_restants);
+    } else {
+        SDL_snprintf(ligne, sizeof ligne, "%s   DERNIER JOUR", mois);
+    }
+    centred(s, w * 0.5f, 56.0f * u, 1.8f * u, head, ligne);
+
+    if (sa->podium_count == 0) {
+        centred(s, w * 0.5f, 130.0f * u, 2.2f * u, row, "AUCUN SCORE CE MOIS-CI");
+        centred(s, w * 0.5f, 168.0f * u, 1.8f * u, moi, "LA PREMIERE PLACE EST LIBRE");
+        return;
+    }
+
+    for (uint32_t i = 0; i < sa->podium_count; ++i) {
+        const ns_saison_ligne *l = &sa->podium[i];
+        /* Le pseudo est borne a huit caracteres : au-dela, deux noms longs se
+         * touchent et l'oeil ne sait plus ou finit le premier. */
+        SDL_snprintf(ligne, sizeof ligne, "%u  %-8.8s %5u  %s",
+                     i + 1u, l->pseudo, l->points, l->palier);
+        centred(s, w * 0.5f, (92.0f + 34.0f * (float)i) * u, 2.0f * u,
+                i == 0 ? head : row, ligne);
+    }
+
+    /* MA LIGNE, en vert d'ecran : c'est la seule de la dalle qui parle de moi,
+     * et elle doit se trouver sans etre cherchee. */
+    if (sa->moi) {
+        SDL_snprintf(ligne, sizeof ligne, "VOUS  %u%s  %u PTS  %s",
+                     sa->ma_ligne.rang, sa->ma_ligne.rang == 1u ? "er" : "e",
+                     sa->ma_ligne.points, sa->ma_ligne.palier);
+        centred(s, w * 0.5f, 212.0f * u, 2.0f * u, moi, ligne);
+        if (sa->ma_ligne.rang > 1u && sa->mon_ecart > 0u) {
+            /*
+             * 1,8 ET PAS 1,5. La police de la couche 2D est une police
+             * matricielle : sous 1,7 unite, les glyphes se decomposent et le
+             * texte devient illisible. Mesure sur capture de cette dalle :
+             * a 1,5 « POINTS DU RANG » se lit « FCINTS CL RANG », a 1,3
+             * « SCORES LOCAUX CI-DESSUS » se lit « SCCRES LOCAUX CI-CESSUS ».
+             * A 1,7 et au-dessus, tout est net. Le seuil est donc entre les
+             * deux, et rien ici ne descend plus dessous.
+             */
+            SDL_snprintf(ligne, sizeof ligne, "%u POINTS DU RANG DEVANT", sa->mon_ecart);
+            centred(s, w * 0.5f, 250.0f * u, 1.8f * u, dim, ligne);
+        }
+    } else {
+        centred(s, w * 0.5f, 212.0f * u, 1.8f * u, moi, "F1 POUR CREER UN COMPTE");
+        centred(s, w * 0.5f, 250.0f * u, 1.8f * u, dim, "TROIS PARTIES SUFFISENT");
+    }
+}
+
+void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds,
+                               const ns_saison *saison)
 {
     if (!s) return;
 
@@ -475,11 +559,7 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
     ns_sprite_rect(s, 0.0f, 0.0f, w, h, bg);
 
     static const float rule[4] = { 0.18f, 0.46f, 0.68f, 1.0f };
-    ns_sprite_rect(s, w * 0.08f, 46.0f * u, w * 0.84f, 2.0f * u, rule);
-    ns_sprite_rect(s, w * 0.08f, 246.0f * u, w * 0.84f, 2.0f * u, rule);
-
     static const float title[4] = { 0.66f, 0.95f, 1.00f, 1.0f };
-    centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
 
     /*
      * Les colonnes viennent des jeux PORTÉS, et elles défilent.
@@ -518,13 +598,62 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
         total++;
     }
     if (total == 0) {
+        centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
         centred(s, w * 0.5f, 130.0f * u, 2.0f * u, title, "AUCUN JEU PORTE");
         return;
     }
 
     const int cols = (total < 4) ? total : 4;
     const int pages = (total + cols - 1) / cols;
-    const int page = pages > 1 ? (int)((time_seconds / 6.0)) % pages : 0;
+
+    /*
+     * LA SAISON PREND UNE PAGE DE PLUS, et pas la place d'une autre.
+     *
+     * Six secondes chacune, comme les pages de records : le temps de lire en
+     * passant, et de voir qu'il y en a d'autres. Un joueur hors ligne garde
+     * exactement l'ecran qu'il avait — `saison` est alors nul et le total ne
+     * bouge pas.
+     */
+    const bool avec_saison = saison && saison->fresh;
+    const int total_pages = pages + (avec_saison ? 1 : 0);
+    const int page = total_pages > 1 ? (int)((time_seconds / 6.0)) % total_pages : 0;
+
+    /*
+     * Dire qu'il y a une suite. Un tableau qui change tout seul sans
+     * l'annoncer ressemble a un bogue ; annonce, il invite a attendre la page
+     * d'apres.
+     *
+     * La pastille est posee ICI, avant que les deux branches se separent, et
+     * elle compte TOUTES les pages. Elle etait dessinee dans la branche des
+     * records seule et comptait les records seuls : la dalle affichait « 1/4 »
+     * alors que cinq pages defilaient, et la cinquieme avait l'air d'arriver de
+     * nulle part.
+     */
+    if (total_pages > 1) {
+        static const float pastille[4] = { 0.44f, 0.56f, 0.70f, 1.0f };
+        char tag[16];
+        SDL_snprintf(tag, sizeof tag, "%d/%d", page + 1, total_pages);
+        centred(s, w * 0.94f, 16.0f * u, 1.6f * u, pastille, tag);
+    }
+
+    /*
+     * LA PAGE DE SAISON EST UNE PAGE ENTIERE, et l'on sort AVANT que la mise en
+     * page des records ne pose la sienne.
+     *
+     * Le premier jet sortait plus bas : le fond, les deux filets et le titre
+     * « MEILLEURS SCORES » etaient deja dessines, si bien que « SAISON »
+     * s'ecrivait par-dessus et que le pied « SCORES LOCAUX CI-DESSUS » passait
+     * sous l'ecart. Vu sur capture, deux titres empiles et une ligne illisible.
+     */
+    if (avec_saison && page == pages) {
+        draw_saison(s, w, u, saison);
+        return;
+    }
+
+    ns_sprite_rect(s, w * 0.08f, 46.0f * u, w * 0.84f, 2.0f * u, rule);
+    ns_sprite_rect(s, w * 0.08f, 246.0f * u, w * 0.84f, 2.0f * u, rule);
+    centred(s, w * 0.5f, 14.0f * u, 3.0f * u, title, "MEILLEURS SCORES");
+
     const int first = page * cols;
     const struct column *col = &all[first];
     const int shown = (total - first < cols) ? (total - first) : cols;
@@ -666,19 +795,15 @@ void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_secon
         char line[64];
         SDL_snprintf(line, sizeof line, "MONDIAL ENVOL  %-3.3s %u",
                      world.row[0].name, world.row[0].score);
-        centred(s, w * 0.5f, 256.0f * u, 1.7f * u, gold, line);
-        centred(s, w * 0.5f, 274.0f * u, 1.3f * u, dim, "SCORES LOCAUX CI-DESSUS");
+        centred(s, w * 0.5f, 254.0f * u, 1.7f * u, gold, line);
+        /* 1,7 comme la ligne du dessus, et non 1,3 : voir la note sur le seuil
+         * de lisibilite dans `draw_saison`. A 1,3 cette ligne se lisait
+         * « SCCRES LOCAUX CI-CESSUS », ce qui est pire que de ne rien ecrire. */
+        centred(s, w * 0.5f, 272.0f * u, 1.7f * u, dim, "SCORES LOCAUX CI-DESSUS");
     } else {
-        centred(s, w * 0.5f, 258.0f * u, 1.6f * u, dim, "SCORES LOCAUX");
+        centred(s, w * 0.5f, 258.0f * u, 1.7f * u, dim, "SCORES LOCAUX");
     }
 
-    /* Dire qu'il y a une suite. Un tableau qui change tout seul sans l'annoncer
-     * ressemble à un bogue ; annoncé, il invite à attendre la page d'après. */
-    if (pages > 1) {
-        char tag[16];
-        SDL_snprintf(tag, sizeof tag, "%d/%d", page + 1, pages);
-        centred(s, w * 0.94f, 16.0f * u, 1.6f * u, dim, tag);
-    }
 }
 
 /* --------------------------------------------------------------------------

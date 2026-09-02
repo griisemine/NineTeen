@@ -28,6 +28,7 @@
 #ifndef NS_ROOM_HUD_H
 #define NS_ROOM_HUD_H
 
+#include "ns_online.h"
 #include "ns_scene.h"
 #include "ns_sprite.h"
 #include "room_couperet.h"
@@ -162,7 +163,14 @@ void room_hud_draw(ns_sprite *s, const room_hud_state *st);
  * donne envie de rien ; affiché sur une borne qu'on croise en entrant, il donne
  * envie de reprendre la main. La borne affichait une image fixe de 2020.
  */
-void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds);
+/*
+ * `saison` peut etre NUL, et c'est le cas ordinaire : sans serveur configure il
+ * n'y a pas de saison, et la dalle montre alors les records locaux seuls. Quand
+ * elle est la, elle prend UNE page de plus dans la rotation — pas la place des
+ * autres. Un joueur hors ligne ne doit pas perdre l'ecran qu'il avait.
+ */
+void room_hud_draw_leaderboard(ns_sprite *s, float w, float h, double time_seconds,
+                               const ns_saison *saison);
 
 /*
  * LE TABLEAU DU BAR : le classement à gauche, les joueurs EN DIRECT à droite.

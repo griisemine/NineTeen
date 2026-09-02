@@ -174,6 +174,71 @@ const char *ns_online_status(void);
 void ns_online_request_board(const char *game, const char *difficulty);
 bool ns_online_board_get(const char *game, const char *difficulty, ns_online_board *out);
 
+/* ==========================================================================
+ * LA SAISON CLASSEE, telle que la salle a besoin de la montrer
+ * ==========================================================================
+ * Le classement mondial dit qui a fait le meilleur score une fois. La saison
+ * dit qui est fort CE MOIS-CI, et elle se remet a zero. C'est la seule des deux
+ * qui donne une raison de revenir demain, donc c'est celle qu'il faut voir en
+ * traversant la salle.
+ *
+ * Ce que le jeu en garde est volontairement MINCE : trois lignes de podium, la
+ * sienne, et une phrase de conseil. Le detail — quatorze creneaux, les paliers,
+ * les bornes desertes — vit sur le site, qui a la place de l'afficher. Une
+ * dalle de 62 cm lue a deux metres et demi n'a la place de rien d'autre que
+ * d'un nom, d'un nombre et d'une raison d'y retourner.
+ * ========================================================================== */
+
+#define NS_SAISON_PODIUM 3
+#define NS_SAISON_PALIER 16
+
+typedef struct ns_saison_ligne {
+    char     pseudo[NS_ONLINE_NAME];
+    uint32_t points;
+    uint32_t rang;
+    char     palier[NS_SAISON_PALIER];
+    int      niveau;          /* 0 = non classe, 7 = le sommet */
+} ns_saison_ligne;
+
+typedef struct ns_saison {
+    char     libelle[32];     /* « septembre 2026 » */
+    int      jours_restants;
+    uint32_t joueurs;
+
+    ns_saison_ligne podium[NS_SAISON_PODIUM];
+    uint32_t        podium_count;
+
+    /* Ma ligne, si un jeton de session accompagne la demande ET que j'ai joue
+     * cette saison. Sinon `moi` reste faux et la dalle montre le podium seul. */
+    bool            moi;
+    ns_saison_ligne ma_ligne;
+    uint32_t        mon_ecart;   /* points qui me separent du rang au-dessus */
+
+    /*
+     * LE CONSEIL, deja redige par le serveur et recopie tel quel.
+     *
+     * C'est la seule ligne de tout ce bloc qui dise quoi FAIRE, et c'est elle
+     * qui transforme un tableau en objectif. Le serveur la compose parce qu'il
+     * est le seul a savoir ce que vaut une place sur chaque borne — la refaire
+     * ici demanderait de recopier le bareme, donc de le laisser diverger.
+     */
+    char conseil[96];
+
+    bool fresh;               /* au moins une reponse recue */
+} ns_saison;
+
+/*
+ * Demande la saison. Retour immediat, comme tout le reste ici : la reponse
+ * arrive plus tard et `ns_online_saison_get` la rend quand elle est la.
+ *
+ * Sans jeton de session la demande part quand meme et rend le podium : un
+ * classement qu'il faut un compte pour LIRE est un classement que personne ne
+ * regarde, et voir le podium avant d'y etre est precisement ce qui donne envie
+ * d'y entrer.
+ */
+void ns_online_request_saison(void);
+bool ns_online_saison_get(ns_saison *out);
+
 /*
  * Un BILLET de partie : ce que le serveur délivre AVANT qu'on joue.
  *

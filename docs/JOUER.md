@@ -279,6 +279,64 @@ courant laisse l'ancien fichier intact plutôt qu'un fichier à moitié écrit. 
 l'économie à zéro et ne casse rien — le jeu repart d'un portefeuille neuf sans un message
 d'erreur, ce qui est le cas du premier lancement.
 
+## La saison classée — le classement qui donne envie d'y retourner
+
+Le classement général additionne `score × multiplicateur` sur tous les jeux. Les échelles n'ont
+rien à voir entre elles : la table `games` dit elle-même que le score plausible maximal vaut
+5 000 pour Envol et 999 999 pour Aplomb, un **facteur deux cents**. Additionner ces nombres ne
+classe pas des joueurs, ça classe des machines.
+
+La saison corrige ça. **Un mois, en UTC, qui repart de zéro.** Un score brut n'y vaut rien par
+lui-même : ce qui compte est le **rang** qu'il vous donne dans son créneau. Les dix-neuf bornes
+valent alors la même chose au sommet.
+
+### Les points
+
+| Rang dans le créneau | 1 | 2 | 3 | 4 | 5 | 6 | 10 | 20 et au-delà |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Points | 100 | 80 | 65 | 52 | 42 | 34 | 14 | 1 |
+
+Multipliés par le coefficient de la borne — 2,5 pour le Démineur difficile, 2 pour les régimes
+durs, 1,5 pour Dédale, 1 pour le reste. **Toute partie valide rapporte au moins un point**, ce
+qui est la seule façon d'ouvrir une saison à quelqu'un qui arrive le 28.
+
+Une saison parfaite — premier sur les quatorze créneaux — vaut 2 100 points.
+
+### Les paliers
+
+| Palier | Points |
+| --- | --- |
+| NON CLASSÉ | moins de trois parties valides |
+| JETON | 0 |
+| RELANCE | 120 |
+| SÉRIE | 300 |
+| RECORD | 600 |
+| PLAQUE | 1 000 |
+| LAME | 1 500 |
+| DIX-NEUF | 1 900 |
+
+DIX-NEUF demande 90 % d'une saison parfaite. Un test compare ces seuils à la vraie table des
+jeux et rougit le jour où une borne ajoutée ou retirée les rendrait absurdes.
+
+### Ce qui entre au classement, et ce qui n'y entre pas
+
+Seul un score **recalculé par le serveur** depuis le journal scellé de la partie compte, et il
+doit être **strictement positif**. Sans cette seconde condition, la stratégie optimale serait
+d'insérer un jeton et de mourir aussitôt sur une borne déserte : un zéro donnerait la première
+place, donc cent points, pour n'avoir rien joué.
+
+### Où ça se voit
+
+Dans le jeu, sur **la borne de classement**, qui ajoute une page « SAISON » à sa rotation : le
+podium, votre rang, votre palier et l'écart avec le rang au-dessus. Elle se rafraîchit toutes
+les deux minutes, et **tout de suite après une partie envoyée**.
+
+Sur le site, `/classement.html` montre le podium à trois marches, l'échelle des paliers, votre
+progression vers le palier suivant, le détail borne par borne, et **le pas suivant nommé** : pas
+« jouez plus », mais « marquez 4 401 sur Piano pour prendre la première place, qui vaut 20 points
+de plus ». Cliquer un pseudo ouvre sa fiche, avec ses records et sa saison précédente à côté de
+la courante.
+
 ## La mise à jour, et pourquoi elle ne bloque jamais rien
 
 Au lancement, si une adresse de serveur est configurée, le jeu demande

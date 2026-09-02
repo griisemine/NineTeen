@@ -34,6 +34,11 @@ static struct {
     char        want_game[24];
     char        want_diff[16];
 
+    /* La saison classee. Une seule, la courante : le jeu n'affiche jamais une
+     * saison passee, c'est le site qui a la place de les comparer. */
+    bool        want_saison;
+    ns_saison   saison;
+
     ns_online_board board[NS_ONLINE_MAX_BOARDS];
     uint32_t        boards;
 
@@ -235,6 +240,154 @@ static ns_online_board *board_slot(const char *game, const char *diff)
     SDL_snprintf(b->game, sizeof b->game, "%s", game);
     SDL_snprintf(b->difficulty, sizeof b->difficulty, "%s", diff);
     return b;
+}
+
+/*
+ * Une ligne de classement de saison, telle que le serveur la rend.
+ *
+ * Le palier est un OBJET dans le JSON — nom, seuil, niveau — parce qu'il en
+ * faut deux pour l'afficher : le mot et la couleur. Les lire separement ici
+ * evite d'avoir a deviner l'un depuis l'autre.
+ */
+static void lire_ligne_saison(const ns_json *doc, const ns_json_value *v,
+                              ns_saison_ligne *out)
+{
+    SDL_zerop(out);
+    if (!v) return;
+    ns_json_get_string(doc, v, "pseudo", out->pseudo, sizeof out->pseudo);
+    out->points = (uint32_t)ns_json_get_i64(doc, v, "points", 0);
+    out->rang = (uint32_t)ns_json_get_i64(doc, v, "rang", 0);
+
+    const ns_json_value *palier = ns_json_get(doc, v, "palier");
+    if (palier) {
+        ns_json_get_string(doc, palier, "nom", out->palier, sizeof out->palier);
+        out->niveau = (int)ns_json_get_i64(doc, palier, "niveau", 0);
+    }
+}
+
+/*
+ * LE CONSEIL, compose ici a partir de ce que le serveur a calcule.
+ *
+ * Deux sources possibles, et on prend LA PLUS RENTABLE — exactement comme le
+ * site : reprendre une place sur une borne qu'on joue deja, ou aller sur une
+ * borne que personne ne tient. La comparaison est refaite ici plutot que
+ * partagee parce qu'elle ne porte que sur deux entiers que le serveur a
+ * deja rendus, et qu'un troisieme aller-retour pour une phrase serait absurde.
+ */
+static void composer_conseil(const ns_json *doc, const ns_json_value *moi,
+                             char *out, size_t cap)
+{
+    out[0] = '\0';
+    if (!moi) return;
+
+    const ns_json_value *ligne = ns_json_get(doc, moi, "ligne");
+    const ns_json_value *pas = ligne ? ns_json_get(doc, ligne, "prochain") : NULL;
+    const ns_json_value *vierges = ns_json_get(doc, moi, "vierges");
+    const ns_json_value *libre = ns_json_array_count(doc, vierges) > 0
+                               ? ns_json_at(doc, vierges, 0) : NULL;
+
+    const int64_t gain_pas = pas ? ns_json_get_i64(doc, pas, "gain", 0) : 0;
+    const int64_t gain_libre = libre ? ns_json_get_i64(doc, libre, "gain", 0) : 0;
+
+    char jeu[32] = { 0 };
+    if (gain_libre >= gain_pas && libre) {
+        ns_json_get_string(doc, libre, "jeuNom", jeu, sizeof jeu);
+        const int64_t joueurs = ns_json_get_i64(doc, libre, "joueurs", 0);
+        if (jeu[0]) {
+            if (joueurs == 0) {
+                SDL_snprintf(out, cap, "%s : personne dessus, %lld PTS A PRENDRE",
+                             jeu, (long long)gain_libre);
+            } else {
+                SDL_snprintf(out, cap, "%s : jamais joue, %lld PTS A PRENDRE",
+                             jeu, (long long)gain_libre);
+            }
+        }
+    } else if (pas && gain_pas > 0) {
+        ns_json_get_string(doc, pas, "jeuNom", jeu, sizeof jeu);
+        const int64_t vise = ns_json_get_i64(doc, pas, "scoreVise", 0);
+        if (jeu[0]) {
+            SDL_snprintf(out, cap, "%s : %lld POUR LA PLACE %lld, +%lld PTS",
+                         jeu, (long long)vise,
+                         (long long)ns_json_get_i64(doc, pas, "rangVise", 0),
+                         (long long)gain_pas);
+        }
+    }
+}
+
+/*
+ * La saison courante. Une requete, et tout tient dedans : le serveur assemble
+ * le podium, ma ligne et le conseil en une reponse, ce qui evite au jeu de
+ * faire trois allers-retours pour une dalle qu'on lit en passant.
+ */
+static void fetch_saison(void)
+{
+    char url[640];
+    SDL_snprintf(url, sizeof url, "%s/api/v1/saison", g.url);
+
+    ns_http_response r;
+    if (!ns_http_request("GET", url, NULL, g.token[0] ? g.token : NULL, NULL, 0, 4000, &r)) {
+        set_status("serveur injoignable");
+        ns_http_response_free(&r);
+        return;
+    }
+    if (r.status != 200 || !r.body) {
+        set_status("saison : %d", r.status);
+        ns_http_response_free(&r);
+        return;
+    }
+
+    /* 256 Kio : cinquante lignes de classement avec leur podium detaille. La
+     * reponse mesuree sur huit joueurs fait 6,4 Kio. */
+    ns_arena arena;
+    if (!ns_arena_init(&arena, 256u * 1024u, "json saison")) {
+        ns_http_response_free(&r);
+        return;
+    }
+
+    ns_json doc;
+    if (ns_json_parse(&doc, r.body, r.length, &arena)) {
+        const ns_json_value *racine = ns_json_root(&doc);
+        ns_saison s;
+        SDL_zero(s);
+
+        const ns_json_value *bloc = ns_json_get(&doc, racine, "saison");
+        if (bloc) {
+            ns_json_get_string(&doc, bloc, "libelle", s.libelle, sizeof s.libelle);
+            s.jours_restants = (int)ns_json_get_i64(&doc, bloc, "joursRestants", 0);
+        }
+        s.joueurs = (uint32_t)ns_json_get_i64(&doc, racine, "joueurs", 0);
+
+        const ns_json_value *podium = ns_json_get(&doc, racine, "podium");
+        const int n = ns_json_array_count(&doc, podium);
+        for (int i = 0; i < n && s.podium_count < NS_SAISON_PODIUM; ++i) {
+            lire_ligne_saison(&doc, ns_json_at(&doc, podium, i),
+                              &s.podium[s.podium_count]);
+            if (s.podium[s.podium_count].pseudo[0]) s.podium_count++;
+        }
+
+        const ns_json_value *moi = ns_json_get(&doc, racine, "moi");
+        if (moi) {
+            const ns_json_value *ligne = ns_json_get(&doc, moi, "ligne");
+            if (ligne) {
+                lire_ligne_saison(&doc, ligne, &s.ma_ligne);
+                s.mon_ecart = (uint32_t)ns_json_get_i64(&doc, ligne, "ecart", 0);
+                s.moi = s.ma_ligne.pseudo[0] != '\0';
+            }
+            composer_conseil(&doc, moi, s.conseil, sizeof s.conseil);
+        }
+
+        s.fresh = true;
+        SDL_LockMutex(g.lock);
+        g.saison = s;
+        SDL_UnlockMutex(g.lock);
+        set_status("saison a jour");
+        NS_INFO("saison : %s, %u joueur(s), %u sur le podium%s",
+                s.libelle[0] ? s.libelle : "en cours", s.joueurs, s.podium_count,
+                s.moi ? ", vous etes classe" : "");
+    }
+
+    ns_arena_free(&arena);
+    ns_http_response_free(&r);
 }
 
 static void fetch_board(const char *game, const char *diff)
@@ -475,10 +628,25 @@ static int SDLCALL worker(void *unused)
 {
     (void)unused;
     while (!SDL_GetAtomicInt(&g.quit)) {
-        bool board = false, ticket = false, flush = false;
+        bool board = false, ticket = false, flush = false, saison = false;
         char game[24], diff[16], tgame[24], tdiff[16];
 
         SDL_LockMutex(g.lock);
+        /*
+         * LE DRAPEAU DE SAISON N'EST PAS CONSOMME ICI, et c'est la difference
+         * qui a coute une dalle vide.
+         *
+         * Au demarrage, la salle demande le classement mondial ET la saison
+         * dans la meme image. Le fil se reveillait, prenait les deux drapeaux,
+         * n'en servait qu'un — le classement, qui passe avant — et jetait
+         * l'autre. La saison n'etait donc jamais demandee qu'a la premiere
+         * echeance de deux minutes, et la borne de classement affichait
+         * « 4/4 » pendant tout ce temps sans que rien ne le dise.
+         *
+         * Il est donc seulement LU ici, et efface plus bas, au moment ou la
+         * requete part vraiment.
+         */
+        saison = g.want_saison;
         if (g.want_board) {
             g.want_board = false;
             SDL_snprintf(game, sizeof game, "%s", g.want_game);
@@ -499,9 +667,18 @@ static int SDLCALL worker(void *unused)
         if (g.want_flush) { g.want_flush = false; flush = true; }
         SDL_UnlockMutex(g.lock);
 
+        /* L'ordre est celui de l'urgence. Le billet passe avant la saison :
+         * l'un fait attendre un joueur devant une borne, l'autre remplit une
+         * dalle qu'on lit en passant. */
         if (board) fetch_board(game, diff);
         else if (flush) flush_queue_now();
         else if (ticket) fetch_ticket(tgame, tdiff);
+        else if (saison) {
+            SDL_LockMutex(g.lock);
+            g.want_saison = false;
+            SDL_UnlockMutex(g.lock);
+            fetch_saison();
+        }
         else SDL_Delay(60);
     }
     return 0;
@@ -728,6 +905,24 @@ static void arm_ticket(const char *game, const char *diff)
         g.ticket_ready = false;
         SDL_zero(g.ticket);
     }
+}
+
+void ns_online_request_saison(void)
+{
+    if (!g.enabled) return;
+    SDL_LockMutex(g.lock);
+    g.want_saison = true;
+    SDL_UnlockMutex(g.lock);
+}
+
+bool ns_online_saison_get(ns_saison *out)
+{
+    if (!g.enabled || !out) return false;
+    SDL_LockMutex(g.lock);
+    const bool prete = g.saison.fresh;
+    if (prete) *out = g.saison;
+    SDL_UnlockMutex(g.lock);
+    return prete;
 }
 
 void ns_online_prefetch_ticket(const char *game, const char *difficulty)

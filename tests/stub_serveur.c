@@ -299,6 +299,47 @@ static void repondre_fichier(stub_socket c, const char *requete)
     (void)send(c, contenu + depuis, n, 0);
 }
 
+/*
+ * LA SAISON, dans la forme exacte de `handleSaison`.
+ *
+ * Les noms de champs sont le contrat entre les deux moities, et c'est la
+ * troisieme fois de la journee qu'ils piegent : le serveur ecrit « jeuNom » et
+ * « joursRestants », un client qui lirait « nom » ou « jours » n'aurait aucune
+ * erreur, seulement une dalle vide. Ce bouchon les recopie du Go, et le test
+ * verifie que le client les retrouve.
+ */
+static void repondre_saison(stub_socket c)
+{
+    static const char corps[] =
+        "{\"ok\":true,"
+        "\"saison\":{\"cle\":\"2026-09\",\"libelle\":\"septembre 2026\","
+        "\"precedente\":\"2026-08\",\"encours\":true,\"joursRestants\":28},"
+        "\"placementRequis\":3,"
+        "\"paliers\":[{\"nom\":\"JETON\",\"seuil\":0,\"niveau\":1},"
+        "{\"nom\":\"LAME\",\"seuil\":1500,\"niveau\":6}],"
+        "\"joueurs\":8,"
+        "\"podium\":["
+        "{\"rang\":1,\"pseudo\":\"Mine\",\"points\":1740,\"parties\":44,"
+        "\"palier\":{\"nom\":\"LAME\",\"seuil\":1500,\"niveau\":6},"
+        "\"ecart\":132,\"ors\":2,\"podiums\":3,"
+        "\"creneaux\":[{\"jeu\":\"demineur-hard\",\"jeuNom\":\"Demineur\","
+        "\"rang\":1,\"points\":250}]},"
+        "{\"rang\":2,\"pseudo\":\"Aurore\",\"points\":1608,\"parties\":30,"
+        "\"palier\":{\"nom\":\"LAME\",\"seuil\":1500,\"niveau\":6},\"ecart\":132},"
+        "{\"rang\":3,\"pseudo\":\"Klaxon\",\"points\":1204,\"parties\":17,"
+        "\"palier\":{\"nom\":\"PLAQUE\",\"seuil\":1000,\"niveau\":5},\"ecart\":404}],"
+        "\"classement\":[],"
+        "\"creneaux\":[],"
+        "\"moi\":{\"ligne\":{\"rang\":3,\"pseudo\":\"Klaxon\",\"points\":1204,"
+        "\"parties\":17,\"ecart\":404,\"ors\":1,"
+        "\"palier\":{\"nom\":\"PLAQUE\",\"seuil\":1000,\"niveau\":5},"
+        "\"prochain\":{\"jeu\":\"piano\",\"jeuNom\":\"Piano\",\"rangVise\":1,"
+        "\"scoreVise\":4401,\"gain\":20}},"
+        "\"vierges\":[{\"jeu\":\"aplomb-easy\",\"jeuNom\":\"Aplomb\","
+        "\"joueurs\":0,\"gain\":100}]}}";
+    envoyer(c, 200, "OK", corps);
+}
+
 static int SDLCALL boucle(void *inutile)
 {
     (void)inutile;
@@ -340,7 +381,9 @@ static int SDLCALL boucle(void *inutile)
 
         const bool autorise = SDL_strstr(req, "Authorization: Bearer " STUB_JETON) != NULL;
 
-        if (SDL_strncmp(req, "GET /api/v1/telechargements", 27) == 0) {
+        if (SDL_strncmp(req, "GET /api/v1/saison", 18) == 0) {
+            repondre_saison(c);
+        } else if (SDL_strncmp(req, "GET /api/v1/telechargements", 27) == 0) {
             repondre_telechargements(c);
         } else if (SDL_strncmp(req, "GET /telechargements/", 21) == 0) {
             repondre_fichier(c, req);

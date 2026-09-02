@@ -1548,7 +1548,17 @@ static uint32_t finish_run(ns_runlog *log, int64_t run_ms,
      * demande — le fil s'en charge, la boucle de jeu ne s'arrête pas.
      */
     if (!offline) {
-        if (ns_runlog_enqueue(log)) ns_online_flush_queue();
+        if (ns_runlog_enqueue(log)) {
+            ns_online_flush_queue();
+            /*
+             * ET LA SAISON DANS LA FOULEE. C'est l'instant precis ou ses points
+             * ont pu changer, et le seul ou le joueur regarde encore l'ecran.
+             * Le fil traite la file AVANT la saison — l'ordre est ecrit dans
+             * `worker` — donc la reponse porte deja la partie qu'on vient de
+             * jouer, au lieu de l'etat d'il y a deux minutes.
+             */
+            ns_online_request_saison();
+        }
     }
     return rank;
 }
@@ -2655,6 +2665,9 @@ int main(int argc, char **argv)
              * et le serveur répondait sur un jeu qui n'existe plus — le panneau
              * mondial restait vide, sans erreur. */
             ns_online_request_board("envol", "normal");
+            /* ET LA SAISON, tout de suite : c'est elle que la borne de
+             * classement montre en premier a qui entre. */
+            ns_online_request_saison();
 
             /*
              * ET LE BILLET DE `--game=`, ICI ET PAS PLUS TARD.
@@ -3037,6 +3050,11 @@ int main(int argc, char **argv)
      */
     ns_character_draw poses[NS_MAX_CHARACTERS];
     uint32_t          poses_n = 0;
+
+    /* L'heure de la prochaine demande de saison. `ns_online_init` en a deja
+     * lance une, plus haut : partir de zero ici en aurait fait une seconde dans
+     * la foulee, deux requetes pour la meme reponse. */
+    uint32_t prochaine_saison_ms = SDL_GetTicks() + 120000u;
 
     /* `--pairs-demo=` a-t-il déjà déposé son battement d'amorçage. Voir là où
      * il est déposé : sans lui, une capture courte photographie le fondu
@@ -4679,6 +4697,21 @@ play_at_done: ;
         }
 
         /*
+         * LA SAISON, toutes les deux minutes.
+         *
+         * DEUX MINUTES et pas deux secondes : ce n'est pas un direct. Le
+         * classement d'un mois ne bouge pas entre deux clignements, et la dalle
+         * qui l'affiche tourne ses pages toutes les six secondes — la
+         * rafraichir plus vite ne montrerait rien de plus et ferait trente
+         * requetes a l'heure pour rien. Ce qui doit etre immediat, c'est
+         * l'apres-partie, et `finish_run` s'en charge separement.
+         */
+        if (SDL_GetTicks() >= prochaine_saison_ms) {
+            prochaine_saison_ms = SDL_GetTicks() + 120000u;
+            ns_online_request_saison();
+        }
+
+        /*
          * LA PRÉSENCE : où je suis, et devant quelle borne.
          *
          * Déposée à chaque image, ce qui ne coûte rien — `ns_realtime_publish`
@@ -5680,7 +5713,20 @@ play_at_done: ;
              */
             if (sprites && board_rt.handle && board_material >= 0) {
                 ns_sprite_begin(sprites, 512.0f, 288.0f);
-                room_hud_draw_leaderboard(sprites, 512.0f, 288.0f, now);
+                /*
+                 * LA SAISON, quand le serveur en donne une.
+                 *
+                 * Relue a chaque image et non gardee : `ns_online_saison_get`
+                 * recopie une structure de trois cents octets sous un verrou,
+                 * et le fil ne l'ecrit qu'une fois par requete. Garder une
+                 * copie ici demanderait de savoir quand elle a change, ce qui
+                 * est exactement le genre de cache qui finit par afficher la
+                 * saison d'hier.
+                 */
+                ns_saison saison;
+                const bool a_saison = ns_online_saison_get(&saison);
+                room_hud_draw_leaderboard(sprites, 512.0f, 288.0f, now,
+                                          a_saison ? &saison : NULL);
                 static const float off[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
                 ns_sprite_end(rhi, sprites, board_rt.handle, 512, 288, off);
                 ns_renderer_set_screen(renderer, board_material, board_rt.handle);

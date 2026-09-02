@@ -560,6 +560,64 @@ static void test_sans_jeton_contre_bouchon(const char *url)
     ns_online_shutdown();
 }
 
+/*
+ * LA SAISON, et surtout LES NOMS DE CHAMPS.
+ *
+ * Le serveur ecrit « jeuNom », « joursRestants », « scoreVise », et le palier
+ * est un objet imbrique. Un client qui se tromperait d'une lettre n'aurait
+ * aucune erreur : la borne de classement afficherait une page vide, et rien,
+ * nulle part, ne dirait pourquoi. C'est deja arrive deux fois dans ce depot —
+ * une fois sur le vocabulaire des architectures, une fois sur le creneau d'un
+ * billet — et les deux ont coute une fonctionnalite entiere.
+ */
+static void test_saison_contre_bouchon(const char *url)
+{
+    demarrer_reseau(url, STUB_JETON);
+
+    ns_saison s;
+    bool vu = false;
+    ns_online_request_saison();
+    ATTENDRE(ns_online_saison_get(&s), 4000, vu);
+    CHECK(vu, "la saison arrive (%s)", ns_online_status());
+    if (!vu) { ns_online_shutdown(); return; }
+
+    CHECK(SDL_strcmp(s.libelle, "septembre 2026") == 0,
+          "avec son libelle (« %s »)", s.libelle);
+    CHECK(s.jours_restants == 28, "et ses jours restants (%d)", s.jours_restants);
+    CHECK(s.joueurs == 8, "et le nombre de joueurs classes (%u)", s.joueurs);
+
+    CHECK(s.podium_count == 3, "trois marches de podium (%u)", s.podium_count);
+    if (s.podium_count == 3) {
+        CHECK(SDL_strcmp(s.podium[0].pseudo, "Mine") == 0,
+              "le premier est nomme (« %s »)", s.podium[0].pseudo);
+        CHECK(s.podium[0].points == 1740, "avec ses points (%u)", s.podium[0].points);
+        /* Le palier est un OBJET imbrique : c'est le champ le plus facile a
+         * lire de travers, et le seul qui porte a la fois un mot et une
+         * couleur. */
+        CHECK(SDL_strcmp(s.podium[0].palier, "LAME") == 0,
+              "et son palier (« %s »)", s.podium[0].palier);
+        CHECK(s.podium[0].niveau == 6, "et son niveau (%d)", s.podium[0].niveau);
+        CHECK(SDL_strcmp(s.podium[2].pseudo, "Klaxon") == 0,
+              "le troisieme aussi (« %s »)", s.podium[2].pseudo);
+    }
+
+    CHECK(s.moi, "ma ligne est la");
+    CHECK(s.ma_ligne.rang == 3, "avec mon rang (%u)", s.ma_ligne.rang);
+    CHECK(s.mon_ecart == 404, "et l'ecart avec le rang au-dessus (%u)", s.mon_ecart);
+
+    /*
+     * LE CONSEIL, et le choix entre les deux sources. La borne vierge rapporte
+     * 100 points, reprendre une place sur Piano en rapporte 20 : c'est la borne
+     * vierge qui doit etre proposee.
+     */
+    CHECK(SDL_strstr(s.conseil, "Aplomb") != NULL,
+          "le conseil vise le creneau le plus rentable (« %s »)", s.conseil);
+    CHECK(SDL_strstr(s.conseil, "100") != NULL,
+          "et dit ce qu'il vaut (« %s »)", s.conseil);
+
+    ns_online_shutdown();
+}
+
 int main(int argc, char **argv)
 {
     ns_log_set_level(NS_LOG_ERROR);
@@ -579,6 +637,7 @@ int main(int argc, char **argv)
         test_changement_de_creneau(bouchon);
         test_chaine_contre_bouchon(bouchon);
         test_sans_jeton_contre_bouchon(bouchon);
+        test_saison_contre_bouchon(bouchon);
         stub_arreter();
     } else {
         printf("  (pile réseau indisponible : le bouchon est sauté)\n");
