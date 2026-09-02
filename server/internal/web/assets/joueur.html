@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fiche joueur de Nineteen</title>
+<meta name="description" content="Le detail d'un joueur : ses records borne par borne, sa saison en cours, son palier et ce qu'il lui reste a prendre.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <!-- ======================================================================
+       UNE FICHE, ET RIEN D'ECRIT A LA MAIN.
+
+       Le pseudo arrive dans l'adresse, sous ?pseudo=. Tout le reste vient de
+       /api/v1/joueurs/<pseudo> et se bâtit ici, par les memes fonctions que
+       les autres pages. Aucune ligne de tableau ne vit dans ce fichier.
+
+       Cette page n'est PAS dans le menu, et c'est voulu : on y arrive en
+       cliquant un nom dans un classement, jamais en la cherchant. Un menu a
+       cinq entrees dont une ne mene nulle part sans argument serait pire que
+       quatre.
+       ====================================================================== -->
+
+  <section class="section">
+    <p class="eyebrow"><a href="/classement.html">Retour au classement</a></p>
+    <div id="fiche"></div>
+    <p class="crt-etat" id="etat-joueur" role="status">Chargement</p>
+  </section>
+
+  <section class="section" id="bloc-saison"></section>
+
+  <section class="section" id="bloc-records"></section>
+
+  <noscript>
+    <section class="section">
+      <p class="note">Cette fiche est lue sur le serveur, ce qui demande JavaScript.</p>
+    </section>
+  </noscript>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.1.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+<script src="/joueur.js" defer></script>
+</body>
+</html>

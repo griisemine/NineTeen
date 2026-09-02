@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nineteen/internal/saison"
 	"nineteen/internal/salons"
 )
 
@@ -337,6 +338,160 @@ func (s *Store) Leaderboard(ctx context.Context, gameID int32, limit, offset int
 }
 
 // PlayerScores renvoie les scores d'un joueur, jeu par jeu.
+/* ========================================================================== */
+/* Saison classee                                                             */
+/* ========================================================================== */
+
+// SaisonMeilleurs rend, pour la fenetre demandee, le MEILLEUR score de chaque
+// joueur sur chaque creneau, avec le nombre de parties valides qu'il y a
+// faites.
+//
+// TROIS FILTRES, ET CHACUN A UNE RAISON.
+//
+//	verdict = 'ok'   Seul un score RECALCULE par le serveur depuis le journal
+//	                 scelle entre au classement. C'est tout l'interet du
+//	                 renversement de preuve : on ne classe pas ce que le client
+//	                 annonce.
+//	score > 0        Sans lui, la strategie optimale serait d'inserer un jeton
+//	                 et de mourir aussitot sur une borne deserte : un zero
+//	                 donnerait la premiere place, donc cent points, pour n'avoir
+//	                 rien joue. C'est le seul trou par lequel le bareme se
+//	                 percerait, et il se bouche ici.
+//	NOT p.disabled   Un compte ferme ne tient pas un podium.
+//
+// La date rendue est celle du MEILLEUR score, pas du dernier : c'est elle qui
+// tranche les egalites, et la regle des bornes est que celui qui a pose le
+// score le premier le detient.
+func (s *Store) SaisonMeilleurs(ctx context.Context, debut, fin time.Time) ([]saison.Meilleur, error) {
+	const q = `
+		WITH valides AS (
+		    SELECT r.player_id, r.game_id, r.score, r.submitted_at
+		    FROM runs r
+		    WHERE r.verdict = 'ok'
+		      AND r.submitted_at >= $1 AND r.submitted_at < $2
+		      AND r.score > 0
+		),
+		comptes AS (
+		    SELECT player_id, game_id, count(*) AS parties
+		    FROM valides GROUP BY player_id, game_id
+		),
+		sommets AS (
+		    SELECT DISTINCT ON (player_id, game_id)
+		           player_id, game_id, score, submitted_at
+		    FROM valides
+		    ORDER BY player_id, game_id, score DESC, submitted_at ASC
+		)
+		SELECT p.username, g.slug, g.name, g.difficulty, g.multiplier,
+		       s.score, s.submitted_at, c.parties
+		FROM sommets s
+		JOIN comptes c ON c.player_id = s.player_id AND c.game_id = s.game_id
+		JOIN players p ON p.id = s.player_id
+		JOIN games   g ON g.id = s.game_id
+		WHERE NOT p.disabled
+		ORDER BY g.id, s.score DESC`
+
+	rows, err := s.pool.Query(ctx, q, debut, fin)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []saison.Meilleur{}
+	for rows.Next() {
+		var m saison.Meilleur
+		if err := rows.Scan(&m.Pseudo, &m.Jeu, &m.JeuNom, &m.Difficulte,
+			&m.Multiplicateur, &m.Score, &m.Quand, &m.Parties); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// FicheJoueur — ce qu'on sait d'un joueur en dehors d'une saison.
+type FicheJoueur struct {
+	Pseudo    string    `json:"pseudo"`
+	Inscrit   time.Time `json:"inscrit"`
+	VuLe      time.Time `json:"vuLe"`
+	Parties   int       `json:"parties"`   // parties valides, toutes saisons
+	Meilleurs []Sommet  `json:"meilleurs"` // record personnel par creneau
+}
+
+// Sommet — le record personnel d'un joueur sur un creneau, toutes saisons
+// confondues, et la place que ce record tient aujourd'hui.
+type Sommet struct {
+	Jeu        string    `json:"jeu"`
+	JeuNom     string    `json:"jeuNom"`
+	Difficulte string    `json:"difficulte"`
+	Score      int64     `json:"score"`
+	Quand      time.Time `json:"quand"`
+	Rang       int       `json:"rang"`    // sa place au classement de tous les temps
+	Joueurs    int       `json:"joueurs"` // combien ont un score sur ce creneau
+}
+
+// Joueur rend la fiche d'un joueur, ou ErrNotFound.
+//
+// Le rang de chaque record est calcule PAR LA BASE, dans la meme requete que le
+// record : le ramener en Go demanderait de charger tout le classement de chaque
+// creneau pour n'en garder qu'une ligne.
+func (s *Store) Joueur(ctx context.Context, pseudo string) (*FicheJoueur, error) {
+	const qp = `
+		SELECT username, created_at, last_seen_at
+		FROM players WHERE username = $1 AND NOT disabled`
+
+	var f FicheJoueur
+	err := s.pool.QueryRow(ctx, qp, pseudo).Scan(&f.Pseudo, &f.Inscrit, &f.VuLe)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	const qs = `
+		WITH classe AS (
+		    SELECT sc.player_id, sc.game_id, sc.score, sc.achieved_at,
+		           RANK() OVER (PARTITION BY sc.game_id ORDER BY sc.score DESC) AS rang,
+		           COUNT(*) OVER (PARTITION BY sc.game_id) AS joueurs
+		    FROM scores sc
+		    JOIN players p ON p.id = sc.player_id
+		    WHERE NOT p.disabled AND sc.score > 0
+		)
+		SELECT g.slug, g.name, g.difficulty, c.score, c.achieved_at, c.rang, c.joueurs
+		FROM classe c
+		JOIN games   g ON g.id = c.game_id
+		JOIN players p ON p.id = c.player_id
+		WHERE p.username = $1
+		ORDER BY c.rang, g.id`
+
+	rows, err := s.pool.Query(ctx, qs, pseudo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	f.Meilleurs = []Sommet{}
+	for rows.Next() {
+		var m Sommet
+		if err := rows.Scan(&m.Jeu, &m.JeuNom, &m.Difficulte, &m.Score,
+			&m.Quand, &m.Rang, &m.Joueurs); err != nil {
+			return nil, err
+		}
+		f.Meilleurs = append(f.Meilleurs, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	const qn = `
+		SELECT count(*) FROM runs r JOIN players p ON p.id = r.player_id
+		WHERE p.username = $1 AND r.verdict = 'ok' AND r.score > 0`
+	if err := s.pool.QueryRow(ctx, qn, pseudo).Scan(&f.Parties); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
 func (s *Store) PlayerScores(ctx context.Context, playerID int64) (map[string]int64, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT g.slug, sc.score

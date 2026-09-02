@@ -22,7 +22,8 @@
 
 (function () {
 
-const { api, elt, vider, etat, tableau, nombre, duree } = window.NS;
+const { api, elt, vider, etat, tableau, nombre, duree,
+        quand, lienJoueur, medaille, podium, echelle, jauge, surCompte } = window.NS;
 
 /*
  * Deux secondes pour une manche, dix pour la liste des salons.
@@ -34,6 +35,215 @@ const { api, elt, vider, etat, tableau, nombre, duree } = window.NS;
  */
 const PERIODE_MANCHE_MS = 2000;
 const PERIODE_OUVERTS_MS = 10000;
+
+/* ==========================================================================
+   La saison classee
+   ==========================================================================
+   Tout le bareme est calcule par le serveur, dans `internal/saison`, qui se
+   teste sans base. Ici on ne fait que peindre : aucune ligne de ce fichier ne
+   decide combien vaut une place.
+   ========================================================================== */
+
+const teteSaison = document.getElementById("saison-tete");
+const zonePodium = document.getElementById("podium");
+const zoneMoi = document.getElementById("moi");
+const etatSaison = document.getElementById("etat-saison");
+const ecranSaison = document.getElementById("ecran-saison");
+const zoneEchelle = document.getElementById("echelle");
+const ecranCreneaux = document.getElementById("ecran-creneaux");
+
+/* Le pseudo connecte, pour surligner sa ligne dans le classement. Il arrive
+ * apres coup : on redessine quand il tombe plutot que d'attendre, sinon la
+ * page resterait vide pour un visiteur anonyme. */
+let moiPseudo = "";
+let derniereSaison = null;
+
+const COLONNES_SAISON = [
+    { titre: "Rang",   classe: "c-rang",  valeur: (l) => String(l.rang) },
+    { titre: "Joueur", classe: "c-nom",   noeud:  (l) => lienJoueur(l.pseudo) },
+    { titre: "Palier", classe: "c-nom",   noeud:  (l) => medaille(l.palier) },
+    { titre: "Points", classe: "c-score", valeur: (l) => nombre(l.points) },
+    /* L'ECART EST UNE COLONNE, et c'est le nombre le plus motivant du tableau.
+       Le premier n'a personne au-dessus : le serveur lui rend son AVANCE, et
+       on l'ecrit avec un plus pour qu'on ne les confonde pas. */
+    { titre: "Ecart",  classe: "c-score",
+      valeur: (l) => l.rang === 1 ? "+" + nombre(l.ecart) : nombre(l.ecart) },
+    { titre: "1res places", classe: "c-score", valeur: (l) => nombre(l.ors) },
+    { titre: "Parties", classe: "c-score", valeur: (l) => nombre(l.parties) },
+];
+
+const COLONNES_CRENEAUX = [
+    { titre: "Borne",  classe: "c-nom", valeur: (c) => c.jeuNom },
+    { titre: "Regime", classe: "c-nom", valeur: (c) => regime(c.difficulte) },
+    { titre: "Valeur", classe: "c-score",
+      valeur: (c) => "x " + String(c.multiplicateur).replace(".", ",") },
+    { titre: "Tenue par", classe: "c-nom",
+      noeud: (c) => c.meneur ? lienJoueur(c.meneur) : elt("span", "vide-mini", "personne") },
+    { titre: "Score", classe: "c-score", valeur: (c) => c.score ? nombre(c.score) : "" },
+    { titre: "Joueurs", classe: "c-score", valeur: (c) => nombre(c.joueurs) },
+];
+
+function peindreTete(data) {
+    vider(teteSaison);
+    const s = data.saison || {};
+
+    teteSaison.appendChild(elt("span", "nom", s.libelle || s.cle || ""));
+    teteSaison.appendChild(elt("span", "compte",
+        nombre(data.joueurs || 0) + " joueurs classes"));
+
+    const fin = elt("span", "fin");
+    if (s.encours) {
+        /* L'URGENCE. Un classement sans fin ne se dispute pas : c'est la date
+           limite qui fait revenir le 29. */
+        const j = Number(s.joursRestants || 0);
+        fin.appendChild(elt("strong", "reste",
+            j <= 0 ? "dernier jour" : j + (j > 1 ? " jours restants" : " jour restant")));
+    } else {
+        fin.appendChild(elt("strong", "reste", "saison close"));
+    }
+    teteSaison.appendChild(fin);
+}
+
+/*
+ * LE BLOC PERSONNEL. C'est la moitie qui transforme un tableau en objectif :
+ * ou j'en suis, ce qu'il me manque pour le palier suivant, et LA borne ou
+ * jouer maintenant.
+ */
+function peindreMoi(data) {
+    vider(zoneMoi);
+    const moi = data.moi;
+    if (!moi) return;
+
+    const bloc = elt("div", "fiche");
+    const ligne = moi.ligne;
+
+    if (!ligne) {
+        bloc.appendChild(elt("h2", null, "Votre saison n'a pas commence"));
+        bloc.appendChild(elt("p", "depuis",
+            "Trois parties valides suffisent a entrer au classement."));
+    } else {
+        bloc.appendChild(elt("h2", null, "Votre saison"));
+        const stats = elt("ul", "stats");
+        stats.appendChild(stat(nombre(ligne.points), "points"));
+        stats.appendChild(stat(String(ligne.rang), "rang"));
+        stats.appendChild(stat(nombre(ligne.ors), "premieres places"));
+        stats.appendChild(stat(nombre(ligne.parties), "parties"));
+        bloc.appendChild(stats);
+
+        const p = elt("p", "depuis");
+        p.appendChild(medaille(ligne.palier));
+        if (ligne.palier && ligne.palier.niveau === 0) {
+            p.appendChild(elt("span", null,
+                "  il vous manque " + (data.placementRequis - ligne.parties) +
+                " partie(s) pour etre classe"));
+        }
+        bloc.appendChild(p);
+
+        const j = jauge(data.paliers, ligne.points);
+        if (j) {
+            bloc.appendChild(j.barre);
+            bloc.appendChild(elt("p", "note",
+                nombre(j.manque) + " points avant " + j.suivant.nom));
+        }
+
+        if (ligne.rang > 1) {
+            bloc.appendChild(elt("p", "note",
+                nombre(ligne.ecart) + " points vous separent du rang au-dessus."));
+        }
+    }
+
+    /* LE CONSEIL, et il est nomme. « Joue plus » ne donne aucune prise, « bats
+       420 sur Piano, la place vaut 15 points » en donne une. */
+    const conseil = meilleurConseil(moi);
+    if (conseil) bloc.appendChild(conseil);
+
+    zoneMoi.appendChild(bloc);
+}
+
+function stat(valeur, quoi) {
+    const li = elt("li");
+    li.appendChild(elt("strong", "valeur", valeur));
+    li.appendChild(elt("span", "quoi", quoi));
+    return li;
+}
+
+/*
+ * Entre grimper d'une place la ou l'on joue deja et prendre une borne que
+ * personne ne tient, on propose CE QUI RAPPORTE LE PLUS. Le serveur rend les
+ * deux chiffres, la comparaison se fait ici parce qu'elle ne concerne que
+ * l'affichage.
+ */
+function meilleurConseil(moi) {
+    const pas = moi.ligne && moi.ligne.prochain ? moi.ligne.prochain : null;
+    const vierges = moi.vierges || [];
+    const libre = vierges.length ? vierges[0] : null;
+
+    const gainPas = pas ? pas.gain : 0;
+    const gainLibre = libre ? libre.gain : 0;
+    if (gainPas <= 0 && gainLibre <= 0) return null;
+
+    const n = elt("p", "conseil");
+    if (gainLibre >= gainPas && libre) {
+        n.appendChild(elt("strong", null, "A prendre : " + libre.jeuNom + ". "));
+        n.appendChild(elt("span", null,
+            libre.joueurs === 0
+                ? "Personne n'y a marque cette saison, la premiere place vaut " +
+                  nombre(libre.gain) + " points."
+                : nombre(libre.joueurs) + " joueurs y sont deja, y entrer vaut " +
+                  nombre(libre.gain) + " points."));
+    } else {
+        n.appendChild(elt("strong", null, "A reprendre : " + pas.jeuNom + ". "));
+        n.appendChild(elt("span", null,
+            "Marquez " + nombre(pas.scoreVise) + " pour prendre la place " +
+            pas.rangVise + ", qui vaut " + nombre(pas.gain) + " points de plus."));
+    }
+    return n;
+}
+
+function peindreSaison(data) {
+    derniereSaison = data;
+    peindreTete(data);
+    podium(zonePodium, data.podium || []);
+    peindreMoi(data);
+    echelle(zoneEchelle, data.paliers, data.moi && data.moi.ligne ? data.moi.ligne.points : 0);
+
+    vider(ecranSaison);
+    ecranSaison.appendChild(tableau(COLONNES_SAISON, data.classement, {
+        legende: "Classement de la saison",
+        vide: "Aucune partie classee cette saison. La premiere place est libre.",
+        marquer: (tr, l) => {
+            if (moiPseudo && l.pseudo.toLowerCase() === moiPseudo.toLowerCase()) {
+                tr.dataset.moi = "oui";
+            }
+        },
+    }));
+
+    vider(ecranCreneaux);
+    ecranCreneaux.appendChild(tableau(COLONNES_CRENEAUX, data.creneaux, {
+        legende: "Les bornes de la saison",
+        vide: "Le serveur n'annonce aucune borne.",
+    }));
+
+    etat(etatSaison, data.saison && data.saison.encours
+        ? "Saison en cours" : "Saison close",
+        data.saison && data.saison.encours ? "direct" : null);
+}
+
+async function chargerSaison() {
+    try {
+        peindreSaison(await api("/api/v1/saison"));
+    } catch (err) {
+        console.error("saison", err);
+        etat(etatSaison, "Classement de saison indisponible", "erreur");
+    }
+}
+
+/* Le pseudo arrive apres la premiere peinture : on redessine pour surligner sa
+ * ligne et afficher son bloc, plutot que de retarder toute la page. */
+surCompte((compte) => {
+    moiPseudo = compte && compte.username ? compte.username : "";
+    if (derniereSaison) chargerSaison();
+});
 
 /* ==========================================================================
    Le classement general
@@ -308,6 +518,7 @@ if (choixJeu) {
     choixJeu.addEventListener("change", () => chargerGeneral(choixJeu.value));
 }
 
+chargerSaison();
 chargerJeux().then(() => chargerGeneral(0));
 reglerRythme();
 

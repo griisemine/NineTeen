@@ -755,3 +755,241 @@ p { margin: 0 0 1rem; max-width: var(--measure); }
 @media (prefers-reduced-motion: reduce) {
     .hero-plate:not(.hero-plate-fixe) { display: none; }
 }
+
+/* ==========================================================================
+   LA SAISON CLASSEE
+   ==========================================================================
+   Un classement general se lit. Une saison se DISPUTE, et la difference doit
+   se voir avant d'etre lue : un podium a trois marches de hauteurs
+   differentes, une echelle de paliers ou l'on se situe d'un coup d'oeil, et
+   un compte a rebours.
+
+   Les couleurs des trois places reprennent celles que `.board` posait deja
+   sur les trois premiers rangs. Une seule definition aurait ete mieux, mais
+   elles ne s'appliquent pas au meme element : ici c'est un socle, la c'est un
+   numero de ligne.
+   ========================================================================== */
+
+.saison-tete {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem 1.4rem;
+    padding: 0.9rem 1rem;
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    margin-bottom: var(--gap);
+}
+.saison-tete .nom {
+    font-family: var(--display);
+    font-size: var(--t-xl);
+    color: var(--marquee);
+    letter-spacing: 0.02em;
+}
+.saison-tete .reste { color: var(--amber); font-variant-numeric: tabular-nums; }
+.saison-tete .compte { color: var(--muted); font-size: var(--t-sm); }
+.saison-tete .fin { margin-left: auto; }
+
+/* --- Le podium ---------------------------------------------------------- */
+
+/* `align-items: end` : les trois marches partagent le SOL, pas le plafond.
+   C'est ce qui fait qu'un podium se lit comme un podium. */
+.podium {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: end;
+    gap: 0.8rem;
+    margin-bottom: var(--gap);
+}
+/* L'ordre visuel d'un podium est 2, 1, 3, et l'ordre du DOM reste 1, 2, 3 :
+   un lecteur d'ecran doit entendre le vainqueur en premier. */
+.podium .marche:nth-child(1) { order: 2; }
+.podium .marche:nth-child(2) { order: 1; }
+.podium .marche:nth-child(3) { order: 3; }
+
+.marche { display: flex; flex-direction: column
+        }
+.marche .carte {
+    background: var(--cabinet-2);
+    border: 1px solid var(--edge);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 0.9rem 0.8rem;
+    text-align: center;
+    min-width: 0;
+}
+.marche .pseudo {
+    display: block;
+    font-family: var(--display);
+    font-size: var(--t-lg);
+    color: var(--marquee);
+    overflow-wrap: anywhere;
+    margin-bottom: 0.15rem;
+}
+.marche .pseudo:hover { color: var(--amber); }
+.marche .points {
+    display: block;
+    font-size: var(--t-2xl);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.marche .sous { display: block; color: var(--muted); font-size: var(--t-xs); }
+.marche .exploit {
+    display: block;
+    margin-top: 0.4rem;
+    color: #c3c9d4;
+    font-size: var(--t-xs);
+    overflow-wrap: anywhere;
+}
+
+/* Le socle. Sa hauteur EST le classement : 1er 7 rem, 2e 5 rem, 3e 3,6 rem.
+   Les chiffres sont choisis pour que la difference se voie sur un telephone
+   de 360 px de large, ou les trois marches font 110 px chacune. */
+.marche .socle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: var(--t-3xl);
+    color: var(--hall);
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+.marche[data-place="1"] .socle { height: 7rem
+        ; background: linear-gradient(180deg, #ffd76a, #b98c22)
+        }
+.marche[data-place="2"] .socle { height: 5rem
+        ; background: linear-gradient(180deg, #d7dbe3, #8b909a)
+        }
+.marche[data-place="3"] .socle { height: 3.6rem
+        ; background: linear-gradient(180deg, #c98a4b, #7d5527)
+        }
+.marche[data-place="1"] .points { color: #ffd76a; }
+.marche[data-place="2"] .points { color: #d7dbe3; }
+.marche[data-place="3"] .points { color: #c98a4b; }
+
+.podium-vide {
+    grid-column: 1 / -1;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--muted);
+    background: var(--cabinet);
+    border: 1px dashed var(--edge);
+    border-radius: var(--radius);
+}
+
+/* --- Les paliers -------------------------------------------------------- */
+
+.medaille {
+    display: inline-block;
+    padding: 0.12rem 0.5rem;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    font-family: var(--marquee-face);
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    color: var(--muted);
+}
+/* Sept paliers, sept couleurs, et elles montent du gris au jaune d'enseigne.
+   Le niveau 0 reste gris : NON CLASSE n'est pas un echec, c'est un etat qui
+   dure trois parties, et lui donner du rouge le ferait lire autrement. */
+.medaille[data-niveau="1"] { color: #9aa3b4; border-color: #39414f; }
+.medaille[data-niveau="2"] { color: #7fc7a8; border-color: #2f5546; }
+.medaille[data-niveau="3"] { color: #6fb8d8; border-color: #2b4a5b; }
+.medaille[data-niveau="4"] { color: #a98fe0; border-color: #453764; }
+.medaille[data-niveau="5"] { color: #e0c07a; border-color: #5e4d22; }
+.medaille[data-niveau="6"] { color: #ff8a5c; border-color: #6b3520; }
+.medaille[data-niveau="7"] {
+    color: var(--hall);
+    background: var(--amber);
+    border-color: var(--amber);
+}
+
+.echelle { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.8rem 0 0; padding: 0; list-style: none; }
+.echelle li { display: flex; align-items: center; gap: 0.3rem; }
+.echelle .seuil { color: var(--muted); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+.echelle li[data-atteint="oui"] .seuil { color: var(--marquee); }
+
+/* La jauge vers le palier suivant. Deux pixels de haut : elle informe sans
+   reclamer l'ecran, comme celle de la mise a jour dans le jeu. */
+.jauge {
+    height: 4px;
+    background: #1a1f29;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0.5rem 0 0.3rem;
+}
+.jauge span { display: block; height: 100%; background: var(--amber); }
+
+/* --- La fiche d'un joueur ---------------------------------------------- */
+
+.fiche {
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 1.1rem 1rem;
+    margin-bottom: var(--gap);
+}
+.fiche h2 { font-size: var(--t-2xl); margin-bottom: 0.2rem
+        ; overflow-wrap: anywhere
+        }
+.fiche .depuis { color: var(--muted); font-size: var(--t-sm); }
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 0.7rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+.stats li {
+    background: var(--cabinet-2);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 0.7rem 0.8rem;
+}
+.stats .valeur {
+    display: block;
+    font-family: var(--display);
+    font-size: var(--t-2xl);
+    color: var(--amber);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.stats .quoi { display: block; color: var(--muted); font-size: var(--t-xs); }
+
+/* Le conseil : la seule ligne de la page qui dit quoi faire. Elle a droit a
+   la couleur d'accent, et elle est seule a l'avoir. */
+.conseil {
+    display: block;
+    margin-top: 1rem;
+    padding: 0.7rem 0.9rem;
+    background: rgba(255, 176, 31, 0.08);
+    border-left: 3px solid var(--amber);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: #e6d6b4;
+    font-size: var(--t-sm);
+}
+.conseil strong { color: var(--amber); }
+
+@media (max-width: 620px) {
+    /* Sur un telephone, trois marches cote a cote donnent trois colonnes de
+       cent pixels ou plus rien ne se lit. On empile, dans l'ordre du
+       classement, et les socles gardent leurs hauteurs : c'est ce qui reste
+       du podium. */
+    .podium { grid-template-columns: 1fr; }
+    .podium .marche:nth-child(1),
+    .podium .marche:nth-child(2),
+    .podium .marche:nth-child(3) { order: 0; }
+}
+
+/* « personne » dans la colonne des meneurs. En jaune d'enseigne parce que
+   c'est une OFFRE et non un manque : une borne que personne ne tient est une
+   premiere place a prendre, et c'est ce que le texte au-dessus promet. Sans
+   couleur, elle se lisait comme une case vide. */
+.vide-mini {
+    color: var(--amber);
+    font-size: var(--t-sm);
+}

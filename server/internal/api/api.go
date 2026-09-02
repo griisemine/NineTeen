@@ -129,6 +129,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/games", s.handleGames)
 	s.mux.HandleFunc("GET /api/v1/leaderboard", s.handleLeaderboard)
 
+	// LE CLASSEMENT CLASSE. Sans compte, comme le reste : un classement qu'il
+	// faut se connecter pour lire est un classement que personne ne regarde.
+	s.mux.HandleFunc("GET /api/v1/saison", s.handleSaison)
+	s.mux.HandleFunc("GET /api/v1/saison/{cle}", s.handleSaison)
+	s.mux.HandleFunc("GET /api/v1/joueurs/{pseudo}", s.handleJoueur)
+
 	s.mux.HandleFunc("POST /api/v1/runs", s.handleRunBegin)
 	s.mux.HandleFunc("POST /api/v1/runs/{id}/submit", s.handleRunSubmit)
 	s.mux.HandleFunc("POST /api/v1/runs/{id}/inputs", s.handleRunInputs)

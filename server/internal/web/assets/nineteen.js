@@ -192,6 +192,130 @@ function tableau(colonnes, lignes, options) {
     return table;
 }
 
+/* ------------------------------------------------------- la saison classee */
+
+/*
+ * Trois fragments partages par la page de classement et par la fiche d'un
+ * joueur. Ils sont ici et non dupliques parce qu'une medaille de palier
+ * dessinee a deux endroits finirait par avoir deux couleurs.
+ */
+
+const dateCourte = new Intl.DateTimeFormat("fr-FR",
+    { day: "numeric", month: "short", year: "numeric" }).format;
+
+function quand(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : dateCourte(d);
+}
+
+/* Le lien vers une fiche. Le pseudo passe par encodeURIComponent : il peut
+ * contenir un espace ou un accent, et une adresse mal formee menerait a une
+ * page vide sans dire pourquoi. */
+function lienJoueur(pseudo, classe) {
+    const a = elt("a", classe || null, pseudo);
+    a.href = "/joueur.html?pseudo=" + encodeURIComponent(pseudo);
+    return a;
+}
+
+/* La pastille d'un palier. Le niveau part dans un attribut de donnee, et c'est
+ * le CSS qui en tire la couleur : le script ne decide d'aucune couleur. */
+function medaille(palier) {
+    const p = palier || { nom: "NON CLASSE", niveau: 0 };
+    const n = elt("span", "medaille", p.nom);
+    n.dataset.niveau = String(p.niveau || 0);
+    return n;
+}
+
+/*
+ * LE PODIUM. Trois marches, et la hauteur du socle EST le classement.
+ *
+ * L'ordre du DOM reste 1, 2, 3 pour qu'un lecteur d'ecran entende le vainqueur
+ * en premier. C'est le CSS qui les remet dans l'ordre visuel 2, 1, 3.
+ */
+function podium(noeud, lignes) {
+    if (!noeud) return;
+    vider(noeud);
+
+    if (!lignes || lignes.length === 0) {
+        noeud.appendChild(elt("p", "podium-vide",
+            "Personne n'a encore marque cette saison. La premiere place est libre."));
+        return;
+    }
+
+    lignes.forEach((l, i) => {
+        const place = i + 1;
+        const marche = elt("div", "marche");
+        marche.dataset.place = String(place);
+
+        const carte = elt("div", "carte");
+        carte.appendChild(lienJoueur(l.pseudo, "pseudo"));
+        carte.appendChild(elt("strong", "points", formatNombre(l.points)));
+        carte.appendChild(elt("span", "sous", "points"));
+        carte.appendChild(medaille(l.palier));
+
+        /* CE QUI L'A MIS LA. Un podium qui ne montre que des nombres
+           n'apprend rien. La meilleure borne de chacun est ce qui donne envie
+           d'aller la lui disputer. */
+        const meilleure = l.creneaux && l.creneaux.length ? l.creneaux[0] : null;
+        if (meilleure) {
+            carte.appendChild(elt("span", "exploit",
+                place19Texte(meilleure) + " sur " + meilleure.jeuNom));
+        }
+        marche.appendChild(carte);
+
+        marche.appendChild(elt("div", "socle", String(place)));
+        noeud.appendChild(marche);
+    });
+}
+
+/* « 1er », « 2e » : le rang d'un creneau, ecrit comme on le dit. */
+function place19Texte(creneau) {
+    const r = Number(creneau.rang || 0);
+    return r === 1 ? "1er" : r + "e";
+}
+
+/*
+ * L'ECHELLE DES PALIERS, avec celui qu'on tient marque.
+ *
+ * Voir l'echelle ENTIERE et pas seulement son palier courant est la moitie de
+ * l'interet : c'est ce qui montre qu'il en reste au-dessus.
+ */
+function echelle(noeud, paliers, points) {
+    if (!noeud) return;
+    vider(noeud);
+    const p = Number(points || 0);
+    for (const palier of paliers || []) {
+        const li = elt("li");
+        li.dataset.atteint = p >= palier.seuil ? "oui" : "non";
+        li.appendChild(medaille(palier));
+        li.appendChild(elt("span", "seuil", formatNombre(palier.seuil)));
+        noeud.appendChild(li);
+    }
+}
+
+/*
+ * LA JAUGE VERS LE PALIER SUIVANT. Rend null au sommet : inventer une barre
+ * pleine a 100 pour cent laisserait croire qu'il reste quelque chose.
+ */
+function jauge(paliers, points) {
+    const p = Number(points || 0);
+    let courant = null, suivant = null;
+    for (const palier of paliers || []) {
+        if (p >= palier.seuil) courant = palier;
+        else if (!suivant) suivant = palier;
+    }
+    if (!suivant) return null;
+    const bas = courant ? courant.seuil : 0;
+    const part = Math.max(0, Math.min(1, (p - bas) / (suivant.seuil - bas)));
+
+    const barre = elt("div", "jauge");
+    const plein = elt("span");
+    plein.style.width = (part * 100).toFixed(1) + "%";
+    barre.appendChild(plein);
+    return { barre: barre, suivant: suivant, manque: suivant.seuil - p };
+}
+
 /* ------------------------------------------------------------------ version */
 
 async function chargerVersion() {
@@ -294,6 +418,12 @@ const NS = {
     vider: vider,
     etat: etat,
     tableau: tableau,
+    quand: quand,
+    lienJoueur: lienJoueur,
+    medaille: medaille,
+    podium: podium,
+    echelle: echelle,
+    jauge: jauge,
     surCompte: surCompte,
     diffuserCompte: diffuserCompte,
     chargerCompte: chargerCompte,

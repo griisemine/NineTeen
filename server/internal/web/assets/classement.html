@@ -48,7 +48,62 @@
        passe pas.</p>
   </section>
 
+  <!-- ======================================================================
+       LA SAISON. Elle passe AVANT le classement de toujours, et c'est un choix.
+
+       Un classement de toujours se consulte une fois. Une saison se dispute :
+       elle a une fin, un podium qui bouge, et une place a defendre. C'est elle
+       qui fait revenir, donc c'est elle qu'on voit en arrivant.
+       ====================================================================== -->
+  <section class="section" id="saison">
+    <div class="section-head">
+      <h2>La saison</h2>
+      <p>Chaque mois repart de zero. Un score brut ne rapporte rien par lui meme, ce qui compte
+         est la PLACE qu'il vous donne sur sa borne. Les dix-neuf bornes valent donc la meme
+         chose au sommet, et la route la plus courte vers le haut passe par celle que personne
+         ne joue.</p>
+    </div>
+
+    <div class="saison-tete" id="saison-tete"></div>
+    <div class="podium" id="podium"></div>
+    <div id="moi"></div>
+
+    <div class="crt">
+      <div class="crt-bar">
+        <p class="crt-etat" id="etat-saison" role="status">Chargement</p>
+      </div>
+      <div class="crt-ecran" id="ecran-saison"></div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+    <p class="note">Cliquez un pseudo pour ouvrir sa fiche. Les cinquante premieres places sont
+       affichees, le rang de chacun est calcule sur tout le monde.</p>
+
+    <div class="section-head sous">
+      <h3>Les paliers</h3>
+      <p class="note">Trois parties valides ouvrent le classement. En dessous on figure, sans
+         etre classe. Une saison parfaite vaut 2 100 points, et DIX-NEUF en demande 1 900.</p>
+    </div>
+    <ul class="echelle" id="echelle"></ul>
+
+    <div class="section-head sous">
+      <h3>Les bornes de la saison</h3>
+      <p class="note">Qui tient chaque borne, avec quel score, et combien s'y sont mesures. Une
+         borne desertee est une premiere place a prendre.</p>
+    </div>
+    <div class="crt">
+      <div class="crt-ecran" id="ecran-creneaux"></div>
+      <div class="crt-scanlines" aria-hidden="true"></div>
+    </div>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
   <section class="section" id="general">
+    <div class="section-head">
+      <h2>Le classement de toujours</h2>
+      <p>Le record de chacun sur chaque borne, sans limite de date. Il ne remet rien a zero et
+         ne donne aucun palier, il dit qui a fait le meilleur score une fois.</p>
+    </div>
     <div class="crt">
       <div class="crt-bar">
         <label class="champ">
