@@ -36,6 +36,36 @@
  * paquet de 175 Mio livrerait un installeur tronqué, ce qui est la seule façon
  * de casser une machine avec une mise à jour.
  *
+ * CE QUE L'EMPREINTE PROTÈGE, ET CE QU'ELLE NE PROTÈGE PAS
+ * --------------------------------------------------------
+ * Elle protège d'un fichier ABÎMÉ : transfert coupé, disque qui ment, reprise
+ * sur un fichier qui n'est plus le même. C'est le cas fréquent, et il est
+ * couvert.
+ *
+ * Elle ne protège PAS d'un fichier REMPLACÉ en chemin. `ns_http` ne fait pas de
+ * TLS — la raison est écrite dans `ns_http.h` — donc la liste des paquets ET
+ * l'empreinte arrivent par le même canal en clair que le paquet lui-même. Qui
+ * peut réécrire l'un peut réécrire l'autre. Comparer les deux ne prouve donc
+ * rien contre quelqu'un qui est sur le chemin.
+ *
+ * C'est une limite RÉELLE, et elle pèse plus lourd ici que partout ailleurs
+ * dans ce dépôt : un classement altéré fausse un tableau, un paquet altéré
+ * exécute du code sur la machine du joueur. Trois choses la contiennent, et il
+ * faut savoir laquelle fait quoi :
+ *
+ *   - Aucune socket ne s'ouvre sans qu'une adresse ait été DONNÉE. Le défaut
+ *     compilé est vide, et un dépôt cloné puis bâti ne demande rien à personne.
+ *   - Le jeu n'exécute jamais ce qu'il a reçu. Il le remet au système, qui
+ *     applique Gatekeeper ou SmartScreen — c'est-à-dire que la signature du
+ *     paquet, le jour où il y en a une, redevient l'autorité.
+ *   - `docs/JOUER.md` dit depuis le début que ce serveur s'héberge soi-même,
+ *     sur un réseau qu'on choisit.
+ *
+ * La réponse complète est un proxy TLS devant le serveur, et elle ne coûte rien
+ * au client. Tant qu'elle n'est pas posée, la mise à jour vaut ce que vaut le
+ * réseau entre le joueur et son serveur, et cette phrase-là ne doit pas
+ * disparaître de ce fichier.
+ *
  * OÙ VA LE PAQUET
  * ---------------
  * `<répertoire utilisateur>/maj/`, à côté de `runs/`. Jamais dans le

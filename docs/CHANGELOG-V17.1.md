@@ -199,6 +199,24 @@ Windows, qu'aucune machine du projet ne sait construire localement.
 
 ---
 
+---
+
+## Ce que la mise à jour ne garantit pas
+
+L'empreinte SHA-256 protège d'un fichier **abîmé**. Elle ne protège **pas** d'un
+fichier remplacé en chemin : le client HTTP ne fait pas de TLS, donc l'empreinte
+arrive par le même canal en clair que le paquet. Qui peut réécrire l'un peut
+réécrire l'autre.
+
+C'est écrit dans `engine/net/ns_maj.h` et dans `docs/JOUER.md`, et ça pèse plus
+lourd ici qu'ailleurs : un classement altéré fausse un tableau, un paquet altéré
+exécute du code. Ce qui la contient — aucune socket sans adresse donnée, aucune
+exécution par le jeu lui-même, un serveur qu'on héberge soi-même — ne remplace
+pas la réponse, qui est **un proxy TLS devant le serveur**. Elle rejoint la
+signature des paquets dans la liste des six décisions ouvertes.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui

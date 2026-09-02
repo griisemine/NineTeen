@@ -318,6 +318,22 @@ Deux réglages, dans `settings.cfg` :
 
 `--no-maj` coupe la question pour une exécution. `--offline` la coupe aussi, comme tout le reste.
 
+### Ce que l'empreinte protège, et ce qu'elle ne protège pas
+
+Elle protège d'un fichier **abîmé** : transfert coupé, disque qui ment, reprise sur un fichier
+qui n'est plus le même. C'est le cas fréquent, et il est couvert.
+
+Elle ne protège **pas** d'un fichier remplacé en chemin. Le client HTTP du jeu ne fait pas de
+TLS, donc la liste des paquets et l'empreinte arrivent par le même canal en clair que le paquet
+lui-même : qui peut réécrire l'un peut réécrire l'autre.
+
+C'est une limite réelle, et elle pèse plus lourd ici qu'ailleurs — un classement altéré fausse
+un tableau, un paquet altéré exécute du code sur votre machine. Ce qui la contient : aucune
+socket ne s'ouvre sans que **vous** ayez donné une adresse, le jeu n'exécute jamais ce qu'il a
+reçu mais le remet au système, et ce serveur est fait pour être hébergé par vous, sur un réseau
+que vous choisissez. **Mettre un proxy TLS devant le serveur est la bonne réponse**, et elle ne
+coûte rien au client.
+
 ## L'économie : jeton, partie, tickets, lot
 
 **Une partie coûte un jeton, et on n'est jamais bloqué.** Le monnayeur — le meuble jaune à
