@@ -217,6 +217,103 @@ signature des paquets dans la liste des six décisions ouvertes.
 
 ---
 
+## L'audit sous Blender
+
+Les modèles et le personnage ont été relus dans Blender, articulation par
+articulation et face par face, plutôt qu'à la lecture des scripts qui les
+produisent. Trois choses en sont sorties.
+
+### Le personnage glisse des pieds, et on sait enfin pourquoi
+
+`ns_skin.h` disait depuis des mois que le cycle livré n'a « pas de pied cloué au
+sol », sans jamais le chiffrer. Mesuré :
+
+| | |
+|---|---|
+| dérapage du pied posé | **0,258 unité**, soit 31 cm à l'échelle du jeu |
+| distance hanche-cheville | **0,5419**, c'est-à-dire exactement cuisse + tibia, sur **29 des 96** couples (image, jambe) |
+| foulée du fichier | **1,306 m**, là où la salle en emploie **1,550** |
+
+La deuxième ligne explique la première : la jambe **ne peut pas** atteindre le
+pas demandé, alors le pied dérape pour compenser. Ce n'est pas une négligence
+d'animateur, c'est une triche géométrique — et elle était invisible parce que
+l'écart de foulée, 16 %, passe sous le seuil de 33 % qui déclenche
+l'avertissement.
+
+La correction est écrite, elle est dans le dépôt, et **elle n'est pas livrée** :
+`assets/blender/personnage.py`. Elle ramène le glissement à un micron par image,
+ferme la boucle au zéro exact, sort le genou de sa butée et porte la foulée à
+celle que la salle emploie déjà — donc sans retoucher les bruits de pas ni
+l'oscillation de la tête, qui lisent la même valeur.
+
+Ce qui l'empêche de partir est `tests/test_allure.c`, qui tombe sur cinq
+contrôles et qui a raison. L'accroupi du jeu n'est pas animé : il est **dérivé**,
+en ajoutant un angle à la cuisse et le double au genou depuis la pose de
+passage. Cette dérivation a besoin d'une jambe porteuse quasi verrouillée :
+
+| pose de passage | genou porteur | angle d'accroupi trouvé |
+|---|---|---|
+| cycle d'origine | 173,5° | 67,5° |
+| cycle corrigé | 151,6° | **105,5°**, soit un genou à 211° |
+
+**2,9 % d'écart d'extension coûtent 22° de genou** : près de l'extension totale,
+l'angle est extrêmement sensible à la longueur. Or corriger le glissement, c'est
+précisément dessouder la jambe de sa butée. Sept variantes ont été essayées avec
+le test pour oracle — trois réserves de flexion, deux foulées, deux façons de
+conserver la longueur — et toutes échouent de la même manière. Une bissection
+innocente l'outil : le cycle d'origine repassé par la même tuyauterie passe.
+
+Ce qu'il faudrait d'abord est déjà écrit dans le test lui-même — donner à
+l'accroupi une cinématique inverse **par jambe** — et le moteur a le module qu'il
+faut, `engine/anim/ns_ik.c`.
+
+### Le biseau laissait des faces d'aire nulle
+
+`roomgen` le disait à chaque compilation, dix-neuf fois de suite, et personne
+n'allait voir. Relevé par matériau :
+
+| modèle | matériau | faces nulles |
+|---|---|---|
+| billard | `repere` | **256 sur 704** (36,4 %) |
+| borne | `grille` | 100 sur 796 (12,6 %) |
+| borne | `manche_bleu` | 24 sur 144 (16,7 %) |
+
+Ce sont les pièces les plus **minces** : les visées font 2 mm d'épaisseur pour un
+chanfrein de 4, les anneaux de grille 3,5 mm pour un chanfrein de 3. Le rabotage
+anti-chevauchement ramène alors la largeur du biseau à ce qui tient, et quand ce
+qui tient vaut zéro, la face naît avec deux sommets confondus.
+
+Les deux scripts les dissolvent maintenant. La borne passe de 4610 à 4466
+triangles, le billard de 3708 à 3452, et **l'aire de surface de la borne bouge
+de six nanomètres carrés** — l'arrondi de la sommation. Les boîtes englobantes
+sont identiques à la neuvième décimale.
+
+### Ce que Blender n'a pas trouvé
+
+Les chemins de texture des modèles CC0 pointent vers des fichiers absents
+(`textures/…_diff_1k.jpg`), ce qui fait crier tout lecteur glTF. Ce n'est **pas**
+un défaut du jeu : la chaîne d'assets aplatit ces noms et `ns_scene` les résout
+par leur base. Vérifié dans `build/assets/scene/textures/`.
+
+---
+
+## Deux lignes du procès-verbal de 17.0.0 étaient périmées
+
+Le tableau « ce qui était annoncé non tenu » de `docs/CHANGELOG-V17.md` porte
+deux affirmations que la mesure dément aujourd'hui.
+
+| Ce que 17.0.0 déclarait | Mesuré maintenant |
+|---|---|
+| « `--width`/`--height` : **1600x900 sort en 1280x720** » | les neuf définitions essayées sortent **exactes**, 1600x900 comprise. Vérifié en lisant l'en-tête PNG des captures : 640x360, 800x600, 1024x768, 1280x720, 1366x768, 1600x900, 1920x1080, 2560x1440, 3440x1440 |
+| « **C-04 à C-08 toujours absents**, cinq des neuf contrôles » | les **neuf** existent et tournent : `check_inside_shell`, `check_solid_overlaps`, `check_grounded`, `check_facing`, `check_panel_visible`, `check_hanging`, `check_light_has_body`, `check_floor_material`, `check_cabinet_clearance` |
+
+Les quatre autres lignes du tableau restent vraies : les paquets ne sont pas
+signés, le déterminisme n'est vérifié que sur une machine, la découverte
+d'adversaire et le relais restent sans TLS, et le personnage n'a toujours qu'un
+seul cycle d'animation.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui
