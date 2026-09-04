@@ -282,7 +282,7 @@
 		{
 			"bufferView":16,
 			"componentType":5126,
-			"count":1024,
+			"count":640,
 			"max":[
 				1.125,
 				0.8475000262260437,
@@ -298,19 +298,19 @@
 		{
 			"bufferView":17,
 			"componentType":5126,
-			"count":1024,
+			"count":640,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":18,
 			"componentType":5126,
-			"count":1024,
+			"count":640,
 			"type":"VEC2"
 		},
 		{
 			"bufferView":19,
 			"componentType":5123,
-			"count":2112,
+			"count":1344,
 			"type":"SCALAR"
 		}
 	],
@@ -413,32 +413,32 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":12288,
+			"byteLength":7680,
 			"byteOffset":131816,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":12288,
-			"byteOffset":144104,
+			"byteLength":7680,
+			"byteOffset":139496,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":8192,
-			"byteOffset":156392,
+			"byteLength":5120,
+			"byteOffset":147176,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":4224,
-			"byteOffset":164584,
+			"byteLength":2688,
+			"byteOffset":152296,
 			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":168808,
+			"byteLength":154984,
 			"uri":"billard.bin"
 		}
 	]

@@ -849,6 +849,33 @@ def assembler():
     for mod in list(ob.modifiers):
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
+    # LES FACES D'AIRE NULLE QUE LE BISEAU LAISSE DERRIÈRE LUI.
+    #
+    # Le rabotage anti-chevauchement de Blender est actif par défaut : quand une
+    # arête est trop courte pour porter le chanfrein demandé, sa largeur est
+    # ramenée à ce qui tient — et quand ce qui tient vaut zéro, la face créée
+    # naît avec deux sommets confondus. Elle ne se voit pas, elle se transporte :
+    # elle occupe un index, un sommet, une normale, et chaque lecteur du fichier
+    # doit la reconnaître pour l'écarter.
+    #
+    # Mesuré sur les modèles livrés, par matériau :
+    #
+    #     billard, « repere »       256 faces nulles sur 704   (36,4 %)
+    #     borne,   « grille »       100 sur 796                (12,6 %)
+    #     borne,   « manche_bleu »   24 sur 144                (16,7 %)
+    #
+    # Ce sont les pièces les plus MINCES : les visées font 2 mm d'épaisseur pour
+    # un chanfrein de 4, les anneaux de grille 3,5 mm pour un chanfrein de 3.
+    # `roomgen` les écartait une par une à chaque build, et le disait — 144 par
+    # borne, dix-neuf fois. Autant ne pas les produire.
+    #
+    # Le seuil est le CENTIÈME de millimètre. Le plus petit détail voulu du
+    # modèle est le jonc de chant, à 9,5 mm : mille fois plus grand.
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.dissolve_degenerate(threshold=1e-5)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
     # Normales lissées au seuil d'angle : les cylindres et la boule s'arrondissent,
     # les arêtes du caisson restent nettes.
     bpy.ops.object.shade_smooth()

@@ -40,6 +40,6 @@
     "chrome",
     "insert"
   ],
-  "triangles": 4610,
+  "triangles": 4466,
   "_": "Écrit par assets/blender/borne.py. Ne pas retoucher à la main : les cotes viennent du script, qui produit aussi le glTF. « materials » donne l'ordre attendu par roomgen."
 }
