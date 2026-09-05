@@ -154,6 +154,24 @@ typedef struct room_menu_ctx {
      */
     bool               *window_size_touched;
     bool               *fullscreen_touched;
+    /*
+     * LE PALIER ET L'ÉCHELLE, qui avaient exactement le même défaut et
+     * personne ne l'avait vu, parce qu'il ne se voit QUE si une source plus
+     * forte que la configuration s'en mêle.
+     *
+     * `ctx->rs` est l'état réel du rendu ; quand il vient de `--quality=`, de
+     * `NINETEEN_QUALITY` ou d'un fichier `.env`, `room_menu_persist` le
+     * recopiait dans `settings.cfg` à la fermeture. Mesuré : un `.env` posé à
+     * la racine du dépôt (`NINETEEN_QUALITY=medium`, `NINETEEN_SCALE=0.6`) et
+     * une exécution de deux images en `--headless` suffisaient à remplacer
+     * « render.quality = high » par « medium » et « render.scale = 1 » par
+     * « 0.6 » — sans menu ouvert, sans un mot, et définitivement.
+     *
+     * Même convention que les deux drapeaux au-dessus : UN POINTEUR NUL VAUT
+     * « PAS TOUCHÉ », donc « ne pas écrire ».
+     */
+    bool               *quality_touched;
+    bool               *scale_touched;
 } room_menu_ctx;
 
 void room_menu_open(room_menu *m);

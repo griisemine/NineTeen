@@ -127,6 +127,27 @@ typedef struct options {
      * différente d'une exécution à l'autre. */
     bool        no_maj;
     bool        quality_set; /* la ligne de commande a tranché : ne pas relire la config */
+    /*
+     * QUI A DÉCIDÉ LA DÉFINITION ET LE PALIER — nommé, parce que le démarrage
+     * doit pouvoir le DIRE. `NULL` : personne, donc la configuration décide.
+     *
+     * Sans ces deux champs, `width`, `height` et `quality` arrivent au bloc de
+     * démarrage sans passeport : une valeur posée par `--width=`, par
+     * `NINETEEN_WIDTH` dans l'environnement ou par un fichier `.env` traînant
+     * dans le répertoire courant y sont indiscernables. Coût mesuré : un `.env`
+     * oublié à la racine du dépôt (`NINETEEN_QUALITY=medium`,
+     * `NINETEEN_WIDTH=1600`, `NINETEEN_HEIGHT=900`) faisait sortir le jeu en
+     * 1600x900 au palier `medium` alors que `settings.cfg` disait 1280x720 et
+     * `high`, et le journal affirmait deux lignes plus haut « configuration
+     * chargée : 14 clés ». Une heure de recherche pour trois lignes d'un
+     * fichier que git ne suit même pas.
+     *
+     * C'est la chaîne de l'adresse du serveur, et pour la même raison : quatre
+     * sources muettes se ressemblent toutes. Voir `ns_online_resolve_url` et
+     * l'en-tête de `nineteen.env` — « Le demarrage DIT laquelle a gagne ».
+     */
+    const char *src_taille;
+    const char *src_palier;
     bool        no_hud;      /* captures d'architecture : la scène sans un pixel de texte */
     const char *server;      /* --server= : le plus fort des quatre niveaux */
     /*
@@ -188,6 +209,11 @@ static void print_usage(const char *exe)
         "  --env=CHEMIN         fichier de réglages (défaut : nineteen.env,\n"
         "                       cherché dans le dossier courant, puis à côté du\n"
         "                       binaire, puis dans les assets)\n"
+        "                       NE CONCERNE PAS le fichier .env, qui est lu\n"
+        "                       plus tôt et pose des NINETEEN_* : celui-là se\n"
+        "                       détourne par NINETEEN_ENV=CHEMIN. Le démarrage\n"
+        "                       dit quel fichier a donné la définition et le\n"
+        "                       palier.\n"
         "  --screenshot=CHEMIN  écrit une capture PNG puis quitte\n"
         "  --sequence=PREFIXE   écrit PREFIXE0000.png, PREFIXE0001.png… une par\n"
         "                       image rendue : de quoi monter un film. Le temps\n"
@@ -285,6 +311,59 @@ static void print_usage(const char *exe)
  * demanderait un analyseur, donc des messages d'erreur, donc un test — pour
  * régler une qualité et une résolution.
  */
+/*
+ * QUEL FICHIER `.env` A POSÉ QUELLE VARIABLE.
+ *
+ * Une fois `SDL_SetEnvironmentVariable` appelée, plus rien ne distingue une
+ * variable venue d'un fichier d'une variable venue du shell : `SDL_getenv` rend
+ * la même chaîne. Or ce n'est pas le même diagnostic — l'une se corrige en
+ * fermant un terminal, l'autre demande de trouver un fichier qu'on ne cherchait
+ * pas, et qui peut être dans le répertoire courant comme à côté du binaire. On
+ * retient donc l'origine au moment où on la connaît, c'est-à-dire ici.
+ *
+ * Trente-deux places : `main.c` lit 18 `NINETEEN_*` et le `.env` de cette
+ * machine en pose 9, mais rien n'interdit à un fichier d'en poser d'autres —
+ * il n'a pas de liste blanche. Le débordement ne ment PAS pour autant : passé
+ * la trente-deuxième, on dit qu'on ne sait plus distinguer, plutôt que de
+ * répondre « environnement » à propos d'un fichier.
+ */
+#define NS_ENV_ORIGINES_MAX 32
+static struct { char cle[48]; char libelle[576]; } g_env_origines[NS_ENV_ORIGINES_MAX];
+static int  g_env_origines_count;
+static bool g_env_origines_pleines;
+
+static void env_origine_noter(const char *cle, const char *fichier)
+{
+    if (g_env_origines_count >= NS_ENV_ORIGINES_MAX) { g_env_origines_pleines = true; return; }
+    SDL_strlcpy(g_env_origines[g_env_origines_count].cle, cle,
+                sizeof g_env_origines[0].cle);
+    /*
+     * Le chemin est rendu ABSOLU, et c'est tout l'intérêt de la ligne.
+     *
+     * Le fichier le plus courant s'appelle « .env » et se cherche dans le
+     * répertoire COURANT : dire « fichier .env » à quelqu'un qui vient de lancer
+     * le jeu depuis la racine de son dépôt ne lui apprend rien, il faut encore
+     * qu'il devine lequel des trois candidats a parlé. Le chemin complet se lit,
+     * se copie et s'ouvre.
+     */
+    char *cwd = (fichier[0] == '/') ? NULL : SDL_GetCurrentDirectory();
+    SDL_snprintf(g_env_origines[g_env_origines_count].libelle,
+                 sizeof g_env_origines[0].libelle, "fichier %s%s",
+                 cwd ? cwd : "", fichier);
+    SDL_free(cwd);
+    g_env_origines_count++;
+}
+
+/* Nomme la source d'une variable DÉJÀ connue non nulle : le fichier qui l'a
+ * posée, sinon l'environnement du lancement. */
+static const char *env_origine(const char *cle)
+{
+    for (int i = 0; i < g_env_origines_count; ++i) {
+        if (SDL_strcmp(g_env_origines[i].cle, cle) == 0) return g_env_origines[i].libelle;
+    }
+    return g_env_origines_pleines ? "environnement ou fichier .env" : "environnement";
+}
+
 static void apply_env_file(const char *path)
 {
     if (!path || !path[0]) return;
@@ -315,8 +394,14 @@ static void apply_env_file(const char *path)
                                || value[vl - 1] == '\r')) value[--vl] = '\0';
 
                 /* `false` : une variable déjà présente dans l'environnement
-                 * l'emporte sur le fichier, comme annoncé. */
-                if (kl > 0) SDL_SetEnvironmentVariable(SDL_GetEnvironment(), key, value, false);
+                 * l'emporte sur le fichier, comme annoncé. C'est aussi ce qui
+                 * permet de dire d'où elle vient : si elle était absente avant
+                 * l'appel, c'est CE fichier qui l'a posée. */
+                if (kl > 0) {
+                    const bool deja = (SDL_getenv(key) != NULL);
+                    SDL_SetEnvironmentVariable(SDL_GetEnvironment(), key, value, false);
+                    if (!deja) env_origine_noter(key, path);
+                }
             }
         }
 
@@ -353,10 +438,19 @@ static void load_env_defaults(options *o)
          * cesserait de faire ce qu'il dit. */
         if (SDL_strcmp(v, "potato") == 0 || SDL_strcmp(v, "low") == 0
             || SDL_strcmp(v, "medium") == 0 || SDL_strcmp(v, "high") == 0
-            || SDL_strcmp(v, "ultra") == 0) o->quality_set = true;
+            || SDL_strcmp(v, "ultra") == 0) {
+            o->quality_set = true;
+            o->src_palier  = env_origine("NINETEEN_QUALITY");
+        }
     }
-    if ((v = SDL_getenv("NINETEEN_WIDTH")) != NULL)     o->width = SDL_atoi(v);
-    if ((v = SDL_getenv("NINETEEN_HEIGHT")) != NULL)    o->height = SDL_atoi(v);
+    if ((v = SDL_getenv("NINETEEN_WIDTH")) != NULL) {
+        o->width = SDL_atoi(v);
+        o->src_taille = env_origine("NINETEEN_WIDTH");
+    }
+    if ((v = SDL_getenv("NINETEEN_HEIGHT")) != NULL) {
+        o->height = SDL_atoi(v);
+        if (!o->src_taille) o->src_taille = env_origine("NINETEEN_HEIGHT");
+    }
     if ((v = SDL_getenv("NINETEEN_SCALE")) != NULL)     o->render_scale = (float)SDL_atof(v);
     if ((v = SDL_getenv("NINETEEN_EXPOSURE")) != NULL)  o->exposure = (float)SDL_atof(v);
     if ((v = SDL_getenv("NINETEEN_VSYNC")) != NULL)     o->vsync = (SDL_atoi(v) != 0);
@@ -420,8 +514,10 @@ static bool parse_options(int argc, char **argv, options *o)
             o->frames = SDL_atoi(a + 9);
         } else if (SDL_strncmp(a, "--width=", 8) == 0) {
             o->width = SDL_atoi(a + 8);
+            o->src_taille = "ligne de commande";
         } else if (SDL_strncmp(a, "--height=", 9) == 0) {
             o->height = SDL_atoi(a + 9);
+            o->src_taille = "ligne de commande";
         } else if (SDL_strncmp(a, "--scale=", 8) == 0) {
             o->render_scale = (float)SDL_atof(a + 8);
         } else if (SDL_strcmp(a, "--fullscreen") == 0) {
@@ -513,6 +609,7 @@ static bool parse_options(int argc, char **argv, options *o)
             else if (SDL_strcmp(q, "ultra") == 0)  o->quality = NS_QUALITY_ULTRA;
             else { fprintf(stderr, "qualité inconnue : %s (potato, low, medium, high, ultra)\n", q); return false; }
             o->quality_set = true;
+            o->src_palier  = "ligne de commande";
         } else if (SDL_strncmp(a, "--camera=", 9) == 0) {
             const char *m = a + 9;
             if (SDL_strcmp(m, "player") == 0)     o->camera_mode = ROOM_CAM_PLAYER;
@@ -2100,6 +2197,38 @@ int main(int argc, char **argv)
     const int win_w = (opt.width  > 0) ? opt.width  : ns_config_get_int(NS_CFG_WINDOW_W, 1600);
     const int win_h = (opt.height > 0) ? opt.height : ns_config_get_int(NS_CFG_WINDOW_H, 900);
 
+    /*
+     * ET LE DÉMARRAGE DIT LAQUELLE A GAGNÉ.
+     *
+     * Le journal décrivait le symptôme sans jamais nommer la cause :
+     * « configuration chargée : 14 clés » à la ligne d'avant, puis « RHI prêt :
+     * 1600x900 » alors que le fichier de 14 lignes dit 1280x720. Coup par coup,
+     * les deux lignes sont vraies ; ensemble, elles font croire à une
+     * configuration lue puis jetée. Elle n'est pas jetée : elle a PERDU, contre
+     * trois lignes d'un `.env` posé à la racine du dépôt — que git ne suit pas,
+     * que `--env=` ne touche pas (il ne pilote que `ns_env_load`) et qui n'est
+     * lu que si l'on lance le jeu depuis ce répertoire-là. Une heure pour le
+     * trouver.
+     *
+     * On ne change PAS la règle : l'environnement bat la configuration, et c'est
+     * délibéré — l'en-tête de `nineteen.env` l'explique pour l'adresse du
+     * serveur, un `settings.cfg` laissé par une session précédente ne doit pas
+     * rendre muet un « docker run -e ... ». On change le SILENCE, exactement
+     * comme `ns_online` le fait déjà : « (source : ...) ».
+     */
+    {
+        const int cfg_w = ns_config_get_int(NS_CFG_WINDOW_W, 0);
+        const int cfg_h = ns_config_get_int(NS_CFG_WINDOW_H, 0);
+        if (opt.src_taille && cfg_w > 0 && cfg_h > 0 && (cfg_w != win_w || cfg_h != win_h)) {
+            NS_INFO("fenêtre : %dx%d (source : %s) — la configuration gardait %dx%d",
+                    win_w, win_h, opt.src_taille, cfg_w, cfg_h);
+        } else {
+            NS_INFO("fenêtre : %dx%d (source : %s)", win_w, win_h,
+                    opt.src_taille ? opt.src_taille
+                                   : (cfg_w > 0 ? "configuration" : "défaut compilé"));
+        }
+    }
+
     ns_rhi_desc rhi_desc;
     SDL_zero(rhi_desc);
     rhi_desc.window_title = "Nineteen";
@@ -2126,14 +2255,39 @@ int main(int argc, char **argv)
      * Un réglage qu'on ne peut pas garder d'une session à l'autre n'est pas un
      * réglage, c'est une option de ligne de commande.
      */
+    const char *cfg_palier = ns_config_get_str(NS_CFG_QUALITY, "");
     if (!opt.quality_set) {
-        const char *q = ns_config_get_str(NS_CFG_QUALITY, "");
+        const char *q = cfg_palier;
         if      (SDL_strcasecmp(q, "potato") == 0) opt.quality = NS_QUALITY_POTATO;
         else if (SDL_strcasecmp(q, "low") == 0)    opt.quality = NS_QUALITY_LOW;
         else if (SDL_strcasecmp(q, "medium") == 0) opt.quality = NS_QUALITY_MEDIUM;
         else if (SDL_strcasecmp(q, "high") == 0)   opt.quality = NS_QUALITY_HIGH;
         else if (SDL_strcasecmp(q, "ultra") == 0)  opt.quality = NS_QUALITY_ULTRA;
         else if (*q) NS_WARN("configuration : qualité « %s » inconnue, ignorée", q);
+    }
+    /*
+     * Le palier aussi NOMME sa source, et pour la même raison que la définition
+     * juste au-dessus : « rendu prêt (qualité 2, ray tracing 0) » ne dit pas que
+     * `settings.cfg` demandait `high`, ni qui l'a emporté.
+     *
+     * La comparaison suffit à savoir si la configuration a gagné : quand elle
+     * gagne, `opt.quality` sort de sa propre chaîne, donc `quality_name` la
+     * rend mot pour mot. Un palier écrit de travers dans le fichier ne
+     * correspond à rien et retombe donc sur « défaut compilé », ce qui est
+     * exactement ce qui s'est passé — l'avertissement au-dessus le dit déjà.
+     */
+    {
+        const char *src = opt.src_palier;
+        if (!src && cfg_palier[0]
+            && SDL_strcasecmp(cfg_palier, quality_name(opt.quality)) == 0) src = "configuration";
+        if (opt.src_palier && cfg_palier[0]
+            && SDL_strcasecmp(cfg_palier, quality_name(opt.quality)) != 0) {
+            NS_INFO("palier : %s (source : %s) — la configuration gardait « %s »",
+                    quality_name(opt.quality), opt.src_palier, cfg_palier);
+        } else {
+            NS_INFO("palier : %s (source : %s)", quality_name(opt.quality),
+                    src ? src : "défaut compilé");
+        }
     }
 
     ns_render_settings rs;
@@ -3164,9 +3318,15 @@ int main(int argc, char **argv)
      */
     bool menu_win_touched = false;
     bool menu_fullscreen_touched = false;
+    /* …et les deux mêmes pour le palier et l'échelle, qui ne les avaient pas :
+     * `rs` porte ce qu'un `.env` ou un `--quality=` a imposé, et la sortie le
+     * recopiait dans `settings.cfg`. Voir `room_menu.h`. */
+    bool menu_quality_touched = false;
+    bool menu_scale_touched = false;
     room_menu_ctx menu_ctx = { &rs, &mouse_sens_mult, &menu_realtime,
                                &menu_win_w, &menu_win_h, &menu_fullscreen,
-                               &menu_win_touched, &menu_fullscreen_touched };
+                               &menu_win_touched, &menu_fullscreen_touched,
+                               &menu_quality_touched, &menu_scale_touched };
     if (opt.menu) {
         room_menu_open(&menu);
         /* Une ligne hors bornes ne surligne rien et ne se répare jamais :
@@ -3822,6 +3982,11 @@ play_at_done: ;
                     appliquer_teinte_achetee(&rs);
                     ns_renderer_set_settings(rhi, renderer, &rs);
                     settings_banner = 2.6f;
+                    /* F7 est un GESTE DU JOUEUR au même titre que la ligne
+                     * « QUALITE » du menu — c'est écrit trois lignes plus haut —
+                     * donc il lève le même drapeau, sans quoi le palier choisi
+                     * ici ne survivrait pas à la fermeture. */
+                    menu_quality_touched = true;
                     NS_INFO("qualité : %s", quality_name(rs.quality));
                     break;
                 }
@@ -3837,6 +4002,7 @@ play_at_done: ;
                     appliquer_teinte_achetee(&rs);
                     ns_renderer_set_settings(rhi, renderer, &rs);
                     settings_banner = 2.6f;
+                    menu_scale_touched = true;   /* idem : c'est un geste, pas un état */
                     NS_INFO("échelle de rendu : %.2f", (double)rs.render_scale);
                     break;
                 }

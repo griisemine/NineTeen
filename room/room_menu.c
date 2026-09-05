@@ -338,11 +338,13 @@ static bool item_step(room_menu *m, const room_menu_ctx *ctx, int i, int dir)
             ctx->rs->render_scale     = keep_scale;
             ctx->rs->particle_density = keep_part;
             ctx->rs->exposure         = keep_expo;
+            if (ctx->quality_touched) *ctx->quality_touched = true;
             return true;
         }
         case MI_SCALE:
             ctx->rs->render_scale = ns_clampf(ctx->rs->render_scale + (float)dir * 0.05f,
                                               0.50f, 1.00f);
+            if (ctx->scale_touched) *ctx->scale_touched = true;
             return true;
         case MI_PARTICLES:
             ctx->rs->particle_density = ns_clampf(ctx->rs->particle_density + (float)dir * 0.1f,
@@ -505,8 +507,26 @@ void room_menu_persist(const room_menu_ctx *ctx)
         case NS_QUALITY_HIGH:   q = "high";   break;
         case NS_QUALITY_ULTRA:  q = "ultra";  break;
     }
-    ns_config_set_str(NS_CFG_QUALITY, q);
-    ns_config_set_float(NS_CFG_RENDER_SCALE, ctx->rs->render_scale);
+    /*
+     * LE PALIER ET L'ÉCHELLE, sous le MÊME garde que la définition plus bas —
+     * et il leur manquait depuis le début.
+     *
+     * `ctx->rs` porte l'état RÉEL du rendu, donc aussi ce qu'une source plus
+     * forte que la configuration y a mis : `--quality=`, `NINETEEN_QUALITY`, ou
+     * un fichier `.env`. Les écrire sans distinction transformait ce choix
+     * D'UNE FOIS en préférence gardée. Mesuré sur cette machine, avec un `.env`
+     * portant `NINETEEN_QUALITY=medium` et `NINETEEN_SCALE=0.6` : une seule
+     * exécution de deux images en `--headless` réécrivait « render.quality =
+     * high » en « medium » et « render.scale = 1 » en « 0.6 » dans le
+     * `settings.cfg` du joueur, qui n'avait pas ouvert le menu et n'a rien vu
+     * passer. Le palier qu'il avait choisi était perdu pour de bon.
+     *
+     * C'est le défaut qui avait déjà été corrigé pour `window.width` — voir les
+     * drapeaux dans `room_menu.h` — et ces deux lignes-ci y avaient échappé.
+     */
+    if (ctx->quality_touched && *ctx->quality_touched) ns_config_set_str(NS_CFG_QUALITY, q);
+    if (ctx->scale_touched && *ctx->scale_touched)
+        ns_config_set_float(NS_CFG_RENDER_SCALE, ctx->rs->render_scale);
     ns_config_set_float(NS_CFG_MOUSE_SENS, *ctx->mouse_sensitivity);
     /* Hors du garde `ns_audio_ready`, délibérément : ces deux-là n'ont pas
      * besoin du mixeur pour exister. Régler les pas sur une machine muette puis

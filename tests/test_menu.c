@@ -44,7 +44,7 @@ static int menu_item_count(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
     for (int i = 1; i <= 64; ++i) {
         room_menu_input(&m, &ctx, ROOM_MENU_DOWN);
@@ -67,7 +67,7 @@ static void test_navigation(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
     /* Fermé, le menu ignore tout : une touche pressée pendant la partie ne doit
      * pas déplacer un curseur invisible. */
@@ -92,7 +92,7 @@ static void test_quality_preserves_the_other_rows(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Ligne 1 : l'échelle. Deux crans vers le bas. */
@@ -142,7 +142,7 @@ static void test_bounds(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     go_to(&m, &ctx, 1);
@@ -175,7 +175,7 @@ static void test_buttons(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
     const int n = menu_item_count();
 
     room_menu_open(&m);
@@ -221,7 +221,7 @@ static void test_room_levels(void)
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
     bool realtime = false;
-    const room_menu_ctx ctx = { &rs, &sens, &realtime, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, &realtime, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
     room_menu_open(&m);
 
     /* Visées par leur LIBELLÉ, et non par arithmétique sur le nombre de lignes.
@@ -320,7 +320,7 @@ static void test_persist_fenetre(void)
     bool fs = true;                  /* idem, par `--fullscreen` */
     bool w_touched = false, fs_touched = false;
     const room_menu_ctx ctx = { &rs, &sens, NULL, &w, &h, &fs,
-                                &w_touched, &fs_touched };
+                                &w_touched, &fs_touched, NULL, NULL };
 
     /* --- moitié 1 : sans geste du joueur, rien ne s'écrit ------------------ */
     ns_config_init("menu-fenetre-test.cfg");
@@ -405,7 +405,7 @@ static void test_persist_fenetre(void)
     bool fs2 = false;
     bool w2_touched = false, fs2_touched = true;
     const room_menu_ctx ctx2 = { &rs, &sens, NULL, &w2, &h2, &fs2,
-                                 &w2_touched, &fs2_touched };
+                                 &w2_touched, &fs2_touched, NULL, NULL };
     ns_config_set_int(NS_CFG_WINDOW_W, 1600);
     room_menu_persist(&ctx2);
     CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == 1600,
@@ -414,7 +414,7 @@ static void test_persist_fenetre(void)
 
     /* Un pointeur de drapeau NUL vaut « pas touché » : c'est le sens sûr, et
      * c'est ce que font les sept autres contextes de ce fichier. */
-    const room_menu_ctx ctx3 = { &rs, &sens, NULL, &w2, &h2, &fs2, NULL, NULL };
+    const room_menu_ctx ctx3 = { &rs, &sens, NULL, &w2, &h2, &fs2, NULL, NULL, NULL, NULL };
     room_menu_persist(&ctx3);
     CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 0) == 1600,
           "un drapeau nul n'écrit rien (%d)",
@@ -423,12 +423,172 @@ static void test_persist_fenetre(void)
     ns_config_shutdown();
 }
 
+/*
+ * LE PALIER ET L'ÉCHELLE À LA SORTIE — le même piège que la définition, une
+ * ligne plus haut dans `room_menu_persist`, et il y est resté seul longtemps.
+ *
+ * `ctx->rs` porte l'état RÉEL du rendu, donc aussi ce qu'une source plus forte
+ * que la configuration y a mis. Mesuré sur le binaire : avec un `.env` posé à
+ * la racine du dépôt (`NINETEEN_QUALITY=medium`, `NINETEEN_SCALE=0.6`), une
+ * exécution de deux images en `--headless` réécrivait « render.quality = high »
+ * en « medium » et « render.scale = 1 » en « 0.6 » dans le `settings.cfg` du
+ * joueur. Il n'avait pas ouvert le menu ; son palier était perdu.
+ *
+ * Les DEUX moitiés, comme pour la définition : « n'écrit jamais » passerait
+ * aussi bien la première, et le menu de qualité cesserait d'exister.
+ */
+static void test_persist_palier(void)
+{
+    /* Le rendu tourne en `medium`, échelle 0,6 — imposé du dehors. */
+    ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
+    rs.render_scale = 0.6f;
+    float sens = 1.0f;
+    bool q_touched = false, sc_touched = false;
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL,
+                                &q_touched, &sc_touched };
+
+    /* --- moitié 1 : sans geste du joueur, rien ne s'écrit ------------------ */
+    ns_config_init("menu-palier-test.cfg");
+    ns_config_set_str(NS_CFG_QUALITY, "high");     /* ce que le joueur garde */
+    ns_config_set_float(NS_CFG_RENDER_SCALE, 1.0f);
+
+    room_menu_persist(&ctx);
+    CHECK(SDL_strcmp(ns_config_get_str(NS_CFG_QUALITY, "?"), "high") == 0,
+          "un palier imposé du dehors ne remplace pas celui qui est gardé (%s)",
+          ns_config_get_str(NS_CFG_QUALITY, "?"));
+    CHECK(ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f) > 0.99f,
+          "…ni l'échelle de rendu (%.3f)",
+          (double)ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f));
+
+    /* --- moitié 2 : après un geste dans le menu, ça s'écrit ---------------- */
+    room_menu m; memset(&m, 0, sizeof m);
+    room_menu_open(&m);
+    const int row_q  = room_menu_row("QUALITE");
+    const int row_sc = room_menu_row("ECHELLE DE RENDU");
+    CHECK(row_q >= 0 && row_sc >= 0,
+          "les lignes « QUALITE » et « ECHELLE DE RENDU » existent (%d, %d)",
+          row_q, row_sc);
+
+    go_to(&m, &ctx, row_q);
+    room_menu_input(&m, &ctx, ROOM_MENU_RIGHT);
+    CHECK(q_touched, "changer le palier lève le drapeau");
+    /* …et PAS l'autre : changer de palier garde l'échelle telle quelle — c'est
+     * la règle testée plus haut — donc il ne doit pas non plus la faire
+     * écrire. Sans cette ligne, un code qui lève les deux drapeaux d'un seul
+     * geste passerait. */
+    CHECK(!sc_touched, "…et ne lève pas celui de l'échelle");
+    const ns_quality choisi = rs.quality;
+    CHECK(choisi != NS_QUALITY_MEDIUM, "…et le palier a bougé (%d)", (int)choisi);
+
+    go_to(&m, &ctx, row_sc);
+    room_menu_input(&m, &ctx, ROOM_MENU_LEFT);
+    CHECK(sc_touched, "bouger l'échelle lève l'autre drapeau");
+    const float echelle = rs.render_scale;
+
+    /*
+     * La configuration est semée de valeurs que le menu NE PEUT PAS choisir :
+     * `potato` n'est pas le palier retenu ci-dessus, et 0,83 ne tombe sur aucun
+     * cran de 0,05. Sans ça, un `room_menu_persist` qui n'écrirait plus rien
+     * passerait le test — c'est la mutation qui a exigé cette précaution dans
+     * `test_persist_fenetre`, et elle vaut ici mot pour mot.
+     */
+    ns_config_set_str(NS_CFG_QUALITY, "potato");
+    ns_config_set_float(NS_CFG_RENDER_SCALE, 0.83f);
+
+    room_menu_persist(&ctx);
+    CHECK(SDL_strcmp(ns_config_get_str(NS_CFG_QUALITY, "?"), "potato") != 0,
+          "ce que le joueur a choisi est écrit (%s)",
+          ns_config_get_str(NS_CFG_QUALITY, "?"));
+    CHECK(ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f) > (double)echelle - 0.001
+          && ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f) < (double)echelle + 0.001,
+          "…et l'échelle aussi (%.3f au lieu de %.3f)",
+          (double)ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f), (double)echelle);
+
+    ns_config_shutdown();
+    /* On ne laisse pas de fichier dans le répertoire du joueur : c'est chez
+     * lui, pas un bac à sable. */
+    char chemin[1024];
+    SDL_snprintf(chemin, sizeof chemin, "%smenu-palier-test.cfg", ns_path_user_dir());
+    SDL_RemovePath(chemin);
+}
+
+/*
+ * UN `settings.cfg` ÉCRIT À LA MAIN, RELU : le palier et la définition en
+ * ressortent-ils ?
+ *
+ * Tout le reste de ce fichier passe par `ns_config_set_*`, donc par la mémoire.
+ * Le tour complet — des octets d'un fichier jusqu'aux valeurs que `main.c`
+ * consulte — n'était couvert nulle part, et c'est précisément le tour dont on a
+ * douté pendant une heure le jour où le jeu sortait en 1600x900 au palier
+ * `medium` avec un fichier qui disait 1280x720 et `high`. Ce test répond en une
+ * seconde : le fichier se relit très bien, la cause était ailleurs.
+ *
+ * La forme du contenu est celle que `ns_config_save` produit, pièges compris :
+ * un en-tête en commentaire, des espaces autour du « = », et une dernière
+ * valeur VIDE — le jeton, qui n'existe pas tant qu'on ne s'est pas inscrit.
+ */
+static void test_config_fichier(void)
+{
+    static const char nom[] = "test-relecture.cfg";
+    static const char contenu[] =
+        "# Nineteen — configuration\n"
+        "# Généré automatiquement ; les lignes commençant par # sont ignorées.\n"
+        "\n"
+        "render.quality = high\n"
+        "render.scale = 1\n"
+        "window.width = 1280\n"
+        "window.height = 720\n"
+        "window.fullscreen = false\n"
+        "network.token = \n";
+
+    char chemin[1024];
+    SDL_snprintf(chemin, sizeof chemin, "%s%s", ns_path_user_dir(), nom);
+
+    SDL_IOStream *io = SDL_IOFromFile(chemin, "w");
+    CHECK(io != NULL, "le fichier d'essai s'ouvre (%s)", chemin);
+    if (!io) return;
+    SDL_WriteIO(io, contenu, sizeof contenu - 1);
+    SDL_CloseIO(io);
+
+    ns_config_init(nom);
+
+    CHECK(SDL_strcmp(ns_config_get_str(NS_CFG_QUALITY, "?"), "high") == 0,
+          "le palier écrit dans le fichier en ressort (%s)",
+          ns_config_get_str(NS_CFG_QUALITY, "?"));
+    /* Les replis sont ceux de `main.c` : si la lecture échouait, ce sont eux
+     * qu'on lirait — et 1600x900 est exactement ce qu'affichait le journal. */
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_W, 1600) == 1280,
+          "la largeur aussi (%d)", ns_config_get_int(NS_CFG_WINDOW_W, 1600));
+    CHECK(ns_config_get_int(NS_CFG_WINDOW_H, 900) == 720,
+          "…et la hauteur (%d)", ns_config_get_int(NS_CFG_WINDOW_H, 900));
+    CHECK(ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f) > 0.99f
+          && ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f) < 1.01f,
+          "…et l'échelle (%.3f)",
+          (double)ns_config_get_float(NS_CFG_RENDER_SCALE, 0.0f));
+    CHECK(ns_config_get_bool(NS_CFG_FULLSCREEN, true) == false,
+          "…et le plein écran, dont la valeur est un mot et non un nombre");
+    /* Une valeur VIDE n'est pas une valeur : c'est le repli qui doit gagner,
+     * sans quoi le jeu croirait détenir un jeton de session fait de rien. */
+    CHECK(SDL_strcmp(ns_config_get_str(NS_CFG_SERVER_TOKEN, "aucun"), "aucun") == 0,
+          "une valeur vide retombe sur le repli (%s)",
+          ns_config_get_str(NS_CFG_SERVER_TOKEN, "aucun"));
+
+    ns_config_shutdown();
+    SDL_RemovePath(chemin);
+}
+
 static void test_persist(const char *dir)
 {
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_HIGH);
     rs.render_scale = 0.75f;
     float sens = 1.85f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    /* Les deux drapeaux à VRAI : ce test-ci vérifie que le menu écrit bien ce
+     * qu'il affiche, donc il se place après un geste du joueur. Le cas inverse
+     * — palier imposé du dehors, jamais touché ici — est tenu par
+     * `test_persist_palier`. */
+    bool q_touched = true, sc_touched = true;
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL,
+                                &q_touched, &sc_touched };
 
     room_sound_set_level(ROOM_LEVEL_STEPS, 0.45f);
     room_sound_set_level(ROOM_LEVEL_TONE, 0.20f);
@@ -523,7 +683,7 @@ static void test_credits(void)
     room_menu m; memset(&m, 0, sizeof m);
     ns_render_settings rs; ns_render_settings_defaults(&rs, NS_QUALITY_MEDIUM);
     float sens = 1.0f;
-    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL };
+    const room_menu_ctx ctx = { &rs, &sens, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL };
 
     const int row = room_menu_row("CREDITS");
     CHECK(row >= 0, "la ligne « CREDITS » existe dans le menu");
@@ -645,6 +805,8 @@ int main(int argc, char **argv)
     test_credits();
     test_persist(argc > 1 ? argv[1] : ".");
     test_persist_fenetre();
+    test_persist_palier();
+    test_config_fichier();
     ns_paths_shutdown();
     printf("%d vérifications, %d échec(s)\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
