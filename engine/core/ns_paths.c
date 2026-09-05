@@ -18,6 +18,33 @@
 #define NS_MAX_MOUNTS 8
 #define NS_PATH_MAX   1024
 
+/*
+ * LE RÉPERTOIRE DE DONNÉES, ET LE MOYEN EXPLICITE DE LE DÉPLACER.
+ *
+ * `SDL_GetPrefPath` rend le bon répertoire POUR UN JOUEUR — sur cette machine
+ * ~/Library/Application Support/recognizer/Nineteen. Il cesse de l'être dès que
+ * le dépôt lance le jeu sans être le joueur : un `nineteen --headless
+ * --frames=1`, qui ne joue rien et ne dessine rien, y réécrit trois fichiers —
+ * `nineteen.log`, `settings.cfg` ET `portefeuille.txt`. C'est la cause du
+ * `settings.cfg` « qui change tout seul », et ça touche des jetons dont le solde
+ * est en cours de vérification.
+ *
+ * Et il n'existait AUCUN moyen de s'en abstraire. Rediriger `HOME` ne protège
+ * rien : sur macOS SDL passe par `NSHomeDirectory`, qui ignore la variable —
+ * trois intervenants s'y sont fait prendre le même jour, chacun croyant avoir
+ * isolé son exécution. `CFFIXED_USER_HOME` fonctionne, mais c'est un détail
+ * d'implémentation d'Apple, sans équivalent Linux ni Windows : s'en servir
+ * reviendrait à protéger une plateforme sur trois par un moyen non documenté.
+ *
+ * D'où une variable À NOUS, lue ici, au seul endroit du dépôt qui appelle
+ * `SDL_GetPrefPath`. Elle est portable par construction, et elle se teste.
+ *
+ * ABSENTE, IL NE SE PASSE RIEN : c'est la contrainte la plus forte de ce
+ * mécanisme. Un joueur ne doit rien voir changer, et la seule chose qu'il voit
+ * est une ligne de journal de plus, qui nomme le répertoire qu'il avait déjà.
+ */
+#define NS_USER_DIR_ENV "NINETEEN_USER_DIR"
+
 typedef struct mount {
     char dir[NS_PATH_MAX];
 } mount;
@@ -59,12 +86,75 @@ static bool logical_is_safe(const char *logical)
  * binaire comme montage de dernier recours. */
 static bool mount_at(const char *directory, bool fallback);
 
-bool ns_paths_init(const char *argv0)
+/*
+ * Adopte `dir` comme répertoire utilisateur, SÉPARATEUR FINAL COMPRIS.
+ *
+ * Les onze appelants de `ns_path_user_dir()` concatènent sans séparateur —
+ * `ns_config.c` fait « %s%s », `room/main.c` fait « %snineteen.log ».
+ * `SDL_GetPrefPath` garantit la barre finale ; une variable d'environnement
+ * écrite à la main, non : « …/bac » donnerait « …/bacnineteen.log », soit un
+ * fichier posé à côté du répertoire visé. On la remet donc ici, une fois, plutôt
+ * que dans onze appelants.
+ */
+static bool user_dir_adopt(const char *dir)
 {
-    (void)argv0;   /* SDL sait retrouver le répertoire du binaire tout seul */
+    const size_t n = SDL_strlen(dir);
+    /* n caractères + une barre éventuelle + le zéro final. */
+    if (n == 0 || n + 2 > sizeof g_user_dir) return false;
 
-    g_mount_count = 0;
-    g_initialised = true;
+    SDL_memcpy(g_user_dir, dir, n + 1);
+    if (g_user_dir[n - 1] != '/' && g_user_dir[n - 1] != '\\') {
+        g_user_dir[n]     = '/';
+        g_user_dir[n + 1] = '\0';
+    }
+    return true;
+}
+
+/*
+ * Choisit le répertoire de données et DIT LEQUEL A GAGNÉ.
+ *
+ * La ligne est émise ici et pas au retour dans `room/main.c`, où le journal est
+ * ouvert : c'est ce répertoire-ci qui décide OÙ `nineteen.log` s'ouvre, donc la
+ * décision précède forcément le fichier qui la consignerait. Elle sort sur la
+ * console, ce qui est exactement là où on la cherche — les scripts de capture y
+ * redirigent la sortie du jeu.
+ *
+ * La forme « (source : ...) » est celle du dépôt, déjà employée pour la
+ * définition, le palier et l'adresse du serveur. Trois valeurs qui pouvaient
+ * venir de plusieurs endroits, et dont on a chaque fois perdu du temps à
+ * chercher lequel avait gagné.
+ */
+static void resoudre_repertoire_utilisateur(void)
+{
+    g_user_dir[0] = '\0';
+
+    const char *forced = SDL_getenv(NS_USER_DIR_ENV);
+    if (forced && *forced) {
+        /*
+         * On CRÉE le répertoire demandé : sans ça la variable n'aurait de sens
+         * que pour un chemin déjà existant, ce qui obligerait chaque script à
+         * faire le `mkdir` lui-même — donc à l'oublier une fois sur deux.
+         * `SDL_CreateDirectory` crée aussi les parents manquants et réussit sur
+         * un répertoire déjà là.
+         */
+        if (!SDL_CreateDirectory(forced)) {
+            /* On le DIT, et on retombe sur le répertoire normal. Perdre la
+             * sauvegarde d'un joueur en silence parce qu'une variable pointe un
+             * chemin impossible serait un défaut plus grave que celui qu'on
+             * corrige. */
+            NS_WARN(NS_USER_DIR_ENV " = « %s » : répertoire impossible à créer (%s) — "
+                    "le répertoire habituel reprend la main", forced, SDL_GetError());
+        } else if (!user_dir_adopt(forced)) {
+            NS_WARN(NS_USER_DIR_ENV " = « %s » : chemin trop long (%d caractères au "
+                    "plus) — le répertoire habituel reprend la main",
+                    forced, NS_PATH_MAX - 2);
+        }
+    }
+
+    if (g_user_dir[0]) {
+        NS_INFO("données : « %s » (source : " NS_USER_DIR_ENV ")", g_user_dir);
+        return;
+    }
 
     /* Répertoire inscriptible : ~/.local/share/Nineteen, %APPDATA%\..., etc.
      * L'original écrivait son journal à côté du binaire, ce qui échoue dès que
@@ -73,10 +163,21 @@ bool ns_paths_init(const char *argv0)
     if (pref) {
         SDL_strlcpy(g_user_dir, pref, sizeof g_user_dir);
         SDL_free(pref);
+        NS_INFO("données : « %s » (source : SDL_GetPrefPath)", g_user_dir);
     } else {
         g_user_dir[0] = '\0';
         NS_WARN("répertoire utilisateur indisponible : %s", SDL_GetError());
     }
+}
+
+bool ns_paths_init(const char *argv0)
+{
+    (void)argv0;   /* SDL sait retrouver le répertoire du binaire tout seul */
+
+    g_mount_count = 0;
+    g_initialised = true;
+
+    resoudre_repertoire_utilisateur();
 
     /* Le répertoire du binaire est toujours monté en dernier recours : c'est la
      * disposition d'un paquet installé (assets à côté de l'exécutable). Marqué

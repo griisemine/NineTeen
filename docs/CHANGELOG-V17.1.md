@@ -817,6 +817,151 @@ façon. Tous trois se taisent par construction : dans le doute, ce code ne dit r
 
 ---
 
+## Compiler le jeu suffisait à écrire dans la sauvegarde du propriétaire
+
+### Ce qui se voyait
+
+Un `settings.cfg` « qui change tout seul ». Le propriétaire s'en est plaint sans
+pouvoir dire quand : le fichier reprenait des valeurs qu'il n'avait pas posées,
+entre deux séances où il n'avait pas joué.
+
+### Ce qui se passait
+
+Toute exécution du jeu écrit dans `~/Library/Application Support/recognizer/Nineteen/`.
+Pas seulement une partie — **n'importe quelle** exécution :
+
+```console
+$ nineteen --headless --frames=1
+```
+
+Cette commande ne joue rien, ne dessine rien, et réécrit pourtant trois fichiers :
+`nineteen.log`, `settings.cfg` **et** `portefeuille.txt`. Or ce répertoire est
+celui du propriétaire : il contient ses jetons, ses tickets, et un solde dont la
+vérification est en cours. `ctest` y passait aussi — les fichiers
+`menu-test.cfg`, `menu-fenetre-test.cfg` et `menu-palier-test.cfg` qu'y déposait
+`ns_test_menu` s'y trouvaient encore, datés d'exécutions antérieures. Chacun de
+ces tests s'applique pourtant à effacer ce qu'il écrit, et c'est bien la preuve
+que le problème n'était pas la propreté : c'était l'**adresse**.
+
+### Pourquoi personne n'y échappait
+
+`engine/core/ns_paths.c` appelait `SDL_GetPrefPath("recognizer", "Nineteen")`,
+seul point d'appel du dépôt, sans aucune porte de sortie. Le réflexe — rediriger
+`HOME` — **ne protège rien** : sur macOS SDL passe par `NSHomeDirectory`, qui
+ignore la variable. Trois intervenants s'y sont fait prendre le même jour, chacun
+croyant avoir isolé son exécution. `CFFIXED_USER_HOME` fonctionne, mais c'est un
+détail d'implémentation d'Apple, non documenté ici et sans équivalent Linux ni
+Windows : s'en servir protégerait une plateforme sur trois, par un moyen que
+personne ne penserait à chercher.
+
+### La correction
+
+Une variable à nous, lue au seul endroit qui appelait `SDL_GetPrefPath`.
+
+```
+NINETEEN_USER_DIR=/un/repertoire
+```
+
+| Cas | Ce qui se passe |
+| --- | --- |
+| Absente | **Rien ne change.** `SDL_GetPrefPath` décide comme avant |
+| Posée | Ce chemin est utilisé, et **créé** s'il manque, parents compris |
+| Posée sur un chemin impossible | `NS_WARN`, puis le répertoire habituel reprend la main |
+
+Le troisième cas est le seul qui demandait un arbitrage : perdre la sauvegarde
+d'un joueur en silence parce qu'une variable pointe un chemin impossible serait
+un défaut plus grave que celui qu'on corrige.
+
+Le démarrage **dit lequel a gagné**, dans la forme déjà employée pour la
+définition, le palier et l'adresse du serveur :
+
+```console
+$ NINETEEN_USER_DIR=/tmp/bac nineteen --headless --frames=1
+INFO ns_paths.c — données : « /tmp/bac/ » (source : NINETEEN_USER_DIR)
+
+$ nineteen --headless --frames=1
+INFO ns_paths.c — données : « /Users/…/recognizer/Nineteen/ » (source : SDL_GetPrefPath)
+
+$ NINETEEN_USER_DIR=/dev/null/impossible nineteen --headless --frames=1
+WARN ns_paths.c — NINETEEN_USER_DIR = « /dev/null/impossible » : répertoire
+impossible à créer (Can't create directory: File exists) — le répertoire
+habituel reprend la main
+INFO ns_paths.c — données : « /Users/…/recognizer/Nineteen/ » (source : SDL_GetPrefPath)
+```
+
+Cette ligne sort sur la **console** et non dans `nineteen.log`, et ce n'est pas un
+oubli : c'est ce répertoire-là qui décide où `nineteen.log` s'ouvre, donc la
+décision précède forcément le fichier qui la consignerait.
+
+Le détail qui aurait mordu : le chemin ressort avec sa **barre finale**. Les onze
+appelants de `ns_path_user_dir()` concatènent sans séparateur — `ns_config.c` fait
+`"%s%s"`, `room/main.c` fait `"%snineteen.log"` — parce que `SDL_GetPrefPath` la
+garantit. Une variable écrite à la main, non : `…/bac` aurait donné
+`…/bacnineteen.log`, un fichier posé **à côté** du répertoire visé.
+
+### Qui s'en sert
+
+Tout ce qui lance le jeu sans être le joueur : `tools/vues-capture.sh`,
+`tools/ambiance-releve.sh`, et les 53 tests de `tests/CMakeLists.txt`, détournés
+d'un seul bloc vers `build/donnees-test`. Un seul répertoire pour toute la suite,
+délibérément : les tests partageaient déjà celui du propriétaire, donc leur en
+donner un chacun changerait leurs conditions d'exécution en même temps que leur
+adresse.
+
+`vues-capture.sh` a gagné un `--quality=high` au passage, et il le fallait : ce
+script ne passait pas de palier et héritait `render.quality = high` du
+`settings.cfg` du propriétaire. Dans un répertoire neuf, c'est le défaut compilé
+qui se serait appliqué — `medium` — et les captures auraient changé sans que
+personne l'ait demandé. `ambiance-releve.sh` figeait déjà le sien, pour cette
+raison exactement.
+
+### La preuve
+
+Empreintes du répertoire du propriétaire, relevées juste avant et juste après une
+suite complète, doublées d'une sonde qui recalcule l'empreinte du dossier **toutes
+les 0,2 seconde** pendant l'exécution :
+
+```console
+$ ctest --test-dir build --output-on-failure
+100% tests passed, 0 tests failed out of 54
+Total Test time (real) =  42.86 sec
+
+$ diff AVANT.txt APRES.txt
+< ### AVANT — 01:16:29
+> ### APRES — 01:17:13
+
+$ cat sonde.txt        # la sonde, pendant toute la durée de la suite
+(vide)
+```
+
+Seul l'horodatage du relevé diffère. `portefeuille.txt` reste à
+`78ad58fd89201847dfcb8e8e8e5e174ec9a89650`, et la date de modification du
+**répertoire** ne bouge pas non plus, ce qui prouve qu'aucune entrée n'y a été
+créée ni retirée. La sonde compte parce qu'un fichier réécrit à l'identique puis
+remis en place passerait entre deux relevés d'extrémités ; elle n'a rien vu.
+
+Les deux sens sont mesurés séparément. Avec la variable, les trois fichiers
+atterrissent dans le bac à sable et nulle part ailleurs. Sans elle — vérifié sous
+un faux `CFFIXED_USER_HOME`, pour ne pas écrire chez le propriétaire — le jeu
+reconstruit exactement `…/Library/Application Support/recognizer/Nineteen/`.
+Huit lancements de `vues-capture.sh` laissent le répertoire du propriétaire
+identique au bit et à la date près.
+
+L'équivalence des captures est mesurée avec l'instrument du dépôt, parce qu'un
+rendu **n'est pas** reproductible au bit près — deux lancements identiques
+donnent deux PNG différents. `tools/vues-diff.py` compare l'ancien comportement
+(le `settings.cfg` du propriétaire) au nouveau (bac vide, palier figé) et rend
+**0,00 %** de sous-pixels changés, écart moyen 0,03, max 1 : exactement le bruit
+de fond de deux lancements identiques.
+
+### Ce qui n'est pas couvert
+
+Le repli n'est pas exercé par `ctest` : il appelle `SDL_GetPrefPath`, donc il vise
+le répertoire du joueur, ce que la suite ne fait plus. Il est mesuré à la main,
+ci-dessus. `tools/site-media.py` lance aussi le jeu et n'a pas été détourné.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui

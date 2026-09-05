@@ -756,3 +756,40 @@ target_link_libraries(ns_test_saisie PRIVATE nineteen::engine)
 nineteen_set_warnings(ns_test_saisie)
 nineteen_apply_sanitizers(ns_test_saisie)
 add_test(NAME saisie COMMAND ns_test_saisie)
+
+# ==========================================================================
+# LE REPERTOIRE DE DONNEES DE LA SUITE — chez nous, pas chez le joueur.
+# ==========================================================================
+#
+# `ctest` écrivait dans le répertoire de sauvegarde RÉEL du propriétaire.
+# `ns_test_menu` y déposait `menu-test.cfg`, `menu-fenetre-test.cfg` et
+# `menu-palier-test.cfg`, `ns_test_core` y semait `ns_probe.txt` et un
+# `ns_mount_over/` — les quatre premiers y sont encore, datés d'exécutions
+# précédentes. Chacun de ces tests s'applique à effacer ce qu'il a écrit, et
+# c'est bien la preuve que le problème n'est pas la propreté : c'est l'ADRESSE.
+# Ce dossier contient les jetons du propriétaire, un solde en cours de
+# vérification, et le `settings.cfg` dont il s'est plaint qu'il changeait tout
+# seul.
+#
+# Rediriger `HOME` ne protège rien — sur macOS SDL passe par `NSHomeDirectory`,
+# qui l'ignore, et trois intervenants s'y sont fait prendre le même jour. D'où
+# `NINETEEN_USER_DIR`, lue par `engine/core/ns_paths.c`, portable et explicite.
+#
+# UN SEUL répertoire pour toute la suite, et c'est délibéré : les tests le
+# partageaient déjà — celui du propriétaire — donc leur donner un dossier chacun
+# changerait leurs conditions d'exécution en même temps que leur adresse. Le
+# répertoire est créé par le jeu lui-même au premier lancement qui en a besoin.
+#
+# `APPEND` et non `PROPERTIES ENVIRONMENT` : le test `render` pose déjà son
+# pilote vidéo et ses suppressions LeakSanitizer, et les écraser rendrait ce
+# test-là ininterprétable hors macOS.
+set(NINETEEN_TEST_USER_DIR "${CMAKE_BINARY_DIR}/donnees-test"
+    CACHE PATH "Répertoire de données utilisé par la suite de tests")
+
+get_property(_ns_tests DIRECTORY PROPERTY TESTS)
+foreach(_ns_t IN LISTS _ns_tests)
+    set_property(TEST "${_ns_t}" APPEND PROPERTY
+                 ENVIRONMENT "NINETEEN_USER_DIR=${NINETEEN_TEST_USER_DIR}")
+endforeach()
+list(LENGTH _ns_tests _ns_n)
+message(STATUS "tests : ${_ns_n} détournés vers ${NINETEEN_TEST_USER_DIR}")

@@ -402,6 +402,91 @@ static void test_mount_priority(void)
     SDL_RemovePath(over_dir);
 }
 
+/*
+ * `NINETEEN_USER_DIR` : le répertoire de données se déplace-t-il VRAIMENT ?
+ *
+ * Le défaut cloué ici : toute exécution du jeu écrivait dans le répertoire de
+ * sauvegarde RÉEL du propriétaire. Un `nineteen --headless --frames=1`, qui ne
+ * joue rien et ne dessine rien, y réécrivait `nineteen.log`, `settings.cfg` ET
+ * `portefeuille.txt` — et cette suite de tests faisait pareil. Il n'existait
+ * aucun moyen de s'en abstraire : rediriger `HOME` ne protège rien, SDL passant
+ * par `NSHomeDirectory` sur macOS, et trois intervenants s'y sont fait prendre
+ * le même jour.
+ *
+ * Deux propriétés, et ce sont exactement les deux qui cassent en silence :
+ *   1. le chemin demandé est CRÉÉ s'il manque — sans quoi chaque script devrait
+ *      faire le `mkdir` lui-même, donc l'oublierait une fois sur deux, et
+ *      retomberait chez le joueur sans un mot ;
+ *   2. il ressort avec sa BARRE FINALE, parce que les onze appelants de
+ *      `ns_path_user_dir()` concatènent sans séparateur : « …/bac » donnerait
+ *      « …/bacnineteen.log », un fichier posé À CÔTÉ du répertoire visé.
+ *
+ * `SDL_SetEnvironmentVariable` et non `SDL_setenv_unsafe` : `SDL_getenv`, que
+ * lit `ns_paths.c`, sert la copie CACHÉE de l'environnement, faite au démarrage
+ * et que `setenv` ne touche pas. Le test passerait à côté de ce qu'il mesure.
+ *
+ * Le repli — chemin impossible, avertissement, répertoire habituel — n'est PAS
+ * exercé ici, et c'est délibéré : il appelle `SDL_GetPrefPath`, donc il vise le
+ * répertoire du joueur, ce que cette suite ne fait plus. Il se mesure à la main.
+ */
+static void test_user_dir_env(void)
+{
+    printf("\nrépertoire de données détourné\n");
+
+    SDL_Environment *env = SDL_GetEnvironment();
+    const char *avant = SDL_getenv("NINETEEN_USER_DIR");
+
+    char sauvegarde[1024];
+    sauvegarde[0] = '\0';
+    if (avant) SDL_strlcpy(sauvegarde, avant, sizeof sauvegarde);
+
+    if (sauvegarde[0] == '\0') {
+        /* Sans valeur de départ il n'y a pas d'endroit sûr où écrire : le repli
+         * irait chez le joueur. C'est `tests/CMakeLists.txt` qui la pose ; lancé
+         * à la main sans elle, ce test s'abstient plutôt que de deviner. */
+        printf("  (NINETEEN_USER_DIR absente, test ignoré)\n");
+        return;
+    }
+
+    /* Volontairement SANS barre finale, et sur un niveau qui n'existe pas
+     * encore : c'est le cas qu'un script écrit à la main produit. */
+    char vise[1024];
+    SDL_snprintf(vise, sizeof vise, "%sns_bac/essai", sauvegarde);
+    (void)SDL_RemovePath(vise);
+
+    CHECK(SDL_SetEnvironmentVariable(env, "NINETEEN_USER_DIR", vise, true),
+          "la variable se pose pour la durée du test");
+    CHECK(ns_paths_init(NULL), "initialisation avec un répertoire imposé");
+
+    char attendu[1200];
+    SDL_snprintf(attendu, sizeof attendu, "%s/", vise);
+    const char *obtenu = ns_path_user_dir();
+    CHECK(obtenu && SDL_strcmp(obtenu, attendu) == 0,
+          "le répertoire imposé gagne, barre finale comprise : « %s » au lieu de « %s »",
+          obtenu ? obtenu : "(nul)", attendu);
+
+    SDL_PathInfo info;
+    CHECK(SDL_GetPathInfo(vise, &info) && info.type == SDL_PATHTYPE_DIRECTORY,
+          "le répertoire imposé a été créé, parents compris (%s)", vise);
+    ns_paths_shutdown();
+
+    /* On repose l'environnement, PUIS on réinitialise : ce qui suit — ici et
+     * dans les autres exécutables de la suite — compte dessus pour ne pas
+     * écrire chez le joueur. Un test qui laisse une variable globale derrière
+     * lui fait dépendre le suivant de l'ordre d'exécution. */
+    SDL_SetEnvironmentVariable(env, "NINETEEN_USER_DIR", sauvegarde, true);
+    CHECK(ns_paths_init(NULL), "réinitialisation après restauration");
+    CHECK(SDL_strcmp(ns_path_user_dir(), sauvegarde) == 0
+          || SDL_strncmp(ns_path_user_dir(), sauvegarde, SDL_strlen(sauvegarde)) == 0,
+          "le répertoire de la suite est revenu (« %s »)", ns_path_user_dir());
+    ns_paths_shutdown();
+
+    (void)SDL_RemovePath(vise);
+    char parent[1100];
+    SDL_snprintf(parent, sizeof parent, "%sns_bac", sauvegarde);
+    (void)SDL_RemovePath(parent);
+}
+
 /* ========================================================================== */
 /* JSON : les entiers 64 bits, et les octets bruts d'une valeur               */
 /* ========================================================================== */
@@ -495,6 +580,7 @@ int main(void)
     test_math();
     test_paths();
     test_mount_priority();
+    test_user_dir_env();
     test_json_i64_and_span();
 
     printf("\n%d vérifications, %d échec(s)\n", g_checks, g_failures);
