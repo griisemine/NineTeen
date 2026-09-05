@@ -139,6 +139,8 @@ déposer à côté. Voir [docs/DEPLOY.md](docs/DEPLOY.md).
 engine/      le moteur : noyau, RHI, rendu, scène, physique, audio
   shaders/   GLSL compilé en SPIR-V et embarqué dans le binaire
 tools/       conversion des assets : obj2gltf, texgen, bvhbake
+             et la MESURE du rendu : vues-diff (qu'est-ce qui a bougé),
+             ambiance (à quoi ça ressemble), planche (les huit vues d'un coup)
 room/        la salle d'arcade — l'exécutable principal
 games/       les mini-jeux
 assets/      données écrites à la main (affectation des bornes, hitbox)
