@@ -187,21 +187,36 @@ def mesurer(chemin):
 # nommées avant tout changement, sont rappelées entre parenthèses — c'est ce qui
 # rend la consigne discutable plutôt qu'assénée.
 #
-#   clair      >= 55   la salle est sombre, pas noire. (départ : 12 à 42)
-#   brule      >= 2.0  on voit les sources. (départ : 0,3 à 3,4 %)
-#   couleur    >= 0.30 la lumière est colorée. (départ : 0,17 à 0,24)
-#   rose+cyan  >= 22   le néon existe et il est froid ET chaud. (départ : 4 à 9)
-#   contraste  >= 45   les masses noires restent. (départ : 22 à 61)
+#   clair      55 à 85   la salle est sombre, pas noire — ET PAS ÉCLAIRÉE.
+#   brule      2 à 8 %   on voit les sources sans que tout écrête.
+#   couleur    >= 0.30   la lumière est colorée. (départ : 0,17 à 0,24)
+#   rose+cyan  >= 22     le néon existe. (départ : 4 à 9)
+#   contraste  >= 45     les masses noires restent. (départ : 22 à 61)
 #
 # Le « rose + cyan » est la consigne qui porte tout le reste : c'est elle qu'on
 # ne pouvait pas atteindre en montant simplement l'exposition, et c'est donc
 # elle qui force à poser des sources au lieu de tourner un bouton.
+#
+# LES BORNES HAUTES ONT ÉTÉ AJOUTÉES APRÈS COUP, et il faut dire pourquoi
+# plutôt que de faire comme si elles avaient toujours été là. La première
+# version n'imposait que des minimums, et c'était un défaut de l'instrument :
+# une consigne « au moins 55 » est satisfaite par une salle à 93, c'est-à-dire
+# par exactement le supermarché que la description de la salle dit ne pas
+# vouloir. Le premier lot de néon l'a montré tout de suite — trois vues sur
+# huit sont montées entre 88 et 93, dont le couloir d'entrée à 93 pour 0,0 % de
+# rose et de cyan. La photo de référence est une pièce SOMBRE traversée de
+# sources vives ; « le plus clair possible » n'en est pas une lecture.
+#
+# 85 et 8 % ne sont pas ronds par hasard : 85 est la médiane au-dessus de
+# laquelle les murs de crépi — d'albédo linéaire 0,3245, mesuré et gardé depuis
+# `murart` — ressortent laiteux au lieu de beiges, et 8 % est la part écrêtée à
+# partir de laquelle les cœurs de néon fusionnent en une seule tache blanche.
 CIBLES = (
-    ("clair",     55.0, "médiane de luminance"),
-    ("brule",      2.0, "part au-dessus de 200"),
-    ("couleur",    0.30, "saturation pondérée"),
-    ("neon",      22.0, "masse rose + cyan"),
-    ("contraste", 45.0, "écart interquartile"),
+    ("clair",     55.0,  85.0, "médiane de luminance"),
+    ("brule",      2.0,   8.0, "part au-dessus de 200"),
+    ("couleur",    0.30,  None, "saturation pondérée"),
+    ("neon",      22.0,  None, "masse rose + cyan"),
+    ("contraste", 45.0,  None, "écart interquartile"),
 )
 
 
@@ -228,12 +243,18 @@ def main():
               f"   colores {m['colores']:5.1f}%")
         print("  teintes  " + "  ".join(f"{k} {t[k]:4.1f}%" for k, _, _ in FAMILLES))
         if juger:
-            for cle, seuil, quoi in CIBLES:
+            for cle, bas, haut, quoi in CIBLES:
                 v = valeur(m, cle)
-                ok = v >= seuil
-                echecs += 0 if ok else 1
-                print(f"    {'OK  ' if ok else 'SOUS'} {cle:10s} {v:6.2f} "
-                      f"{'>=' if ok else '<'} {seuil:5.2f}   {quoi}")
+                if v < bas:
+                    verdict, borne = "SOUS", f"< {bas:5.2f}"
+                elif haut is not None and v > haut:
+                    verdict, borne = "SUR ", f"> {haut:5.2f}"
+                else:
+                    verdict = "OK  "
+                    borne = (f"dans [{bas:.2f} ; {haut:.2f}]" if haut is not None
+                             else f">= {bas:5.2f}")
+                echecs += 0 if verdict == "OK  " else 1
+                print(f"    {verdict} {cle:10s} {v:6.2f} {borne:20s} {quoi}")
     return 1 if echecs else 0
 
 
