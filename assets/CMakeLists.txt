@@ -923,6 +923,24 @@ add_custom_command(
 # refuse, à raison, puisque `ns_path_resolve` a pour rôle d'interdire les chemins
 # remontants. Partager le répertoire évite à la fois la remontée et la
 # duplication des 58 textures.
+#
+# CE QU'ELLE COMPARE VRAIMENT, ET CE QU'ELLE NE COMPARE PLUS.
+#
+# Elle sort AUJOURD'HUI SANS SES TEXTURES, et ce n'est pas un defaut du build :
+# c'est la somme de trois exclusions toutes voulues et toutes justifiees plus
+# bas. Onze images sont des oeuvres tierces ou des captures qui en contiennent
+# (`TEXTURES_TIERS`) et ne doivent pas etre livrees ; d'autres sont recopiees
+# sous un autre nom (`TEXTURES_RENOMMEES`) et les livrer deux fois serait le
+# contraire du but ; dix-neuf sont declarees retirees par la salle reconstruite
+# (`retiredTextures`). Mesure sur la vue `bar` : 26 images introuvables, toutes
+# presentes dans `legacy/room/textures/` et aucune copiee.
+#
+# La consequence est donc a dire plutot qu'a corriger — la corriger reviendrait
+# a mettre une oeuvre tierce dans le paquet. `--room=legacy` compare LA
+# GEOMETRIE ET LA LUMIERE de 2020, pas ses materiaux. C'est encore la moitie de
+# ce pour quoi elle existe, et c'est la moitie qui repond aux questions
+# d'echelle et de plan ; ce n'est pas ce que le commentaire ci-dessus laissait
+# croire.
 option(NINETEEN_BUILD_LEGACY_ROOM "Produire aussi la salle OBJ de 2020, pour comparaison" ON)
 
 if(NINETEEN_BUILD_LEGACY_ROOM)
