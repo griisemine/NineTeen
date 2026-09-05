@@ -14,7 +14,15 @@ layout(location = 0) out vec4 o_color;
 layout(set = 2, binding = 0) uniform sampler2D u_source;
 
 layout(set = 3, binding = 0) uniform Params {
-    vec4 u_direction;   /* xy : pas en UV (horizontal ou vertical), zw : inutilisé */
+    /*
+     * xy : pas en UV (horizontal ou vertical) — nul pour un simple rééchantillonnage.
+     * z  : GAIN appliqué au résultat. Il sert la remontée de la pyramide, où
+     *      chaque niveau est ajouté au précédent : c'est lui qui décide de la
+     *      forme du halo, cœur serré ou nappe large. Il doit être écrit à chaque
+     *      passe — un `SDL_zero` de la structure le laisserait à zéro, donc noir.
+     * w  : inutilisé.
+     */
+    vec4 u_direction;
 };
 
 void main()
@@ -29,5 +37,5 @@ void main()
         result += texture(u_source, v_uv + delta).rgb * weights[i];
         result += texture(u_source, v_uv - delta).rgb * weights[i];
     }
-    o_color = vec4(result, 1.0);
+    o_color = vec4(result * u_direction.z, 1.0);
 }

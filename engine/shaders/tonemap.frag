@@ -52,6 +52,36 @@ layout(set = 3, binding = 0) uniform Params {
  * de la courbe de référence de l'Academy, et qui préserve la teinte des hautes
  * lumières — un néon rouge saturé vire à l'orange en s'éclaircissant plutôt que
  * de virer au blanc rose.
+ *
+ * ELLE EST APPLIQUÉE CANAL PAR CANAL, ET LE SOUPÇON HABITUEL EST À L'ENVERS.
+ *
+ * Quand une salle de néon sort délavée, on accuse le mapping de tons, et
+ * nommément « le Reinhard naïf, qui désature violemment les hautes lumières ».
+ * Vérifié en chiffres plutôt que cru sur parole, sur un rose de néon de
+ * saturation HSV 0,900, entrée linéaire (3,0 ; 0,30 ; 2,4), exposition 1,60 :
+ *
+ *   Reinhard sur la luminance   0,818   il RESCALE les trois canaux du même
+ *                                       facteur, donc il conserve le rapport
+ *   Reinhard par canal          0,608
+ *   ACES par canal, ici         0,387
+ *   ACES sur le canal fort seul 0,900
+ *
+ * C'est donc la courbe EN PLACE qui désature le plus, et le Reinhard accusé qui
+ * désature le moins. Sauf que ce n'est pas un défaut ici : c'est exactement ce
+ * que demande la photo de référence, un cœur de source qui part au blanc. Et la
+ * courbe ne le fait qu'en haut — sur le même rose à un sixième de l'intensité,
+ * (0,5 ; 0,05 ; 0,4), celle du HALO, la saturation reste à 0,879. Cœur blanc,
+ * halo coloré, sans qu'on ait rien à écrire pour ça.
+ *
+ * La variante « préservation de teinte » a quand même été écrite et mesurée :
+ * ne faire passer par la courbe que le canal le plus fort, garder le rapport
+ * des trois, et ne blanchir qu'au-dessus de 0,88 de sortie. Mélangée à 0,30,
+ * sur les cinq vues nommées et la même salle, elle rapporte au mieux 0,012 de
+ * saturation pondérée sur une vue — rien ou moins que rien sur deux autres — et
+ * coûte 3 à 5 points d'écart interquartile SUR LES CINQ, parce que conserver le
+ * rapport LINÉAIRE des canaux remonte les ombres colorées. On paierait quatre
+ * points de noir pour un demi-point de couleur. Elle n'est pas retenue, et
+ * c'est écrit ici pour que la mesure ne soit pas refaite une troisième fois.
  */
 vec3 acesFilmic(vec3 x)
 {

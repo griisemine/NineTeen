@@ -197,6 +197,9 @@ struct ns_renderer {
     SDL_GPUGraphicsPipeline *pipe_lighting;
     SDL_GPUGraphicsPipeline *pipe_bloom_threshold;
     SDL_GPUGraphicsPipeline *pipe_bloom_blur;
+    /* Même shader que ci-dessus, mais la cible est ADDITIONNÉE au lieu d'être
+     * écrite : c'est la remontée de la pyramide de halo. */
+    SDL_GPUGraphicsPipeline *pipe_bloom_up;
     SDL_GPUGraphicsPipeline *pipe_tonemap;
     SDL_GPUGraphicsPipeline *pipe_debug;
     SDL_GPUComputePipeline  *pipe_raytrace;
@@ -292,14 +295,63 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
     s->quality = quality;
     s->render_scale = 1.0f;
     s->exposure = 1.35f;
-    s->bloom_intensity = 0.7f;
-    /* Sous 1.0, les panneaux lumineux du plafond (émissifs à exactement 1.0
-     * dans le modèle d'origine) ne fleurissaient pas du tout et ressortaient
-     * comme des trous blancs découpés au lieu de sources de lumière. */
-    s->bloom_threshold = 0.85f;
+    /*
+     * 0,32 et non 0,70, et la baisse ne rend PAS le halo plus discret.
+     *
+     * Elle accompagne la remontée de la pyramide (voir la passe de halo plus
+     * bas). Mesuré sur la vue « allee », crête de la cible de halo rapportée à
+     * la crête de la source dans l'image éclairée : 0,0013 avant, 0,193 après.
+     * L'intensité multipliait donc un millième de source ; elle multiplie
+     * maintenant un cinquième, cent cinquante fois plus. À 0,70 sur cette
+     * crête, le halo d'un fronton dépassait le fronton lui-même : les six
+     * enseignes de l'allée sortaient en rectangles blancs de bord franc, plus
+     * larges que le fronton et sans dégradé — un aplat, pas une lueur. 0,32
+     * rend le dégradé.
+     */
+    s->bloom_intensity = 0.32f;
+    /*
+     * Le seuil du halo, à 0,70.
+     *
+     * L'ancienne valeur, 0,85, avait été posée pour que les panneaux lumineux du
+     * plafond — émissifs à exactement 1,0 dans le modèle d'origine — fleurissent.
+     * Elle décidait aussi, sans le dire, du sort de tout le reste : mesuré sur la
+     * vue « travee », la surface émissive la plus lumineuse de la salle plafonnait
+     * à 0,84 de luminance. Aucun fronton, aucun tube, aucun écran n'atteignait le
+     * seuil ; seul le coude adoucissant en laissait passer un sixième. Ce point-là
+     * est corrigé en amont, dans `lighting.frag`, qui fait des émissifs de vraies
+     * radiances.
+     *
+     * Reste le réglage lui-même, repris à la mesure sur la vue « centre » :
+     *   0,85  brûlé 2,61 %  écart interquartile 89,4  médiane 58,6
+     *   0,70  brûlé 2,74 %  écart interquartile 91,5  médiane 62,6
+     *   0,50  brûlé 2,95 %  écart interquartile 93,3  médiane 68,6
+     * On s'arrête à 0,70. Non pas parce que 0,50 mesure moins bien, mais parce
+     * qu'à 0,50 le halo commence à prendre les murs éclairés : la médiane monte
+     * de six points de plus sans qu'aucune source nouvelle apparaisse, et la
+     * saturation pondérée de la vue « travee » redescend à 0,297, sous le
+     * plancher. C'est un relèvement d'exposition déguisé en halo, et
+     * l'éclairage de la salle ne se règle pas ici.
+     */
+    s->bloom_threshold = 0.70f;
     s->vignette = 0.32f;
     s->grain = 0.012f;
-    s->saturation = 1.12f;
+    /*
+     * 1,34 et non 1,12, et c'est une réparation, pas un forçage.
+     *
+     * Les cœurs de source blanchissent maintenant pour de bon — c'est le point
+     * de la photo de référence — et un cœur blanc est un pixel TRÈS LUMINEUX ET
+     * SANS SATURATION, donc lourdement compté dans une moyenne pondérée par la
+     * luminance. Le halo large, qui est une moyenne spatiale, tire dans le même
+     * sens. Mesuré sur les cinq vues nommées, même salle, saturation pondérée :
+     *              centre  allee   bar   travee  billard
+     *   1,12         0,314  0,281  0,297  0,285   0,321   trois vues sous 0,30
+     *   1,34         0,346  0,310  0,330  0,308   0,353   les cinq au-dessus
+     * L'écart interquartile ne bouge pas : 101,1 / 105,7 / 70,1 / 89,3 / 82,5
+     * contre 100,7 / 105,6 / 69,8 / 89,4 / 82,1. On rend au cadre la couleur que
+     * le halo lui a prise, et rien d'autre — ce réglage s'applique APRÈS la
+     * courbe, sur une image déjà bornée, donc il ne peut ni brûler ni écraser.
+     */
+    s->saturation = 1.34f;
     s->chromatic_aberration = 0.0f;
 
     /* Brouillard très léger, teinté de l'ambre des plafonniers : donne de la
@@ -696,9 +748,9 @@ bool ns_renderer_resize(ns_rhi *r, ns_renderer *rd, uint32_t width, uint32_t hei
  * Les compteurs de ressources ne sont plus passés au point d'appel : ils
  * viennent de `ns_shaders.c`, qui est aussi ce contre quoi la traduction MSL est
  * testée. Deux copies des mêmes chiffres, c'était une de trop. */
-static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
+static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline_blended(
     ns_rhi *r, const char *frag_name,
-    const SDL_GPUTextureFormat *formats, uint32_t format_count)
+    const SDL_GPUTextureFormat *formats, uint32_t format_count, bool additive)
 {
     ns_shader_desc vsd, fsd;
     if (!ns_shader_desc_fill("fullscreen.vert", &vsd)) return NULL;
@@ -714,7 +766,23 @@ static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
 
     SDL_GPUColorTargetDescription targets[4];
     SDL_zeroa(targets);
-    for (uint32_t i = 0; i < format_count && i < 4; ++i) targets[i].format = formats[i];
+    for (uint32_t i = 0; i < format_count && i < 4; ++i) {
+        targets[i].format = formats[i];
+        if (!additive) continue;
+        /* Un + un : la passe AJOUTE à ce que la cible porte déjà. C'est la seule
+         * façon de replier les cinq niveaux de halo l'un sur l'autre sans
+         * ajouter un échantillonneur au tone mapping — et le nombre
+         * d'échantillonneurs par shader est déclaré dans `ns_shaders.c`, donc
+         * l'y ajouter serait une modification à deux endroits qui se
+         * désynchronisent en silence sur Metal (voir tests/test_msl.c). */
+        targets[i].blend_state.enable_blend = true;
+        targets[i].blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        targets[i].blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        targets[i].blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+        targets[i].blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+        targets[i].blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+        targets[i].blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+    }
 
     SDL_GPUGraphicsPipelineCreateInfo info;
     SDL_zero(info);
@@ -731,6 +799,13 @@ static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
     SDL_ReleaseGPUShader(ns_rhi_device(r), fs);
     if (!p) NS_ERROR("pipeline « %s » refusé : %s", frag_name, SDL_GetError());
     return p;
+}
+
+static SDL_GPUGraphicsPipeline *make_fullscreen_pipeline(
+    ns_rhi *r, const char *frag_name,
+    const SDL_GPUTextureFormat *formats, uint32_t format_count)
+{
+    return make_fullscreen_pipeline_blended(r, frag_name, formats, format_count, false);
 }
 
 static SDL_GPUGraphicsPipeline *make_gbuffer_pipeline(ns_rhi *r)
@@ -1259,6 +1334,7 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     rd->pipe_lighting = make_fullscreen_pipeline(r, "lighting.frag", &hdr_fmt, 1);
     rd->pipe_bloom_threshold = make_fullscreen_pipeline(r, "bloom_threshold.frag", &hdr_fmt, 1);
     rd->pipe_bloom_blur = make_fullscreen_pipeline(r, "bloom_blur.frag", &hdr_fmt, 1);
+    rd->pipe_bloom_up = make_fullscreen_pipeline_blended(r, "bloom_blur.frag", &hdr_fmt, 1, true);
     rd->pipe_tonemap = make_fullscreen_pipeline(r, "tonemap.frag", &rd->tonemap_format, 1);
     rd->pipe_debug   = make_fullscreen_pipeline(r, "debug_view.frag", &rd->tonemap_format, 1);
 
@@ -1311,8 +1387,8 @@ ns_renderer *ns_renderer_create(ns_rhi *r, const ns_render_settings *settings)
     }
 
     if (!rd->pipe_gbuffer || !rd->pipe_ssao || !rd->pipe_lighting
-        || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_tonemap
-        || !rd->pipe_debug) {
+        || !rd->pipe_bloom_threshold || !rd->pipe_bloom_blur || !rd->pipe_bloom_up
+        || !rd->pipe_tonemap || !rd->pipe_debug) {
         NS_ERROR("un ou plusieurs pipelines de rendu manquent — abandon");
         ns_renderer_destroy(r, rd);
         return NULL;
@@ -1355,6 +1431,7 @@ void ns_renderer_destroy(ns_rhi *r, ns_renderer *rd)
     if (rd->pipe_lighting)         SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_lighting);
     if (rd->pipe_bloom_threshold)  SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_bloom_threshold);
     if (rd->pipe_bloom_blur)       SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_bloom_blur);
+    if (rd->pipe_bloom_up)         SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_bloom_up);
     if (rd->pipe_tonemap)          SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_tonemap);
     if (rd->pipe_debug)            SDL_ReleaseGPUGraphicsPipeline(dev, rd->pipe_debug);
     if (rd->pipe_raytrace)         SDL_ReleaseGPUComputePipeline(dev, rd->pipe_raytrace);
@@ -2293,6 +2370,25 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         fullscreen_pass(r, rd->pipe_bloom_threshold, rd->bloom[0].handle, SDL_GPU_LOADOP_CLEAR,
                         &src, &clamp, 1, &tu, sizeof tu, NULL);
 
+        /*
+         * Le niveau 0 pèse moins que les autres, et c'est ce qui garde les
+         * ÉCRANS LISIBLES.
+         *
+         * Son flou fait un sigma d'environ six pixels de pleine résolution. Une
+         * ligne de score, une lettre de fronton, un chiffre d'écran font cette
+         * taille-là : à poids plein, le niveau 0 remplit les blancs ENTRE les
+         * glyphes et la ligne entière devient une barre. Mesuré sur la vue
+         * « bar », tableau des meilleurs scores : à poids plein, les quatre noms
+         * de jeu de la colonne de gauche n'étaient plus lisibles du tout.
+         *
+         * Les niveaux suivants ne doivent PAS y perdre : ils sont construits en
+         * cascade depuis celui-ci, donc l'atténuation se propagerait à toute la
+         * pyramide et on aurait simplement baissé le halo. Le premier
+         * sous-échantillonnage la reprend donc exactement (1 / 0,45), et seul le
+         * niveau 0 reste allégé.
+         */
+        const float mip0_weight = 0.45f;
+
         /* Descente : chaque niveau est le flou du précédent, réduit de moitié.
          * Le flou horizontal puis vertical donne un noyau séparable. */
         for (int i = 0; i < BLOOM_MIPS; ++i) {
@@ -2300,6 +2396,7 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                 SDL_GPUTexture *prev = rd->bloom[i - 1].handle;
                 bloom_blur_ubo bu;
                 SDL_zero(bu);
+                bu.direction[2] = (i == 1) ? (1.0f / mip0_weight) : 1.0f;
                 fullscreen_pass(r, rd->pipe_bloom_blur, rd->bloom[i].handle, SDL_GPU_LOADOP_CLEAR,
                                 &prev, &clamp, 1, &bu, sizeof bu, NULL);
             }
@@ -2307,6 +2404,7 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
             bloom_blur_ubo bh;
             SDL_zero(bh);
             bh.direction[0] = 1.0f / (float)rd->bloom[i].width;
+            bh.direction[2] = 1.0f;
             SDL_GPUTexture *a = rd->bloom[i].handle;
             fullscreen_pass(r, rd->pipe_bloom_blur, rd->bloom_tmp[i].handle, SDL_GPU_LOADOP_CLEAR,
                             &a, &clamp, 1, &bh, sizeof bh, NULL);
@@ -2314,9 +2412,58 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
             bloom_blur_ubo bv;
             SDL_zero(bv);
             bv.direction[1] = 1.0f / (float)rd->bloom[i].height;
+            bv.direction[2] = (i == 0) ? mip0_weight : 1.0f;
             SDL_GPUTexture *b = rd->bloom_tmp[i].handle;
             fullscreen_pass(r, rd->pipe_bloom_blur, rd->bloom[i].handle, SDL_GPU_LOADOP_CLEAR,
                             &b, &clamp, 1, &bv, sizeof bv, NULL);
+        }
+
+        /*
+         * REMONTÉE — et c'est elle qui manquait.
+         *
+         * Le tone mapping ne lisait QUE le dernier niveau. En 1024 x 576 ce
+         * niveau fait 32 x 18 texels : toute l'énergie d'un tube de néon y est
+         * étalée sur la moitié du cadre, donc le halo qu'on ajoutait à l'image
+         * était une nappe uniforme, sans crête. Mesuré sur la vue « allee », en
+         * lisant la cible de halo et l'image éclairée par la vue de débogage :
+         * la crête du niveau 4 valait 0,0013 fois la crête de la source. On
+         * ajoutait UN MILLIÈME de néon autour d'un néon — d'où « le halo est
+         * mou », et d'où le fait qu'aucune borne ne se détachait de son décor.
+         * La même mesure après cette remontée donne 0,193.
+         *
+         * Chaque niveau est maintenant rabattu sur le précédent, du plus flou
+         * au plus net, et le tone mapping lit le niveau 0. La somme porte donc
+         * les deux échelles à la fois : le niveau 0 (sigma ≈ 6 pixels pleine
+         * résolution) fait le liseré vif contre la source, le niveau 4
+         * (sigma ≈ 110) la nappe colorée qui va mourir sur le mur d'en face.
+         * C'est exactement ce que montre la photo de référence, et une seule
+         * échelle ne peut pas le donner.
+         *
+         * Le gain par palier est ce qui décide de la LARGEUR du halo, et 0,62
+         * n'est pas un arrondi. Balayé sur les cinq vues nommées, même salle,
+         * médiane de luminance (la consigne la borne à 85) :
+         *              centre  allee   bar   travee  billard   saturation
+         *   0,35         52,4   56,1   66,0    67,9     73,4   0,32 à 0,37
+         *   0,62         64,2   72,8   83,7    75,3     82,8   0,30 à 0,34
+         *   0,85         81,0   96,0  105,2    87,7     97,9   0,28 à 0,32
+         * À 0,85 la nappe large cesse d'être un halo : quatre vues sur cinq
+         * passent au-dessus du plafond, jusqu'à 105 — c'est un voile posé sur
+         * toute l'image, et la saturation pondérée tombe sous son plancher sur
+         * deux vues. À 0,35 le halo se referme sur les sources : « centre »
+         * repasse sous le plancher de médiane et le coin billard perd les deux
+         * tiers de ce qui brûle (0,51 % contre 0,85). 0,62 est la valeur qui
+         * garde les CINQ médianes dans la bande.
+         *
+         * Quatre passes de plus, toutes sous la demi-résolution : leur total
+         * fait un tiers de pixel de pleine image.
+         */
+        for (int i = BLOOM_MIPS - 2; i >= 0; --i) {
+            bloom_blur_ubo bu;
+            SDL_zero(bu);
+            bu.direction[2] = 0.62f;   /* xy nuls : rééchantillonnage bilinéaire seul */
+            SDL_GPUTexture *coarse = rd->bloom[i + 1].handle;
+            fullscreen_pass(r, rd->pipe_bloom_up, rd->bloom[i].handle, SDL_GPU_LOADOP_LOAD,
+                            &coarse, &clamp, 1, &bu, sizeof bu, NULL);
         }
     }
 
@@ -2333,7 +2480,7 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
                                       : rd->visibility.handle; break;
         case NS_DEBUG_HDR:        src = lit;                         break;
         case NS_DEBUG_VOLUMETRIC: src = rd->volumetric.handle;       break;
-        case NS_DEBUG_BLOOM:      src = rd->bloom[BLOOM_MIPS - 1].handle; break;
+        case NS_DEBUG_BLOOM:      src = rd->bloom[0].handle;              break;
         default: break;
         }
         if (src) {
@@ -2367,9 +2514,10 @@ bool ns_renderer_draw(ns_rhi *r, ns_renderer *rd, const ns_scene *scene,
         u.grade[3] = rd->settings.grade_strength;
 
         SDL_GPUSampler *clamp = ns_rhi_sampler(r, NS_SAMPLER_LINEAR_CLAMP);
-        /* Le niveau de halo le plus flou porte l'essentiel du rayonnement ; les
-         * niveaux intermédiaires y ont déjà été fondus par la descente. */
-        SDL_GPUTexture *tex[2] = { lit, rd->bloom[BLOOM_MIPS - 1].handle };
+        /* Le niveau 0 porte la pyramide ENTIÈRE depuis la remontée : le liseré
+         * serré et la nappe large y sont déjà additionnés. Lire le dernier
+         * niveau, comme on le faisait, revenait à ne garder que la nappe. */
+        SDL_GPUTexture *tex[2] = { lit, rd->bloom[0].handle };
         SDL_GPUSampler *smp[2] = { clamp, clamp };
         fullscreen_pass(r, rd->pipe_tonemap, target, SDL_GPU_LOADOP_CLEAR,
                         tex, smp, 2, &u, sizeof u, rd->exposure.handle);

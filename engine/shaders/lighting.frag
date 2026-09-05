@@ -140,6 +140,54 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 /* Repli pour une lumière qui n'en déclare pas : l'ampoule d'applique d'avant. */
 const float LIGHT_SOURCE_RADIUS_MIN = 0.05;
 
+/*
+ * DE LA COULEUR ÉMISSIVE À UNE RADIANCE, ET POURQUOI IL FAUT UNE COURBE.
+ *
+ * Le G-buffer émissif porte ce que les matériaux déclarent : une couleur choisie
+ * dans un nuancier, donc une valeur d'AFFICHAGE, bornée par construction autour
+ * de 1. Mesuré sur la vue « travee », en lisant le tampon émissif par la vue de
+ * débogage, luminance :
+ *   maximum de toute la salle          0,842   (le cœur d'une lettre « PIANO »)
+ *   part du cadre au-dessus de 0,50    0,018 %
+ *   part du cadre au-dessus de 0,20    2,90 %
+ * Le seuil du halo valait 0,85. AUCUNE surface émissive de la salle ne
+ * l'atteignait : ni les frontons, ni les tubes, ni les écrans ; seul le coude
+ * adoucissant laissait passer un sixième de la valeur du pixel le plus fort.
+ * Tout le halo visible venait donc des dalles de plafond ÉCLAIRÉES,
+ * c'est-à-dire de la seule chose de l'image qui n'est pas une enseigne. Les
+ * néons, eux, étaient des aplats colorés collés au mur.
+ *
+ * Une radiance n'est pas bornée. Un tube au néon photographié dans une salle
+ * sombre est à dix ou cent fois la luminance du mur qu'il éclaire, et c'est ce
+ * rapport qui le fait LIRE comme une source. La conversion d'une couleur
+ * déclarée en radiance est donc super-linéaire : celui qui écrit 0,84 dit « le
+ * plus lumineux que je puisse écrire », celui qui écrit 0,2 dit « ce plastique
+ * luit faiblement ». Les traiter à la même échelle est ce qui écrasait les deux
+ * au même niveau.
+ *
+ * D'où le carré. Le gain vaut 1 + 6 y², y étant la luminance déclarée :
+ *   y = 0,20  (motifs de la moquette, fond sombre d'un fronton)  x 1,24 -> 0,25
+ *   y = 0,50  (la dalle d'un écran de borne)                     x 2,50 -> 1,25
+ *   y = 0,84  (cœur d'une lettre de fronton, tube de néon)       x 5,25 -> 4,42
+ * Le rapport entre le fond d'un fronton et sa lettre passe de 4,2 à 17,8 : la
+ * lettre brûle vers le blanc, le fond reste coloré, et c'est le halo qui porte
+ * la couleur. Un gain CONSTANT de 5,25 aurait poussé le fond du fronton à 1,05,
+ * donc au-dessus du blanc lui aussi, et le fronton serait devenu une dalle sans
+ * lettres. C'est la COURBE qui compte, pas le facteur.
+ *
+ * Pourquoi 6 et pas 8 ni 4, à l'œil sur les captures parce que la mesure ne
+ * tranche pas ce point-là : à 8, le fond des frontons dépasse le blanc en même
+ * temps que les lettres et les six enseignes de l'allée deviennent des rectangles
+ * blancs sans texte ; à 4, une lettre ne monte qu'à 3,2 et le halo reste court.
+ * À 6, une lettre est six fois le seuil du halo (0,70) et les motifs de moquette,
+ * à 0,25, restent nettement dessous — le sol ne fleurit pas.
+ *
+ * Ceci ne touche PAS l'éclairage : l'émissif de ce moteur n'éclaire rien, il
+ * s'ajoute en fin de course. Ce qui monte, ce sont les pixels des sources
+ * elles-mêmes, soit 2,9 % du cadre.
+ */
+const float EMISSIVE_GAIN = 6.0;
+
 float attenuation(float dist, float range, float sourceRadius)
 {
     float r = max(sourceRadius, LIGHT_SOURCE_RADIUS_MIN);
@@ -156,6 +204,14 @@ void main()
     vec4 albedoAO = texture(u_albedoAO, v_uv);
     vec4 normalRM = texture(u_normalRM, v_uv);
     vec3 emissive = texture(u_emissive, v_uv).rgb;
+
+    /* La couleur déclarée devient une radiance (voir EMISSIVE_GAIN). Le gain est
+     * SCALAIRE, donc la chromaticité est intacte : c'est le mapping de tons qui
+     * blanchira le cœur, et le halo gardera la teinte du tube. */
+    {
+        float ey = dot(emissive, vec3(0.2126, 0.7152, 0.0722));
+        emissive *= 1.0 + EMISSIVE_GAIN * ey * ey;
+    }
 
     /* En reverse-Z, la profondeur 0 est le plan lointain : c'est le ciel, ou le
      * fond vide. On y met le brouillard plutôt que du noir. */
