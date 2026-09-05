@@ -1,26 +1,66 @@
-
-*.dll
+# ---- Build ----
+build/
+out/
+cmake-build-*/
+install/
 *.o
-NineTeen.cbp
-NineTeen.depend
-NineTeen.exe
-NineTeen.layout
-include/.DS_Store
-include/include.rar
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
 *.exe
-define/threadthings.txt
-Documentation/*
-games/7_asteroid/Sound/shootremplace.wav
-games/7_asteroid/Sound/glace2.wav
-include/SDL2/SDL2_framerate.c
-include/SDL2/SDL2_framerate.h
-include/SDL2/SDL2_gfxPrimitives.c
-include/SDL2/SDL2_gfxPrimitives.h
-include/SDL2/SDL2_gfxPrimitives_font.h
-include/SDL2/SDL2_imageFilter.c
-include/SDL2/SDL2_imageFilter.h
-include/SDL2/SDL2_rotozoom.c
-include/SDL2/SDL2_rotozoom.h
-games/7_asteroid/myfix.c
-patch1.0
-patch1.1.0
+*.pdb
+*.ilk
+*.dSYM/
+
+# ---- Assets dérivés (régénérés par tools/, jamais commités) ----
+assets/generated/
+
+# ---- Paquets fabriques par la pile Docker ----
+# Le repertoire EXISTE dans le depot (voir son LISEZ-MOI), son contenu non :
+# ce sont des centaines de mebioctets refabricables en une commande.
+telechargements/*
+!telechargements/LISEZ-MOI.txt
+
+# ---- Serveur Go ----
+server/nineteend
+server/coverage.out
+/web/node_modules/
+
+# ---- Documentation générée ----
+legacy/Documentation/
+docs/html/
+docs/latex/
+
+# ---- Sauvegardes d'outils d'art ----
+.debris/
+*.blend1
+*.blend2
+*.xcf~
+
+# ---- Systèmes ----
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ---- Secrets : jamais dans le dépôt ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!third_party/**/*.key
+
+# Worktrees des agents, purement locaux
+.claude/
+
+# ---- Cache de bytecode Python ----
+# Les scripts de `packaging/` et de `tools/` sont parfois importes plutot que
+# lances — pour verifier une sortie sans la reecrire — et CPython depose alors
+# un `__pycache__/` a cote de la recette. C'est un derive, pas une source.
+__pycache__/
+*.pyc

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nineteen, salle d'arcade</title>
+<meta name="description" content="Une salle d'arcade en 3D, dix-neuf bornes, huit jeux, et un mode competitif ou le dernier est elimine toutes les quarante-cinq secondes. Telechargement libre pour Windows, macOS et Linux.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/" aria-current="page">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <!-- La video est decorative : le texte a cote dit ce qu'elle montre, et
+       l'affiche porte l'alternative pour qui ne la voit pas. `aria-hidden` lui
+       evite d'etre annoncee deux fois.
+
+       `preload="metadata"` et non `auto` : le navigateur ne prend que l'entete
+       tant qu'il n'a pas decide de lire. `playsinline` empeche iOS de passer en
+       plein ecran tout seul, ce qui sortirait le visiteur de la page. -->
+  <section class="hero">
+    <video class="hero-plate" id="video-salle"
+           autoplay muted loop playsinline preload="metadata"
+           poster="/media/salle-affiche.jpg"
+           aria-hidden="true" tabindex="-1">
+      <source src="/media/salle.webm" type="video/webm">
+      <source src="/media/salle.mp4" type="video/mp4">
+    </video>
+    <img class="hero-plate hero-plate-fixe" src="/media/salle-affiche.jpg"
+         alt="La salle d'arcade rendue par le moteur : deux rangees de bornes allumees de part et d'autre de l'allee centrale, le plafond lumineux, la moquette noire a motifs neon."
+         width="1280" height="720" fetchpriority="high">
+    <div class="hero-veil" aria-hidden="true"></div>
+
+    <div class="hero-text">
+      <p class="eyebrow">Salle d'arcade 3D</p>
+      <h1>Dix-neuf bornes.<br>Une lame.</h1>
+      <p class="lede">
+        Vous entrez, vous choisissez une machine, vous jouez. En mode Couperet, vos points ne
+        comptent qu'une fois la partie finie, et toutes les quarante-cinq secondes le dernier
+        du classement sort de la salle.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="/telecharger.html">Telecharger le jeu</a>
+        <a class="btn" href="/couperet.html">Voir le mode competitif</a>
+      </div>
+    </div>
+
+    <dl class="specs">
+      <div><dt>Bornes</dt><dd data-chiffre="bornes">19</dd></div>
+      <div><dt>Jeux</dt><dd data-chiffre="jeux">8</dd></div>
+      <div><dt>Joueurs par manche</dt><dd>2 a 8</dd></div>
+      <div><dt>Prix</dt><dd>0</dd></div>
+    </dl>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Les jeux</h2>
+      <p>Huit jeux, chacun filme dans sa borne, en 3D, pendant qu'il se joue. L'enseigne, la
+         dalle et les mains sur les commandes. Survolez une vignette, ou donnez-lui le clavier,
+         pour lancer sa boucle.</p>
+    </div>
+    <ul class="loops" id="galerie-jeux">
+      <li class="note">Chargement des boucles.</li>
+    </ul>
+    <noscript>
+      <p class="note">Les boucles de jeu demandent JavaScript. Les vues de la salle, plus bas,
+         restent visibles sans.</p>
+    </noscript>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <!-- Cette galerie est ecrite EN DUR dans la page, et c'est delibere : elle
+       est ce qui reste quand JavaScript ne s'execute pas. Les deux autres
+       galeries se construisent depuis le manifeste, donc suivent la scene.
+       Celle-ci suit la page, et un test Go verifie que ses fichiers existent. -->
+  <section class="section">
+    <div class="section-head">
+      <h2>La salle</h2>
+      <p>Huit points de vue, tous declares par la scene elle-meme, tous rendus au meme cadrage
+         d'une version a l'autre. C'est ce qui permet de comparer deux etats de la salle sans
+         discuter.</p>
+    </div>
+    <ul class="vues">
+      <li><figure>
+        <img src="/img/vue-allee.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="L'allee centrale, entre les deux rangees de bornes. Rendu par le moteur du jeu.">
+        <figcaption>L'allee centrale, entre les deux rangees de bornes.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-bar.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le comptoir, l'enseigne au neon et le tableau des scores. Rendu par le moteur du jeu.">
+        <figcaption>Le comptoir, l'enseigne au neon et le tableau des scores.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-classement.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="La borne de classement et son tableau des meilleurs scores. Rendu par le moteur du jeu.">
+        <figcaption>La borne de classement et son tableau des meilleurs scores.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-travee.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="La travee ouest : trois bornes de trois quarts, la corniche. Rendu par le moteur du jeu.">
+        <figcaption>La travee ouest, trois bornes de trois quarts sous la corniche.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-billard.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le billard, au fond de la salle. Rendu par le moteur du jeu.">
+        <figcaption>Le billard, au fond de la salle.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-entree.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le sas d'entree, vu depuis le couloir. Rendu par le moteur du jeu.">
+        <figcaption>Le sas d'entree, vu depuis le couloir.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-plafond.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le plafond lumineux et ses poutres. Rendu par le moteur du jeu.">
+        <figcaption>Le plafond lumineux et ses poutres.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/vue-sud.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le vide sud, la poche la plus profonde du hall. Rendu par le moteur du jeu.">
+        <figcaption>Le vide sud, la poche la plus profonde du hall.</figcaption>
+      </figure></li>
+    </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Les bornes</h2>
+      <p>Dix-neuf meubles, photographies un par un depuis les commandes. Six jeux occupent une
+         paire de bornes face a face, la rangee du fond en difficile, celle de devant en facile.
+         Dedale et Piano en occupent trois chacun. La dix-neuvieme n'est pas un jeu, c'est le
+         classement.</p>
+    </div>
+    <ul class="rail" id="galerie-bornes">
+      <li class="cab"><span class="cab-marquee">Chargement</span></li>
+    </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Se mesurer aux autres</h2>
+      <p>Deux tableaux, et ils ne disent pas la meme chose.</p>
+    </div>
+    <ul class="cartes">
+      <li>
+        <h3>Le classement general</h3>
+        <p>Il n'accepte que des parties recalculees par le serveur a partir de leur journal
+           d'evenements. Le jeu ne declare pas son score, il envoie ce qu'il a fait, et le
+           serveur refait le compte. Un score invente n'y entre pas.</p>
+        <p><a href="/classement.html">Voir le classement</a></p>
+      </li>
+      <li>
+        <h3>Le Couperet</h3>
+        <p>De deux a huit joueurs dans la meme salle, avec une lame qui tombe toutes les
+           quarante-cinq secondes et six actions a se lancer a la figure. Les manches en cours
+           se suivent en direct depuis le site.</p>
+        <p><a href="/couperet.html">Comment ca se joue</a></p>
+      </li>
+      <li>
+        <h3>Un compte, deux entrees</h3>
+        <p>Le meme compte sert au site et au jeu. On le cree ici, ou au comptoir de la salle
+           avec la touche F1. Il ne sert qu'a tenir une place dans une manche et a signer un
+           score.</p>
+        <p><a href="/compte.html">Creer un compte</a></p>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.1.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+<script src="/accueil.js" defer></script>
+</body>
+</html>

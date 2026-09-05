@@ -1,0 +1,174 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Client C — les trois plateformes cibles, depuis le même arbre CMake.
+  # ---------------------------------------------------------------------------
+  client:
+    name: Client (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "Linux x64",       os: ubuntu-24.04,  preset: linux-x64,        extra_configure: "-DNINETEEN_SHADERCROSS=ON" }
+          - { name: "macOS universal", os: macos-14,      preset: macos-universal,  extra_configure: "" }
+          - { name: "Windows x64",     os: windows-2022,  preset: windows-x64,      extra_configure: "" }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build glslang-tools \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev \
+            mesa-vulkan-drivers
+
+      - name: Dépendances macOS
+        if: runner.os == 'macOS'
+        run: brew install ninja glslang
+
+      - name: Dépendances Windows
+        if: runner.os == 'Windows'
+        # glslangValidator arrive avec le SDK Vulkan ; ninja est déjà présent.
+        run: |
+          choco install --no-progress vulkan-sdk
+        shell: pwsh
+
+      - name: Cache des dépendances récupérées
+        uses: actions/cache@v4
+        with:
+          path: build/${{ matrix.preset }}/_deps
+          key: deps-${{ matrix.os }}-${{ hashFiles('cmake/Dependencies.cmake', 'cmake/Shaders.cmake') }}
+
+      # `NINETEEN_SHADERCROSS=ON` sur Linux : la traduction MSL et ses
+      # emplacements de ressources sont ainsi vérifiés à chaque commit, sur la
+      # plateforme où l'on a un GPU logiciel — et non seulement sur les Mac, où
+      # personne ne regarde. C'est le test `msl`.
+      - name: Configuration
+        run: cmake --preset ${{ matrix.preset }} ${{ matrix.extra_configure }}
+
+      - name: Compilation
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # Le rendu est vérifié pour de vrai. Sur Linux, sans écran ni carte
+      # graphique : SDL passe par son pilote « offscreen » et Vulkan par lavapipe.
+      #
+      # Sur macOS et Windows la suite tournait auparavant avec `-R core`, un test
+      # sans GPU — l'étape s'appelait elle-même « hors rendu ». Le binaire n'y
+      # était jamais exécuté, et c'est ainsi qu'un jeu incapable de démarrer sur
+      # macOS a pu rester vert deux mois. La suite complète tourne maintenant
+      # partout ; `render` se déclare **ignoré** (code 77) quand la machine n'a
+      # pas de périphérique GPU, ce qui se voit dans le rapport au lieu de
+      # disparaître.
+      - name: Tests
+        run: ctest --preset ${{ matrix.preset }}
+
+      - name: Capture de rendu produite par la CI
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/*.png
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Sanitizers : ce que la V1 n'a jamais subi, et qui aurait trouvé ses
+  # débordements de tampon avant qu'ils n'arrivent chez les joueurs.
+  # ---------------------------------------------------------------------------
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build glslang-tools \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+            libwayland-dev wayland-protocols libdecor-0-dev \
+            libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev mesa-vulkan-drivers
+      - run: cmake --preset linux-x64-asan
+      - run: cmake --build --preset linux-x64-asan
+      # TOUS les tests, `render` compris.
+      #
+      # Il était exclu au motif de « faux positifs d'ASan dans le pilote ». Le
+      # motif était juste — 112 octets laissés par les fils de lavapipe — mais
+      # exclure la seule cible qui touche au GPU revenait à ne pas instrumenter
+      # le rendu du tout. Les fuites du pilote sont maintenant écartées par
+      # `tests/lsan-suppressions.txt`, nommément, et le reste est vérifié.
+      - name: Tests sous sanitizers
+        env:
+          SDL_VIDEO_DRIVER: offscreen
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build/linux-x64-asan --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # Serveur Go
+  # ---------------------------------------------------------------------------
+  server:
+    name: Serveur Go
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: nineteen_ci
+          POSTGRES_USER: nineteen
+          POSTGRES_DB: nineteen_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # DOIT suivre `server/go.mod` (`go 1.25.0`). Restée en 1.24, la chaîne
+          # Go entière échouait dès `go vet` sur « go.mod requires go >= 1.25.0 » :
+          # ni les vérifications statiques, ni gosec, ni les tests ne tournaient.
+          # Le Dockerfile portait la même version périmée, pour la même raison.
+          go-version: "1.25"
+          cache-dependency-path: server/go.sum
+
+      - name: Vérifications statiques
+        run: |
+          go vet ./...
+          test -z "$(gofmt -l .)" || { echo "gofmt : fichiers non formatés"; gofmt -l .; exit 1; }
+
+      - name: Analyse de sécurité
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          "$(go env GOPATH)/bin/gosec" -quiet -exclude-generated ./...
+
+      - name: Tests
+        env:
+          NINETEEN_DB_URL: postgres://nineteen:nineteen_ci@localhost:5432/nineteen_test?sslmode=disable
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Compilation
+        run: go build ./...

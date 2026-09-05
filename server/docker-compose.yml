@@ -1,0 +1,169 @@
+# docker-compose.yml — la pile complète en une commande.
+#
+#   cp .env.example .env      # au minimum : NINETEEN_DB_PASSWORD
+#   docker compose up --build
+#
+# Le site est alors sur http://localhost:8080, base migrée et jeux insérés, ET
+# LE JEU LUI-MÊME FABRIQUÉ, téléchargeable depuis la page « Télécharger ».
+#
+# CE DERNIER POINT EST LA RAISON DU SERVICE « paquets ». La page bâtissait ses
+# liens vers une release GitHub qui n'existe pas pour la version qu'on vient de
+# construire : la pile se montait entière et ne distribuait rien. Elle fabrique
+# maintenant ses propres paquets, dans ../telechargements, et le serveur sert ce
+# répertoire.
+#
+# Le premier `up` compile donc le jeu, ce qui est long (SDL3 est récupéré et
+# construit). Les suivants ne refont rien tant que la version n'a pas changé.
+# Pour monter le serveur SEUL, sans fabriquer :
+#
+#   docker compose up --build db server duelrelay
+#
+# TOUT CE QUI SE RÈGLE EST DANS `.env`, et rien n'y est obligatoire sauf le mot
+# de passe. Les `${VAR:-defaut}` ci-dessous portent le défaut de développement :
+# la pile démarre donc telle quelle, et se déplace vers un vrai déploiement sans
+# qu'on touche à ce fichier.
+
+# L'ADRESSE PUBLIQUE, ÉCRITE UNE SEULE FOIS.
+#
+# Deux services en ont besoin et pour deux raisons différentes : le serveur
+# l'annonce au joueur, le fabricant la cuit dans le binaire. Deux copies de la
+# même valeur finiraient par diverger, et le symptôme serait le pire qui soit,
+# un jeu qui vise une adresse que le site n'affiche pas.
+#
+# Le défaut est l'adresse que ce fichier publie lui-même, plus bas. Ce n'est
+# donc pas une adresse devinée. UN DÉPLOIEMENT RÉEL DOIT LA POSER : derrière un
+# nom de domaine ou un proxy, « localhost » est faux pour tout le monde sauf la
+# machine qui héberge, et le jeu téléchargé viserait le poste du joueur.
+x-adresse-publique: &adresse-publique ${NINETEEN_PUBLIC_URL:-http://localhost:${NINETEEN_PORT:-8080}}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nineteen
+      POSTGRES_PASSWORD: ${NINETEEN_DB_PASSWORD:-nineteen_dev}
+      POSTGRES_DB: nineteen
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Le port n'est PAS publié : seule l'application y accède, par le réseau
+    # interne. Exposer PostgreSQL sur l'hôte est un des réflexes qui coûtent
+    # cher, et il n'apporte rien ici.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nineteen -d nineteen"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NINETEEN_DB_URL: postgres://nineteen:${NINETEEN_DB_PASSWORD:-nineteen_dev}@db:5432/nineteen?sslmode=disable
+      NINETEEN_ADDR: ":8080"
+      # Le serveur REFUSE une ecoute publique sans cookies Secure. Ici c'est un
+      # faux positif, et il est leve explicitement plutot que desarme : dans un
+      # conteneur, ecouter sur la boucle locale rendrait le service injoignable
+      # depuis l'hote — il FAUT « :8080 ». Ce qui borne l'exposition, c'est la
+      # publication ci-dessous, qui ne sort pas de la machine par defaut.
+      # Derriere un vrai proxy TLS, retirer cette ligne et poser
+      # NINETEEN_SECURE=1.
+      NINETEEN_INSECURE_OK: ${NINETEEN_INSECURE_OK:-1}
+      NINETEEN_SECURE: ${NINETEEN_SECURE:-}
+      NINETEEN_LOG: ${NINETEEN_LOG:-json}
+      # L'ADRESSE QUE LE JEU DOIT VISER — celle que la page de téléchargement
+      # écrit sous le bouton, telle qu'on la tape dans `--server=`.
+      #
+      # Elle ne peut pas se déduire de `NINETEEN_ADDR` : le serveur écoute sur
+      # « :8080 » DANS le conteneur, et le monde le joint par la publication
+      # ci-dessous, ou par un proxy, sur un tout autre nom. Seul l'exploitant
+      # sait laquelle est la bonne.
+      #
+      NINETEEN_PUBLIC_URL: *adresse-publique
+      # Les paquets de cette version sont-ils publiés sur GitHub ? À 1, la page
+      # rallume ses trois boutons de téléchargement.
+      NINETEEN_RELEASE_PUBLIEE: ${NINETEEN_RELEASE_PUBLIEE:-}
+      # Adresse TCP que les clients reçoivent en créant ou rejoignant un salon.
+      # En développement elle reste sur la machine ; un déploiement réseau doit
+      # fournir son DNS ou son IP joignable dans NINETEEN_DUEL_PUBLIC.
+      NINETEEN_DUEL_PUBLIC: ${NINETEEN_DUEL_PUBLIC:-127.0.0.1:8081}
+      # LE RÉPERTOIRE DES PAQUETS, monté juste en dessous. Ce qui s'y trouve
+      # est offert au téléchargement, ce qui ne s'y trouve pas n'est pas
+      # annoncé : la page lit un `os.ReadDir`, pas une variable.
+      NINETEEN_TELECHARGEMENTS: /telechargements
+    volumes:
+      # EN LECTURE SEULE, et depuis le disque de l'hôte plutôt que depuis un
+      # volume nommé. C'est ce qui permet de déposer à la main le .dmg et le
+      # .exe construits ailleurs, à côté des paquets Linux que le service
+      # « paquets » fabrique : aucune machine ne sait construire les trois.
+      - ../telechargements:/telechargements:ro
+    ports:
+      # 127.0.0.1 PAR DÉFAUT, et c'est le choix qui compte dans cette ligne :
+      # le service ne sort pas de la machine tant que personne ne l'a demandé.
+      #
+      # `NINETEEN_BIND=0.0.0.0` l'ouvre au réseau — et c'est exactement le
+      # moment où il FAUT un proxy TLS devant, avec NINETEEN_SECURE=1 et sans
+      # NINETEEN_INSECURE_OK : sinon le cookie de session part en clair sur une
+      # adresse joignable. Le serveur le dit et refuse de démarrer si l'on ôte
+      # NINETEEN_INSECURE_OK sans poser NINETEEN_SECURE.
+      - "${NINETEEN_BIND:-127.0.0.1}:${NINETEEN_PORT:-8080}:8080"
+    restart: unless-stopped
+    # Durcissement du conteneur : rien de tout cela n'est nécessaire au service.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  duelrelay:
+    build: .
+    entrypoint: ["/duelrelay"]
+    command: ["-addr", "0.0.0.0:8081"]
+    ports:
+      - "${NINETEEN_DUEL_BIND:-127.0.0.1}:${NINETEEN_DUEL_PORT:-8081}:8081"
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+  # ========================================================================
+  # LE JEU, FABRIQUÉ ICI ET MAINTENANT
+  # ========================================================================
+  # Pourquoi la fabrication est DANS la pile et pas à côté : le binaire porte
+  # l'adresse du serveur, cuite au build par `-DNINETEEN_SERVER_URL`. Elle ne
+  # peut pas être posée après coup sur un paquet déjà fabriqué. Le jeu doit
+  # donc être construit APRÈS qu'on a dit à la pile quelle est son adresse
+  # publique, et c'est exactement ce que fait ce service.
+  #
+  # Sans NINETEEN_PUBLIC_URL, le paquet sort sans adresse et le jeu démarre
+  # hors ligne. Il reste jouable, il ne rejoint simplement aucun salon tant que
+  # le joueur ne passe pas `--server=`.
+  #
+  # Le service s'arrête tout seul quand il a fini. `restart: "no"` est explicite
+  # parce que ce n'est pas un serveur : le relancer en boucle recompilerait le
+  # jeu en boucle.
+  paquets:
+    build:
+      # Le contexte est la RACINE du dépôt, pas server/ : cette image est la
+      # machine qui compile le jeu, et le jeu n'est pas dans server/.
+      context: ..
+      dockerfile: packaging/linux/Dockerfile.build
+    volumes:
+      # L'arbre de sources en écriture : la compilation écrit son cache dans
+      # build/linux-x64, et c'est CE cache qui rend les `up` suivants rapides.
+      - ..:/src
+      - ../telechargements:/telechargements
+    working_dir: /src
+    environment:
+      SORTIE: /telechargements
+      # L'adresse que le binaire visera par défaut. La MÊME valeur que celle
+      # annoncée par le serveur, par l'ancre du haut de fichier.
+      NINETEEN_SERVER_URL: *adresse-publique
+      # Ne refabrique pas ce qui est déjà là pour cette version.
+      NINETEEN_PAQUETS_SI_ABSENT: "1"
+    command: ["sh", "packaging/linux/paquets.sh"]
+    restart: "no"
+
+volumes:
+  pgdata:

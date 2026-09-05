@@ -1,0 +1,101 @@
+# Dockerfile.build — la machine qui fabrique les paquets Linux.
+#
+# POURQUOI 22.04 ET PAS 24.04, NI LE RUNNER TEL QUEL
+# --------------------------------------------------
+# Un binaire lié dynamiquement à la glibc ne tourne QUE sur une glibc au moins
+# aussi récente que celle qui l'a construit : les symboles versionnés
+# (`GLIBC_2.38`) sont résolus au chargement, et il n'y a pas de repli. Une
+# AppImage construite sur le runner `ubuntu-24.04` de GitHub embarquerait donc
+# une exigence `glibc >= 2.39` qu'elle n'annonce nulle part, et refuserait de
+# démarrer sur Debian 12, Ubuntu 22.04 LTS ou Mint 21 — c'est-à-dire sur la
+# moitié des postes de bureau qui existent aujourd'hui — avec un message que
+# personne ne sait lire (« version `GLIBC_2.38' not found »).
+#
+# On construit donc sur la plus VIEILLE base raisonnable. 22.04 est en support
+# jusqu'en 2027, ce qui borne l'autre côté : une base encore plus ancienne
+# n'aurait plus de mise à jour de sécurité pour sa chaîne de compilation.
+#
+# MESURÉ dans cette image le 30 août 2026 : glibc 2.35 (Ubuntu GLIBC
+# 2.35-0ubuntu3.14), gcc 11.4.0, cmake 3.22.1, glslangValidator 11.8.0.
+# L'image pèse 730 Mio. La version de glibc exigée par le binaire livré est
+# imprimée à la fin de `paquets.sh` : c'est ELLE, et non celle de l'image, qui
+# décide de ce sur quoi l'AppImage démarre.
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# La liste des `-dev` est celle de `.github/workflows/ci.yml`, étape
+# « Dépendances Linux », recopiée et non partagée : un fichier de build qui
+# dépend d'un workflow casse le jour où l'on touche au workflow sans y penser.
+#
+# Ce que cette liste ajoute par rapport à la CI, et pourquoi :
+#   dpkg-dev        `dpkg-shlibdeps`, sans quoi CPACK_DEBIAN_PACKAGE_SHLIBDEPS
+#                   échoue et le .deb sort SANS aucune dépendance déclarée
+#   file            `dpkg-shlibdeps` s'en sert pour reconnaître les ELF
+#   desktop-file-utils  `appimagetool` valide le .desktop avec, et refuse
+#                   l'AppImage s'il est mal formé
+#   ca-certificates, curl, git   récupérer SDL3 et appimagetool
+#   zsync           `appimagetool` le cherche pour les mises à jour delta ;
+#                   absent, il le dit à chaque appel dans un avertissement qui
+#                   ressemble à une erreur
+#   gnupg           la signature détachée facultative de `paquets.sh`. Sans lui
+#                   le chemin signé ne s'exécuterait JAMAIS dans l'image qui
+#                   produit la release : le script le dirait plutôt que de
+#                   planter, mais il le dirait dans un journal que personne ne
+#                   relit un jour de balise. Mesuré (gnupg 2.2.27) : l'image
+#                   passe de 725,2 à 730,3 Mio, soit + 5,1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake ninja-build git ca-certificates curl \
+        dpkg-dev file desktop-file-utils zsync gnupg \
+        glslang-tools \
+        libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+        libxfixes-dev libxss-dev libxkbcommon-dev libxtst-dev libxinerama-dev \
+        libwayland-dev wayland-protocols libdecor-0-dev \
+        libasound2-dev libpulse-dev libudev-dev libdrm-dev libgbm-dev \
+        libgl1-mesa-dev libegl1-mesa-dev libvulkan-dev \
+        mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/*
+
+# appimagetool et son « runtime », ÉPINGLÉS sur 1.9.0, ET CHOISIS SELON
+# L'ARCHITECTURE DE L'IMAGE.
+#
+# La même règle que SDL3 dans cmake/Dependencies.cmake : un projet qu'on rouvre
+# dans cinq ans doit refaire le même paquet, pas suivre la branche
+# « continuous » d'un tiers.
+#
+# ATTENTION au dépôt : la plupart des recettes qui traînent pointent encore
+# `AppImage/AppImageKit/releases/download/13/…`, qui rend un 404 depuis que ce
+# dépôt a été archivé (vérifié : `curl -I` répond 404). L'outil vit maintenant
+# dans `AppImage/appimagetool`.
+#
+# ATTENTION à l'architecture, aussi, et pour une raison qu'on a payée : sur un
+# Mac Apple Silicon, `docker build` produit une image **arm64**, où un
+# `appimagetool-x86_64` téléchargé en dur rend « Exec format error » — après
+# vingt minutes de compilation. `uname -m` est donc lu DANS l'image, ce qui
+# donne x86_64 sur un runner GitHub et aarch64 sur un Mac, sans réglage.
+#
+# Le « runtime », ce sont les ~1 Mio d'ELF que l'AppImage porte en tête et qui
+# savent monter le squashfs qui suit. `appimagetool` va le CHERCHER SUR INTERNET
+# à chaque appel s'il ne lui est pas donné — une fabrication qui dépend du réseau
+# au moment de graver la release, et qui la fait échouer le jour où GitHub
+# tousse. On le fige ici, et le script le passe par `--runtime-file`.
+# `APPIMAGE_EXTRACT_AND_RUN` est posé AVANT le téléchargement et pas après :
+# `appimagetool` est lui-même une AppImage, et le contrôle de version ci-dessous
+# est la première chose qui la lance. Sans cette variable il cherche FUSE, que le
+# conteneur n'a pas, et rend « open dir error » — un message qui ne dit pas du
+# tout ce qui manque.
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+
+ARG APPIMAGETOOL_VERSION=1.9.0
+RUN set -eux; \
+    a="$(uname -m)"; \
+    curl -fsSL "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${a}.AppImage" \
+         -o /usr/local/bin/appimagetool; \
+    chmod +x /usr/local/bin/appimagetool; \
+    curl -fsSL "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-${a}" \
+         -o /usr/local/lib/appimage-runtime; \
+    /usr/local/bin/appimagetool --version
+
+ENV APPIMAGE_RUNTIME_FILE=/usr/local/lib/appimage-runtime
+
+WORKDIR /src

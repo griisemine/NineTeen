@@ -1,0 +1,29 @@
+NINETEEN - ORIGINE ET LICENCE
+
+Ce texte est volontairement sans accents : le modele NSIS de CPack compile un
+installateur ANSI, qui afficherait un fichier UTF-8 en caracteres illisibles.
+La version complete et accentuee est installee avec le jeu, sous le nom
+LICENSES.md, dans le repertoire d'installation.
+
+LE JEU
+Le moteur, les jeux et la salle sont l'oeuvre du projet Nineteen.
+
+CE QUI N'EST PAS DE NOUS, ET QUI VOYAGE AVEC
+  - Textures et modeles rapportes de Poly Haven, sous CC0 : aucune obligation,
+    pas meme celle de citer. Nous citons quand meme.
+  - Le personnage derive de CesiumMan, sous CC BY 4.0 : l'attribution est une
+    OBLIGATION, et sa texture ayant ete repeinte, l'oeuvre livree est une
+    oeuvre derivee, ce que la meme licence oblige a declarer.
+  - SDL3 (zlib), miniaudio (MIT-0 ou domaine public), stb (domaine public),
+    cgltf (MIT), jsmn (MIT) : lies dans le binaire.
+
+CE QUI RESTE INCERTAIN
+Le decor descend d'un modele de 2020 dont certaines images n'ont pas de
+provenance etablie. Les vingt et une identifiees comme appartenant a des tiers
+ont ete retirees du paquet. Il en reste dont personne ne peut dire d'ou elles
+viennent : c'est ecrit noir sur blanc dans LICENSES.md, section "Les images de
+2020". A lire avant toute exploitation commerciale.
+
+CE PAQUET N'EST PAS SIGNE
+Aucun certificat Authenticode n'est configure. Windows affichera un
+avertissement SmartScreen : c'est attendu, pas une panne.

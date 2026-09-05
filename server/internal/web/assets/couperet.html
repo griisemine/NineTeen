@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le Couperet, le mode competitif de Nineteen</title>
+<meta name="description" content="De deux a huit joueurs dans la meme salle d'arcade. Vos points ne comptent qu'une fois la partie finie, et toutes les quarante-cinq secondes le dernier sort.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/">Le jeu</a>
+    <a href="/couperet.html" aria-current="page">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <section class="section">
+    <p class="eyebrow">Mode competitif</p>
+    <h1>Le Couperet</h1>
+    <p class="lede">De deux a huit joueurs dans la meme salle. Une phrase suffit a le decrire.
+       <strong>Vos points ne comptent qu'une fois la partie finie, et toutes les quarante-cinq
+       secondes le couperet sort le dernier.</strong></p>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Pourquoi c'est un dilemme</h2>
+      <p>Parce que les dix-neuf bornes ne durent pas le meme temps. La duree mediane d'une
+         partie va de <strong>5,9 secondes</strong> a <strong>180 secondes</strong>, mesuree sur
+         vingt-quatre parties par borne et par regime.</p>
+    </div>
+
+    <ul class="cartes">
+      <li>
+        <span class="chiffre">2</span>
+        <h3>Enchainer du court</h3>
+        <p>Deux mises en banque entre deux lames. Vous montez lentement, mais vous montez a
+           chaque fois, et vous ne perdez jamais rien.</p>
+      </li>
+      <li>
+        <span class="chiffre">4</span>
+        <h3>S'engager sur du long</h3>
+        <p>Quatre lames traversees sans avoir rien encaisse. Si vous finissez, vous doublez la
+           salle. Si on vous coupe le courant a la troisieme, vous n'avez rien.</p>
+      </li>
+      <li>
+        <span class="chiffre">80</span>
+        <h3>Ce que paient les longues</h3>
+        <p>Les bornes longues rapportent pres de quatre-vingts fois plus que les courtes. Le
+           multiplicateur est ecrit sur le fronton, avant qu'on insere le jeton.</p>
+      </li>
+    </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Les fusibles</h2>
+      <p>Six actions s'achetent avec des fusibles. Elles ne se gagnent pas en boutique, elles
+         naissent au coup d'envoi et meurent au verdict.</p>
+    </div>
+    <ul class="cartes">
+      <li><h3>Brouiller</h3><p>L'image de quelqu'un devient illisible pendant qu'il joue.</p></li>
+      <li><h3>Inverser</h3><p>Son manche part a l'envers. Le plus court chemin vers une erreur.</p></li>
+      <li><h3>Couper</h3><p>Le courant de sa borne saute. Sa partie en cours ne comptera pas.</p></li>
+      <li><h3>Se blinder</h3><p>La prochaine attaque ne vous atteint pas.</p></li>
+      <li><h3>Donner</h3><p>Un fusible passe a quelqu'un d'autre. Les alliances existent.</p></li>
+      <li><h3>Renvoyer</h3><p>La prochaine attaque repart sur celui qui l'a lancee.</p></li>
+    </ul>
+
+    <div class="encart">
+      <h3>Etre elimine ne met pas a la porte</h3>
+      <p>On devient spectre. On ne joue plus, on garde ses fusibles, et on continue d'agir sur
+         la manche. Un joueur sorti a la premiere lame reste dangereux jusqu'a la derniere, ce
+         qui change completement la facon dont on traite ceux qui sont en bas.</p>
+    </div>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Une manche, en images</h2>
+    </div>
+    <ul class="vues">
+      <li><figure>
+        <img src="/img/couperet-allee.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Une manche du Couperet vue depuis l'allee : les bornes tenues par des rivaux jouent leur partie. Rendu par le moteur du jeu.">
+        <figcaption>Les bornes que tiennent les rivaux jouent leur partie, pas une demonstration.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/couperet-bar.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="Le televiseur du bar affichant le classement d'une manche du Couperet. Rendu par le moteur du jeu.">
+        <figcaption>Le televiseur du bar passe au classement de la manche.</figcaption>
+      </figure></li>
+      <li><figure>
+        <img src="/img/couperet-verdict.jpg" width="1280" height="720" loading="lazy" decoding="async"
+             alt="La page de verdict a la fin d'une manche : rang, points, parties finies, coupures subies. Rendu par le moteur du jeu.">
+        <figcaption>Le verdict : votre rang, vos points, et ce que vous avez perdu sur coupure.</figcaption>
+      </figure></li>
+    </ul>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Y jouer avec quelqu'un</h2>
+      <p>Quatre pas, et rien a convenir hors du jeu.</p>
+    </div>
+    <ol class="pas">
+      <li><strong>Creez un compte.</strong> Ici avec <a href="/compte.html">Creer un compte</a>,
+          ou dans le jeu, au comptoir. Les deux menent au meme compte.</li>
+      <li><strong>Ouvrez le comptoir</strong> dans le jeu avec <kbd>F1</kbd>. Il s'ouvre aussi
+          tout seul au premier lancement, tant que personne n'est connecte.</li>
+      <li><strong>Creez un salon</strong>, ou rejoignez-en un dans la liste. Un salon prive
+          n'est pas liste, il se rejoint par son code, et c'est tout son interet.</li>
+      <li><strong>Donnez le code.</strong> Six caracteres, sans I, O, 0 ni 1, pour qu'il se
+          dicte a voix haute sans qu'on s'y trompe.</li>
+    </ol>
+
+    <div class="encart">
+      <h3>Ce que le serveur tient a votre place</h3>
+      <p>Les camps sont attribues par le serveur, pas declares par le jeu. Sans cela, un joueur
+         pouvait basculer dans le camp qui mene juste avant la lame. Une place laissee vide est
+         tenue par un rival qui joue reellement, avec le meme pilote automatique que celui des
+         demonstrations. Et une manche que tout le monde a quittee est fauchee au lieu de rester
+         ouverte indefiniment.</p>
+      <p>Rien ne s'achete. Ni saison, ni laissez-passer, ni fusible.</p>
+    </div>
+
+    <p class="lede"><a class="btn btn-primary" href="/telecharger.html">Telecharger le jeu</a>
+       <a class="btn" href="/classement.html">Suivre une manche en direct</a></p>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>L'equilibre est mesure, pas affirme</h2>
+      <p>Le test ne simule pas les parties, il les joue. Les huit pilotes automatiques du jeu
+         constituent un vivier de durees et de scores reels, et deux cents manches de huit
+         places sont jouees pour chaque reglage.</p>
+    </div>
+    <ul class="cartes">
+      <li>
+        <span class="chiffre">55 %</span>
+        <h3>L'engagement l'emporte</h3>
+        <p>Celui qui s'engage sur du long gagne 55 % du temps contre celui qui se presse. Et
+           51, 49 puis 56 % sur trois tirages independants.</p>
+      </li>
+      <li>
+        <span class="chiffre">38 pts</span>
+        <h3>Ce que pesent les actions</h3>
+        <p>Les six actions deplacent l'issue de trente-huit points de pourcentage. Sans elles,
+           l'engagement gagne neuf manches sur dix, et le mode n'a plus de dilemme.</p>
+      </li>
+      <li>
+        <span class="chiffre">45 s</span>
+        <h3>La periode de la lame</h3>
+        <p>Assez long pour qu'une partie moyenne tienne, assez court pour qu'une longue soit un
+           pari. C'est ce reglage qui fait tout le reste.</p>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.1.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre compte Nineteen</title>
+<meta name="description" content="Un compte pour tenir une place dans une manche du Couperet et signer un score. Le meme sert au site et au jeu.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="topbar">
+  <a class="wordmark" href="/" aria-label="Nineteen, accueil">nineteen</a>
+  <nav aria-label="Navigation principale">
+    <a href="/">Le jeu</a>
+    <a href="/couperet.html">Le Couperet</a>
+    <a href="/classement.html">Classement</a>
+    <a href="/telecharger.html">Telecharger</a>
+  </nav>
+  <div class="compte-barre" id="compte-barre"></div>
+</header>
+
+<main id="contenu">
+
+  <section class="section">
+    <p class="eyebrow">Compte</p>
+    <h1>Votre compte</h1>
+    <p class="lede">Il sert a deux choses, et a rien d'autre : tenir une place dans une manche
+       du Couperet, et signer un score pour qu'il entre au classement. Telecharger et jouer seul
+       n'en demandent pas.</p>
+  </section>
+
+  <section class="section">
+    <div id="zone-compte">
+      <div class="forme" id="forme-compte">
+        <div class="onglets" role="tablist">
+          <button type="button" role="tab" aria-selected="true" aria-controls="onglet-connexion"
+                  id="tab-connexion">Connexion</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="onglet-inscription"
+                  id="tab-inscription">Creer un compte</button>
+        </div>
+
+        <form id="onglet-connexion" role="tabpanel" aria-labelledby="tab-connexion">
+          <label class="champ">
+            <span>Identifiant</span>
+            <input type="text" name="username" autocomplete="username" required
+                   minlength="3" maxlength="24">
+          </label>
+          <label class="champ">
+            <span>Mot de passe</span>
+            <input type="password" name="password" autocomplete="current-password" required>
+          </label>
+          <p class="message" data-ton="erreur" role="alert" hidden></p>
+          <button class="btn btn-primary" type="submit">Se connecter</button>
+        </form>
+
+        <form id="onglet-inscription" role="tabpanel" aria-labelledby="tab-inscription" hidden>
+          <label class="champ">
+            <span>Identifiant</span>
+            <input type="text" name="username" autocomplete="username" required
+                   minlength="3" maxlength="24" pattern="[A-Za-z0-9_\-]+">
+            <small>3 a 24 caracteres, lettres, chiffres, tiret et souligne. C'est ce nom qui
+                   apparaitra au classement.</small>
+          </label>
+          <label class="champ">
+            <span>Adresse e-mail, facultative</span>
+            <input type="email" name="email" autocomplete="email">
+            <small>Elle ne sert qu'a vous reconnaitre si vous perdez votre mot de passe. Rien
+                   ne vous est envoye.</small>
+          </label>
+          <label class="champ">
+            <span>Mot de passe</span>
+            <input type="password" name="password" autocomplete="new-password" required
+                   minlength="12">
+            <small>12 caracteres minimum. Accents, espaces et ponctuation bienvenus.</small>
+          </label>
+          <p class="message" data-ton="erreur" role="alert" hidden></p>
+          <button class="btn btn-primary" type="submit">Creer le compte</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <div class="hazard" role="presentation"></div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Le meme compte dans le jeu</h2>
+      <p>Le comptoir de la salle s'ouvre avec <kbd>F1</kbd>, et au premier lancement tout seul
+         tant que personne n'est connecte. On y cree un compte, on s'y connecte, on y liste les
+         salons et on en cree. Rien de ce que vous faites ici n'est a refaire la-bas.</p>
+    </div>
+    <ul class="cartes">
+      <li>
+        <h3>Ce qui est garde</h3>
+        <p>Un identifiant, une empreinte de mot de passe, et vos scores. L'adresse e-mail est
+           facultative et vide par defaut.</p>
+      </li>
+      <li>
+        <h3>Comment</h3>
+        <p>Le mot de passe est passe a Argon2id, jamais stocke. La session est un jeton opaque
+           garde hache, revocable, et le formulaire porte un jeton anti-CSRF.</p>
+      </li>
+      <li>
+        <h3>Ce qui n'existe pas</h3>
+        <p>Aucun achat, aucune saison, aucun laissez-passer, aucun suivi publicitaire. Le site
+           ne charge aucune ressource exterieure.</p>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>Nineteen, salle d'arcade. Version <span data-version>17.1.0</span>.</p>
+  <p><a href="https://github.com/griisemine/NineTeen">Code source</a></p>
+</footer>
+
+<script src="/nineteen.js" defer></script>
+<script src="/compte.js" defer></script>
+</body>
+</html>

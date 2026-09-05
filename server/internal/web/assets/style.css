@@ -1,0 +1,995 @@
+/* ==========================================================================
+   Nineteen, feuille de style du site.
+
+   CE QUE CE SITE EST. Le site du jeu : ce qu'on y joue, comment on s'y mesure
+   aux autres, et ou telecharger. Il ne raconte pas comment le projet a ete
+   refait, et la version precedente le faisait sur un tiers de sa hauteur. Un
+   visiteur venu jouer n'a que faire de l'etat d'un moteur de rendu en 2020.
+
+   DIRECTION. La page se parcourt comme la salle : fond de moquette noire,
+   lumiere qui vient des machines, et deux dispositifs empruntes au decor reel
+   plutot qu'inventes, la bande de danger jaune et noire des socles de bornes,
+   et le traitement cathodique, reserve au seul endroit qui est effectivement
+   un ecran, le classement.
+
+   Une seule ambiance, sombre, et c'est un parti pris : une salle d'arcade en
+   clair n'existe pas. Toutes les couleurs sont donc posees explicitement, sans
+   dependre du theme du visiteur.
+   ========================================================================== */
+
+/*
+   Les polices d'affichage sont celles du jeu lui-meme (legacy/room/fonts/),
+   pas des webfontes generiques : c'est ce qui rattache le site a ce qu'il
+   presente.
+
+   Deux ecueils rencontres en les integrant, tous deux regles ici :
+
+   1. sega.ttf, la police des enseignes, dessine son E d'une facon qui se lit
+      comme un C. « CLASSEMENT » devenait « CLASSCMCNT ». Elle est donc
+      reservee aux libelles courts des bornes, ou le contexte leve le doute, et
+      ecartee des titres.
+
+   2. sega.ttf declare bien les codes des caracteres accentues, mais leurs
+      glyphes sont vides : « rallumee » s'affichait « rallum e ». Elle est donc
+      restreinte a l'ASCII par unicode-range, ce qui fait basculer le navigateur
+      sur la police suivante pour ces caracteres. neon.ttf et police.ttf, elles,
+      dessinent reellement les accents et ne sont pas restreintes. Verifie en
+      inspectant la table loca de chaque police plutot qu'a l'oeil.
+*/
+@font-face {
+    font-family: "Sega";
+    src: url("/fonts/sega.ttf") format("truetype");
+    unicode-range: U+0000-007F;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Police19";
+    src: url("/fonts/police.ttf") format("truetype");
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Neon";
+    src: url("/fonts/neon.ttf") format("truetype");
+    font-display: swap;
+}
+
+:root {
+    /* --- Couleurs, relevees sur le rendu du moteur --- */
+    --hall:      #07080b;   /* la moquette noire, tres legerement bleutee */
+    --cabinet:   #0f1218;   /* flanc de borne */
+    --cabinet-2: #151a23;   /* surface surelevee */
+    --edge:      #232b3a;   /* filets et separations */
+    --marquee:   #ece8df;   /* blanc chaud d'enseigne */
+    --muted:     #8b93a4;   /* texte secondaire, bleute comme le reste */
+
+    /* Accent : le jaune des bandes de danger sur les socles de bornes.
+       C'est la couleur du monde des salles d'arcade, celle des jetons. */
+    --amber:     #ffb01f;
+    --amber-dim: #7a5309;
+
+    /* Vert de la borne Envol : reserve a l'etat « en direct ». */
+    --screen:    #35e0a1;
+    --danger:    #ff5a4d;
+
+    /* --- Typographie --- */
+    --display: "Neon", "Police19", "Trebuchet MS", "Segoe UI", sans-serif;
+    --marquee-face: "Sega", "Neon", "Arial Narrow", sans-serif;
+    --body:    ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono:    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+
+    /* Echelle typographique, ratio 1.25 */
+    --t-xs:  0.75rem;
+    --t-sm:  0.875rem;
+    --t-md:  1rem;
+    --t-lg:  1.25rem;
+    --t-xl:  1.563rem;
+    --t-2xl: 1.953rem;
+    --t-3xl: 2.441rem;
+    --t-4xl: 3.815rem;
+
+    --gap:      1.5rem;
+    --gap-lg:   3rem;
+    --measure:  62ch;
+    --radius:   3px;   /* volontairement dur : une borne n'a pas d'angles arrondis */
+    --largeur:  min(1180px, calc(100vw - 2 * var(--gap)));
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--hall);
+    color: var(--marquee);
+    font-family: var(--body);
+    font-size: var(--t-md);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+}
+
+img, video { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--amber); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: #ffc85c; }
+
+:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 3px;
+}
+
+code, kbd, samp { font-family: var(--mono); font-size: 0.92em; }
+
+kbd {
+    border: 1px solid var(--edge);
+    border-bottom-width: 2px;
+    border-radius: var(--radius);
+    background: var(--cabinet-2);
+    padding: 0.05em 0.45em;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+    background: var(--amber);
+    color: #000;
+    padding: 0.6rem 1rem;
+    font-weight: 700;
+}
+.skip:focus { left: 0; }
+
+/* ==========================================================================
+   Barre du haut
+   ========================================================================== */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    flex-wrap: wrap;
+    padding: 0.7rem max(var(--gap), calc((100vw - var(--largeur)) / 2));
+    background: rgba(7, 8, 11, 0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--edge);
+}
+
+.wordmark {
+    font-family: var(--display);
+    font-size: var(--t-lg);
+    letter-spacing: 0.14em;
+    text-transform: lowercase;
+    color: var(--marquee);
+    text-decoration: none;
+    text-shadow: 0 0 8px rgba(255, 176, 31, 0.55), 0 0 22px rgba(255, 176, 31, 0.25);
+}
+
+.topbar nav {
+    display: flex;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+    margin-right: auto;
+    font-size: var(--t-sm);
+}
+
+.topbar nav a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.2rem 0;
+    border-bottom: 2px solid transparent;
+}
+.topbar nav a:hover { color: var(--marquee); }
+.topbar nav a[aria-current="page"] {
+    color: var(--marquee);
+    border-bottom-color: var(--amber);
+}
+
+.compte-barre { display: flex; align-items: center; gap: 0.6rem; font-size: var(--t-sm); }
+.compte-barre .pseudo { font-family: var(--mono); color: var(--screen); }
+
+/* ==========================================================================
+   Boutons
+   ========================================================================== */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 0.62rem 1.15rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--edge);
+    background: var(--cabinet-2);
+    color: var(--marquee);
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.btn:hover { background: #1c222d; border-color: #3a465c; color: var(--marquee); }
+.btn:active { transform: translateY(1px); }
+
+.btn-primary {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #14100a;
+}
+.btn-primary:hover { background: #ffc247; border-color: #ffc247; color: #14100a; }
+
+.btn-small { padding: 0.35rem 0.7rem; font-size: var(--t-sm); }
+
+.btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   Structure
+   ========================================================================== */
+
+main { display: block; }
+
+.section {
+    width: var(--largeur);
+    margin: 0 auto;
+    padding: var(--gap-lg) 0;
+}
+
+.section-head { max-width: var(--measure); margin-bottom: var(--gap); }
+/* Un second titre dans la meme section a besoin d'air au-dessus. Une classe et
+   non un attribut `style` : la politique de contenu du serveur interdit le
+   style en ligne, et c'est elle qui a le dernier mot. */
+.section-head.sous { margin-top: 2rem; }
+
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; margin: 0 0 0.6rem; }
+h1 { font-size: var(--t-4xl); letter-spacing: -0.01em; }
+h2 { font-size: var(--t-3xl); }
+h3 { font-size: var(--t-xl); }
+
+p { margin: 0 0 1rem; max-width: var(--measure); }
+
+.eyebrow {
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 0.8rem;
+}
+
+.lede { font-size: var(--t-lg); color: #cfd4de; }
+.note { color: var(--muted); font-size: var(--t-sm); }
+
+/* La bande de danger jaune et noire des socles de bornes. Elle separe les
+   sections comme elle separe le sol du meuble dans la salle. */
+.hazard {
+    height: 10px;
+    background: repeating-linear-gradient(
+        135deg,
+        var(--amber) 0 14px,
+        #0a0b0f 14px 28px);
+    opacity: 0.5;
+}
+
+.footer {
+    width: var(--largeur);
+    margin: 0 auto;
+    padding: var(--gap-lg) 0 var(--gap);
+    border-top: 1px solid var(--edge);
+    color: var(--muted);
+    font-size: var(--t-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    justify-content: space-between;
+}
+.footer p { margin: 0; }
+
+/* ==========================================================================
+   Accueil
+   ========================================================================== */
+
+.hero {
+    position: relative;
+    min-height: min(78vh, 660px);
+    display: grid;
+    align-content: end;
+    gap: var(--gap);
+    padding: calc(var(--gap-lg) * 1.5) max(var(--gap), calc((100vw - var(--largeur)) / 2)) var(--gap-lg);
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.hero-plate {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -2;
+}
+
+/* L'affiche fixe est SOUS la video et ne se voit que si la video ne joue pas :
+   refus de lecture automatique, animation reduite, format non pris en charge.
+   Aucun script n'est necessaire pour ce repli. */
+.hero-plate-fixe { z-index: -3; }
+
+.hero-veil {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+        linear-gradient(to top, var(--hall) 4%, rgba(7, 8, 11, 0.55) 45%, rgba(7, 8, 11, 0.2) 100%),
+        radial-gradient(120% 80% at 50% 0%, rgba(7, 8, 11, 0) 40%, rgba(7, 8, 11, 0.85) 100%);
+}
+
+.hero-text { max-width: 40ch; }
+.hero h1 { text-shadow: 0 2px 30px rgba(0, 0, 0, 0.8); }
+.hero-actions { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1.2rem; }
+
+.specs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    margin: 0;
+    background: var(--edge);
+    border: 1px solid var(--edge);
+}
+.specs > div { background: rgba(15, 18, 24, 0.86); padding: 0.9rem 1rem; }
+.specs dt {
+    font-size: var(--t-xs);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.specs dd {
+    margin: 0.15rem 0 0;
+    font-family: var(--display);
+    font-size: var(--t-2xl);
+    color: var(--amber);
+}
+
+/* --- Galeries ---------------------------------------------------------- */
+
+.vues, .loops, .rail, .platforms, .cartes {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.vues {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--gap);
+}
+.vues figure { margin: 0; border: 1px solid var(--edge); background: var(--cabinet); }
+.vues figcaption {
+    padding: 0.7rem 0.9rem;
+    font-size: var(--t-sm);
+    color: var(--muted);
+}
+
+.loops {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--gap);
+}
+.loop-bouton {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid var(--edge);
+    background: var(--cabinet);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.loop-bouton:hover { border-color: var(--amber-dim); }
+.loop-media { position: relative; aspect-ratio: 16 / 9; overflow: hidden; }
+.loop-media img, .loop-media video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.loop-media video { opacity: 0; transition: opacity 0.2s ease; }
+.is-playing .loop-media video { opacity: 1; }
+.loop-corps {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+}
+.loop-nom {
+    font-family: var(--marquee-face);
+    letter-spacing: 0.1em;
+    font-size: var(--t-lg);
+}
+.loop-etat {
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+}
+.is-playing .loop-etat { color: var(--screen); }
+
+/* Les dix-neuf bornes : un rail horizontal, comme la rangee qu'il montre. */
+.rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(240px, 1fr);
+    gap: var(--gap);
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    scroll-snap-type: x mandatory;
+}
+.cab {
+    scroll-snap-align: start;
+    border: 1px solid var(--edge);
+    background: var(--cabinet);
+}
+.cab img { aspect-ratio: 16 / 9; object-fit: cover; width: 100%; }
+.cab-corps { padding: 0.7rem 0.9rem; display: grid; gap: 0.15rem; }
+.cab-slot {
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    color: var(--muted);
+}
+.cab-marquee {
+    font-family: var(--marquee-face);
+    font-size: var(--t-lg);
+    letter-spacing: 0.09em;
+}
+.cab-detail { font-size: var(--t-sm); color: var(--muted); }
+
+/* ==========================================================================
+   Cartes de contenu
+   ========================================================================== */
+
+.cartes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--gap);
+}
+.cartes > li {
+    border: 1px solid var(--edge);
+    background: var(--cabinet);
+    padding: 1.1rem 1.2rem;
+}
+.cartes h3 { margin-bottom: 0.35rem; }
+.cartes p { margin-bottom: 0; color: #c3c9d4; font-size: var(--t-sm); }
+.cartes .chiffre {
+    display: block;
+    font-family: var(--display);
+    font-size: var(--t-2xl);
+    color: var(--amber);
+    line-height: 1;
+    margin-bottom: 0.4rem;
+}
+
+.pas {
+    counter-reset: pas;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.9rem;
+    max-width: var(--measure);
+}
+.pas > li {
+    counter-increment: pas;
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0.9rem;
+    align-items: start;
+}
+.pas > li::before {
+    content: counter(pas);
+    font-family: var(--display);
+    font-size: var(--t-lg);
+    color: var(--amber);
+    border: 1px solid var(--amber-dim);
+    border-radius: var(--radius);
+    text-align: center;
+    line-height: 2rem;
+}
+
+.encart {
+    border: 1px solid var(--amber-dim);
+    border-left-width: 4px;
+    background: rgba(122, 83, 9, 0.12);
+    padding: 1.1rem 1.3rem;
+    margin: var(--gap) 0;
+}
+.encart h3 { color: var(--amber); }
+.encart p:last-child { margin-bottom: 0; }
+
+/* ==========================================================================
+   Le tube cathodique : reserve a ce qui est vraiment un ecran
+   ========================================================================== */
+
+.crt {
+    position: relative;
+    border: 1px solid var(--edge);
+    background: linear-gradient(180deg, #0a1512, #070b0a);
+    box-shadow: inset 0 0 90px rgba(53, 224, 161, 0.07);
+    overflow: hidden;
+}
+
+.crt-bar {
+    display: flex;
+    align-items: end;
+    gap: var(--gap);
+    flex-wrap: wrap;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--edge);
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.crt-ecran { padding: 0.4rem 0.6rem 1rem; overflow-x: auto; }
+
+.crt-scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.25) 0 1px,
+        rgba(0, 0, 0, 0) 1px 3px);
+    mix-blend-mode: multiply;
+}
+
+.crt-etat {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.crt-etat[data-etat="direct"] { color: var(--screen); }
+.crt-etat[data-etat="erreur"] { color: var(--danger); }
+
+.board {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: var(--t-sm);
+    color: var(--screen);
+}
+.board th {
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--t-xs);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--edge);
+    white-space: nowrap;
+}
+.board td {
+    padding: 0.42rem 0.6rem;
+    border-bottom: 1px solid rgba(35, 43, 58, 0.5);
+    white-space: nowrap;
+}
+.board tbody tr:hover { background: rgba(53, 224, 161, 0.06); }
+.board .c-rang { width: 3.5rem; color: var(--amber); }
+.board .c-score { text-align: right; font-variant-numeric: tabular-nums; }
+.board .c-nom { white-space: normal; color: var(--marquee); }
+.board .vide { color: var(--muted); text-align: center; padding: 2rem 0.6rem; }
+.board tr[data-sorti="oui"] td { color: var(--muted); text-decoration: line-through; }
+.board tr[data-moi="oui"] { background: rgba(255, 176, 31, 0.09); }
+
+/* Le podium des trois premiers, en couleur de jeton. */
+.board tbody tr:nth-child(1) .c-rang { color: #ffd76a; }
+.board tbody tr:nth-child(2) .c-rang { color: #d7dbe3; }
+.board tbody tr:nth-child(3) .c-rang { color: #c98a4b; }
+
+/* ==========================================================================
+   Formulaires
+   ========================================================================== */
+
+.champ { display: grid; gap: 0.3rem; margin-bottom: 0.9rem; }
+.champ > span {
+    font-size: var(--t-xs);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.champ input, .champ select {
+    font: inherit;
+    font-family: var(--mono);
+    color: var(--marquee);
+    background: #0a0d12;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 0.5rem 0.7rem;
+    min-width: 0;
+}
+.champ input:focus, .champ select:focus { border-color: var(--amber); }
+.champ small { color: var(--muted); font-size: var(--t-xs); }
+
+.ligne-champs {
+    display: flex;
+    align-items: end;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin: 0;
+}
+.ligne-champs .champ { margin-bottom: 0; }
+
+.forme {
+    border: 1px solid var(--edge);
+    background: var(--cabinet);
+    padding: 1.3rem;
+    max-width: 30rem;
+}
+.forme h2 { font-size: var(--t-xl); }
+
+.message {
+    border-left: 3px solid var(--edge);
+    padding: 0.5rem 0.8rem;
+    margin: 0 0 0.9rem;
+    font-size: var(--t-sm);
+}
+.message[data-ton="erreur"] { border-color: var(--danger); color: #ffb3ac; }
+.message[data-ton="ok"] { border-color: var(--screen); color: var(--screen); }
+.message[hidden] { display: none; }
+
+.onglets { display: flex; gap: 0.4rem; margin-bottom: 1.1rem; }
+.onglets button {
+    font: inherit;
+    font-weight: 600;
+    padding: 0.45rem 0.9rem;
+    background: none;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    color: var(--muted);
+    cursor: pointer;
+}
+.onglets button[aria-selected="true"] {
+    color: #14100a;
+    background: var(--amber);
+    border-color: var(--amber);
+}
+
+/* ==========================================================================
+   Telechargements
+   ========================================================================== */
+
+.platforms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--gap);
+}
+.plateforme {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    border: 1px solid var(--edge);
+    background: var(--cabinet);
+    padding: 1.2rem;
+}
+.plateforme h3 { margin: 0; }
+.plateforme .detail { margin: 0; color: var(--muted); font-size: var(--t-sm); }
+.plateforme .btn { margin-top: auto; }
+.plateforme .somme {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    word-break: break-all;
+    margin: 0;
+}
+.plateforme .absent { color: var(--muted); font-size: var(--t-sm); margin: 0; }
+
+.ligne {
+    display: block;
+    font-family: var(--mono);
+    font-size: var(--t-sm);
+    background: #0a0d12;
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--amber-dim);
+    padding: 0.6rem 0.8rem;
+    margin: 0.5rem 0;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.gestes { margin: 0; }
+.gestes dt {
+    font-family: var(--display);
+    font-size: var(--t-lg);
+    color: var(--amber);
+    margin-top: 1rem;
+}
+.gestes dd { margin: 0.25rem 0 0; max-width: var(--measure); }
+
+.annexes { list-style: none; padding: 0; margin: 0; font-size: var(--t-sm); }
+.annexes li { padding: 0.2rem 0; }
+
+/* ==========================================================================
+   Adaptations
+   ========================================================================== */
+
+@media (max-width: 720px) {
+    :root { --t-4xl: 2.6rem; --t-3xl: 1.9rem; --gap-lg: 2rem; }
+    .topbar { gap: 0.7rem; }
+    .topbar nav { order: 3; width: 100%; }
+    .hero { min-height: 60vh; }
+}
+
+/* Le visiteur qui a demande moins d'animation ne recoit pas la video du haut :
+   le CSS la cache, et le script lui retire ses sources pour qu'elle ne soit
+   meme pas telechargee. Les deux, parce que l'un sans l'autre laisse soit un
+   telechargement inutile, soit une image qui bouge. */
+@media (prefers-reduced-motion: reduce) {
+    .hero-plate:not(.hero-plate-fixe) { display: none; }
+}
+
+/* ==========================================================================
+   LA SAISON CLASSEE
+   ==========================================================================
+   Un classement general se lit. Une saison se DISPUTE, et la difference doit
+   se voir avant d'etre lue : un podium a trois marches de hauteurs
+   differentes, une echelle de paliers ou l'on se situe d'un coup d'oeil, et
+   un compte a rebours.
+
+   Les couleurs des trois places reprennent celles que `.board` posait deja
+   sur les trois premiers rangs. Une seule definition aurait ete mieux, mais
+   elles ne s'appliquent pas au meme element : ici c'est un socle, la c'est un
+   numero de ligne.
+   ========================================================================== */
+
+.saison-tete {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem 1.4rem;
+    padding: 0.9rem 1rem;
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    margin-bottom: var(--gap);
+}
+.saison-tete .nom {
+    font-family: var(--display);
+    font-size: var(--t-xl);
+    color: var(--marquee);
+    letter-spacing: 0.02em;
+}
+.saison-tete .reste { color: var(--amber); font-variant-numeric: tabular-nums; }
+.saison-tete .compte { color: var(--muted); font-size: var(--t-sm); }
+.saison-tete .fin { margin-left: auto; }
+
+/* --- Le podium ---------------------------------------------------------- */
+
+/* `align-items: end` : les trois marches partagent le SOL, pas le plafond.
+   C'est ce qui fait qu'un podium se lit comme un podium. */
+.podium {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    align-items: end;
+    gap: 0.8rem;
+    margin-bottom: var(--gap);
+}
+/* L'ordre visuel d'un podium est 2, 1, 3, et l'ordre du DOM reste 1, 2, 3 :
+   un lecteur d'ecran doit entendre le vainqueur en premier. */
+.podium .marche:nth-child(1) { order: 2; }
+.podium .marche:nth-child(2) { order: 1; }
+.podium .marche:nth-child(3) { order: 3; }
+
+.marche { display: flex; flex-direction: column
+        }
+.marche .carte {
+    background: var(--cabinet-2);
+    border: 1px solid var(--edge);
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 0.9rem 0.8rem;
+    text-align: center;
+    min-width: 0;
+}
+.marche .pseudo {
+    display: block;
+    font-family: var(--display);
+    font-size: var(--t-lg);
+    color: var(--marquee);
+    overflow-wrap: anywhere;
+    margin-bottom: 0.15rem;
+}
+.marche .pseudo:hover { color: var(--amber); }
+.marche .points {
+    display: block;
+    font-size: var(--t-2xl);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.marche .sous { display: block; color: var(--muted); font-size: var(--t-xs); }
+.marche .exploit {
+    display: block;
+    margin-top: 0.4rem;
+    color: #c3c9d4;
+    font-size: var(--t-xs);
+    overflow-wrap: anywhere;
+}
+
+/* Le socle. Sa hauteur EST le classement : 1er 7 rem, 2e 5 rem, 3e 3,6 rem.
+   Les chiffres sont choisis pour que la difference se voie sur un telephone
+   de 360 px de large, ou les trois marches font 110 px chacune. */
+.marche .socle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: var(--t-3xl);
+    color: var(--hall);
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+.marche[data-place="1"] .socle { height: 7rem
+        ; background: linear-gradient(180deg, #ffd76a, #b98c22)
+        }
+.marche[data-place="2"] .socle { height: 5rem
+        ; background: linear-gradient(180deg, #d7dbe3, #8b909a)
+        }
+.marche[data-place="3"] .socle { height: 3.6rem
+        ; background: linear-gradient(180deg, #c98a4b, #7d5527)
+        }
+.marche[data-place="1"] .points { color: #ffd76a; }
+.marche[data-place="2"] .points { color: #d7dbe3; }
+.marche[data-place="3"] .points { color: #c98a4b; }
+
+.podium-vide {
+    grid-column: 1 / -1;
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--muted);
+    background: var(--cabinet);
+    border: 1px dashed var(--edge);
+    border-radius: var(--radius);
+}
+
+/* --- Les paliers -------------------------------------------------------- */
+
+.medaille {
+    display: inline-block;
+    padding: 0.12rem 0.5rem;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    font-family: var(--marquee-face);
+    font-size: var(--t-xs);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    color: var(--muted);
+}
+/* Sept paliers, sept couleurs, et elles montent du gris au jaune d'enseigne.
+   Le niveau 0 reste gris : NON CLASSE n'est pas un echec, c'est un etat qui
+   dure trois parties, et lui donner du rouge le ferait lire autrement. */
+.medaille[data-niveau="1"] { color: #9aa3b4; border-color: #39414f; }
+.medaille[data-niveau="2"] { color: #7fc7a8; border-color: #2f5546; }
+.medaille[data-niveau="3"] { color: #6fb8d8; border-color: #2b4a5b; }
+.medaille[data-niveau="4"] { color: #a98fe0; border-color: #453764; }
+.medaille[data-niveau="5"] { color: #e0c07a; border-color: #5e4d22; }
+.medaille[data-niveau="6"] { color: #ff8a5c; border-color: #6b3520; }
+.medaille[data-niveau="7"] {
+    color: var(--hall);
+    background: var(--amber);
+    border-color: var(--amber);
+}
+
+.echelle { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.8rem 0 0; padding: 0; list-style: none; }
+.echelle li { display: flex; align-items: center; gap: 0.3rem; }
+.echelle .seuil { color: var(--muted); font-size: var(--t-xs); font-variant-numeric: tabular-nums; }
+.echelle li[data-atteint="oui"] .seuil { color: var(--marquee); }
+
+/* La jauge vers le palier suivant. Deux pixels de haut : elle informe sans
+   reclamer l'ecran, comme celle de la mise a jour dans le jeu. */
+.jauge {
+    height: 4px;
+    background: #1a1f29;
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0.5rem 0 0.3rem;
+}
+.jauge span { display: block; height: 100%; background: var(--amber); }
+
+/* --- La fiche d'un joueur ---------------------------------------------- */
+
+.fiche {
+    background: var(--cabinet);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 1.1rem 1rem;
+    margin-bottom: var(--gap);
+}
+.fiche h2 { font-size: var(--t-2xl); margin-bottom: 0.2rem
+        ; overflow-wrap: anywhere
+        }
+.fiche .depuis { color: var(--muted); font-size: var(--t-sm); }
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 0.7rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+.stats li {
+    background: var(--cabinet-2);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    padding: 0.7rem 0.8rem;
+}
+.stats .valeur {
+    display: block;
+    font-family: var(--display);
+    font-size: var(--t-2xl);
+    color: var(--amber);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+.stats .quoi { display: block; color: var(--muted); font-size: var(--t-xs); }
+
+/* Le conseil : la seule ligne de la page qui dit quoi faire. Elle a droit a
+   la couleur d'accent, et elle est seule a l'avoir. */
+.conseil {
+    display: block;
+    margin-top: 1rem;
+    padding: 0.7rem 0.9rem;
+    background: rgba(255, 176, 31, 0.08);
+    border-left: 3px solid var(--amber);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: #e6d6b4;
+    font-size: var(--t-sm);
+}
+.conseil strong { color: var(--amber); }
+
+@media (max-width: 620px) {
+    /* Sur un telephone, trois marches cote a cote donnent trois colonnes de
+       cent pixels ou plus rien ne se lit. On empile, dans l'ordre du
+       classement, et les socles gardent leurs hauteurs : c'est ce qui reste
+       du podium. */
+    .podium { grid-template-columns: 1fr; }
+    .podium .marche:nth-child(1),
+    .podium .marche:nth-child(2),
+    .podium .marche:nth-child(3) { order: 0; }
+}
+
+/* « personne » dans la colonne des meneurs. En jaune d'enseigne parce que
+   c'est une OFFRE et non un manque : une borne que personne ne tient est une
+   premiere place a prendre, et c'est ce que le texte au-dessus promet. Sans
+   couleur, elle se lisait comme une case vide. */
+.vide-mini {
+    color: var(--amber);
+    font-size: var(--t-sm);
+}

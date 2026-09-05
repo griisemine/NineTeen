@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Nineteen
+Comment=La salle d'arcade — huit jeux, dix-neuf bornes
+Exec=nineteen
+Icon=nineteen
+Terminal=false
+Categories=Game;ArcadeGame;

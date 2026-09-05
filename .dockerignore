@@ -1,0 +1,17 @@
+# Ce que `docker build` NE DOIT PAS transferer.
+#
+# Le service « paquets » de server/docker-compose.yml prend la racine du depot
+# pour contexte, parce que l'image qui compile le jeu doit voir tout l'arbre.
+# Sans ce fichier, le demon recevrait aussi build/ (plusieurs gigaoctets d'objets
+# et de paquets deja fabriques) et .git/, a chaque construction d'image.
+#
+# packaging/linux/Dockerfile.build ne COPIE rien : l'arbre lui arrive par un
+# montage a l'execution, pas par le contexte. Ce qui est exclu ici n'en manque
+# donc a personne.
+.git/
+build/
+telechargements/
+out/
+install/
+cmake-build-*/
+**/.DS_Store

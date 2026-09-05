@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Affectation des jeux aux bornes de la salle.",
+    "",
+    "Pourquoi ce fichier existe : les 15 bornes du modèle Blender ont été dupliquées",
+    "à partir d'une seule et portent toutes le nom « FLAPPY_BIRD_HARD.NNN ». Le jeu",
+    "hébergé par une borne n'est donc pas déductible du modèle 3D. obj2gltf les",
+    "numérote par ordre spatial stable (X croissant, puis Z) dans salle.lights.json,",
+    "et c'est ici qu'on dit ce que chacune contient.",
+    "",
+    "La disposition reprend celle de la V1 (legacy/room/room.c:171-177) : chaque jeu",
+    "occupe une paire de bornes face à face, la rangée du fond en difficile, celle de",
+    "devant en facile. La V1 réservait trois emplacements « COMMING SOON » jamais",
+    "remplis ; Pac-Man et Piano, dont le code existait dans games/ sans être branché",
+    "à la salle, y prennent enfin place."
+  ],
+
+  "cabinets": [
+    { "slot": 1,  "game": "envol",    "difficulty": "hard", "marquee": "ecran_envol_dur",     "attract": true },
+    { "slot": 0,  "game": "envol",    "difficulty": "easy", "marquee": "ecran_envol_facile",  "attract": true },
+
+    { "slot": 2,  "game": "aplomb",   "difficulty": "hard", "marquee": "marquee_aplomb",      "attract": true },
+    { "slot": 3,  "game": "aplomb",   "difficulty": "easy", "marquee": "marquee_aplomb",      "attract": true },
+
+    { "slot": 5,  "game": "asteroid", "difficulty": "hard", "marquee": "asteroid_font_hard", "attract": true },
+    { "slot": 4,  "game": "asteroid", "difficulty": "easy", "marquee": "asteroid_font",      "attract": true },
+
+    { "slot": 6,  "game": "shooter",  "difficulty": "hard", "marquee": "shooter_font",       "attract": true },
+    { "slot": 7,  "game": "shooter",  "difficulty": "easy", "marquee": "shooter_font",       "attract": true },
+
+    { "slot": 9,  "game": "snake",    "difficulty": "hard", "marquee": "snake_font",         "attract": true },
+    { "slot": 10, "game": "snake",    "difficulty": "easy", "marquee": "snake_font",         "attract": true },
+
+    { "slot": 12, "game": "demineur", "difficulty": "hard", "marquee": "demineur_font",      "attract": true },
+    { "slot": 11, "game": "demineur", "difficulty": "easy", "marquee": "demineur_font",      "attract": true },
+
+    { "slot": 13, "game": "dedale",   "difficulty": "normal", "marquee": "coming_soon",      "attract": true },
+    { "slot": 14, "game": "piano",    "difficulty": "normal", "marquee": "coming_soon",      "attract": true },
+
+    { "slot": 8,  "game": "leaderboard", "difficulty": "none", "marquee": "leaderboard_font", "attract": false }
+  ],
+
+  "screen": {
+    "_comment": [
+      "Emprise de l'écran dans la boîte englobante de la borne, en fractions.",
+      "L'écran est rendu en direct (le mini-jeu tourne dedans en mode attract) et",
+      "sert de source lumineuse émissive : c'est lui qui éclaire le joueur qui",
+      "s'approche. Ces valeurs se règlent une fois pour toutes les bornes, puisque",
+      "elles sont toutes issues du même modèle."
+    ],
+    "originFraction": [0.14, 0.46, 0.02],
+    "sizeFraction":   [0.72, 0.30, 0.0],
+    "emissiveBoost":  2.4,
+    "curvature":      0.06,
+    "scanlineStrength": 0.35
+  }
+}

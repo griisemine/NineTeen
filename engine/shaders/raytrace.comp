@@ -1,0 +1,575 @@
+#version 450
+/*
+ * raytrace.comp — la couche « RTX » de Nineteen.
+ *
+ * Traverse en compute le BVH de la salle, construit hors-ligne par bvhbake, et
+ * produit trois choses que la rasterisation ne sait pas faire correctement :
+ *
+ *   - des **ombres** exactes pour chacune des 25 sources, sans shadow map,
+ *     donc sans acné de profondeur, sans cascade à régler et sans limite de
+ *     nombre de lumières ;
+ *   - une **illumination globale** à un rebond : la lumière verte d'une borne
+ *     colore la moquette devant elle, ce qui est précisément ce qui manquait à
+ *     la salle d'origine ;
+ *   - des **réflexions** sur le sol ciré et le verre des bornes.
+ *
+ * Pourquoi du compute et pas les extensions matérielles de ray tracing : la
+ * portabilité était une exigence du projet. Une traversée en compute tourne sur
+ * Vulkan, Metal et Direct3D 12 sans distinction, donc sur les trois plateformes
+ * cibles, y compris les Mac. On perd les unités RT dédiées des cartes récentes ;
+ * on gagne de tourner partout, et la salle est assez petite (102 231 triangles,
+ * 62 495 nœuds) pour que la traversée logicielle tienne le temps réel.
+ *
+ * L'échantillonnage est stochastique : un ou quatre rayons par pixel selon la
+ * qualité, accumulés dans le temps. Caméra immobile, l'image converge en
+ * quelques dizaines d'images ; caméra en mouvement, l'historique est rejeté par
+ * reprojection et le bruit résiduel est filtré spatialement.
+ */
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+/* --- set 0 : textures échantillonnées puis tampons en lecture seule ---
+ *
+ * L'albédo du G-buffer était lié ici et n'a jamais été lu : le rebond indirect
+ * se colore avec l'albédo du matériau du BVH, pas avec celui du pixel d'origine.
+ * L'optimiseur SPIR-V supprimait donc la déclaration, et le moteur liait une
+ * quatrième texture que personne n'échantillonnait. Trouvé en traduisant vers
+ * MSL, où un emplacement mort décale tous les suivants. */
+layout(set = 0, binding = 0) uniform sampler2D u_depth;
+layout(set = 0, binding = 1) uniform sampler2D u_normalRM;
+layout(set = 0, binding = 2) uniform sampler2D u_history;      /* accumulation précédente */
+
+struct BvhNode {
+    vec3 bmin;  uint leftFirst;
+    vec3 bmax;  uint triCount;
+};
+
+struct BvhTri {
+    vec3 v0;     uint material;
+    vec3 e1;     uint flags;
+    vec3 e2;     uint _pad0;
+    vec3 normal; uint _pad1;
+};
+
+struct BvhMaterial {
+    vec3  albedo;   float roughness;
+    vec3  emissive; float metallic;
+};
+
+struct Light {
+    vec3  position;  float range;
+    vec3  color;     float intensity;
+    vec3  direction; float spotCos;
+    int   type;      int   shadowIndex;
+    /* Même disposition que `ns_light_gpu` et que `lighting.frag`. Le rayon de
+     * source ne sert pas ici — cette passe lance des rayons d'ombre, elle
+     * n'intègre pas la décroissance — mais le champ doit y être : une structure
+     * qui diverge d'un mot entre deux shaders décale tout ce qui suit, en
+     * silence. */
+    float sourceRadius;
+    float _pad;
+};
+
+/* Les tampons suivent immédiatement les textures dans le même set : SDL numérote
+ * les emplacements à la file, donc retirer une texture décale ces bindings. */
+layout(std430, set = 0, binding = 3) readonly buffer Nodes     { BvhNode     nodes[]; };
+layout(std430, set = 0, binding = 4) readonly buffer Tris      { BvhTri      tris[]; };
+layout(std430, set = 0, binding = 5) readonly buffer Materials { BvhMaterial materials[]; };
+layout(std430, set = 0, binding = 6) readonly buffer Lights    { Light       lights[]; };
+
+/* --- set 1 : cibles en écriture --- */
+layout(rgba16f, set = 1, binding = 0) uniform writeonly image2D o_visibility;  /* r : ombres, gba : GI */
+layout(rgba16f, set = 1, binding = 1) uniform writeonly image2D o_reflections;
+
+/*
+ * Ombres des quatre lumières dominantes du pixel, empaquetées.
+ *
+ * Un canal par lumière : `(indice << 8) | visibilité sur 8 bits`, avec l'indice
+ * 255 pour « pas de lumière ». NS_MAX_LIGHTS vaut 128, donc huit bits d'indice
+ * suffisent et il en reste huit pour la visibilité.
+ *
+ * Une seule cible entière plutôt que deux (une pour les visibilités, une pour
+ * les indices) : `fullscreen_pass` plafonne à huit textures, et la passe
+ * d'éclairage en lie déjà sept. Deux cibles auraient dépassé.
+ */
+layout(rgba16ui, set = 1, binding = 2) uniform writeonly uimage2D o_lightShadow;
+
+/* --- set 2 : uniformes --- */
+layout(set = 2, binding = 0) uniform Params {
+    mat4  u_invViewProj;
+    vec4  u_cameraPos;      /* xyz : position, w : temps */
+    vec4  u_ambient;
+    ivec4 u_config;         /* x : lumières, y : mode RT, z : rayons/pixel, w : n° d'image */
+    vec4  u_accum;          /* x : poids de l'historique, y : largeur, z : hauteur, w : nb de matériaux */
+};
+
+/* Nombre de matériaux, passé par le CPU plutôt que lu par `materials.length()`.
+ *
+ * Ce n'est pas une préférence de style : en GLSL/SPIR-V la longueur d'un tableau
+ * de taille variable se lit gratuitement, mais en MSL elle n'existe pas — le
+ * traducteur la remplace par un tampon de tailles supplémentaire, à un
+ * emplacement que SDL ne lie jamais. Le shader compilerait, tournerait, et
+ * indexerait dans le vide sur Metal. Le CPU connaît ce nombre : il le donne. */
+uint materialCount() { return uint(max(u_accum.w, 1.0)); }
+
+/* Empaquetage d'une lumière dominante : indice sur huit bits de poids fort,
+ * visibilité sur huit bits de poids faible. 255 en indice = « aucune ». */
+uvec4 packLightShadow(int idx[4], float vis[4])
+{
+    uvec4 o;
+    for (int k = 0; k < 4; ++k) {
+        uint index = (idx[k] < 0) ? 255u : uint(idx[k]);
+        uint v = uint(clamp(vis[k], 0.0, 1.0) * 255.0 + 0.5);
+        o[k] = (index << 8) | v;
+    }
+    return o;
+}
+
+const float PI = 3.14159265359;
+const float RAY_EPSILON = 2e-3;      /* décollement de la surface, évite l'auto-intersection */
+const int   MAX_STACK   = 32;
+
+/* ========================================================================== */
+/* Traversée                                                                  */
+/* ========================================================================== */
+
+/* Inverse composante par composante, avec un epsilon signé sur les axes nuls.
+ * La méthode des dalles gère correctement les infinis, mais 0/0 donnerait un NaN
+ * qui ferait échouer silencieusement tous les tests de boîte. */
+vec3 safeInverse(vec3 d)
+{
+    const float e = 1e-8;
+    vec3 s = vec3(d.x >= 0.0 ? 1.0 : -1.0, d.y >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+    vec3 m = max(abs(d), vec3(e)) * s;
+    return 1.0 / m;
+}
+
+bool slabTest(vec3 origin, vec3 invDir, vec3 bmin, vec3 bmax, float tmax, out float tenter)
+{
+    vec3 t1 = (bmin - origin) * invDir;
+    vec3 t2 = (bmax - origin) * invDir;
+    vec3 lo = min(t1, t2);
+    vec3 hi = max(t1, t2);
+    float tmin = max(max(lo.x, lo.y), lo.z);
+    float tex  = min(min(hi.x, hi.y), hi.z);
+    tenter = max(tmin, 0.0);
+    return tex >= tenter && tmin <= tmax;
+}
+
+/* Renvoie true au premier obstacle rencontré. Deux fois plus rapide qu'un
+ * parcours complet, et c'est 90 % des rayons lancés (ombres, occlusion). */
+bool traceOccluded(vec3 origin, vec3 dir, float maxDist)
+{
+    vec3 invDir = safeInverse(dir);
+
+    uint stack[MAX_STACK];
+    int sp = 0;
+    stack[sp++] = 0u;
+
+    while (sp > 0) {
+        uint index = stack[--sp];
+        BvhNode node = nodes[index];
+
+        float tenter;
+        if (!slabTest(origin, invDir, node.bmin, node.bmax, maxDist, tenter)) continue;
+
+        if (node.triCount > 0u) {
+            for (uint i = 0u; i < node.triCount; ++i) {
+                BvhTri tri = tris[node.leftFirst + i];
+
+                vec3 p = cross(dir, tri.e2);
+                float det = dot(tri.e1, p);
+                if (abs(det) < 1e-9) continue;
+                float inv = 1.0 / det;
+
+                vec3 tv = origin - tri.v0;
+                float u = dot(tv, p) * inv;
+                if (u < 0.0 || u > 1.0) continue;
+
+                vec3 q = cross(tv, tri.e1);
+                float v = dot(dir, q) * inv;
+                if (v < 0.0 || u + v > 1.0) continue;
+
+                float t = dot(tri.e2, q) * inv;
+                if (t > RAY_EPSILON && t < maxDist) return true;
+            }
+        } else if (sp + 2 <= MAX_STACK) {
+            stack[sp++] = node.leftFirst;
+            stack[sp++] = node.leftFirst + 1u;
+        }
+    }
+    return false;
+}
+
+struct Hit {
+    float t;
+    vec3  normal;
+    uint  material;
+    bool  hit;
+};
+
+Hit traceClosest(vec3 origin, vec3 dir, float maxDist)
+{
+    Hit h;
+    h.t = maxDist;
+    h.normal = vec3(0.0, 1.0, 0.0);
+    h.material = 0u;
+    h.hit = false;
+
+    vec3 invDir = safeInverse(dir);
+
+    uint stack[MAX_STACK];
+    int sp = 0;
+    stack[sp++] = 0u;
+
+    while (sp > 0) {
+        uint index = stack[--sp];
+        BvhNode node = nodes[index];
+
+        float tenter;
+        if (!slabTest(origin, invDir, node.bmin, node.bmax, h.t, tenter)) continue;
+        if (tenter > h.t) continue;
+
+        if (node.triCount > 0u) {
+            for (uint i = 0u; i < node.triCount; ++i) {
+                BvhTri tri = tris[node.leftFirst + i];
+
+                vec3 p = cross(dir, tri.e2);
+                float det = dot(tri.e1, p);
+                if (abs(det) < 1e-9) continue;
+                float inv = 1.0 / det;
+
+                vec3 tv = origin - tri.v0;
+                float u = dot(tv, p) * inv;
+                if (u < 0.0 || u > 1.0) continue;
+
+                vec3 q = cross(tv, tri.e1);
+                float v = dot(dir, q) * inv;
+                if (v < 0.0 || u + v > 1.0) continue;
+
+                float t = dot(tri.e2, q) * inv;
+                if (t > RAY_EPSILON && t < h.t) {
+                    h.t = t;
+                    h.normal = tri.normal;
+                    h.material = tri.material;
+                    h.hit = true;
+                }
+            }
+        } else if (sp + 2 <= MAX_STACK) {
+            stack[sp++] = node.leftFirst;
+            stack[sp++] = node.leftFirst + 1u;
+        }
+    }
+    return h;
+}
+
+/* ========================================================================== */
+/* Échantillonnage                                                            */
+/* ========================================================================== */
+
+vec3 decodeOctahedral(vec2 e)
+{
+    vec3 n = vec3(e.xy, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) {
+        n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    }
+    return normalize(n);
+}
+
+vec3 worldFromDepth(vec2 uv, float depth)
+{
+    vec4 clip = vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
+    vec4 world = u_invViewProj * clip;
+    return world.xyz / world.w;
+}
+
+/* Hachage entier : décorrèle les pixels voisins sans table de bruit. */
+uint hashUint(uint x)
+{
+    x ^= x >> 17; x *= 0xed5ad4bbu;
+    x ^= x >> 11; x *= 0xac4c1b51u;
+    x ^= x >> 15; x *= 0x31848babu;
+    x ^= x >> 14;
+    return x;
+}
+
+float randomFloat(inout uint state)
+{
+    state = hashUint(state);
+    return float(state) * (1.0 / 4294967296.0);
+}
+
+/* Direction tirée dans l'hémisphère, densité proportionnelle au cosinus : c'est
+ * exactement la distribution d'un rebond diffus, donc l'estimateur converge
+ * beaucoup plus vite qu'un tirage uniforme. */
+vec3 cosineHemisphere(vec3 n, inout uint rng)
+{
+    float u1 = randomFloat(rng);
+    float u2 = randomFloat(rng);
+    float r = sqrt(u1);
+    float phi = 2.0 * PI * u2;
+
+    vec3 up = abs(n.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 t = normalize(cross(up, n));
+    vec3 b = cross(n, t);
+    return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u1)));
+}
+
+/* Rayon de source : PROPRIÉTÉ DU LUMINAIRE, pas du moteur.
+ *
+ * Cette fonction employait une constante de 0,22 m — l'ampoule d'une applique —
+ * alors que `ns_light_gpu` porte le champ par lumière depuis A4 et que
+ * `lighting.frag` le lit. Un pavé lumineux de faux plafond fait 1,20 m : traité
+ * comme une ampoule, il pesait beaucoup trop lourd dans le classement des quatre
+ * sources dominantes, et les ombres retenues n'étaient pas celles qui comptent.
+ * Deux formules d'atténuation dans le même moteur finissent toujours par
+ * diverger ; celle-ci est maintenant celle de la passe d'éclairage. */
+float lightAttenuation(float dist, float range, float sourceRadius)
+{
+    float r = max(sourceRadius, 0.05);
+    float d2 = max(dist * dist, r * r);
+    float w = clamp(1.0 - pow(dist / max(range, 0.001), 4.0), 0.0, 1.0);
+    return w * w / (4.0 * PI * d2);
+}
+
+/* Éclairage direct d'un point, ombres comprises. Sert au point vu par la caméra
+ * et au point atteint par le rebond d'illumination globale. */
+vec3 directLighting(vec3 pos, vec3 normal, vec3 albedo, bool traceShadows, inout uint rng)
+{
+    vec3 sum = vec3(0.0);
+    int count = min(u_config.x, 128);
+
+    for (int i = 0; i < count; ++i) {
+        Light li = lights[i];
+        vec3 toLight = li.position - pos;
+        float dist = length(toLight);
+        if (dist > li.range) continue;
+
+        vec3 L = toLight / max(dist, 1e-4);
+        float ndl = dot(normal, L);
+        if (ndl <= 0.0) continue;
+
+        if (traceShadows) {
+            /* Origine décollée le long de la normale : sinon le rayon ressort
+             * de la surface elle-même et tout est dans l'ombre. */
+            vec3 origin = pos + normal * RAY_EPSILON * 4.0;
+            if (traceOccluded(origin, L, dist - RAY_EPSILON * 8.0)) continue;
+        }
+        sum += albedo / PI * li.color * li.intensity * lightAttenuation(dist, li.range, li.sourceRadius) * ndl;
+    }
+    return sum;
+}
+
+/* ========================================================================== */
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = ivec2(u_accum.y, u_accum.z);
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+
+    float depth = texture(u_depth, uv).r;
+    if (depth <= 0.0) {
+        /* Ciel : entièrement visible, aucun indirect, aucune réflexion.
+         * Les quatre emplacements sont marqués vides — la passe d'éclairage ne
+         * lit de toute façon rien ici, mais laisser de la mémoire indéfinie
+         * dans une cible est exactement ce qui a produit un écran noir en M4. */
+        imageStore(o_visibility, pixel, vec4(1.0, 0.0, 0.0, 1.0));
+        imageStore(o_reflections, pixel, vec4(0.0));
+        imageStore(o_lightShadow, pixel, uvec4(255u << 8));
+        return;
+    }
+
+    vec4 nrm = texture(u_normalRM, uv);
+    vec3 N = decodeOctahedral(nrm.xy);
+    float roughness = clamp(nrm.z, 0.03, 1.0);
+    float metallic  = clamp(nrm.w, 0.0, 1.0);
+
+    vec3 P = worldFromDepth(uv, depth);
+    vec3 V = normalize(u_cameraPos.xyz - P);
+
+    /* Graine décorrélée en espace et dans le temps : sans le numéro d'image,
+     * le bruit serait figé et l'accumulation ne convergerait jamais. */
+    uint rng = hashUint(uint(pixel.x) * 73856093u
+                      ^ uint(pixel.y) * 19349663u
+                      ^ uint(u_config.w) * 83492791u);
+
+    int mode = u_config.y;                 /* 1 : ombres, 2 : + réflexions, 3 : + GI */
+    int rays = max(u_config.z, 1);
+
+    /*
+     * --- Ombres ---
+     *
+     * Deux résultats sortent d'ici, et c'est le cœur du palier A5.
+     *
+     * 1. `shadow`, la fraction non occultée pondérée par la contribution de
+     *    chaque source. C'est ce que la passe d'éclairage appliquait à TOUTES
+     *    les lumières, ce qui est faux : un point à l'ombre d'un pilier perdait
+     *    aussi la lumière des écrans de bornes, à l'autre bout de la salle.
+     *    On la garde pour les lumières faibles, où l'erreur est bornée.
+     *
+     * 2. `topIndex[4]` / `topVisible[4]`, la visibilité EXACTE des quatre
+     *    lumières qui contribuent le plus à ce pixel. C'est ce qui supprime
+     *    l'assombrissement global du lancer de rayons.
+     *
+     * Le coût est nul : la boucle lançait déjà un rayon par lumière et jetait
+     * le résultat individuel. On se contente de garder les quatre qui comptent.
+     * Une première passe classe les lumières sans lancer un seul rayon, une
+     * seconde lance les rayons — et vise le CENTRE de la source pour les quatre
+     * retenues. Un rayon décalé au hasard donnerait une valeur binaire qui
+     * change à chaque image, donc une ombre qui grésille, puisque cette cible-ci
+     * n'est pas accumulée dans le temps.
+     */
+    float shadow = 1.0;
+    int   topIndex[4]   = int[4](-1, -1, -1, -1);
+    float topVisible[4] = float[4](1.0, 1.0, 1.0, 1.0);
+    float topWeight[4]  = float[4](0.0, 0.0, 0.0, 0.0);
+    {
+        int count = min(u_config.x, 128);
+
+        /* Passe 1 : classement, sans aucun rayon. */
+        for (int i = 0; i < count; ++i) {
+            Light li = lights[i];
+            vec3 toLight = li.position - P;
+            float dist = length(toLight);
+            if (dist > li.range) continue;
+            vec3 L = toLight / max(dist, 1e-4);
+            float ndl = dot(N, L);
+            if (ndl <= 0.0) continue;
+
+            float w = ndl * li.intensity * lightAttenuation(dist, li.range, li.sourceRadius);
+
+            /* Insertion triée dans un tableau de quatre. Déroulée : un indice
+             * variable sur un tableau local force certains compilateurs à le
+             * reporter en mémoire, ce qui coûte plus cher que les seize
+             * comparaisons. */
+            if (w > topWeight[0]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = topWeight[1]; topIndex[2] = topIndex[1];
+                topWeight[1] = topWeight[0]; topIndex[1] = topIndex[0];
+                topWeight[0] = w;            topIndex[0] = i;
+            } else if (w > topWeight[1]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = topWeight[1]; topIndex[2] = topIndex[1];
+                topWeight[1] = w;            topIndex[1] = i;
+            } else if (w > topWeight[2]) {
+                topWeight[3] = topWeight[2]; topIndex[3] = topIndex[2];
+                topWeight[2] = w;            topIndex[2] = i;
+            } else if (w > topWeight[3]) {
+                topWeight[3] = w;            topIndex[3] = i;
+            }
+        }
+
+        /*
+         * Passe 2 : les rayons — UNIQUEMENT pour les quatre retenues.
+         *
+         * C'était une par lumière à portée, soit une trentaine dans ce hall.
+         * Chaque rayon traverse un BVH de 8 913 nœuds : à 1280x720, cela faisait
+         * **4 milliards de tests de boîte par image**, et le jeu tournait à une
+         * image par seconde sur un M1 Pro. Je ne l'avais pas vu parce que mes
+         * mesures headless n'attendaient jamais le GPU.
+         *
+         * Les quatre dominantes suffisent : les autres sont faibles par
+         * construction, et leur prêter la visibilité moyenne des dominantes est
+         * une approximation bornée — bien plus honnête qu'un jeu injouable.
+         */
+        float lit = 0.0, total = 0.0;
+        vec3 origin = P + N * RAY_EPSILON * 4.0;
+        for (int k = 0; k < 4; ++k) {
+            if (topIndex[k] < 0) continue;
+            Light li = lights[topIndex[k]];
+            vec3 toLight = li.position - P;
+            float dist = length(toLight);
+            vec3 L = toLight / max(dist, 1e-4);
+
+            const float w = topWeight[k];
+            total += w;
+
+            /* Visée au centre de la source : stable d'une image à l'autre, ce
+             * qui permet de ne PAS accumuler cette cible dans le temps. */
+            float visible = traceOccluded(origin, L, dist - RAY_EPSILON * 8.0) ? 0.0 : 1.0;
+            lit += w * visible;
+            topVisible[k] = visible;
+        }
+        shadow = (total > 1e-5) ? (lit / total) : 1.0;
+    }
+
+    /* --- Illumination globale, un rebond --- */
+    vec3 indirect = vec3(0.0);
+    if (mode >= 3) {
+        for (int s = 0; s < rays; ++s) {
+            vec3 dir = cosineHemisphere(N, rng);
+            vec3 origin = P + N * RAY_EPSILON * 4.0;
+            Hit h = traceClosest(origin, dir, 25.0);
+
+            if (!h.hit) {
+                indirect += u_ambient.rgb * u_ambient.a;
+                continue;
+            }
+            vec3 hitPos = origin + dir * h.t;
+            vec3 hitN = dot(h.normal, dir) > 0.0 ? -h.normal : h.normal;
+            BvhMaterial m = materials[min(h.material, materialCount() - 1u)];
+
+            /* Le rebond n'est pas lui-même ombré : deux niveaux de rayons
+             * d'ombre coûteraient le double pour une différence invisible sur
+             * une contribution déjà indirecte. */
+            vec3 bounce = directLighting(hitPos, hitN, m.albedo, false, rng) + m.emissive;
+            indirect += bounce;
+        }
+        indirect /= float(rays);
+    } else {
+        indirect = u_ambient.rgb * u_ambient.a;
+    }
+
+    /* --- Réflexions --- */
+    vec3 reflection = vec3(0.0);
+    if (mode >= 2) {
+        /* Les surfaces très rugueuses ne réfléchissent rien de lisible : les
+         * traiter coûterait cher pour du bruit. */
+        if (roughness < 0.55) {
+            vec3 R = reflect(-V, N);
+            /* Perturbation proportionnelle à la rugosité : un sol ciré réfléchit
+             * net, un sol mat étale le reflet. */
+            if (roughness > 0.05) {
+                vec3 jitter = cosineHemisphere(R, rng);
+                R = normalize(mix(R, jitter, roughness * roughness * 1.5));
+            }
+            vec3 origin = P + N * RAY_EPSILON * 4.0;
+            Hit h = traceClosest(origin, R, 40.0);
+            if (h.hit) {
+                vec3 hitPos = origin + R * h.t;
+                vec3 hitN = dot(h.normal, R) > 0.0 ? -h.normal : h.normal;
+                BvhMaterial m = materials[min(h.material, materialCount() - 1u)];
+                reflection = directLighting(hitPos, hitN, m.albedo, true, rng) + m.emissive;
+            } else {
+                reflection = u_ambient.rgb * u_ambient.a * 0.5;
+            }
+            /* Un métal réfléchit tout, un diélectrique presque rien de face. */
+            reflection *= mix(0.35, 1.0, metallic);
+        }
+    }
+
+    /* --- Accumulation temporelle ---
+     * L'historique est mélangé au nouvel échantillon. Caméra immobile, le poids
+     * de l'historique est élevé et l'image converge ; en mouvement, le CPU le
+     * réduit à zéro, car un historique reprojeté à tort produit des traînées
+     * bien plus visibles que le bruit qu'il supprime. */
+    vec4 current = vec4(shadow, indirect);
+    float historyWeight = clamp(u_accum.x, 0.0, 0.97);
+    if (historyWeight > 0.0) {
+        vec4 previous = texture(u_history, uv);
+        current = mix(current, previous, historyWeight);
+    }
+
+    imageStore(o_visibility, pixel, current);
+    imageStore(o_reflections, pixel, vec4(reflection, 1.0));
+
+    /* Les ombres par lumière ne sont PAS accumulées : leurs rayons visent le
+     * centre de la source, donc le résultat est déjà stable d'une image à
+     * l'autre. Les accumuler demanderait de relire l'image précédente et de
+     * vérifier que les quatre indices n'ont pas changé — de la complexité pour
+     * lisser un signal qui ne bouge pas. */
+    imageStore(o_lightShadow, pixel, packLightShadow(topIndex, topVisible));
+}

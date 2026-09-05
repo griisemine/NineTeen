@@ -1,0 +1,352 @@
+{
+  "_": "PRODUIT PAR tools/site-media.py — ne pas modifier à la main.",
+  "version": "17.1.0",
+  "bornes": [
+    {
+      "slot": 1,
+      "nom": "borne_arcade_1",
+      "jeu": "envol",
+      "libelle": "Envol",
+      "difficulte": "difficile",
+      "image": "/img/borne-01.jpg",
+      "alt": "Borne 1 : enseigne Envol, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 2,
+      "nom": "borne_arcade_2",
+      "jeu": "aplomb",
+      "libelle": "Aplomb",
+      "difficulte": "difficile",
+      "image": "/img/borne-02.jpg",
+      "alt": "Borne 2 : enseigne Aplomb, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 3,
+      "nom": "borne_arcade_3",
+      "jeu": "asteroid",
+      "libelle": "Asteroid",
+      "difficulte": "difficile",
+      "image": "/img/borne-03.jpg",
+      "alt": "Borne 3 : enseigne Asteroid, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 4,
+      "nom": "borne_arcade_4",
+      "jeu": "demineur",
+      "libelle": "Démineur",
+      "difficulte": "facile",
+      "image": "/img/borne-04.jpg",
+      "alt": "Borne 4 : enseigne Démineur, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 5,
+      "nom": "borne_arcade_5",
+      "jeu": "snake",
+      "libelle": "Snake",
+      "difficulte": "facile",
+      "image": "/img/borne-05.jpg",
+      "alt": "Borne 5 : enseigne Snake, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 6,
+      "nom": "borne_arcade_6",
+      "jeu": "shooter",
+      "libelle": "Shooter",
+      "difficulte": "facile",
+      "image": "/img/borne-06.jpg",
+      "alt": "Borne 6 : enseigne Shooter, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 7,
+      "nom": "borne_arcade_7",
+      "jeu": "shooter",
+      "libelle": "Shooter",
+      "difficulte": "difficile",
+      "image": "/img/borne-07.jpg",
+      "alt": "Borne 7 : enseigne Shooter, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 8,
+      "nom": "borne_arcade_8",
+      "jeu": "snake",
+      "libelle": "Snake",
+      "difficulte": "difficile",
+      "image": "/img/borne-08.jpg",
+      "alt": "Borne 8 : enseigne Snake, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 9,
+      "nom": "borne_arcade_9",
+      "jeu": "demineur",
+      "libelle": "Démineur",
+      "difficulte": "difficile",
+      "image": "/img/borne-09.jpg",
+      "alt": "Borne 9 : enseigne Démineur, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 10,
+      "nom": "borne_arcade_10",
+      "jeu": "asteroid",
+      "libelle": "Asteroid",
+      "difficulte": "facile",
+      "image": "/img/borne-10.jpg",
+      "alt": "Borne 10 : enseigne Asteroid, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 11,
+      "nom": "borne_arcade_11",
+      "jeu": "aplomb",
+      "libelle": "Aplomb",
+      "difficulte": "facile",
+      "image": "/img/borne-11.jpg",
+      "alt": "Borne 11 : enseigne Aplomb, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 12,
+      "nom": "borne_arcade_12",
+      "jeu": "envol",
+      "libelle": "Envol",
+      "difficulte": "facile",
+      "image": "/img/borne-12.jpg",
+      "alt": "Borne 12 : enseigne Envol, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 13,
+      "nom": "borne_arcade_13",
+      "jeu": "dedale",
+      "libelle": "Dédale",
+      "difficulte": "normal",
+      "image": "/img/borne-13.jpg",
+      "alt": "Borne 13 : enseigne Dédale, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 14,
+      "nom": "borne_arcade_14",
+      "jeu": "dedale",
+      "libelle": "Dédale",
+      "difficulte": "normal",
+      "image": "/img/borne-14.jpg",
+      "alt": "Borne 14 : enseigne Dédale, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 15,
+      "nom": "borne_arcade_15",
+      "jeu": "piano",
+      "libelle": "Piano",
+      "difficulte": "normal",
+      "image": "/img/borne-15.jpg",
+      "alt": "Borne 15 : enseigne Piano, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 16,
+      "nom": "borne_arcade_16",
+      "jeu": "piano",
+      "libelle": "Piano",
+      "difficulte": "normal",
+      "image": "/img/borne-16.jpg",
+      "alt": "Borne 16 : enseigne Piano, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 17,
+      "nom": "borne_arcade_17",
+      "jeu": "piano",
+      "libelle": "Piano",
+      "difficulte": "normal",
+      "image": "/img/borne-17.jpg",
+      "alt": "Borne 17 : enseigne Piano, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 18,
+      "nom": "borne_arcade_18",
+      "jeu": "dedale",
+      "libelle": "Dédale",
+      "difficulte": "normal",
+      "image": "/img/borne-18.jpg",
+      "alt": "Borne 18 : enseigne Dédale, le jeu tournant dans la dalle."
+    },
+    {
+      "slot": 19,
+      "nom": "borne_classement",
+      "jeu": "leaderboard",
+      "libelle": "Classement",
+      "difficulte": "normal",
+      "image": "/img/borne-19.jpg",
+      "alt": "Borne 19 : enseigne Classement, le jeu tournant dans la dalle."
+    }
+  ],
+  "jeux": [
+    {
+      "id": "envol",
+      "nom": "Envol",
+      "borne": "borne_arcade_1",
+      "mp4": "/media/jeu-envol.mp4",
+      "webm": "/media/jeu-envol.webm",
+      "affiche_avif": "/media/jeu-envol-affiche.avif",
+      "affiche_jpg": "/media/jeu-envol-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Envol en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "aplomb",
+      "nom": "Aplomb",
+      "borne": "borne_arcade_2",
+      "mp4": "/media/jeu-aplomb.mp4",
+      "webm": "/media/jeu-aplomb.webm",
+      "affiche_avif": "/media/jeu-aplomb-affiche.avif",
+      "affiche_jpg": "/media/jeu-aplomb-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Aplomb en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "asteroid",
+      "nom": "Asteroid",
+      "borne": "borne_arcade_3",
+      "mp4": "/media/jeu-asteroid.mp4",
+      "webm": "/media/jeu-asteroid.webm",
+      "affiche_avif": "/media/jeu-asteroid-affiche.avif",
+      "affiche_jpg": "/media/jeu-asteroid-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Asteroid en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "demineur",
+      "nom": "Démineur",
+      "borne": "borne_arcade_4",
+      "mp4": "/media/jeu-demineur.mp4",
+      "webm": "/media/jeu-demineur.webm",
+      "affiche_avif": "/media/jeu-demineur-affiche.avif",
+      "affiche_jpg": "/media/jeu-demineur-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Démineur en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "snake",
+      "nom": "Snake",
+      "borne": "borne_arcade_5",
+      "mp4": "/media/jeu-snake.mp4",
+      "webm": "/media/jeu-snake.webm",
+      "affiche_avif": "/media/jeu-snake-affiche.avif",
+      "affiche_jpg": "/media/jeu-snake-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Snake en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "shooter",
+      "nom": "Shooter",
+      "borne": "borne_arcade_6",
+      "mp4": "/media/jeu-shooter.mp4",
+      "webm": "/media/jeu-shooter.webm",
+      "affiche_avif": "/media/jeu-shooter-affiche.avif",
+      "affiche_jpg": "/media/jeu-shooter-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Shooter en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "dedale",
+      "nom": "Dédale",
+      "borne": "borne_arcade_13",
+      "mp4": "/media/jeu-dedale.mp4",
+      "webm": "/media/jeu-dedale.webm",
+      "affiche_avif": "/media/jeu-dedale-affiche.avif",
+      "affiche_jpg": "/media/jeu-dedale-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Dédale en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    },
+    {
+      "id": "piano",
+      "nom": "Piano",
+      "borne": "borne_arcade_15",
+      "mp4": "/media/jeu-piano.mp4",
+      "webm": "/media/jeu-piano.webm",
+      "affiche_avif": "/media/jeu-piano-affiche.avif",
+      "affiche_jpg": "/media/jeu-piano-affiche.jpg",
+      "duree": 7.9,
+      "alt": "La borne Piano en cours de partie, vue depuis les commandes : l'enseigne au néon et le jeu dans la dalle."
+    }
+  ],
+  "vues": [
+    {
+      "nom": "allee",
+      "image": "/img/vue-allee.jpg",
+      "legende": "L'allée centrale, entre les deux rangées de bornes.",
+      "alt": "L'allée centrale, entre les deux rangées de bornes. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "bar",
+      "image": "/img/vue-bar.jpg",
+      "legende": "Le comptoir, l'enseigne au néon et le tableau des scores.",
+      "alt": "Le comptoir, l'enseigne au néon et le tableau des scores. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "classement",
+      "image": "/img/vue-classement.jpg",
+      "legende": "La borne de classement et son tableau des meilleurs scores.",
+      "alt": "La borne de classement et son tableau des meilleurs scores. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "travee",
+      "image": "/img/vue-travee.jpg",
+      "legende": "La travée ouest : trois bornes de trois quarts, la corniche.",
+      "alt": "La travée ouest : trois bornes de trois quarts, la corniche. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "billard",
+      "image": "/img/vue-billard.jpg",
+      "legende": "Le billard, au fond de la salle.",
+      "alt": "Le billard, au fond de la salle. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "entree",
+      "image": "/img/vue-entree.jpg",
+      "legende": "Le sas d'entrée, vu depuis le couloir.",
+      "alt": "Le sas d'entrée, vu depuis le couloir. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "plafond",
+      "image": "/img/vue-plafond.jpg",
+      "legende": "Le plafond lumineux et ses poutres.",
+      "alt": "Le plafond lumineux et ses poutres. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "sud",
+      "image": "/img/vue-sud.jpg",
+      "legende": "Le vide sud, la poche la plus profonde du hall.",
+      "alt": "Le vide sud, la poche la plus profonde du hall. Rendu par le moteur du jeu."
+    }
+  ],
+  "salle": {
+    "mp4": "/media/salle.mp4",
+    "webm": "/media/salle.webm",
+    "affiche_avif": "/media/salle-affiche.avif",
+    "affiche_jpg": "/media/salle-affiche.jpg",
+    "duree": 9.9,
+    "alt": "Orbite lente dans la salle d'arcade : les deux rangées de bornes allumées, le plafond lumineux, la moquette à motifs néon."
+  },
+  "couperet": [
+    {
+      "nom": "allee",
+      "image": "/img/couperet-allee.jpg",
+      "legende": "Une manche en cours : les bornes que tiennent les rivaux jouent leur partie, pas une démo.",
+      "alt": "Une manche en cours : les bornes que tiennent les rivaux jouent leur partie, pas une démo. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "bar",
+      "image": "/img/couperet-bar.jpg",
+      "legende": "Le téléviseur du bar passe au classement de la manche : points, fusibles, et qui la lame vise.",
+      "alt": "Le téléviseur du bar passe au classement de la manche : points, fusibles, et qui la lame vise. Rendu par le moteur du jeu."
+    },
+    {
+      "nom": "verdict",
+      "image": "/img/couperet-verdict.jpg",
+      "legende": "Le verdict : votre rang, vos points, et ce que vous avez perdu sur coupure.",
+      "alt": "Le verdict : votre rang, vos points, et ce que vous avez perdu sur coupure. Rendu par le moteur du jeu."
+    }
+  ],
+  "compte": {
+    "bornes": 19,
+    "jeux": 8,
+    "luminaires": 26,
+    "vues_nommees": 15,
+    "props": 88
+  }
+}

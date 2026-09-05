@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Info.plist de Nineteen.app.
+
+  Écrit à la main plutôt que laissé au modèle par défaut de CMake, pour DEUX
+  clés que ce modèle ne pose pas et dont l'absence se voit :
+
+  - `SDL_FILESYSTEM_BASE_DIR_TYPE` décide où `SDL_GetBasePath()` — donc
+    `ns_paths`, donc TOUT le chargement d'assets — regarde. « resource » est le
+    défaut de SDL, mais un défaut n'est pas une décision : écrit ici, il dit que
+    les assets sont dans `Contents/Resources/assets` et que ce n'est pas un
+    hasard. Le changer en « bundle » ou « parent » déplacerait silencieusement
+    tout l'arbre de données.
+  - `NSHighResolutionCapable` : sans elle, macOS lance l'application en mode
+    compatibilité et la dalle de 1600x900 est étirée d'un facteur 2 par le
+    système, floue, au lieu d'être rendue à la résolution native de l'écran.
+
+  Le reste est ce qu'il faut pour que le Finder voie une application et non un
+  dossier : type APPL, un exécutable, un identifiant.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>fr</string>
+    <key>CFBundleExecutable</key>
+    <string>nineteen</string>
+    <key>CFBundleIconFile</key>
+    <string>nineteen</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.recognizer.nineteen</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Nineteen</string>
+    <key>CFBundleDisplayName</key>
+    <string>Nineteen</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@PROJECT_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@PROJECT_VERSION@</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.arcade-games</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>@CMAKE_OSX_DEPLOYMENT_TARGET@</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Nineteen @PROJECT_VERSION@ — assets tiers sous CC0, voir LICENSES.md</string>
+    <key>SDL_FILESYSTEM_BASE_DIR_TYPE</key>
+    <string>resource</string>
+</dict>
+</plist>

@@ -1,0 +1,440 @@
+/*
+ * room_sound.h — la bande-son de la salle.
+ *
+ * Même partage des rôles que pour les bras : `engine/audio/ns_audio.c` sait
+ * mixer, ce fichier sait **ce qu'il y a à entendre**. Il connaît la scène, la
+ * caméra et le BVH ; le mixeur n'en sait rien.
+ *
+ * Ce que ça produit, en une phrase : un fond de salle continu, dix-neuf bornes
+ * qui bourdonnent chacune à sa place, un extracteur derrière la porte des
+ * toilettes, la rue au sas, et des pas dont le son change selon ce qu'on a sous
+ * les pieds — le tout atténué quand un mur s'interpose.
+ *
+ * Les pas
+ * -------
+ * La cadence vient de `bob.distance`, la même valeur qui pilote l'oscillation de
+ * la vue et le contre-balancement des bras. Un pas correspond donc à une foulée
+ * **par construction** : à vitesse moitié, deux fois moins de pas dans la même
+ * durée, et personne n'a de réglage à tenir d'accord.
+ *
+ * Plus précisément : le seuil vaut la DEMI-foulée, qui est exactement la période
+ * de la composante verticale de l'oscillation (`bob_offset` prend `sin(phase*2)`
+ * dans `room_camera.c`). Le pas tombe donc au bas du mouvement de tête, et pas à
+ * côté. C'est aussi pourquoi ce seuil ne change PAS avec l'allure : le faire
+ * varier découplerait le son de l'image, ce qui s'entend tout de suite. Courir
+ * fait plus de pas par seconde parce qu'on parcourt la distance plus vite, ce
+ * qui est la bonne raison.
+ *
+ * Le matériau vient de `ground_material`, que `ns_bvh_move_capsule` renseigne
+ * depuis M5. La salle déclare la classe de chaque matériau (`footstep` dans
+ * `salle.room.json`) ; rien n'est deviné d'un nom de fichier.
+ *
+ * Une banque, enfin
+ * -----------------
+ * `legacy/room/sounds/walk.wav` est le seul enregistrement de pas de 2020, et
+ * B14 le rejouait pour les cinq matériaux en changeant sa HAUTEUR. Ce qui
+ * distinguait une moquette d'un carrelage était donc une transposition — et
+ * surtout, c'était la même forme d'onde toutes les 0,775 s. L'oreille repère une
+ * répétition exacte bien avant un mauvais timbre.
+ *
+ * `tools/stepgen` synthétise maintenant quatre variantes par matériau (choc,
+ * résonance de talon, résonance de corps, frottement de semelle, caisse pour
+ * l'estrade). La brillance mesurée sur la banque produite va de 3 800 passages
+ * par zéro et par seconde sur la moquette à 16 500 sur le carrelage : c'est un
+ * écart de SPECTRE, pas de vitesse de lecture.
+ *
+ * `walk.wav` reste chargé et reste le recours : si la banque manque — un arbre
+ * de build partiel, un paquet incomplet — on retombe sur le comportement de B14
+ * plutôt que de marcher en silence.
+ */
+#ifndef NS_ROOM_SOUND_H
+#define NS_ROOM_SOUND_H
+
+#include "ns_audio.h"
+#include "ns_scene.h"
+#include "room_camera.h"
+#include "room_door.h"
+
+#include <stdbool.h>
+
+/* Les cabines dont peut partir une chasse d'eau. Deux dans la salle
+ * reconstruite (`cabine_toilettes_1` et `_2`), et la table en accepte quatre —
+ * un bloc sanitaire s'agrandit plus souvent qu'il ne rétrécit. */
+#define ROOM_MAX_STALLS 4
+
+/* Quatre par matériau. Le motif audible commence à deux répétitions, pas à
+ * quatre : avec l'interdiction de rejouer la variante précédente et l'écart de
+ * hauteur tiré à chaque pas, quatre suffisent largement. */
+#define ROOM_STEP_VARIANTS 4
+
+/*
+ * Les deux niveaux réglables que cette couche ajoute.
+ *
+ * Ce ne sont pas des bus — un bus coûterait une clé de configuration réservée du
+ * moteur et une décision qui n'est pas d'ici (`ns_audio.h` le dit). Ce sont deux
+ * facteurs appliqués par `room_sound` : l'un au gain de chaque pas joué, l'autre
+ * au gain de la nappe de fond. Ils vivent au niveau du MODULE et non dans
+ * `room_sound` parce que le menu doit pouvoir les bouger sans tenir l'instance —
+ * exactement le motif de `ns_audio_bus_volume`, pour la même raison.
+ */
+typedef enum room_sound_level {
+    ROOM_LEVEL_STEPS = 0,   /* les pas du joueur */
+    ROOM_LEVEL_TONE,        /* le fond continu : néons et tubes */
+    ROOM_LEVEL_COUNT
+} room_sound_level;
+
+void  room_sound_set_level(room_sound_level k, float v);
+float room_sound_get_level(room_sound_level k);
+
+/* Les clés de `settings.cfg`.
+ *
+ * Elles ne sont PAS dans `ns_config.h` avec les autres, et c'est un compromis
+ * assumé : rien dans le moteur ne les lit — elles sont écrites par le menu et
+ * relues par `room_sound_init`, deux fichiers de la salle. Les monter dans le
+ * moteur reviendrait à y réserver des clés sans lecteur, ce que ce dépôt a déjà
+ * fait trois fois et défait deux. */
+#define ROOM_CFG_VOL_STEPS "audio.footsteps"
+#define ROOM_CFG_VOL_TONE  "audio.roomTone"
+
+typedef struct room_sound {
+    bool ready;
+
+    /* Sons chargés une fois. -1 si absent : le jeu tourne sans. */
+    int clip_walk;                                   /* le recours de 2020 */
+    int clip_step[NS_STEP_COUNT][ROOM_STEP_VARIANTS];
+    bool bank_ready;                                 /* la banque a été trouvée */
+    int clip_ambience;
+    int clip_tone, clip_fan, clip_street;
+    int clip_cabinet[3];
+    int clip_door_open, clip_door_close;
+    int clip_flush;
+    /* Le coup de poing sur une borne, synthétisé par `tools/stepgen` comme les
+     * pas et la chasse. -1 si la banque manque : le geste reste muet plutôt que
+     * d'emprunter un son qui ne veut pas dire ça. */
+    int clip_coup;
+
+    /*
+     * LES TROIS BRUITS DU JETON, et pourquoi ils sont trois.
+     *
+     * Une pièce fait trois choses distinctes dans cette salle : elle entre dans
+     * une fente, elle se fait recracher par un monnayeur qui n'en veut pas, et
+     * elle tombe dans le godet du distributeur. Les jouer avec un seul fichier
+     * dirait trois fois la même chose, et la dirait fausse deux fois — un refus
+     * qui sonne comme une insertion fait croire qu'on vient de payer.
+     *
+     * −1 chacun si la banque manque, et alors le geste reste MUET. C'est la
+     * même règle que pour le coup de poing, et elle a une histoire ici :
+     * jusqu'à cette version, le jeton empruntait `SF-fermport.wav` transposé de
+     * 60 % — le seul « clac » métallique de la banque de 2020. Un son qui ne
+     * veut pas dire ça est pire qu'un silence : le silence, on l'attribue à un
+     * fichier manquant ; le son emprunté, on l'attribue au jeu.
+     */
+    int clip_jeton_insere, clip_jeton_refuse, clip_jeton_bac;
+
+    /*
+     * LES CINQ BRUITS DU COUPERET, synthétisés par `tools/stepgen` comme le
+     * reste de la banque. −1 chacun si la banque manque, et alors le geste reste
+     * MUET : c'est la règle du coup de poing et des trois jetons, et elle vaut
+     * ici plus qu'ailleurs. Le mode se joue à huit sur une seule salle ; un son
+     * emprunté y dirait faux à sept personnes à la fois.
+     */
+    int clip_cp_tic, clip_cp_lame;
+    int clip_cp_coupure, clip_cp_blindage, clip_cp_renvoi;
+
+    /*
+     * LA SECONDE ENTIÈRE DÉJÀ ANNONCÉE PAR LE TIC, de 10 à 1 ; 0 quand rien ne
+     * court.
+     *
+     * Cet état vit ICI et pas chez l'appelant, exactement pour la raison déjà
+     * écrite au-dessus de la rafale du monnayeur : `room/main.c` pousse des
+     * événements et lit un classement, il n'a pas à porter un compte à rebours
+     * POUR UN SON. C'est aussi le même motif que la cadence des pas, qui compare
+     * une distance à celle du pas précédent.
+     */
+    int cp_tic_seconde;
+
+    /*
+     * LES CHASSES D'EAU.
+     *
+     * Ponctuelles, jamais en boucle. Une salle où la chasse tire toutes les dix
+     * secondes est une salle hantée : ce qu'on cherche, c'est le bruit qu'on
+     * entend une fois en traversant le hall et qui dit qu'il y a quelqu'un
+     * derrière la cloison. L'intervalle est donc long et TIRÉ AU SORT entre deux
+     * bornes — un intervalle fixe se remarquerait au troisième passage.
+     *
+     * Le compte à rebours court même quand personne n'écoute, et c'est voulu :
+     * une chasse ne doit pas se déclencher à l'instant précis où le joueur entre
+     * dans les toilettes, ce qui la ferait passer pour une réaction à sa
+     * présence.
+     */
+    /*
+     * LA RAFALE DU MONNAYEUR : les pièces qui restent à tomber dans le godet.
+     *
+     * Elle vit ICI et non chez l'appelant parce que c'est une file d'attente
+     * dans le TEMPS, et que le seul point de ce fichier qui ait un `dt` est
+     * `room_sound_update`. La faire tenir à `room/main.c` lui demanderait de
+     * porter un compte à rebours pour un son, ce qui est exactement le partage
+     * des rôles que cet en-tête refuse.
+     *
+     * Pourquoi les espacer plutôt que de tout jouer d'un coup : cinq clips qui
+     * partent à la même image se superposent en UN bruit, plus fort et pas plus
+     * long. C'est l'intervalle qui fait entendre « cinq jetons » ; sans lui, le
+     * monnayeur rend une pièce épaisse.
+     */
+    ns_v3    coin_at;              /* le godet, en monde */
+    int      coin_left;            /* pièces encore à faire tomber */
+    float    coin_delay;           /* secondes avant la prochaine */
+
+    ns_v3    stall_position[ROOM_MAX_STALLS];
+    uint32_t stall_count;
+    float    flush_countdown;      /* secondes avant la prochaine */
+    uint32_t flush_last_stall;     /* jamais deux fois d'affilée la même */
+    float    flush_min, flush_max; /* bornes de l'intervalle, en secondes */
+
+    /* Voix persistantes. */
+    int voice_ambience;
+    int voice_tone;
+    int voice_fan, voice_street;
+    int voice_cabinet[NS_MAX_CABINETS];
+    int cabinet_voices;
+
+    /* Où sont les deux sources d'ambiance placées, pour leur occlusion. Elles
+     * sont DÉDUITES des zones sonores de la scène (« toilettes », « sas_entree »)
+     * plutôt que déclarées : ces zones existent déjà, elles portent déjà les
+     * bonnes boîtes, et en ajouter une description parallèle ferait deux vérités
+     * à tenir d'accord. */
+    ns_v3 fan_position, street_position;
+    bool  has_fan, has_street;
+
+    /* Cadence des pas : on déclenche chaque fois que la distance parcourue
+     * franchit un demi-pas de foulée. */
+    float  last_step_distance;
+    bool   left_foot;
+    uint32_t rng;
+    /* La variante jouée en dernier, PAR matériau : on s'interdit de la rejouer
+     * deux fois de suite. C'est la seule règle qui compte vraiment — deux pas
+     * identiques consécutifs s'entendent, deux pas identiques à cinq pas
+     * d'intervalle non. */
+    int last_variant[NS_STEP_COUNT];
+
+    /* L'atterrissage se détecte ici plutôt que de se lire dans la caméra : elle
+     * amortit `bob.land` dès le pas suivant, et le front est ce qu'on veut. */
+    bool was_grounded;
+
+    /* Tourniquet d'occlusion : une source par image plutôt que vingt et une.
+     * `ns_bvh_occlusion_factor` lance trois rayons, et vingt et une sources par
+     * image coûteraient soixante-trois traversées de BVH pour une grandeur qui
+     * bouge à la vitesse où l'on marche. */
+    uint32_t occlusion_cursor;
+
+    /* L'espace entendu, amorti. Deux flottants plutôt qu'un pointeur de zone :
+     * on interpole entre deux pièces, on ne saute pas de l'une à l'autre. */
+    float space_wet, space_decay;
+} room_sound;
+
+/* Charge les sons et lance les boucles. Sans effet si le mixeur n'a pas démarré :
+ * une machine sans carte son doit pouvoir jouer. */
+void room_sound_init(room_sound *s, const ns_scene *scene);
+
+/*
+ * À appeler une fois par image, après la caméra ET après les portes.
+ *
+ * `doors` peut être NULL : une salle sans porte animée — celle de 2020 — sonne
+ * comme avant. C'est `room_sound` qui joue les deux extraits de porte plutôt que
+ * `room_door`, parce que c'est lui qui sait ce qui est chargé et où est
+ * l'auditeur ; la porte, elle, ne sait que si elle vient de partir.
+ */
+void room_sound_update(room_sound *s, const ns_scene *scene, const room_camera *cam,
+                       room_doors *doors, float dt);
+
+/* ==========================================================================
+ * LE JETON
+ * ==========================================================================
+ *
+ * Trois gestes, trois sons, et la même règle que pour le coup de poing : la
+ * position est celle de l'objet dans la salle, la hauteur est tirée au sort
+ * dans une plage ÉTROITE, et rien ne se joue si le fichier manque.
+ *
+ * La hauteur, et pourquoi la plage n'est pas la même pour les trois
+ * -----------------------------------------------------------------
+ * La hauteur d'une pièce EST son diamètre : la transposer, c'est changer la
+ * taille du disque. Les dix-neuf bornes prennent le même jeton, donc l'insertion
+ * et le refus restent dans ±5 % — juste de quoi casser la répétition exacte
+ * d'une forme d'onde, qui est ce que l'oreille repère en premier.
+ *
+ * Le godet a le droit d'être plus large (±8 %), et c'est le seul des trois qui
+ * en ait besoin : le monnayeur rend CINQ jetons d'un coup, à quelques dizaines
+ * de millisecondes d'intervalle. Cinq pièces qui tombent ne sont pas cinq
+ * copies d'une pièce — elles ne touchent pas le godet du même angle — et c'est
+ * l'intervalle le plus court de toute la bande-son, donc celui où une
+ * répétition exacte s'entend le plus.
+ *
+ * `tools/stepgen` les synthétise, comme le reste de la banque : un disque de
+ * métal est un résonateur à trois modes INHARMONIQUES qu'un rebond ré-excite
+ * avec moins d'énergie et un intervalle qui raccourcit. Le modèle complet est
+ * dans `sg_render_coin`.
+ */
+
+/* La pièce entre dans la fente et tombe dans la caisse. Appelée sur le FRONT de
+ * `room_viewmodel_take_token`, jamais depuis `elapsed` : voir `room_viewmodel.h`. */
+void room_sound_jeton_insere(room_sound *s, ns_v3 position);
+
+/* Le monnayeur n'en veut pas et la rend. */
+void room_sound_jeton_refuse(room_sound *s, ns_v3 position);
+
+/*
+ * `nombre` pièces qui tombent dans le godet du distributeur, ESPACÉES.
+ *
+ * La première part tout de suite, les suivantes sont mises en file et tombent
+ * au fil de `room_sound_update` — c'est ce qui fait entendre « cinq jetons »
+ * plutôt qu'un seul, plus épais. Un `nombre` nul ou négatif ne joue rien : le
+ * monnayeur qui n'a rien à rendre parce qu'on est déjà au plancher doit rester
+ * muet, sans quoi il dirait qu'il a donné quelque chose.
+ *
+ * Une nouvelle rafale REMPLACE celle qui coulait encore. Deux appuis rapprochés
+ * sur le monnayeur ne doivent pas empiler deux files : ce qu'on entendrait
+ * alors n'aurait plus de rapport avec ce que le portefeuille a reçu.
+ */
+void room_sound_jeton_bac(room_sound *s, ns_v3 position, int nombre);
+
+/*
+ * LE COUP SUR UNE BORNE, à l'instant de l'impact et pas au début du geste.
+ *
+ * `tools/stepgen` le synthétise plutôt qu'on ne le télécharge, comme tout le
+ * reste de la banque, et pour la même raison de licence autant que de style :
+ * un choc se DÉCRIT — un poing mat, deux modes de tôle laquée, la caisse creuse
+ * du meuble et le cliquetis de ses tripes — donc il se synthétise. Le modèle
+ * complet est dans `sg_render_coup`.
+ *
+ * La hauteur est tirée au sort dans une plage étroite à chaque coup. Ce n'est
+ * pas de la décoration : quand on rage on frappe plusieurs fois de suite, et
+ * c'est exactement la situation où l'oreille repère une forme d'onde répétée —
+ * le défaut que la banque de pas existe pour corriger, à la seule différence
+ * que l'intervalle est ici d'une demi-seconde au lieu de trois quarts.
+ */
+void room_sound_frappe(room_sound *s, ns_v3 position);
+
+/* ==========================================================================
+ * LE COUPERET
+ * ==========================================================================
+ *
+ * Le mode compétitif de `room_couperet.h` était entièrement MUET, et c'était son
+ * défaut le plus coûteux : sa règle tient dans une minuterie de quarante-cinq
+ * secondes, et une minuterie qu'on ne peut pas entendre n'arbitre rien. Le
+ * joueur a les yeux sur la dalle d'une borne — c'est même tout le mode, puisqu'il
+ * faut jouer pour marquer — donc il ne regarde pas le compte à rebours.
+ *
+ * C'est aussi ce qui décide de tout ce qui suit : ces cinq sons ne sont pas des
+ * ornements posés sur une interface, ils sont le SEUL canal par lequel la règle
+ * atteint un joueur occupé ailleurs. Un son qui manque ici ne rend pas le mode
+ * moins agréable, il le rend moins jouable.
+ *
+ * SPATIALISÉS OU NON : LA QUESTION EST TRANCHÉE, ET PAS DE LA MÊME FAÇON POUR
+ * LES CINQ
+ * --------------------------------------------------------------------------
+ * DEUX NE LE SONT PAS — le tic et la lame — et ils passent donc par
+ * `ns_audio_play` et non `ns_audio_play_3d`.
+ *
+ *   LE TIC parce qu'un compte à rebours n'est pas un objet de la salle. Il ne
+ *   sort de nulle part : il sort du COMPTEUR, c'est-à-dire de l'installation,
+ *   c'est-à-dire de partout. Et surtout, spatialisé, il serait atténué par la
+ *   distance et bouché par un mur — or il existe exactement pour être entendu
+ *   par quelqu'un qui a la tête dans une borne, au fond de la salle, derrière
+ *   une cloison. Un compte à rebours qu'on peut perdre en marchant n'est pas un
+ *   compte à rebours. Il y a une seconde raison, et elle est aussi forte : le
+ *   tic sonne DIX FOIS de suite, et une source 3D changerait de niveau et de
+ *   côté à chaque tour de tête. L'oreille entendrait dix événements distincts là
+ *   où il faut qu'elle entende un seul battement répété.
+ *
+ *   LA LAME parce qu'elle concerne toute la salle. Elle vient du compteur, pas
+ *   d'un joueur. La placer sur la borne de l'éliminé dirait « il s'est passé
+ *   quelque chose là-bas » alors que le fait est « la manche vient de sortir
+ *   quelqu'un » — ce qui est vrai pour les huit à la fois, et doit donc leur
+ *   parvenir à l'identique. Un joueur qui entendrait la lame plus fort parce
+ *   qu'il se trouve à côté du perdant apprendrait une chose fausse.
+ *
+ * TROIS LE SONT — la coupure, le blindage et le renvoi — et c'est le même
+ * argument dans l'autre sens : ce sont les trois seuls qui aient un LIEU.
+ *
+ *   LA COUPURE part de la borne qu'on vient d'éteindre. C'est elle qui apprend
+ *   au joueur d'où vient le coup, et c'est la seule occasion de l'apprendre : la
+ *   partie annulée, il ne reste rien à regarder. Sa portée est la deuxième plus
+ *   longue du fichier après la chasse d'eau, parce qu'une borne qui meurt doit
+ *   faire se retourner — même raison que le coup de poing.
+ *
+ *   LE BLINDAGE ET LE RENVOI partent de la borne qui a tenu. Ils sont la réponse
+ *   à une attaque dirigée contre UNE borne, et s'ils ne sortaient pas de
+ *   l'endroit où l'attaque devait atterrir, ils ne se liraient pas comme une
+ *   réponse. Leur portée est en revanche courte : à huit joueurs qui achètent
+ *   des actions en permanence, des tintements métalliques audibles de partout
+ *   deviendraient la TEXTURE du mode au lieu d'en être la ponctuation.
+ *
+ * NI HAUTEUR NI GAIN TIRÉS AU SORT POUR LE TIC ET LA LAME, et c'est l'exact
+ * contraire de la règle que tout le reste de ce fichier applique — donc il faut
+ * le justifier. Partout ailleurs, la variation existe pour casser la répétition
+ * exacte d'une forme d'onde, que l'oreille repère avant tout le reste. Ici, on
+ * VEUT qu'elle la repère : le tic doit s'entendre comme dix fois la même chose,
+ * sans quoi il n'est plus un compte ; la lame doit s'entendre comme la même
+ * chose qu'il y a quarante-cinq secondes, sans quoi elle n'est plus un repère.
+ * Faire varier l'un des deux ferait porter l'attention sur la variation au lieu
+ * du compte. Les trois autres, eux, peuvent partir plusieurs fois en quelques
+ * secondes et gardent la règle commune, dans une plage étroite.
+ */
+
+/*
+ * LE BATTEMENT DES DIX DERNIÈRES SECONDES.
+ *
+ * À appeler À CHAQUE IMAGE avec `couperet.prochain` tant que la manche court :
+ * cette fonction décide elle-même quand battre, et ne joue rien le reste du
+ * temps. C'est le choix qu'`room_sound` fait déjà pour la rafale du monnayeur et
+ * pour la cadence des pas, et pour la même raison — le compte à rebours d'un son
+ * n'a pas sa place chez l'appelant.
+ *
+ * LA RÈGLE, exactement : un tic à chaque fois que le compte à rebours FRANCHIT
+ * une seconde entière entre 10 et 1, soit DIX tics. Le dixième tombe à une
+ * seconde du couperet, et la lame occupe le temps du onzième — c'est elle, le
+ * dernier battement.
+ *
+ * Au-delà de 10 s, rien, et l'état se réarme : appeler cette fonction pendant le
+ * salon, où `prochain` vaut la période entière, est donc sans effet. À 0 ou
+ * moins, rien non plus.
+ *
+ * UNE IMAGE LONGUE NE FAIT JAMAIS DEUX TICS. Si le compte passe de 3,4 à 1,2 en
+ * une seule image — un chargement, une machine à genoux —, seul « 2 » sonne et
+ * « 3 » est perdu. C'est délibéré : deux clips lancés à la même image ne
+ * s'entendraient pas comme deux secondes mais comme un seul bruit plus épais,
+ * ce qui est le défaut que la rafale du monnayeur existe pour éviter.
+ */
+void room_sound_couperet_tic(room_sound *s, float prochain);
+
+/* LA LAME EST TOMBÉE — `ROOM_CP_EVT_COUPERET`. Sans position : voir plus haut,
+ * elle vient du compteur et concerne la salle entière. */
+void room_sound_couperet_lame(room_sound *s);
+
+/* ON VIENT D'ÉTEINDRE UNE BORNE — `ROOM_CP_EVT_ACTION` avec `ROOM_CP_COUPURE`.
+ * `position` est celle de la borne de la CIBLE : c'est ce qui apprend au joueur
+ * d'où vient le coup. */
+void room_sound_couperet_coupure(room_sound *s, ns_v3 position);
+
+/* UNE ATTAQUE A ÉTÉ ENCAISSÉE — `ROOM_CP_EVT_ABSORBE`. `position` est celle de
+ * la borne qui a tenu. */
+void room_sound_couperet_blindage(room_sound *s, ns_v3 position);
+
+/*
+ * LE LEURRE A RETOURNÉ LA SURTENSION — `ROOM_CP_EVT_RENVOYE`. `position` est
+ * celle de la borne qui a renvoyé, c'est-à-dire d'où repart l'attaque.
+ *
+ * C'est un son À PART et non le blindage rejoué, alors que les deux disent « ça
+ * n'a pas marché » à l'attaquant. `ROOM_CP_EVT_ABSORBE` et `ROOM_CP_EVT_RENVOYE`
+ * sont deux événements distincts parce que ce sont deux verdicts distincts : la
+ * plaque a tenu, ou l'attaque revient sur son auteur. Les jouer avec le même
+ * fichier ferait exactement ce que `SF-fermport.wav` faisait au jeton — dire une
+ * chose à la place d'une autre, et l'attaquant n'apprendrait jamais ce que coûte
+ * un leurre. Les deux fichiers glissent d'ailleurs en sens contraire, ce qui est
+ * la seule différence qu'une oreille classe sans qu'on la lui explique.
+ */
+void room_sound_couperet_renvoi(room_sound *s, ns_v3 position);
+
+void room_sound_shutdown(room_sound *s);
+
+#endif /* NS_ROOM_SOUND_H */

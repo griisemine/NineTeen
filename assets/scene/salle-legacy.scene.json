@@ -1,0 +1,46 @@
+{
+  "_comment": "Fichier de scène de la salle de 2020, écrit à la main. Il ne décrit pas la géométrie — celle-ci est convertie de salle.obj par obj2gltf — mais ce que le modèle ne peut pas dire de lui-même : son échelle, et des points de vue nommés.",
+
+  "_scale": "Le modèle est en unités Blender, 2,06 par mètre. Ce n'est pas une estimation : l'auteur a écrit HAUTEUR_CAMERA_DEBOUT 3.5F et HAUTEUR_CAMERA_ACCROUPI 2.7F (legacy/room/room.c:90-91) pour un œil debout et accroupi, soit 3,5 unités pour 1,70 m. Le facteur est confirmé par tout le décor : à cette échelle le plafond tombe à 2,92 m, les appliques à 2,3 m, les piliers à 0,48 m de côté, le comptoir à 1,25 m de haut et les affiches à 0,38 x 0,66 m.",
+  "unitsPerMetre": 2.06,
+
+  "_captures": "Les mêmes noms que la salle reconstruite déclarera, mais exprimés ICI dans les unités de ce modèle. C'est tout l'intérêt : --pos= désignerait deux endroits différents dans deux salles d'échelles différentes, alors que --view=allee désigne le même cadrage dans chacune. Les coordonnées reprennent celles qui ont servi aux captures de docs/.",
+  "captures": [
+    {
+      "name": "allee",
+      "_comment": "L'allée centrale, depuis l'extrémité -X : le cadrage de docs/render-allee.png et docs/render-salle.png.",
+      "position": [-12.0, 2.2, 11.06],
+      "yaw": -8.0,
+      "pitch": -6.0
+    },
+    {
+      "name": "bar",
+      "_comment": "Le comptoir d'accueil, vu depuis l'allée. Le bar occupe Z 19,8 a 24,2 en unités du modele.",
+      "position": [0.0, 3.6, 14.5],
+      "yaw": 90.0,
+      "pitch": -2.0
+    },
+    {
+      "name": "billard",
+      "_comment": "Le coin billard, cote -X. La table occupe X -13,5 a -5, Z -2,5 a 2,5.",
+      "position": [-4.0, 3.6, 3.2],
+      "yaw": 200.0,
+      "pitch": -10.0
+    },
+    {
+      "name": "plafond",
+      "_comment": "Regard leve vers le plafond, a hauteur d'oeil (3,5 unites = 1,70 m, la valeur de l'auteur). Le pendant exact de la capture de la salle reconstruite : c'est la paire qui tranche la question du pavage.",
+      "position": [0.0, 3.5, 5.4],
+      "yaw": 0.0,
+      "pitch": 34.0
+    },
+    {
+      "name": "orbite",
+      "_comment": "Tour lent autour du centre de la salle, a hauteur d'homme un peu surelevee. Sert a juger l'ensemble plutot qu'un detail.",
+      "orbit": true,
+      "position": [0.0, 0.0, 8.0],
+      "radius": 11.0,
+      "height": 4.6
+    }
+  ]
+}

@@ -1,0 +1,1150 @@
+/* ns_rhi.c — implémentation de la couche de rendu au-dessus de SDL3 GPU. */
+#include "ns_rhi.h"
+#include "nstex.h"
+
+/* Registre des shaders embarqués : sert ici uniquement à savoir quels formats le
+ * binaire contient, pour n'annoncer que ceux-là à SDL. */
+#include "shader_blobs.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_STDIO           /* on lit par nos propres points de montage */
+#define STBI_ONLY_PNG
+#define STBI_ONLY_JPEG
+#define STBI_ONLY_TGA
+#include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+/* L'icône de la fenêtre. Après stb_image : c'est lui qui la décode. */
+#include "ns_rhi_icon.h"
+
+#include <string.h>
+
+/* Taille de l'anneau de transfert : dimensionnée pour une image chargée
+ * (instances + particules + sprites d'un mini-jeu). Le dépassement est signalé
+ * plutôt que silencieusement contourné. */
+#define NS_STAGING_RING_BYTES (16u * 1024u * 1024u)
+#define NS_STAGING_MAX_COPIES 512
+
+typedef struct staged_copy {
+    SDL_GPUBuffer *dst;
+    uint32_t       src_offset;
+    uint32_t       dst_offset;
+    uint32_t       size;
+} staged_copy;
+
+struct ns_rhi {
+    SDL_Window     *window;
+    SDL_GPUDevice  *device;
+    const char     *backend;
+
+    /* Frame courante */
+    SDL_GPUCommandBuffer *cmd;
+    SDL_GPUTexture       *swapchain;
+    uint32_t              sc_width, sc_height;
+    SDL_GPUTextureFormat  sc_format;
+    uint64_t              frame_index;
+    bool                  frame_active;
+
+    /* Anneau de transfert */
+    SDL_GPUTransferBuffer *staging;
+    uint8_t               *staging_mapped;
+    uint32_t               staging_head;
+    staged_copy            copies[NS_STAGING_MAX_COPIES];
+    uint32_t               copy_count;
+
+    SDL_GPUSampler *samplers[NS_SAMPLER_COUNT];
+
+    /* Capture demandée pour l'image en cours */
+    char screenshot_path[1024];
+    bool screenshot_pending;
+
+    bool headless;
+    bool vsync;
+
+    /* La définition DEMANDÉE. Elle ne sert qu'en headless — voir
+     * `ns_rhi_drawable_size`, qui explique pourquoi elle doit y faire foi. */
+    uint32_t req_width, req_height;
+};
+
+/* ========================================================================== */
+/* Utilitaires internes                                                       */
+/* ========================================================================== */
+
+static uint32_t format_bytes_per_pixel(SDL_GPUTextureFormat f)
+{
+    /* Les formats BLOC n'ont pas d'octets-par-texel : quatre bits pour BC1,
+     * huit pour BC5, et seulement par bloc de 4x4. Les faire passer par ici
+     * rendrait un chiffre faux qui servirait ensuite à dimensionner un
+     * téléversement ; ils ont leur propre chemin (`upload_blocks`). */
+    NS_ASSERT(f != SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM
+              && f != SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM);
+    switch (f) {
+    case SDL_GPU_TEXTUREFORMAT_R8_UNORM:              return 1;
+    case SDL_GPU_TEXTUREFORMAT_R8G8_UNORM:            return 2;
+    case SDL_GPU_TEXTUREFORMAT_R16_FLOAT:             return 2;
+    case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM:
+    case SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB:
+    case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM:
+    case SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB:
+    case SDL_GPU_TEXTUREFORMAT_R10G10B10A2_UNORM:
+    case SDL_GPU_TEXTUREFORMAT_R16G16_FLOAT:
+    case SDL_GPU_TEXTUREFORMAT_R11G11B10_UFLOAT:
+    case SDL_GPU_TEXTUREFORMAT_D32_FLOAT:
+    case SDL_GPU_TEXTUREFORMAT_D24_UNORM_S8_UINT:     return 4;
+    case SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT:    return 8;
+    case SDL_GPU_TEXTUREFORMAT_R32G32B32A32_FLOAT:    return 16;
+    default:                                          return 4;
+    }
+}
+
+static bool format_is_bgra(SDL_GPUTextureFormat f)
+{
+    return f == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM
+        || f == SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM_SRGB;
+}
+
+static uint32_t mip_count_for(uint32_t w, uint32_t h)
+{
+    uint32_t levels = 1;
+    while (w > 1 || h > 1) { w = w > 1 ? w / 2 : 1; h = h > 1 ? h / 2 : 1; levels++; }
+    return levels;
+}
+
+/* ========================================================================== */
+/* Création / destruction                                                     */
+/* ========================================================================== */
+
+static void create_default_samplers(ns_rhi *r)
+{
+    struct { ns_sampler_kind kind; SDL_GPUFilter filter; SDL_GPUSamplerAddressMode mode;
+             bool aniso; bool compare; SDL_GPUSamplerMipmapMode mip; } defs[] = {
+        { NS_SAMPLER_LINEAR_REPEAT,  SDL_GPU_FILTER_LINEAR,  SDL_GPU_SAMPLERADDRESSMODE_REPEAT,         false, false, SDL_GPU_SAMPLERMIPMAPMODE_LINEAR },
+        { NS_SAMPLER_LINEAR_CLAMP,   SDL_GPU_FILTER_LINEAR,  SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,  false, false, SDL_GPU_SAMPLERMIPMAPMODE_LINEAR },
+        { NS_SAMPLER_NEAREST_REPEAT, SDL_GPU_FILTER_NEAREST, SDL_GPU_SAMPLERADDRESSMODE_REPEAT,         false, false, SDL_GPU_SAMPLERMIPMAPMODE_NEAREST },
+        { NS_SAMPLER_NEAREST_CLAMP,  SDL_GPU_FILTER_NEAREST, SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,  false, false, SDL_GPU_SAMPLERMIPMAPMODE_NEAREST },
+        { NS_SAMPLER_ANISO_REPEAT,   SDL_GPU_FILTER_LINEAR,  SDL_GPU_SAMPLERADDRESSMODE_REPEAT,         true,  false, SDL_GPU_SAMPLERMIPMAPMODE_LINEAR },
+        { NS_SAMPLER_SHADOW,         SDL_GPU_FILTER_LINEAR,  SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,  false, true,  SDL_GPU_SAMPLERMIPMAPMODE_NEAREST },
+    };
+
+    for (size_t i = 0; i < SDL_arraysize(defs); ++i) {
+        SDL_GPUSamplerCreateInfo info;
+        SDL_zero(info);
+        info.min_filter     = defs[i].filter;
+        info.mag_filter     = defs[i].filter;
+        info.mipmap_mode    = defs[i].mip;
+        info.address_mode_u = defs[i].mode;
+        info.address_mode_v = defs[i].mode;
+        info.address_mode_w = defs[i].mode;
+        info.max_lod        = 1000.0f;
+        if (defs[i].aniso) {
+            info.enable_anisotropy = true;
+            info.max_anisotropy    = 16.0f;
+        }
+        if (defs[i].compare) {
+            info.enable_compare = true;
+            /* Reverse-Z : le fragment est éclairé quand sa profondeur est
+             * SUPÉRIEURE à celle stockée dans la shadow map. */
+            info.compare_op = SDL_GPU_COMPAREOP_GREATER_OR_EQUAL;
+        }
+        r->samplers[defs[i].kind] = SDL_CreateGPUSampler(r->device, &info);
+        if (!r->samplers[defs[i].kind]) {
+            NS_ERROR("échantillonneur %d non créé : %s", (int)defs[i].kind, SDL_GetError());
+        }
+    }
+}
+
+/*
+ * L'ICÔNE DE LA FENÊTRE.
+ *
+ * `SDL_SetWindowIcon` n'était appelé nulle part : le titre était juste, et la
+ * fenêtre portait quand même l'icône générique du système — dans le dock, dans
+ * l'alt-tab et dans la barre des tâches, c'est-à-dire aux trois endroits où l'on
+ * cherche un jeu qu'on a lancé. Un exécutable sans icône se lit comme un
+ * exécutable de développement, ce qu'un jeu vendu ne doit pas être.
+ *
+ * L'échec est silencieux, et c'est délibéré : une icône qu'on n'a pas su
+ * décoder n'est pas une raison de ne pas ouvrir la fenêtre. Elle est SIGNALÉE
+ * dans le journal, parce qu'une ressource embarquée qui cesse de se décoder est
+ * une régression et pas une fatalité.
+ */
+static void set_window_icon(SDL_Window *window)
+{
+    int w = 0, h = 0, channels = 0;
+    stbi_uc *pixels = stbi_load_from_memory(ns_rhi_icon_png,
+                                            (int)sizeof ns_rhi_icon_png,
+                                            &w, &h, &channels, 4);
+    if (!pixels) {
+        NS_WARN("icône de fenêtre indécodable : %s", stbi_failure_reason());
+        return;
+    }
+
+    /* `SDL_CreateSurfaceFrom` n'a pas de propriétaire des pixels : la surface
+     * les REGARDE. On la détruit et on libère derrière, une fois l'icône posée —
+     * SDL en garde sa propre copie. */
+    SDL_Surface *icon = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32,
+                                              pixels, w * 4);
+    if (icon) {
+        if (!SDL_SetWindowIcon(window, icon)) {
+            NS_WARN("icône de fenêtre refusée : %s", SDL_GetError());
+        }
+        SDL_DestroySurface(icon);
+    } else {
+        NS_WARN("icône de fenêtre : surface non créée : %s", SDL_GetError());
+    }
+    stbi_image_free(pixels);
+}
+
+ns_rhi *ns_rhi_create(const ns_rhi_desc *desc)
+{
+    NS_ASSERT(desc != NULL);
+
+    ns_rhi *r = (ns_rhi *)ns_calloc(1, sizeof *r);
+    if (!r) return NULL;
+
+    r->headless = desc->headless;
+    r->req_width  = (uint32_t)(desc->width  > 0 ? desc->width  : 1280);
+    r->req_height = (uint32_t)(desc->height > 0 ? desc->height : 720);
+    r->vsync    = desc->vsync;
+
+    /*
+     * On n'annonce à SDL que les formats que le binaire **contient réellement**.
+     *
+     * Ce masque valait `SPIRV | DXIL | MSL` en dur, alors que le build ne
+     * produisait que du SPIR-V. SDL choisit son backend d'après ce masque
+     * (Metal, puis D3D12, puis Vulkan) : sur macOS il rendait donc un
+     * périphérique Metal parfaitement valide, et les seize shaders étaient
+     * refusés un par un juste après. Sur Windows, l'annonce de DXIL faisait
+     * choisir D3D12 avant Vulkan, avec le même résultat.
+     *
+     * `ns_shader_registry_formats` est calculé par cmake/EmbedShaders.cmake à
+     * partir des blobs embarqués. Demander un backend qu'on ne sait pas
+     * alimenter devient impossible, plutôt que corrigé.
+     */
+    const SDL_GPUShaderFormat formats = (SDL_GPUShaderFormat)ns_shader_registry_formats;
+
+    r->device = SDL_CreateGPUDevice(formats, desc->debug, NULL);
+    if (!r->device) {
+        NS_ERROR("aucun périphérique GPU utilisable : %s", SDL_GetError());
+        NS_ERROR("  formats de shaders embarqués dans ce binaire : %s%s",
+                 (formats & SDL_GPU_SHADERFORMAT_SPIRV) ? "SPIR-V " : "",
+                 (formats & SDL_GPU_SHADERFORMAT_MSL) ? "MSL " : "");
+        ns_free(r);
+        return NULL;
+    }
+    r->backend = SDL_GetGPUDeviceDriver(r->device);
+    NS_INFO("GPU : backend %s%s", r->backend ? r->backend : "?", desc->debug ? " (validation active)" : "");
+
+    SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (desc->fullscreen) flags |= SDL_WINDOW_FULLSCREEN;
+    if (desc->headless)   flags |= SDL_WINDOW_HIDDEN;
+
+    r->window = SDL_CreateWindow(desc->window_title ? desc->window_title : "Nineteen",
+                                 desc->width > 0 ? desc->width : 1280,
+                                 desc->height > 0 ? desc->height : 720,
+                                 flags);
+    if (!r->window) {
+        NS_ERROR("fenêtre non créée : %s", SDL_GetError());
+        SDL_DestroyGPUDevice(r->device);
+        ns_free(r);
+        return NULL;
+    }
+
+    /* Avant de rattacher la fenêtre au GPU : poser l'icône est une opération de
+     * fenêtre, elle n'a rien à voir avec la swapchain. Même en headless — la
+     * fenêtre est cachée, pas absente, et le coût est celui d'un PNG de 1,8 Kio
+     * décodé une fois. */
+    set_window_icon(r->window);
+
+    if (!SDL_ClaimWindowForGPUDevice(r->device, r->window)) {
+        NS_ERROR("fenêtre non rattachée au GPU : %s", SDL_GetError());
+        SDL_DestroyWindow(r->window);
+        SDL_DestroyGPUDevice(r->device);
+        ns_free(r);
+        return NULL;
+    }
+
+    ns_rhi_set_vsync(r, desc->vsync);
+    r->sc_format = SDL_GetGPUSwapchainTextureFormat(r->device, r->window);
+
+    if (desc->frames_in_flight > 0) {
+        SDL_SetGPUAllowedFramesInFlight(r->device, desc->frames_in_flight);
+    }
+
+    /* Anneau de transfert persistant. */
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tb.size  = NS_STAGING_RING_BYTES;
+    r->staging = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!r->staging) {
+        NS_ERROR("anneau de transfert non créé : %s", SDL_GetError());
+    }
+
+    create_default_samplers(r);
+
+    NS_INFO("RHI prêt : %dx%d, format swapchain %d%s",
+            desc->width, desc->height, (int)r->sc_format, desc->headless ? ", headless" : "");
+    return r;
+}
+
+void ns_rhi_destroy(ns_rhi *r)
+{
+    if (!r) return;
+
+    SDL_WaitForGPUIdle(r->device);
+
+    for (int i = 0; i < NS_SAMPLER_COUNT; ++i) {
+        if (r->samplers[i]) SDL_ReleaseGPUSampler(r->device, r->samplers[i]);
+    }
+    if (r->staging) SDL_ReleaseGPUTransferBuffer(r->device, r->staging);
+    if (r->window) {
+        SDL_ReleaseWindowFromGPUDevice(r->device, r->window);
+        SDL_DestroyWindow(r->window);
+    }
+    SDL_DestroyGPUDevice(r->device);
+    ns_free(r);
+}
+
+SDL_Window    *ns_rhi_window(ns_rhi *r)  { return r->window; }
+SDL_GPUDevice *ns_rhi_device(ns_rhi *r)  { return r->device; }
+const char    *ns_rhi_backend_name(ns_rhi *r) { return r->backend ? r->backend : "?"; }
+SDL_GPUCommandBuffer *ns_rhi_cmd(ns_rhi *r) { return r->cmd; }
+SDL_GPUTexture       *ns_rhi_swapchain_texture(ns_rhi *r) { return r->swapchain; }
+SDL_GPUTextureFormat  ns_rhi_swapchain_format(ns_rhi *r) { return r->sc_format; }
+uint64_t              ns_rhi_frame_index(ns_rhi *r) { return r->frame_index; }
+
+/*
+ * EN HEADLESS, C'EST LA DÉFINITION DEMANDÉE QUI FAIT FOI.
+ *
+ * `SDL_GetWindowSizeInPixels` interroge une fenêtre. Quand elle est CACHÉE —
+ * c'est ce que `--headless` en fait — le système n'a aucune raison de lui
+ * accorder la taille demandée, et macOS rend celle de l'écran : mesuré ici,
+ * `--width=640 --height=360`, `1600x900` et `2560x1440` rendaient tous les
+ * trois 3024x1964, la définition native de la dalle. Toutes les captures de ce
+ * projet ont donc été prises à une définition que personne n'avait choisie, et
+ * qui change avec l'écran de celui qui construit — deux images comparées d'une
+ * machine à l'autre ne comparaient rien.
+ *
+ * Il n'y a pas de swapchain en headless : le rendu vise des cibles hors écran,
+ * dont cette fonction donne la taille. Rien n'oblige donc à suivre la fenêtre,
+ * et tout oblige à suivre ce qu'on a demandé.
+ *
+ * Fenêtre visible, en revanche, la vérité EST la fenêtre : l'utilisateur la
+ * redimensionne, le système applique sa densité de pixels, et une valeur
+ * mémorisée serait périmée dès la première poignée tirée.
+ */
+void ns_rhi_drawable_size(ns_rhi *r, uint32_t *w, uint32_t *h)
+{
+    if (r->headless) {
+        if (w) *w = r->req_width;
+        if (h) *h = r->req_height;
+        return;
+    }
+    int iw = 0, ih = 0;
+    SDL_GetWindowSizeInPixels(r->window, &iw, &ih);
+    if (w) *w = (uint32_t)(iw > 0 ? iw : 0);
+    if (h) *h = (uint32_t)(ih > 0 ? ih : 0);
+}
+
+/*
+ * LA DÉFINITION ET LE PLEIN ÉCRAN, CHANGÉS SANS RELANCER.
+ *
+ * `window.width`, `window.height` et `window.fullscreen` étaient lus au
+ * démarrage et n'avaient aucun ÉCRIVAIN : trois clés que seul un éditeur de
+ * texte pouvait toucher, sur un fichier que le joueur ne sait pas où trouver.
+ * C'est la même faute que `render.quality` avant que le menu ne l'écrive.
+ *
+ * L'ordre compte, et il est mesuré : on quitte le plein écran AVANT de
+ * redimensionner, on y entre APRÈS. Redimensionner une fenêtre déjà en plein
+ * écran ne fait rien sur macOS et fait clignoter l'écran sur X11 ; la taille
+ * demandée est alors perdue au retour en fenêtré, et le joueur voit un réglage
+ * qui ne prend pas.
+ *
+ * La swapchain n'a rien à réajuster : `ns_rhi_drawable_size` interroge la
+ * fenêtre à chaque image dès qu'elle est visible, et le renderer redimensionne
+ * ses cibles quand elle change. C'est déjà le chemin d'un simple coup de souris
+ * sur la poignée de la fenêtre.
+ */
+void ns_rhi_set_window_mode(ns_rhi *r, int width, int height, bool fullscreen)
+{
+    if (!r || !r->window) return;
+
+    /* En headless la fenêtre est cachée et c'est la définition DEMANDÉE qui
+     * fait foi (voir `ns_rhi_drawable_size`) : on la met à jour, et on ne
+     * demande pas au système un plein écran qu'aucun écran ne montrera. */
+    if (width > 0 && height > 0) {
+        r->req_width  = (uint32_t)width;
+        r->req_height = (uint32_t)height;
+    }
+    if (r->headless) return;
+
+    const bool was_fullscreen = (SDL_GetWindowFlags(r->window) & SDL_WINDOW_FULLSCREEN) != 0;
+
+    if (was_fullscreen && !fullscreen) {
+        if (!SDL_SetWindowFullscreen(r->window, false)) {
+            NS_WARN("sortie du plein écran refusée : %s", SDL_GetError());
+        }
+        SDL_SyncWindow(r->window);
+    }
+
+    if (!fullscreen && width > 0 && height > 0) {
+        SDL_SetWindowSize(r->window, width, height);
+    }
+
+    if (!was_fullscreen && fullscreen) {
+        if (!SDL_SetWindowFullscreen(r->window, true)) {
+            NS_WARN("plein écran refusé : %s", SDL_GetError());
+        }
+    }
+}
+
+void ns_rhi_set_vsync(ns_rhi *r, bool vsync)
+{
+    r->vsync = vsync;
+    /* MAILBOX (triple buffering) évite le déchirement sans plafonner la
+     * simulation ; il n'est pas garanti partout, d'où le repli sur VSYNC. */
+    SDL_GPUPresentMode mode = vsync ? SDL_GPU_PRESENTMODE_VSYNC : SDL_GPU_PRESENTMODE_IMMEDIATE;
+    if (!vsync && !SDL_WindowSupportsGPUPresentMode(r->device, r->window, mode)) {
+        mode = SDL_GPU_PRESENTMODE_VSYNC;
+    }
+    if (!SDL_SetGPUSwapchainParameters(r->device, r->window,
+                                       SDL_GPU_SWAPCHAINCOMPOSITION_SDR, mode)) {
+        NS_WARN("mode de présentation refusé : %s", SDL_GetError());
+    }
+}
+
+/* ========================================================================== */
+/* Frame                                                                      */
+/* ========================================================================== */
+
+bool ns_rhi_begin_frame(ns_rhi *r)
+{
+    NS_ASSERT(!r->frame_active);
+
+    r->cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    if (!r->cmd) {
+        NS_ERROR("command buffer indisponible : %s", SDL_GetError());
+        return false;
+    }
+
+    /* En headless il n'y a pas de swapchain exploitable : le rendu vise des
+     * cibles hors écran et la capture les lit directement. */
+    if (!r->headless) {
+        if (!SDL_WaitAndAcquireGPUSwapchainTexture(r->cmd, r->window, &r->swapchain,
+                                                   &r->sc_width, &r->sc_height)) {
+            NS_WARN("swapchain indisponible : %s", SDL_GetError());
+            SDL_SubmitGPUCommandBuffer(r->cmd);
+            r->cmd = NULL;
+            return false;
+        }
+        if (!r->swapchain) {          /* fenêtre minimisée : image sautée, pas une erreur */
+            SDL_SubmitGPUCommandBuffer(r->cmd);
+            r->cmd = NULL;
+            return false;
+        }
+    } else {
+        r->swapchain = NULL;
+        ns_rhi_drawable_size(r, &r->sc_width, &r->sc_height);
+    }
+
+    r->staging_head = 0;
+    r->copy_count   = 0;
+    r->frame_active = true;
+    return true;
+}
+
+void ns_rhi_wait_idle(ns_rhi *r)
+{
+    if (r && r->device) SDL_WaitForGPUIdle(r->device);
+}
+
+void ns_rhi_cancel_frame(ns_rhi *r)
+{
+    NS_ASSERT(r->frame_active);
+
+    /*
+     * L'image est ABANDONNÉE : la swapchain acquise n'est pas présentée, et le
+     * compositeur réaffiche donc la précédente.
+     *
+     * C'est le remède au flash noir. Sans lui, une image que le rendu n'a pas
+     * pu produire — cibles indisponibles pendant un redimensionnement, un
+     * changement de palier — était quand même soumise, swapchain vide, donc
+     * noire à l'écran. Sauter une image ne se voit pas ; en présenter une noire,
+     * si.
+     *
+     * On vide quand même les téléversements en attente : ils appartiennent aux
+     * ressources, pas à l'image, et les perdre laisserait des tampons à moitié
+     * écrits.
+     */
+    ns_rhi_flush_staging(r);
+    SDL_CancelGPUCommandBuffer(r->cmd);
+    r->cmd = NULL;
+    r->swapchain = NULL;
+    r->frame_active = false;
+}
+
+void ns_rhi_end_frame(ns_rhi *r)
+{
+    NS_ASSERT(r->frame_active);
+
+    ns_rhi_flush_staging(r);
+
+    if (!SDL_SubmitGPUCommandBuffer(r->cmd)) {
+        NS_ERROR("soumission refusée : %s", SDL_GetError());
+    }
+    r->cmd = NULL;
+    r->swapchain = NULL;
+    r->frame_active = false;
+    r->frame_index++;
+}
+
+/* ========================================================================== */
+/* Tampons                                                                    */
+/* ========================================================================== */
+
+bool ns_buffer_create(ns_rhi *r, ns_buffer *out, ns_buffer_kind kind, uint32_t size, const char *name)
+{
+    NS_ASSERT(out != NULL);
+    NS_ASSERT(size > 0);
+    SDL_zerop(out);
+
+    SDL_GPUBufferUsageFlags usage = 0;
+    switch (kind) {
+    case NS_BUFFER_VERTEX:     usage = SDL_GPU_BUFFERUSAGE_VERTEX; break;
+    case NS_BUFFER_INDEX:      usage = SDL_GPU_BUFFERUSAGE_INDEX;  break;
+    case NS_BUFFER_STORAGE:    usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ
+                                     | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ; break;
+    case NS_BUFFER_STORAGE_RW: usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ
+                                     | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE
+                                     | SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ; break;
+    case NS_BUFFER_INDIRECT:   usage = SDL_GPU_BUFFERUSAGE_INDIRECT; break;
+    }
+
+    SDL_GPUBufferCreateInfo info;
+    SDL_zero(info);
+    info.usage = usage;
+    info.size  = size;
+
+    out->handle = SDL_CreateGPUBuffer(r->device, &info);
+    if (!out->handle) {
+        NS_ERROR("tampon « %s » (%u octets) non créé : %s", name ? name : "?", size, SDL_GetError());
+        return false;
+    }
+    out->size = size;
+    out->kind = kind;
+    out->name = name;
+    if (name) SDL_SetGPUBufferName(r->device, out->handle, name);
+    return true;
+}
+
+void ns_buffer_destroy(ns_rhi *r, ns_buffer *b)
+{
+    if (!b || !b->handle) return;
+    SDL_ReleaseGPUBuffer(r->device, b->handle);
+    SDL_zerop(b);
+}
+
+bool ns_buffer_upload(ns_rhi *r, ns_buffer *b, const void *data, uint32_t size, uint32_t offset)
+{
+    NS_ASSERT(b && b->handle && data);
+    if (size == 0) return true;
+    if (offset > b->size || size > b->size - offset) {
+        NS_ERROR("téléversement hors bornes dans « %s » : %u+%u > %u",
+                 b->name ? b->name : "?", offset, size, b->size);
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tb.size  = size;
+
+    SDL_GPUTransferBuffer *tmp = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!tmp) {
+        NS_ERROR("tampon de transfert non créé : %s", SDL_GetError());
+        return false;
+    }
+
+    void *mapped = SDL_MapGPUTransferBuffer(r->device, tmp, false);
+    if (!mapped) {
+        NS_ERROR("projection du transfert impossible : %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+        return false;
+    }
+    SDL_memcpy(mapped, data, size);
+    SDL_UnmapGPUTransferBuffer(r->device, tmp);
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(cmd);
+
+    SDL_GPUTransferBufferLocation src = { tmp, 0 };
+    SDL_GPUBufferRegion dst = { b->handle, offset, size };
+    SDL_UploadToGPUBuffer(pass, &src, &dst, false);
+
+    SDL_EndGPUCopyPass(pass);
+
+    /* Attente explicite : l'appelant s'attend à pouvoir libérer `data` au retour. */
+    SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+    SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+    return true;
+}
+
+/* ========================================================================== */
+/* Anneau de transfert                                                        */
+/* ========================================================================== */
+
+bool ns_rhi_stage_buffer(ns_rhi *r, ns_buffer *dst, const void *data, uint32_t size, uint32_t dst_offset)
+{
+    NS_ASSERT(r->frame_active);
+    if (size == 0) return true;
+
+    if (!r->staging) return false;
+    if (r->copy_count >= NS_STAGING_MAX_COPIES) {
+        NS_ERROR("trop de copies en attente dans l'image (%u)", r->copy_count);
+        return false;
+    }
+
+    /* Alignement à 16 octets : exigé par plusieurs pilotes pour les copies. */
+    const uint32_t head = (r->staging_head + 15u) & ~15u;
+    if (head + size > NS_STAGING_RING_BYTES) {
+        NS_ERROR("anneau de transfert saturé : %u octets demandés, %u restants",
+                 size, NS_STAGING_RING_BYTES - head);
+        return false;
+    }
+
+    if (!r->staging_mapped) {
+        /* `cycle = true` sur la première projection de l'image : SDL fournit une
+         * zone qui n'est plus lue par le GPU, ce qui évite d'attendre. */
+        r->staging_mapped = (uint8_t *)SDL_MapGPUTransferBuffer(r->device, r->staging, true);
+        if (!r->staging_mapped) {
+            NS_ERROR("projection de l'anneau impossible : %s", SDL_GetError());
+            return false;
+        }
+    }
+
+    SDL_memcpy(r->staging_mapped + head, data, size);
+
+    r->copies[r->copy_count].dst        = dst->handle;
+    r->copies[r->copy_count].src_offset = head;
+    r->copies[r->copy_count].dst_offset = dst_offset;
+    r->copies[r->copy_count].size       = size;
+    r->copy_count++;
+    r->staging_head = head + size;
+    return true;
+}
+
+void ns_rhi_flush_staging(ns_rhi *r)
+{
+    if (r->copy_count == 0) return;
+
+    if (r->staging_mapped) {
+        SDL_UnmapGPUTransferBuffer(r->device, r->staging);
+        r->staging_mapped = NULL;
+    }
+
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(r->cmd);
+    for (uint32_t i = 0; i < r->copy_count; ++i) {
+        SDL_GPUTransferBufferLocation src = { r->staging, r->copies[i].src_offset };
+        SDL_GPUBufferRegion dst = { r->copies[i].dst, r->copies[i].dst_offset, r->copies[i].size };
+        SDL_UploadToGPUBuffer(pass, &src, &dst, false);
+    }
+    SDL_EndGPUCopyPass(pass);
+    r->copy_count = 0;
+}
+
+/* ========================================================================== */
+/* Textures                                                                   */
+/* ========================================================================== */
+
+bool ns_texture_create(ns_rhi *r, ns_texture *out, const ns_texture_desc *d)
+{
+    NS_ASSERT(out && d);
+    NS_ASSERT(d->width > 0 && d->height > 0);
+    SDL_zerop(out);
+
+    SDL_GPUTextureUsageFlags usage = 0;
+    if (d->sampled || (!d->render_target && !d->depth_target && !d->storage_write)) {
+        usage |= SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    }
+    if (d->render_target)  usage |= SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+    if (d->depth_target)   usage |= SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+    if (d->storage_read)   usage |= SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ
+                                  | SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ;
+    if (d->storage_write)  usage |= SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE;
+
+    const uint32_t layers = d->layers ? d->layers : 1;
+    const uint32_t mips   = d->mip_levels ? d->mip_levels : 1;
+
+    SDL_GPUTextureCreateInfo info;
+    SDL_zero(info);
+    info.type                 = d->type ? d->type : SDL_GPU_TEXTURETYPE_2D;
+    info.format               = d->format;
+    info.usage                = usage;
+    info.width                = d->width;
+    info.height               = d->height;
+    info.layer_count_or_depth = layers;
+    info.num_levels           = mips;
+    info.sample_count         = SDL_GPU_SAMPLECOUNT_1;
+
+    out->handle = SDL_CreateGPUTexture(r->device, &info);
+    if (!out->handle) {
+        NS_ERROR("texture « %s » %ux%u non créée : %s",
+                 d->name ? d->name : "?", d->width, d->height, SDL_GetError());
+        return false;
+    }
+    out->width = d->width; out->height = d->height;
+    out->layers = layers;  out->mip_levels = mips;
+    out->format = d->format;
+    out->name = d->name;
+    if (d->name) SDL_SetGPUTextureName(r->device, out->handle, d->name);
+    return true;
+}
+
+void ns_texture_destroy(ns_rhi *r, ns_texture *t)
+{
+    if (!t || !t->handle) return;
+    SDL_ReleaseGPUTexture(r->device, t->handle);
+    SDL_zerop(t);
+}
+
+bool ns_texture_upload(ns_rhi *r, ns_texture *t, const void *pixels, uint32_t bytes)
+{
+    NS_ASSERT(t && t->handle && pixels);
+
+    const uint32_t expected = t->width * t->height * format_bytes_per_pixel(t->format);
+    if (bytes < expected) {
+        NS_ERROR("téléversement trop court pour « %s » : %u octets fournis, %u attendus",
+                 t->name ? t->name : "?", bytes, expected);
+        return false;
+    }
+
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tb.size  = expected;
+
+    SDL_GPUTransferBuffer *tmp = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!tmp) {
+        NS_ERROR("transfert de texture non créé : %s", SDL_GetError());
+        return false;
+    }
+    void *mapped = SDL_MapGPUTransferBuffer(r->device, tmp, false);
+    if (!mapped) {
+        SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+        return false;
+    }
+    SDL_memcpy(mapped, pixels, expected);
+    SDL_UnmapGPUTransferBuffer(r->device, tmp);
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(cmd);
+
+    SDL_GPUTextureTransferInfo src;
+    SDL_zero(src);
+    src.transfer_buffer = tmp;
+    src.pixels_per_row  = t->width;
+    src.rows_per_layer  = t->height;
+
+    SDL_GPUTextureRegion dst;
+    SDL_zero(dst);
+    dst.texture = t->handle;
+    dst.w = t->width; dst.h = t->height; dst.d = 1;
+
+    SDL_UploadToGPUTexture(pass, &src, &dst, false);
+    SDL_EndGPUCopyPass(pass);
+
+    if (t->mip_levels > 1) {
+        SDL_GenerateMipmapsForGPUTexture(cmd, t->handle);
+    }
+
+    SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+    SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+    return true;
+}
+
+/*
+ * Téléversement d'une texture compressée, niveau par niveau.
+ *
+ * Deux différences avec `ns_texture_upload`, et ce sont elles qui imposent une
+ * fonction séparée plutôt qu'un drapeau :
+ *
+ *  - la taille se compte en BLOCS de 4x4, pas en texels. `pixels_per_row` d'un
+ *    transfert vaut alors la largeur en texels ARRONDIE au bloc supérieur : une
+ *    texture de 1x1 occupe un bloc entier, et donner 1 ici décrit une source
+ *    plus petite que ce que le pilote va lire.
+ *  - les mips viennent du FICHIER. Aucune API ne sait générer une mip sur une
+ *    texture bloc par blit, donc `SDL_GenerateMipmapsForGPUTexture` n'est pas
+ *    une option — c'est `texgen` qui les a calculées, sur l'image d'origine et
+ *    non sur un niveau déjà compressé.
+ */
+static bool upload_blocks(ns_rhi *r, ns_texture *t, const uint8_t *data, size_t bytes,
+                          uint32_t format, uint32_t levels)
+{
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tb.size  = (uint32_t)bytes;
+
+    SDL_GPUTransferBuffer *tmp = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!tmp) {
+        NS_ERROR("transfert bloc non créé pour « %s » : %s",
+                 t->name ? t->name : "?", SDL_GetError());
+        return false;
+    }
+    void *mapped = SDL_MapGPUTransferBuffer(r->device, tmp, false);
+    if (!mapped) {
+        SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+        return false;
+    }
+    SDL_memcpy(mapped, data, bytes);
+    SDL_UnmapGPUTransferBuffer(r->device, tmp);
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(cmd);
+
+    uint32_t off = 0, lw = t->width, lh = t->height;
+    for (uint32_t i = 0; i < levels; ++i) {
+        SDL_GPUTextureTransferInfo src;
+        SDL_zero(src);
+        src.transfer_buffer = tmp;
+        src.offset          = off;
+        src.pixels_per_row  = ((lw + 3u) / 4u) * 4u;
+        src.rows_per_layer  = ((lh + 3u) / 4u) * 4u;
+
+        SDL_GPUTextureRegion dst;
+        SDL_zero(dst);
+        dst.texture   = t->handle;
+        dst.mip_level = i;
+        dst.w = lw; dst.h = lh; dst.d = 1;
+
+        SDL_UploadToGPUTexture(pass, &src, &dst, false);
+
+        off += nstex_level_bytes(lw, lh, format);
+        lw = (lw > 1) ? lw / 2 : 1;
+        lh = (lh > 1) ? lh / 2 : 1;
+    }
+    SDL_EndGPUCopyPass(pass);
+
+    SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+    SDL_ReleaseGPUTransferBuffer(r->device, tmp);
+    return true;
+}
+
+/*
+ * Charge une carte `.nstex` si elle existe à la place du PNG.
+ *
+ * Renvoie `false` sans rien dire quand le fichier n'est pas là : ce n'est pas
+ * une erreur, c'est le cas normal d'un arbre construit sans `--bc`.
+ */
+static bool try_load_nstex(ns_rhi *r, ns_texture *out, const char *logical_path)
+{
+    /* `materials/x_n.png` -> `materials/x_n.nstex`. On ne devine rien d'autre :
+     * un chemin sans extension connue n'a pas de variante bloc. */
+    const char *dot = SDL_strrchr(logical_path, '.');
+    if (!dot) return false;
+    char alt[1024];
+    const size_t stem = (size_t)(dot - logical_path);
+    if (stem + 7u >= sizeof alt) return false;
+    SDL_memcpy(alt, logical_path, stem);
+    SDL_memcpy(alt + stem, ".nstex", 7);
+
+    /*
+     * On SONDE avant d'ouvrir, et c'est la deuxième fois que cette ligne
+     * manque. `ns_file_read_all` journalise en ERROR quand le fichier n'est pas
+     * là — ce qui est juste pour un asset attendu, et faux ici où l'absence est
+     * le cas normal : tous les albédos passent par ce chemin et aucun n'a de
+     * variante bloc. Sans ce garde-fou, chaque démarrage crachait une
+     * cinquantaine de lignes rouges pour un fonctionnement parfaitement sain,
+     * exactement comme la sonde des `_c.png` en B17.
+     */
+    char probe[1024];
+    if (!ns_path_resolve(alt, probe, sizeof probe)) return false;
+
+    ns_arena tmp;
+    if (!ns_arena_init(&tmp, 96u * 1024u * 1024u, "chargement nstex")) return false;
+    size_t size = 0;
+    void *file = ns_file_read_all(&tmp, alt, &size);
+    if (!file || size < NSTEX_HEADER_BYTES) { ns_arena_free(&tmp); return false; }
+
+    const uint8_t *b = (const uint8_t *)file;
+    if (b[0] != NSTEX_MAGIC0 || b[1] != NSTEX_MAGIC1
+        || b[2] != NSTEX_MAGIC2 || b[3] != NSTEX_MAGIC3 || b[4] != NSTEX_VERSION) {
+        NS_ERROR("« %s » : en-tête nstex invalide", alt);
+        ns_arena_free(&tmp);
+        return false;
+    }
+    const uint32_t fmt    = b[5];
+    const uint32_t levels = (uint32_t)b[6] | ((uint32_t)b[7] << 8);
+    uint32_t w = 0, h = 0, total = 0;
+    for (int i = 0; i < 4; ++i) {
+        w     |= (uint32_t)b[8 + i]  << (i * 8);
+        h     |= (uint32_t)b[12 + i] << (i * 8);
+        total |= (uint32_t)b[16 + i] << (i * 8);
+    }
+    if (size < NSTEX_HEADER_BYTES + total || levels == 0 || w == 0 || h == 0) {
+        NS_ERROR("« %s » : fichier tronqué (%zu octets pour %u annoncés)", alt, size, total);
+        ns_arena_free(&tmp);
+        return false;
+    }
+
+    const SDL_GPUTextureFormat sdl_fmt = (fmt == NSTEX_FORMAT_BC5)
+        ? SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM
+        : SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM;
+
+    /*
+     * Le format doit être SUPPORTÉ, et on le demande plutôt que de l'espérer.
+     * Tous les GPU de bureau savent lire du BC — c'est la base de D3D depuis
+     * vingt ans, et les Mac Apple Silicon le gèrent — mais l'annoncer sans le
+     * vérifier donnerait une texture noire sans message, qui est précisément le
+     * genre de panne qu'on a passé ce projet à éliminer.
+     */
+    if (!SDL_GPUTextureSupportsFormat(r->device, sdl_fmt,
+                                      SDL_GPU_TEXTURETYPE_2D,
+                                      SDL_GPU_TEXTUREUSAGE_SAMPLER)) {
+        NS_ERROR("« %s » : ce GPU ne gère pas %s — carte ignorée", alt,
+                 (fmt == NSTEX_FORMAT_BC5) ? "BC5" : "BC1");
+        ns_arena_free(&tmp);
+        return false;
+    }
+
+    ns_texture_desc d;
+    SDL_zero(d);
+    d.width = w; d.height = h;
+    d.format = sdl_fmt;
+    d.sampled = true;
+    d.mip_levels = levels;
+    d.name = logical_path;
+
+    bool ok = ns_texture_create(r, out, &d);
+    if (ok) ok = upload_blocks(r, out, b + NSTEX_HEADER_BYTES, total, fmt, levels);
+    if (ok) {
+        NS_DEBUG("texture %s : %ux%u, %u niveaux, %s", alt, w, h, levels,
+                 (fmt == NSTEX_FORMAT_BC5) ? "BC5" : "BC1");
+    }
+    ns_arena_free(&tmp);
+    return ok;
+}
+
+bool ns_texture_load(ns_rhi *r, ns_texture *out, const char *logical_path, bool srgb, bool gen_mips)
+{
+    NS_ASSERT(out && logical_path);
+
+    /* La variante compressée d'abord : c'est elle qui est installée dans un
+     * paquet. Absente, on retombe sur le PNG sans un mot — un arbre construit
+     * sans `--bc` est parfaitement valide. */
+    if (try_load_nstex(r, out, logical_path)) return true;
+
+    ns_arena tmp;
+    if (!ns_arena_init(&tmp, 64u * 1024u * 1024u, "chargement image")) return false;
+
+    size_t file_size = 0;
+    void *file = ns_file_read_all(&tmp, logical_path, &file_size);
+    if (!file) { ns_arena_free(&tmp); return false; }
+
+    int w = 0, h = 0, channels = 0;
+    /* Toujours 4 canaux : les formats à 3 canaux n'existent pas côté GPU. */
+    stbi_uc *pixels = stbi_load_from_memory((const stbi_uc *)file, (int)file_size, &w, &h, &channels, 4);
+    ns_arena_free(&tmp);
+
+    if (!pixels) {
+        NS_ERROR("image illisible (%s) : %s", logical_path, stbi_failure_reason());
+        return false;
+    }
+
+    ns_texture_desc d;
+    SDL_zero(d);
+    d.width  = (uint32_t)w;
+    d.height = (uint32_t)h;
+    d.format = srgb ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
+                    : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    d.sampled = true;
+    d.mip_levels = gen_mips ? mip_count_for((uint32_t)w, (uint32_t)h) : 1;
+    d.name = logical_path;
+
+    /* Les mipmaps sont générées sur GPU, ce qui exige que la texture soit aussi
+     * une cible de rendu — contrainte de l'API, pas un choix. */
+    if (gen_mips) d.render_target = true;
+
+    bool ok = ns_texture_create(r, out, &d);
+    if (ok) ok = ns_texture_upload(r, out, pixels, (uint32_t)(w * h * 4));
+
+    stbi_image_free(pixels);
+    if (ok) {
+        NS_DEBUG("texture %s : %dx%d, %u niveaux, %s", logical_path, w, h, d.mip_levels,
+                 srgb ? "sRGB" : "linéaire");
+    }
+    return ok;
+}
+
+static ns_texture make_solid(ns_rhi *r, uint8_t rr, uint8_t gg, uint8_t bb, uint8_t aa, const char *name)
+{
+    ns_texture t;
+    ns_texture_desc d;
+    SDL_zero(d);
+    d.width = d.height = 1;
+    d.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    d.sampled = true;
+    d.name = name;
+    if (!ns_texture_create(r, &t, &d)) { SDL_zero(t); return t; }
+    const uint8_t px[4] = { rr, gg, bb, aa };
+    ns_texture_upload(r, &t, px, 4);
+    return t;
+}
+
+ns_texture ns_texture_white(ns_rhi *r)       { return make_solid(r, 255, 255, 255, 255, "blanc 1x1"); }
+ns_texture ns_texture_black(ns_rhi *r)       { return make_solid(r, 0, 0, 0, 255, "noir 1x1"); }
+ns_texture ns_texture_flat_normal(ns_rhi *r) { return make_solid(r, 128, 128, 255, 255, "normale plate 1x1"); }
+
+SDL_GPUSampler *ns_rhi_sampler(ns_rhi *r, ns_sampler_kind kind)
+{
+    NS_ASSERT(kind >= 0 && kind < NS_SAMPLER_COUNT);
+    return r->samplers[kind];
+}
+
+/* ========================================================================== */
+/* Capture                                                                    */
+/* ========================================================================== */
+
+bool ns_rhi_capture_texture_png(ns_rhi *r, SDL_GPUTexture *src,
+                                uint32_t width, uint32_t height,
+                                SDL_GPUTextureFormat format, const char *out_path)
+{
+    NS_ASSERT(src && out_path);
+    if (width == 0 || height == 0) return false;
+
+    const uint32_t bpp   = format_bytes_per_pixel(format);
+    const uint32_t bytes = width * height * bpp;
+
+    SDL_GPUTransferBufferCreateInfo tb;
+    SDL_zero(tb);
+    tb.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+    tb.size  = bytes;
+
+    SDL_GPUTransferBuffer *dl = SDL_CreateGPUTransferBuffer(r->device, &tb);
+    if (!dl) {
+        NS_ERROR("tampon de relecture non créé : %s", SDL_GetError());
+        return false;
+    }
+
+    SDL_GPUCommandBuffer *cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    SDL_GPUCopyPass *pass = SDL_BeginGPUCopyPass(cmd);
+
+    SDL_GPUTextureRegion region;
+    SDL_zero(region);
+    region.texture = src;
+    region.w = width; region.h = height; region.d = 1;
+
+    SDL_GPUTextureTransferInfo dst;
+    SDL_zero(dst);
+    dst.transfer_buffer = dl;
+    dst.pixels_per_row  = width;
+    dst.rows_per_layer  = height;
+
+    SDL_DownloadFromGPUTexture(pass, &region, &dst);
+    SDL_EndGPUCopyPass(pass);
+
+    SDL_GPUFence *fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+
+    void *mapped = SDL_MapGPUTransferBuffer(r->device, dl, false);
+    if (!mapped) {
+        NS_ERROR("relecture impossible : %s", SDL_GetError());
+        SDL_ReleaseGPUTransferBuffer(r->device, dl);
+        return false;
+    }
+
+    uint8_t *rgba = (uint8_t *)ns_alloc(width * height * 4);
+    if (!rgba) {
+        SDL_UnmapGPUTransferBuffer(r->device, dl);
+        SDL_ReleaseGPUTransferBuffer(r->device, dl);
+        return false;
+    }
+
+    const uint8_t *srcpx = (const uint8_t *)mapped;
+    const bool swap_rb = format_is_bgra(format);
+    for (uint32_t i = 0; i < width * height; ++i) {
+        const uint8_t *p = srcpx + (size_t)i * bpp;
+        rgba[i * 4 + 0] = swap_rb ? p[2] : p[0];
+        rgba[i * 4 + 1] = p[1];
+        rgba[i * 4 + 2] = swap_rb ? p[0] : p[2];
+        rgba[i * 4 + 3] = (bpp >= 4) ? p[3] : 255;
+    }
+    SDL_UnmapGPUTransferBuffer(r->device, dl);
+    SDL_ReleaseGPUTransferBuffer(r->device, dl);
+
+    /*
+     * La luminance de l'image, JOURNALISÉE avec chaque capture.
+     *
+     * « La salle est trop sombre » est un jugement ; « la médiane vaut 8 sur
+     * 255 et 64 % des pixels sont sous 16 » est un fait, et c'est ce fait qui
+     * dit s'il reste du travail. Sans ce chiffre, chaque passe d'éclairage se
+     * jugeait à l'œil sur une capture, et cinq passes successives ont chacune
+     * baissé une source pour corriger une brûlure locale sans que personne ne
+     * voie le cumul.
+     *
+     * Ça ne coûte qu'un balayage d'une image déjà en mémoire, et c'est écrit à
+     * côté du nom du fichier : une régression d'éclairage ne peut plus passer
+     * inaperçue dans un journal qu'on relit.
+     */
+    {
+        uint32_t hist[256];
+        SDL_memset(hist, 0, sizeof hist);
+        const uint32_t n = width * height;
+        uint64_t sum = 0;
+        for (uint32_t i = 0; i < n; ++i) {
+            /* Luminance Rec. 709 en entiers : la même formule que l'œil, sans
+             * flottant ni gamma — on compare des captures entre elles, pas des
+             * candelas. */
+            const uint32_t l = ((uint32_t)rgba[i * 4 + 0] * 54u
+                              + (uint32_t)rgba[i * 4 + 1] * 183u
+                              + (uint32_t)rgba[i * 4 + 2] * 19u) >> 8;
+            hist[l < 256u ? l : 255u]++;
+            sum += l;
+        }
+        uint32_t acc = 0, median = 0, dark = 0, blown = 0;
+        for (uint32_t v = 0; v < 256u; ++v) {
+            acc += hist[v];
+            if (median == 0 && acc * 2u >= n) median = v;
+            if (v < 16u) dark += hist[v];
+            if (v >= 200u) blown += hist[v];
+        }
+        NS_INFO("luminance : moyenne %.1f, médiane %u, %.1f%% sous 16, %.1f%% au-dessus de 200",
+                (double)sum / (double)n, median,
+                100.0 * (double)dark / (double)n, 100.0 * (double)blown / (double)n);
+    }
+
+    const int ok = stbi_write_png(out_path, (int)width, (int)height, 4, rgba, (int)width * 4);
+    ns_free(rgba);
+
+    if (!ok) {
+        NS_ERROR("écriture PNG impossible : %s", out_path);
+        return false;
+    }
+    NS_INFO("capture écrite : %s (%ux%u)", out_path, width, height);
+    return true;
+}
+
+bool ns_rhi_request_screenshot(ns_rhi *r, const char *out_path)
+{
+    if (!out_path) return false;
+    SDL_strlcpy(r->screenshot_path, out_path, sizeof r->screenshot_path);
+    r->screenshot_pending = true;
+    return true;
+}
