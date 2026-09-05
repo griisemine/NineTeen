@@ -235,10 +235,22 @@ def mesurer(chemin):
 # rose et de cyan. La photo de référence est une pièce SOMBRE traversée de
 # sources vives ; « le plus clair possible » n'en est pas une lecture.
 #
-# 85 et 8 % ne sont pas ronds par hasard : 85 est la médiane au-dessus de
-# laquelle les murs de crépi — d'albédo linéaire 0,3245, mesuré et gardé depuis
-# `murart` — ressortent laiteux au lieu de beiges, et 8 % est la part écrêtée à
-# partir de laquelle les cœurs de néon fusionnent en une seule tache blanche.
+# LES DEUX BORNES HAUTES SONT CONSTATÉES, PAS MESURÉES, et il faut le dire :
+# elles viennent de l'œil posé sur des captures de CETTE salle, pas d'un seuil
+# calculé ni d'une lecture de la photo de référence — dont on n'a que l'image,
+# jamais les pixels d'origine.
+#
+# Ce qui a été constaté, précisément : la vue `bar` à 89,8 de médiane montre un
+# crépi laiteux qui ne se rattache plus à la salle ; à 86,4 il redevient beige
+# mais reste plat ; la moyenne des huit vues s'est stabilisée à 72,7 et c'est là
+# que la salle se lit. 85 est donc la limite au-delà de laquelle on a
+# systématiquement voulu redescendre, et 8 % la part écrêtée à partir de
+# laquelle les cœurs de néon voisins se rejoignent en une seule tache.
+#
+# Ce sont des garde-fous, pas des vérités. Une consigne qu'on ne sait pas
+# justifier au chiffre près vaut mieux qu'une borne absente — c'était la version
+# précédente de ce bloc, et une salle à 93 y passait —, mais elle ne doit pas se
+# présenter comme ce qu'elle n'est pas.
 CIBLES = (
     ("clair",     55.0,  85.0, "médiane de luminance"),
     ("brule",      2.0,   8.0, "part au-dessus de 200"),
