@@ -1970,8 +1970,9 @@
         0.8,
         0.56
       ],
-      "intensity": 62.0,
-      "range": 4.2,
+      "_niveau": "10 ET PORTÉE 3,0, CONTRE 62 ET 4,2. À 62, les trois pavés posaient 3,8 d'éclairement sur la joue ouest à hauteur d'œil, contre 1,2 pour le tube magenta du plafond. La vue « entree » mesurait alors 85,3 % d'ambre, 2,5 % de rose et 0,1 % de cyan pour une consigne de 22 de masse rose + cyan, et 87,4 de médiane pour une borne haute à 85 : le rendu d'AVANT le néon, conservé intact dans la première image du jeu.\nCE SONT EUX QU'IL FALLAIT DESCENDRE LE PLUS BAS, et non les appliques. Un pavé de faux plafond éclaire À PLAT : il pose la même nappe sur les deux joues, sur toute la longueur, et c'est cette nappe-là qui empêchait une autre couleur d'exister. Une applique fait une tache, et une tache se garde — elle dit qu'il y a une lampe. Le sas rejoint donc le régime des quatre plafonniers du hall : baliser la circulation, pas éclairer la pièce.\nLa portée suit pour la même raison : à 4,2 les trois pavés se recouvraient de bout en bout, à 3,0 ils se lisent comme trois points.",
+      "intensity": 10.0,
+      "range": 3.0,
       "radius": 0.3,
       "flicker": false,
       "ceilingPanel": true,
@@ -2089,7 +2090,8 @@
         0.72,
         0.44
       ],
-      "intensity": 36.0,
+      "_niveau": "22 et non 36. C'est la source la plus proche de ce qu'elle éclaire : 0,64 m de la joue ouest à hauteur d'œil, où elle posait 6,9 d'éclairement à elle seule, contre 1,2 pour le tube du plafond. Les deux nappes ambrées qui mangeaient le haut du cadre étaient les siennes, et le rapport de 6 contre 1 est exactement ce que la vue rendait en 85,3 % d'ambre.\n22 ET NON 12, ET LE CHIFFRE A ÉTÉ REMONTÉ APRÈS COUP. À 12 la vue passait les deux consignes manquées — médiane 83,6 et 53,0 de néon — mais son écart interquartile tombait de 71,4 à 49,3 : le couloir devenait un aplat magenta uniforme, c'est-à-dire l'autre façon de rater la photo de référence, qui est faite de masses ET de sources. Les deux cages sont ce qui brûle dans ce cadre ; les rendre à 22 rend 4,4 points d'écart interquartile pour 4 points d'ambre.",
+      "intensity": 22.0,
       "range": 3.4,
       "radius": 0.11,
       "repeat": {
@@ -2245,7 +2247,8 @@
         0.8,
         0.56
       ],
-      "intensity": 50.0,
+      "_niveau": "25 et non 50, la même correction que sa jumelle « applique_entree » et pour la même mesure. Celle-ci est à 1,71 m du point de vue « entree » : c'est sa nappe qui occupait le plus de pixels du cadre. Le rapport 50/36 entre les deux joues est gardé à 25/22 — la joue est reste la plus chaude, parce que c'est celle qu'on longe en entrant.",
+      "intensity": 25.0,
       "range": 4.2,
       "radius": 0.1,
       "_source": "La source suit les AMPOULES : au barycentre des deux globes, donc a 0,265 m devant la platine, exactement comme « applique_sud » dont la source est a z -6,748 pour une platine a -7,013. Elle a suivi le demi-tour du luminaire : la platine etant passee de 6,720 a 6,953 et les cages de +X a -X, le barycentre est passe de 6,455 a 6,688. Le laisser a 6,455 aurait mis la lumiere 23 cm DEVANT la gueule des cages, c'est-a-dire nulle part."
@@ -2753,6 +2756,7 @@
     },
     {
       "_": "Trois sources sur 6,40 m, 8 cm sous le verre. Le couloir fait 1,67 m de libre : une source y touche ses deux parements à moins d'un mètre, donc 46 et non les 80 à 120 des courses du hall, qui éclairent une salle de 14 m.",
+      "_niveau": "55 ET PORTÉE 4,0, ET LE RAISONNEMENT CI-DESSUS EST JUSTE DANS SON PRINCIPE ET FAUX DANS SA COTE. « Une source touche ses deux parements à moins d'un mètre » : pas celle-ci. Le tube est au PLAFOND, à 2,67 m, donc à 1,30 m de la joue à hauteur d'œil, pendant que les appliques sont à 0,64 m de la leur. Mesuré sur la joue ouest à 1,70 m : 1,2 d'éclairement pour le tube contre 10,7 pour l'ambre — le rapport de 9 contre 1 que la vue rendait en 85,3 % d'ambre pour 2,5 % de rose. 46 réglait une course de néon comme si elle éclairait de près ce qu'elle éclaire de loin.\nIl reste néanmoins la course la plus faible du couloir, et c'est voulu : ce n'est plus lui qui teint les murs — les deux courses de cimaise le font, à 0,15 m du plâtre — il teint le plafond et l'axe de la moquette. Portée 6,0 -> 4,0 pour la même raison : à 6,0 les trois sources se recouvraient sur toute la longueur et le couloir devenait un tube uniforme.",
       "name": "neon_couloir",
       "at": [
         6.1185,
@@ -2764,9 +2768,61 @@
         0.1,
         1.0
       ],
-      "intensity": 46.0,
-      "range": 6.0,
+      "intensity": 55.0,
+      "range": 4.0,
       "radius": 0.8,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          2.2
+        ]
+      }
+    },
+    {
+      "_": "LES DEUX COURSES DE CIMAISE DU COULOIR, et pourquoi elles sont au MUR et non au plafond.\nLa vue « entree » est la première image du jeu et la seule des huit à ne porter aucune couleur de la salle : 85,3 % d'ambre, 2,5 % de rose, 0,1 % de cyan, pour une consigne de 22 de masse rose + cyan. Le couloir avait pourtant déjà son tube — « neon_couloir » — mais dans l'axe du plafond, c'est-à-dire à 1,3 m des joues, quand les appliques sont à 0,64 m des leurs. Ce qui remplit le cadre d'un couloir de 1,67 m de large, ce sont ses DEUX JOUES ; monter le seul tube axial aurait éclairci la moquette et le plafond sans jamais reprendre les murs à l'ambre.\nPosées au ras de la cimaise (1,02 à 1,08), elles sont à 0,15 m du plâtre qu'elles teignent : 0,1137 d'éclairement par unité d'intensité sur la joue ouest à hauteur d'œil, contre 0,0621 pour le tube du plafond et 0,193 pour l'applique. À 38 sur une portée de 2,0, le plâtre reçoit 14,2 à l'aplomb d'une source et 4,3 à mi-chemin entre deux : c'est ce feston de 3 pour 1 qui garde 53,7 d'écart interquartile, là où le même néon étalé — essayé à 60 sur une portée de 4,5 — tombait à 42,9, sous la cible de 45.",
+      "_couleur": "MAGENTA LES DEUX, ET C'EST UN CHOIX QU'IL FAUT DÉFENDRE, parce que le réflexe était de reprendre la paire rose/cyan du hall. Mesuré sur le plâtre du couloir, dont l'albédo est [0,52 ; 0,44 ; 0,34] : un point de la joue ouest reçoit 0,1137 par unité d'intensité de SA course et 0,0446 de celle d'en face, soit 2,5 pour 1 seulement. Ce n'est pas assez pour que l'une l'emporte : cyan d'un côté et magenta de l'autre, la somme retombe à 0,27 de saturation sur ce plâtre — un gris violacé. Deux courses de la MÊME teinte donnent 0,79 au même point, et la vue rendue mesure 0,499 de saturation pondérée pour 45,1 de masse rose. Le couloir n'est pas un endroit où l'on tient les deux couleurs à 1,67 m l'une de l'autre.\nET C'EST AUSSI CE QU'ON VEUT VOIR : le couloir ANNONCE la salle, il ne la copie pas. Il tient le rose, qui est déjà la teinte de son mur est (« neon_mur_est », « neon_pan_est ») ; le cyan n'apparaît qu'au bout, par la trouée du pan coupé, quand le hall s'ouvre. L'une est ce qu'on traverse, l'autre ce vers quoi l'on va.",
+      "name": "neon_cimaise_couloir_ouest",
+      "at": [
+        5.474,
+        1.28,
+        7.0
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 38.0,
+      "range": 2.0,
+      "radius": 0.32,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          2.2
+        ]
+      },
+      "_source": "12 cm en dehors du verre et 9 cm au-dessus, la cote des six plinthes du hall : 0,15 m du tube, donc bien sous les 0,40 m que C-07 demande entre une source et son luminaire — la plus éloignée de la salle est à 0,36 m. Les trois z sont ceux de « neon_couloir », 7,00 / 9,20 / 11,40, parce que les trois courses du couloir sont coextensives et qu'un décalage se lirait comme un défaut de pose.\nPORTÉE 2,0 ET NON 4,5, ET C'EST LA CORRECTION QUI A COÛTÉ LE PLUS D'ESSAIS. À 4,5, chaque source couvrait les 6,40 m de la course entière : les trois se recouvraient, la joue recevait une nappe plate, et la vue mesurait 42,9 d'écart interquartile — sous la cible de 45, alors qu'elle était à 71,4 AVANT qu'on y touche. On avait remplacé un couloir ambré uniforme par un couloir magenta uniforme. À 2,0 les trois pools se séparent, et l'écart remonte à 53,7."
+    },
+    {
+      "_": "La jumelle de la joue est. Même cote en miroir : le parement est à 6,953, le verre à 6,883..6,933, la source 12 cm en avant.",
+      "name": "neon_cimaise_couloir_est",
+      "at": [
+        6.763,
+        1.28,
+        7.0
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 38.0,
+      "range": 2.0,
+      "radius": 0.32,
       "repeat": {
         "count": 3,
         "step": [
@@ -9329,6 +9385,63 @@
           "size": [
             0.11,
             0.11,
+            6.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LE VERRE DES DEUX COURSES DE CIMAISE — le raisonnement est écrit avec les sources, dans « lights ». Ce que le prop ajoute et que la source ne dit pas : la course est VUE, et sur toute sa longueur. Le point de vue « entree » est dans l'axe du couloir ; les deux tubes y filent vers la trouée en deux traits convergents, ce qui donne au sas la seule ligne de fuite qu'il ait.\nCE QUE CE PROP NE RÉGLE PAS, ET IL FAUT L'ÉCRIRE : le verre culmine autour de 190 de luminance, pas au-dessus de 200. La vue reste donc à 0,42 % de pixels brûlés pour une consigne de 2 % — elle était à 0,52 % avant, et le seuil n'a jamais été tenu ici. Le monter demanderait de toucher « neon_tube_magenta », dont l'émissivité de 3,9 sert les dix-sept autres courses de la salle : un réglage de couloir payé par sept vues qui vont bien.\nCote : 6,40 m de 6,00 à 12,40, exactement la course du plafond, sur la cimaise dont le dessus est à 1,08. Le verre occupe 1,10 à 1,19 — 2 cm d'air au-dessus de la moulure — et 5 cm d'épaisseur à 2 cm du parement, la garde de « neon_pan_est ».",
+      "name": "neon_cimaise_couloir_ouest",
+      "at": [
+        5.329,
+        1.1,
+        9.2
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre », la raison des dix-sept autres courses : un tube n'a pas de façade et « mur » déclencherait C-04, qui en exige une.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.09,
+            6.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "La jumelle de la joue est, en miroir du parement 6,953 : verre de 6,883 à 6,933. Elle passe 16 cm au-dessus du plateau du bureau, dont le point le plus haut est le poste de radio à 0,935.",
+      "name": "neon_cimaise_couloir_est",
+      "at": [
+        6.908,
+        1.1,
+        9.2
+      ],
+      "yaw": 0.0,
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.09,
             6.4
           ],
           "chamfer": 0.012

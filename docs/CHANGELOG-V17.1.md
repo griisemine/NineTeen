@@ -473,6 +473,164 @@ annonce déjà — « superbe en capture, coûteux en temps réel ».
 
 ---
 
+## Le couloir d'entrée était resté au tungstène
+
+Vingt-quatre commits ont amené la salle au néon. **Une vue sur huit n'a pas
+suivi**, et c'est la première chose qu'on voit du jeu : le sas d'entrée, neuf
+mètres de couloir entre la porte de la rue et la trouée du pan coupé.
+
+| `entree`, mesuré au palier `high`, échelle 1,0 | valeur | consigne |
+|---|---|---|
+| médiane de luminance | 87,4 | 55 à 85 |
+| masse rose + cyan | **2,66** | ≥ 22 |
+| masse ambrée | **85,3 %** | — |
+| cyan | 0,1 % | — |
+| rose | 2,5 % | — |
+
+C'est-à-dire, au chiffre près, le rendu **d'avant** le travail sur le néon : un
+couloir de plâtre beige éclairé par quatre appliques ambre. La moquette portait
+bien les symboles néon et un tube magenta courait au plafond ; ils pesaient 2,66
+pour une cible de 22.
+
+### La cause, et elle n'est pas « il manquait du néon »
+
+Le couloir **avait** son néon — `neon_couloir`, une course de 6,40 m posée dans
+l'axe du plafond. Elle ne servait à rien, et la géométrie dit pourquoi.
+
+Le couloir fait 1,669 m de libre. Ce qui remplit son cadre, ce sont ses **deux
+joues**. Or le tube est au plafond, à 2,67 m, donc à **1,30 m** d'une joue à
+hauteur d'œil, pendant que les appliques sont à **0,64 m** de la leur. Mesuré sur
+la joue ouest à 1,70 m :
+
+| source | éclairement sur le plâtre |
+|---|---|
+| `applique_entree`, à 0,64 m | 6,9 |
+| `plafonnier_sas` ×3 | 3,8 |
+| `neon_couloir`, à 1,30 m | **1,2** |
+
+Neuf contre un. C'est exactement le rapport que la vue rendait en 85,3 % d'ambre
+pour 2,5 % de rose. Le commentaire de `neon_couloir` justifiait d'ailleurs son
+réglage bas par « une source y touche ses deux parements à moins d'un mètre » :
+c'est vrai des appliques, pas de lui. La course avait été réglée comme si elle
+éclairait de près ce qu'elle éclaire de loin.
+
+**Monter le seul tube axial n'aurait donc pas suffi** : il aurait éclairci la
+moquette et le plafond sans jamais reprendre les murs à l'ambre.
+
+### Ce qui change, dans `assets/scene/salle.room.json`
+
+| Où | Avant | Après | Pourquoi |
+|---|---|---|---|
+| `plafonnier_sas` (×3) | 62, portée 4,2 | **10, portée 3,0** | Un pavé de faux plafond éclaire **à plat** : la même nappe sur les deux joues, sur toute la longueur. C'est elle qui empêchait une autre couleur d'exister. |
+| `applique_entree` (×2) | 36 | **22** | Une applique fait une **tache**, et une tache se garde : c'est ce qui dit qu'il y a une lampe. |
+| `applique_sas` | 50 | **25** | Même correction ; le rapport 50/36 entre les deux joues est gardé à 25/22. |
+| `neon_couloir` (×3) | 46, portée 6,0 | **55, portée 4,0** | Il teint désormais le plafond et l'axe de la moquette, plus les murs. À 6,0 les trois sources se recouvraient de bout en bout. |
+| `neon_cimaise_couloir_ouest` | — | **neuf** | Une course de 6,40 m au ras de la cimaise, 3 sources à 38. |
+| `neon_cimaise_couloir_est` | — | **neuf** | Sa jumelle, en miroir du parement 6,953. |
+
+Les deux courses neuves sont à **0,15 m** du plâtre qu'elles teignent, contre
+1,30 m pour le tube du plafond : 0,1137 d'éclairement par unité d'intensité,
+contre 0,0621. C'est le seul endroit d'où l'on pouvait reprendre les joues.
+
+Verre de 5 cm à 2 cm du parement — la garde de `neon_pan_est` —, occupant 1,10 à
+1,19 m, soit 2 cm d'air au-dessus de la cimaise dont le dessus est à 1,08. Les
+sources sont à 0,15 m de leur tube, là où **C-07** en tolère 0,40.
+
+### Magenta les deux, et pas la paire rose/cyan du hall
+
+Le réflexe était de reprendre les deux couleurs de la salle, cyan à l'ouest et
+magenta à l'est, comme le font `neon_mur_ouest` et `neon_mur_est`. **Mesuré, ça
+ne marche pas dans un couloir de 1,669 m.** Un point de la joue ouest reçoit
+0,1137 par unité d'intensité de sa propre course et 0,0446 de celle d'en face,
+soit 2,5 pour 1 seulement — pas assez pour que l'une l'emporte. Sur le plâtre du
+couloir, dont l'albédo est [0,52 ; 0,44 ; 0,34], la somme des deux retombe à
+**0,27 de saturation** : un gris violacé. Deux courses de la même teinte donnent
+**0,79** au même point.
+
+Et c'est aussi ce qu'on veut voir. **Le couloir annonce la salle, il ne la
+copie pas.** Il tient le rose, qui est déjà la teinte de son mur est ; le cyan
+n'apparaît qu'au bout, par la trouée du pan coupé, quand le hall s'ouvre. L'une
+est ce qu'on traverse, l'autre ce vers quoi l'on va.
+
+### Le remplissage uniforme est l'autre façon de rater la photo
+
+Le premier jet posait 60 d'intensité sur une portée de 4,5. Il passait les deux
+consignes manquées — 79,1 de masse rose — et **cassait une troisième** :
+
+| | départ | remplissage uniforme | feston retenu |
+|---|---|---|---|
+| médiane | 87,4 | 86,1 | **82,3** |
+| écart interquartile | 71,4 | **42,9** ✗ | **53,7** |
+| masse rose + cyan | 2,66 | 79,1 | **45,1** |
+
+À 4,5, chaque source couvrait les 6,40 m de la course entière : les trois se
+recouvraient et la joue recevait une nappe plate. On avait remplacé un couloir
+ambré uniforme par un couloir magenta uniforme, ce qui n'est pas plus la photo
+de référence — elle est faite de masses **et** de sources. À 38 sur une portée
+de 2,0, le plâtre reçoit 14,2 à l'aplomb d'une source et 4,3 à mi-chemin entre
+deux : ce feston de 3 pour 1 rend 10,8 points d'écart interquartile.
+
+### Les huit vues, avant et après
+
+Captures `--headless --offline --frames=40 --width=1024 --height=576 --scale=1.0
+--quality=high`, par `tools/ambiance-releve.sh`.
+
+| vue | médiane | écart interquartile | masse rose + cyan |
+|---|---|---|---|
+| allee | 75,1 → 75,1 | 105,1 → 104,7 | 37,2 → 37,4 |
+| travee | 74,9 → 74,9 | 88,8 → 88,8 | 31,7 → 31,8 |
+| sud | 59,1 → 59,1 | 88,0 → 88,1 | 36,6 → 36,7 |
+| bar | 86,3 → 86,1 | 69,8 → 69,5 | 35,6 → 35,8 |
+| billard | 82,8 → 82,8 | 82,3 → 82,3 | 22,1 → 22,2 |
+| classement | 57,6 → 57,6 | 79,8 → 79,8 | 26,9 → 26,9 |
+| plafond | 58,4 → 58,4 | 37,5 → 37,4 | 48,1 → 48,1 |
+| **entree** | **87,4 → 82,3** | **71,4 → 53,7** | **2,66 → 45,1** |
+
+Les sept autres vues bougent de moins de 0,3 sur chaque grandeur, c'est-à-dire
+du bruit d'un rendu stochastique. Aucune source touchée n'éclaire hors du sas, et
+c'est ce que la table vérifie plutôt que d'en donner l'assurance.
+
+`roomgen` finit à **zéro défaut** sur ses neuf contrôles, C-02 (interpénétration)
+et C-07 (une source a un luminaire) compris. L'emprise atteignable passe de
+118,4 à 117,8 m² : les deux tubes prennent 7 cm sur chaque joue à 1,10 m de
+haut, ce qui laisse 1,529 m de passage sur 1,669.
+
+### Le plafond, contraste 37,5 pour 45 — non corrigé, et pourquoi
+
+La vue `plafond` rate la même consigne d'écart interquartile, et **la cause n'est
+pas de la même famille**. Elle ne manque pas de néon : c'est la mieux servie des
+huit avec 48,1 de masse rose + cyan, pour 0,360 de saturation et 58,4 de médiane,
+toutes deux dans les clous. Son histogramme :
+
+| | p05 | q1 | médiane | q3 | p95 | max |
+|---|---|---|---|---|---|---|
+| `plafond` | 13,8 | 39,7 | 58,3 | 77,2 | 175,0 | 218,0 |
+| `allee` | 3,5 | 23,7 | 75,1 | 128,4 | 202,5 | 232,7 |
+
+Elle **a** ses masses noires — 25,3 % des pixels sous 40 — et elle **a** ses
+sources — 7,7 % au-dessus de 150. Ce n'est pas l'aplat gris que la consigne
+existe pour attraper. Ce qui lui manque, c'est de l'étalement dans la moitié
+centrale, et cette moitié-là est **un seul plan** : le regard est levé à 34° et
+le faux plafond occupe les trois quarts du cadre, à distance et albédo presque
+constants.
+
+L'essai a été fait plutôt qu'argumenté : **+35 % sur les cinq courses de poutre**
+du hall.
+
+| | avant | +35 % sur les poutres |
+|---|---|---|
+| `plafond`, écart interquartile | 37,5 | **41,2** — toujours sous 45 |
+| `plafond`, médiane | 58,4 | 64,4 |
+| `allee`, saturation | 0,311 | **0,307** — pour 0,30 demandés |
+
+Doubler le néon du plafond achète 3,8 points d'écart et consomme la marge de
+saturation de `allee`, qui n'en a que 0,011. Le reste du chemin coûterait
+davantage aux six vues qui vont bien qu'il ne rapporterait à celle-ci. **Non
+corrigé, délibérément** : un écart interquartile forcé par du noir ajouté serait
+un chiffre acheté, pas une image améliorée.
+
+---
+
 ## Le palier « high » choisi dans le menu redevenait « medium » tout seul
 
 Deux défauts distincts, trouvés en cherchant pourquoi le jeu démarrait en
