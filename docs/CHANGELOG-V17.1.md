@@ -314,6 +314,169 @@ seul cycle d'animation.
 
 ---
 
+## La salle était une photo de la mauvaise pièce
+
+Le propriétaire a fourni une image de ce que la salle doit donner : une salle
+d'arcade **néon**, traversée de tubes roses et cyan au plafond et en haut des
+murs, avec des cœurs de source qui brûlent. Le rendu montrait un entrepôt au
+tungstène.
+
+### Ce que le défaut coûtait, et pourquoi personne ne pouvait le dire
+
+Aucun outil du dépôt ne savait répondre à la question posée. `vues-diff.py`
+répond à « est-ce que ça a bougé » : une salle deux fois plus claire mais
+toujours ambrée y montre un écart énorme sans se rapprocher d'un pas de la
+photo. On jugeait donc à l'œil, une vue à la fois, et l'on ne se mettait jamais
+d'accord — deux personnes devant la même capture, l'une dit « trop sombre »,
+l'autre « trop jaune ».
+
+`tools/ambiance.py` chiffre les cinq mots qu'on prononce devant l'image : la
+**médiane** de luminance (pas la moyenne — un seul néon à 255 sur 5 % de l'image
+la déplace de 12 points sans que la salle s'éclaire), la part de pixels qui
+brûlent, la saturation pondérée, la masse de chaque famille de teinte, et
+l'écart interquartile. Le premier passage a suffi à trancher :
+
+| | départ | après | consigne |
+|---|---|---|---|
+| médiane de luminance | 35,0 | **72,7** | 55 à 85 |
+| écart interquartile | 55,0 | **77,8** | ≥ 45 |
+| part au-dessus de 200 | 0,38 % | **2,38 %** | 2 à 8 % |
+| masse ambrée | 87,3 % | **36,6 %** | — |
+| masse rose + cyan | 2,1 % | **30,1 %** | ≥ 22 |
+
+La **saturation était déjà bonne au départ** — 0,563 pour 0,30 demandés. C'est
+exactement pourquoi l'outil sépare la teinte de la saturation : mesurées
+ensemble, elles auraient conclu que la couleur allait bien.
+
+`tools/planche.py` assemble les huit vues en une mosaïque, et
+`tools/ambiance-releve.sh` fige l'enchaînement capturer / mesurer / regarder avec
+les réglages du propriétaire — trois erreurs de méthode ont été commises avant
+qu'il existe, dont comparer une capture en `medium` à une capture en `high`.
+
+### Les six causes, toutes mesurées
+
+1. **Les six tubes colorés de la salle étaient invisibles**, pour deux raisons
+   indépendantes. Leur portée de 4,2 m les éteignait à deux mètres : le shader
+   fenêtre la contribution par `(1 − (d/portée)⁴)²`, donc à 4 m il ne restait
+   3,2 % de ce que la distance laissait déjà passer. Et le tube « bleu » l'était
+   vraiment — son émissif multiplié par son albédo sort à 217° de teinte,
+   c'est-à-dire dans la famille BLEU et jamais dans CYAN. **La couleur qu'on
+   croyait poser n'était pas celle qu'on posait.**
+
+2. **Aucune enseigne de la salle n'atteignait le seuil du halo.** Le pixel le
+   plus lumineux de tout le décor — le cœur d'une lettre du fronton PIANO —
+   plafonnait à 0,842 de luminance pour un seuil à 0,85. Zéro fronton, zéro
+   tube, zéro écran ne le franchissait ; tout le halo visible venait des dalles
+   de plafond *éclairées*, la seule chose de l'image qui ne soit pas une
+   enseigne.
+
+3. **Le halo n'en portait qu'un millième.** Cinq niveaux de pyramide étaient
+   calculés, le tone mapping n'en lisait qu'un — 32 × 18 texels pour une image
+   de 1024 × 576. Crête de la cible de halo rapportée à celle de la source :
+   **0,0013**. On ajoutait un millième de néon autour d'un néon.
+
+4. **Le tiers bas de chaque image est de la moquette, et rien ne l'éclairait**
+   de moins de 2,74 m. Six courses de néon en plinthe la portent maintenant.
+
+5. **L'ambiance constante du moteur était ambrée.** Le raisonnement écrit
+   au-dessus d'elle est juste — l'indirect prend la couleur de ce qui éclaire —
+   et c'est sa prémisse qui a cessé d'être vraie. Recalculée depuis les sources
+   réelles : les 85 lumières déclarées pèsent (3861 ; 3358 ; 5065) en somme de
+   couleur × intensité, et le crépi des murs a une réflectance mesurée de
+   (0,3427 ; 0,3338 ; 0,2970) ; le produit donne (0,903 ; 0,778 ; 1,000). **La
+   luminance ne bouge pas** — 0,0898 avant comme après —, seule la teinte était
+   périmée. À `high`, où l'ambiance est multipliée par 2,6, c'était
+   (0,291 ; 0,224 ; 0,161) posés sur tout ce qu'aucune source n'atteint : le
+   crépi du bar ressortait laiteux et jaune dans une salle rose et cyan.
+
+6. **On jouait sans mains.** Pendant une partie, aucune des deux n'était à
+   l'image. Le poste de jeu avance l'œil de 27,7 cm vers la dalle sans déplacer
+   le corps : le sommet du manche descend de 23,3° à **32,0°** sous l'axe du
+   regard, pour 29° de demi-ouverture. Les mains tombaient trois degrés sous le
+   bord du cadre. Le champ des bras s'ouvre à 70° **pendant une partie
+   seulement**, amorti pour arriver avec le poste.
+
+### Ce qui a été posé
+
+Dix-huit courses de néon — cinq au plafond sous les poutres, six en haut des
+murs, six en plinthe, une dans le couloir —, seize déclarations de sources
+(85 lumières au total sur les 128 du moteur), une remontée de pyramide de halo
+sur quatre niveaux, un gain émissif en courbe (`1 + 6 y²`, choisi contre 4 et 8),
+et la garniture de café qui manquait : **six bancs, deux mange-debout, un canapé
+et sa table basse, et rien dessus depuis toujours.** Une table d'arcade vide se
+lit comme un meuble de catalogue.
+
+### Ce que ça coûte, mesuré
+
+Minimum de cinq passages, 1280 × 720, vue `centre`, machine au repos :
+
+| palier | avant | après |
+|---|---|---|
+| `medium` (défaut) | 11,7 ms — 86 i/s | **15,4 ms — 65 i/s** |
+| `high` | 24,4 ms — 41 i/s | **31,0 ms — 32 i/s** |
+
+Environ +30 %. La mesure au chronomètre est **inutilisable sans le minimum** :
+prise une seule fois pendant que d'autres compilations tournaient, elle donnait
+des écarts de ±40 % et une conclusion fausse.
+
+### Ce qui résiste
+
+- **Le couloir d'entrée** reste à 85 % d'ambre : c'est un sas, deux appliques à
+  filament, et le passer au néon effacerait le contraste d'entrée. Hors consigne
+  assumé.
+- **`medium` est plus clair que `high`** — médiane 88,8 contre 67,1 sur `centre`
+  — et c'est déjà documenté dans `ns_render.c` : sans ombre lancée, chaque
+  lumière traverse les caissons. Il est plus clair parce qu'il est plus faux.
+- **Les frontons bavent** de près : la lettre brûle vers le blanc et son halo
+  comble l'espace entre les glyphes. C'est le comportement voulu du gain émissif,
+  balayé contre 4 et 8 ; à 4 le halo reste court, à 8 le fond des frontons blanchit
+  avec les lettres.
+- **La main gauche n'empoigne pas la boule** du manche : elle la touche du bout
+  du majeur. La corriger demande de viser la paume, or `tests/test_ik.c:492`
+  verrouille « bout du majeur à moins de 3 cm du sommet de la boule », ce
+  qu'aucune vraie prise ne satisfait — paume sur une boule de 42 mm, le bout du
+  majeur est à 6,4 cm du sommet. Le test mesure au mauvais endroit.
+- **Une borne n'a qu'un seul manche** (`assets/blender/borne.py` ; `manche_rouge`
+  est devenu le bouton START). Deux mains sur deux boules demanderaient une
+  seconde ancre côté salle.
+
+---
+
+## Le palier « high » choisi dans le menu redevenait « medium » tout seul
+
+Deux défauts distincts, trouvés en cherchant pourquoi le jeu démarrait en
+`medium` alors que `settings.cfg` portait `render.quality = high`.
+
+**Le premier n'en est pas un, c'est un silence.** Un fichier `.env` à la racine
+du dépôt — non suivi par git, ignoré par `.gitignore` — porte
+`NINETEEN_QUALITY=medium`, `NINETEEN_WIDTH=1600` et `NINETEEN_HEIGHT=900`.
+`apply_env_file` les pose **avant** la ligne de commande, donc `opt.quality_set`
+passe à vrai et la configuration n'est jamais consultée. Cette précédence est
+voulue et documentée. Ce qui manquait, c'est qu'elle le dise :
+
+```
+fenêtre : 1600x900 (source : fichier /…/NineTeen/.env) — la configuration gardait 1280x720
+palier  : medium   (source : fichier /…/NineTeen/.env) — la configuration gardait « high »
+```
+
+Les quatre sources se nomment maintenant, comme le démarrage nomme déjà celle de
+l'adresse du serveur. Le défaut n'était pas trouvable depuis un autre
+répertoire : lancé depuis `/tmp`, tout marchait.
+
+**Le second est un vrai dégât.** `room_menu_persist` écrivait le palier et
+l'échelle **sans garde**. Mesuré : une exécution `--headless --frames=2` depuis
+la racine transformait `render.quality = high` en `medium` et `render.scale = 1`
+en `0.6`, sans qu'aucun menu soit ouvert. C'est le défaut déjà corrigé pour
+`window.width` ; ces deux lignes y avaient échappé. Elles passent sous le même
+garde, levé aussi par F7 et F8 qui sont des gestes du joueur.
+
+Deux tests l'épinglent (`tests/test_menu.c`) : l'un vérifie qu'une exécution
+sans menu ne réécrit rien, l'autre écrit un `settings.cfg` à la main — forme
+exacte du jeu, espaces autour du `=`, dernière valeur vide — et vérifie que
+palier, définition, échelle et plein écran en ressortent.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui
