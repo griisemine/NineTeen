@@ -6,7 +6,7 @@
   "_echelle": "Le mètre. Le modèle d'origine est en unités Blender à 2,06 par mètre — l'auteur l'a écrit lui-même, HAUTEUR_CAMERA_DEBOUT 3.5F pour un œil debout (legacy/room/room.c:90) — et le moteur V15 l'a lu comme des mètres, ce qui donnait un joueur de 82 cm au milieu de bornes de 2,40 m. Le problème cesse d'exister ici par construction.",
   "_plan": "LE PLAN DE 2020, MESURE — docs/RELEVE-2020.md, etabli objet par objet sur legacy/room/textures/salle.obj et legacy/room/room.c.\nECHELLE. 2,06 unites Blender par metre, l'auteur l'ecrit lui-meme (HAUTEUR_CAMERA_DEBOUT 3.5F pour un oeil debout, room.c:90). x_m = x_u/2,06 ; z_m = z_u/2,06 - 4,68 ; y_m = (y_u - 0,100)/2,06.\nLE PIEGE, ET IL A DEJA COUTE. « 19,3 x 14,4 m » est l'ENVELOPPE batie — MUR_SAL_Cube.002, bloc sanitaire compris. Le HALL PROPRE fait 14,43 x 14,27 en lignes medianes et 184,4 m2 de plancher. Les deux chiffres sont justes et mesurent deux choses ; c'est sur cette ambiguite qu'on a rebati une emprise de +/-9,65, ou courent encore les moulures dans les versions anterieures a celle-ci.\nCE QUE CE FICHIER DECRIT AUJOURD'HUI, et qui est le plan de 2020 au centimetre : un hall de 14,43 x 14,27 ferme par DEUX PANS COUPES SYMETRIQUES de 5,06 m au nord-ouest et au nord-est ; un couloir d'entree de 1,67 m de libre sur 8,9, contour ferme a part, dont la joue ouest epouse le pan coupe nord-est sur ses 1,32 derniers metres et s'y ouvre par une trouee de 1,51 m sous un linteau a 2,33 ; un bloc sanitaire de 35,8 m2 a l'EST, coupe en quatre par trois cloisons et desservi par deux portes coulissantes ; un comptoir centre sur x = 0 sous une enseigne de 2,55 m centree sur x = 0 ; treize piliers dont douze engages ; une estrade de 2,427 x 3,398 centree sur (0 ; -4,68) ; un salon ferme a l'ouest par 4,38 m de cloison qui aboutit au seul pilier libre de la salle.\nCE QUI RESTE DIFFERENT DE 2020, ET QUI EST VOULU : DIX-NEUF bornes et non seize — le jeu s'appelle Nineteen —, dont six sur le mur ouest la ou 2020 n'avait que deux caissons COMING SOON, et un poste de classement au centre la ou 2020 mettait un caisson COMING SOON, son classement etant un moniteur pose sur le comptoir. Voir le commentaire de cabinets[borne_classement].\nCE QU'IL NE FAUT PAS REPRENDRE de 2020 : ses bornes de 2,39 m sous un plafond de 2,92, ses UV de plafond bouclant tous les 8,69 m, ses sept materiaux qui sont des aplats de 24 x 24 pixels, et la tige du luminaire du billard qui traverse le plafond sur 1,61 m. Le proprietaire veut son PLAN, pas ses defauts.",
   "_convention": "Les points de mur se lisent [x, z] et suivent la LIGNE MÉDIANE. Ils sont listés de sorte qu'en marchant de l'un au suivant, l'intérieur soit à gauche : c'est la seule règle à tenir, tout le reste en découle (face intérieure, sens des onglets, côté des moulures).",
-  "_pose": "LA POSE DE CHAQUE SOLIDE, déclarée et non déduite.\nLes 146 solides de cette description — 32 boîtes, 19 bornes, 95 props — portent tous la clé « pose ». Elle vaut « sol », « meuble » (+ « poseSur »), « mur », « suspendu » (+ « suspenduPar ») ou « libre », et c'est elle qui déclenche TROIS contrôles de tools/roomgen.c : C-03 (ce qui est posé touche son support), la branche « mur » de C-04 (une façade adossée regarde la salle) et C-06 (ce qui pend est accroché). Sans elle, les trois étaient écrits, éprouvés et INERTES — le build l'annonçait à chaque passage : « 146 SANS clé pose ».\nRÉPARTITION : 66 « sol » (19 boîtes, les 19 bornes, 28 props), 7 « meuble », 22 « mur », 11 « suspendu » (dont 2 par leur câble), 40 « libre » (13 boîtes, 27 props).\n« libre » N'EST PAS UN LAISSEZ-PASSER, et chaque objet qui la porte dit dans son propre « _pose » pourquoi aucune des quatre autres ne convient. Quatre familles la portent, et toutes les quatre pour une raison mesurée : les huit ampoules et les sept appliques (le modèle de cage a sa platine en +Z local, la convention de C-04 est inversée pour lui), les six tubes néon et les cinq poutres (contre un mur mais sans façade — « mur » vaut aujourd'hui pour deux affirmations distinctes), les quatre pilastres sud et leurs socles (centre d'empreinte dans la maçonnerie, hors de tout rectangle de « floors »), et trois cas isolés — la suspension du billard, fixée à la POUTRE et non au plafond, et les deux vantaux de cabine, pendus à leurs gonds.",
+  "_pose": "LA POSE DE CHAQUE SOLIDE, déclarée et non déduite.\nLes 176 solides de cette description — 32 boîtes, 19 bornes, 125 props — portent tous la clé « pose ». Elle vaut « sol », « meuble » (+ « poseSur »), « mur », « suspendu » (+ « suspenduPar ») ou « libre », et c'est elle qui déclenche TROIS contrôles de tools/roomgen.c : C-03 (ce qui est posé touche son support), la branche « mur » de C-04 (une façade adossée regarde la salle) et C-06 (ce qui pend est accroché). Sans elle, les trois étaient écrits, éprouvés et INERTES — le build l'annonçait à chaque passage : « 146 SANS clé pose ».\nRÉPARTITION : 81 « sol » (19 boîtes, les 19 bornes, 43 props), 7 « meuble », 23 « mur », 11 « suspendu » (dont 2 par leur câble), 54 « libre » (13 boîtes, 41 props).\n« libre » N'EST PAS UN LAISSEZ-PASSER, et chaque objet qui la porte dit dans son propre « _pose » pourquoi aucune des quatre autres ne convient. Cinq familles la portent, et toutes les cinq pour une raison mesurée : les huit ampoules et les sept appliques (le modèle de cage a sa platine en +Z local, la convention de C-04 est inversée pour lui), les TREIZE COURSES DE NÉON du hall et du couloir, vingt exemplaires, et les cinq poutres (contre un mur ou sous une poutre, mais sans façade — « mur » vaut aujourd'hui pour deux affirmations distinctes, et une course de plafond n'est ni posée ni pendue), les quatre pilastres sud et leurs quatre socles (centre d'empreinte dans la maçonnerie, hors de tout rectangle de « floors »), et trois cas isolés — la suspension du billard, fixée à la POUTRE et non au plafond, et les deux vantaux de cabine, pendus à leurs gonds.\nLes six plinthes de néon, elles, sont « sol » : une plinthe repose sur la moquette, et c'est la seule des cinq poses qui dise ici quelque chose de vérifiable.",
   "_tableau": "Le TABLEAU DU BAR, derriere le comptoir. Il est DECLARE et non deduit : le moteur y dessine le classement et les joueurs en direct, comme il dessine une partie dans la dalle d'une borne. Il portait `background_classement.png`, une image peinte de 2020 avec des scores dessus — un tableau de scores qui ne bouge pas est une decoration. Le nommer ici est la seule facon que le moteur sache lequel des 190 materiaux de la salle est un ecran vivant : le deviner par son nom serait exactement l'heuristique qu'on a passe le projet a retirer.",
   "scoreboard": "classement_fond",
   "units": "metres",
@@ -42,12 +42,13 @@
       "_rugosite": "0,94 et non 0,24 : obj2gltf cherchait la famille de matériau dans le NOM DU FICHIER, et floor.jpg déclenchait le jeton « sol ciré ». Le plus grand sol de la salle était donc verni, d'où les taches spéculaires.",
       "footstep": "moquette",
       "emissive": [
-        1.0,
+        0.86,
         0.92,
-        0.84
+        1.0
       ],
       "emissiveStrength": 0.1,
-      "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1."
+      "_emissif": "L'émissif n'est ni une licence ni un bricolage. gbuffer.frag multiplie l'émissif par l'albédo TEXEL PAR TEXEL : le tissage noir du tapis ne luit donc quasiment pas, et seuls les motifs au néon portent la lueur — le comportement voulu tombe de la convention glTF, sans masque ni texture supplémentaire. C'est aussi l'ADN : salle.mtl déclare Ke 0,2298 sur le sol de l'estrade en 2020, et 0,25 est cette valeur à 8 % près. Enfin c'est le seul levier qui éclaire le tiers bas de l'image sans toucher aux plafonniers, donc sans refaire l'essai raté no 1.",
+      "_teinte": "LA LUEUR DU TAPIS ÉTAIT AMBRÉE, ce qui est une contradiction dans les termes : un motif PHOSPHORESCENT rend sa propre couleur, il ne rend pas celle de l'ampoule qui l'a chargé. À (1,00 0,92 0,84) les motifs fluo du tapis — dont les roses et les cyans — sortaient tous tirés vers l'ambre, sur la plus grande surface de la salle et sur le tiers bas de chaque vue, là où les huit relevés comptaient 87,3 % d'ambre. La FORCE ne bouge pas (0,10, poste 5 de SPEC-ATMOSPHERE, et 0,25 délavait les bas de bornes) : seule la teinte passe côté froid, et chaque motif retrouve la sienne."
     },
     {
       "name": "sol_sombre",
@@ -57,12 +58,13 @@
       "uvMetres": 1.5,
       "footstep": "estrade",
       "emissive": [
-        1.0,
+        0.9,
         0.86,
-        0.62
+        1.0
       ],
       "emissiveStrength": 0.23,
-      "_atmo": "SPEC-ATMOSPHERE poste 8 (§1.8). L'estrade portait `moquette_noire.jpg`, reflectance mesuree 0,0031 : la surface LA PLUS SOMBRE du decor. En 2020 elle etait le DEUXIEME emetteur de la salle — `salle.mtl:4`, materiau `Material` sur `CENTRE_MACHINE_SOL_Cube`, `map_Kd moquette.jpg`, `Ke 0.229790`. C'etait une inversion exacte de l'ADN. La texture revient, avec sa cible de de-cuisson ALBEDO_moquette 0,10, et l'emissif reprend sa valeur de 2020 a 0,23. `moquette_noire.jpg` passe en echange dans `retiredTextures` : plus aucun materiau ne l'emploie."
+      "_atmo": "SPEC-ATMOSPHERE poste 8 (§1.8). L'estrade portait `moquette_noire.jpg`, reflectance mesuree 0,0031 : la surface LA PLUS SOMBRE du decor. En 2020 elle etait le DEUXIEME emetteur de la salle — `salle.mtl:4`, materiau `Material` sur `CENTRE_MACHINE_SOL_Cube`, `map_Kd moquette.jpg`, `Ke 0.229790`. C'etait une inversion exacte de l'ADN. La texture revient, avec sa cible de de-cuisson ALBEDO_moquette 0,10, et l'emissif reprend sa valeur de 2020 a 0,23. `moquette_noire.jpg` passe en echange dans `retiredTextures` : plus aucun materiau ne l'emploie.",
+      "_teinte": "Même correction que « sol », même raison : un motif phosphorescent rend SA couleur. La force reste celle de 2020 (0,23, salle.mtl:4, Ke 0,229790)."
     },
     {
       "name": "sol_toilettes",
@@ -133,9 +135,10 @@
       "baseColor": [
         0.3,
         0.26,
-        0.13,
+        0.21,
         1.0
-      ]
+      ],
+      "_bleu": "LE BLEU DU PLAFOND PASSE DE 0,13 À 0,21, ET C'EST LE SEUL CANAL QUI BOUGE. À 0,13 il valait 43 % du rouge : le plafond était si jaune qu'il DÉCIDAIT de la famille de teinte à la place de la lampe.\nLE CALCUL SE FAIT À TROIS TERMES ET NON À DEUX, et c'est le troisième qui tranche : le moteur ajoute une ambiance de (0,291 0,224 0,161) à tout ce qu'il éclaire (ns_render.c, palier « high »), elle est AMBRÉE, et c'est elle qui fait basculer. Sous un tube cyan (0,10 0,68 1,00), l'ancien plafond ressortait à 157°, c'est-à-dire en VERT — la vue « bar » mesurait 22,3 % de vert pour 22,0 % de cyan, et ce vert-là n'était pas dans la salle, il était dans l'albédo.\nÀ 0,21 le même plafond rend 184° sous le cyan, 324° sous le rose et 29° sous le tungstène : chacune des trois lumières de la salle le rend dans SA famille, ce qui est tout ce qu'on lui demande. La réflectance suit à peine — 0,2571 avant, 0,2663 après en luminance Rec. 601, soit 3,6 % — donc le plafond reste la surface sombre que le poste 3 de SPEC-ATMOSPHERE a voulue, et son motif art déco bleu nuit y retrouve le bleu qu'il a toujours eu."
     },
     {
       "name": "rail",
@@ -1131,8 +1134,9 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.7,
-      "fit": true
+      "emissiveStrength": 1.35,
+      "fit": true,
+      "_force": "1,7 A ÉTÉ RÉGLÉ CONTRE UN MUR À 26 DE MÉDIANE ; ce mur en rend 87 depuis que le néon est posé. Une enseigne rétroéclairée se lit par son ÉCART au fond, pas par sa valeur absolue : à 1,7 les lettres saturaient et « NINETEEN » sortait en pâté blanc dans la vue « bar », à 4,2 m, alors qu'elle se lisait encore à 9,9 m dans la vue « classement ». À 1,35 elle tient les deux distances."
     },
     {
       "name": "classement_fond",
@@ -1144,10 +1148,11 @@
         1.0,
         1.0
       ],
-      "emissiveStrength": 1.9,
+      "emissiveStrength": 1.6,
       "_": "Le tableau derriere le comptoir. A 0,129 de reflectance sur 1,8 x 0,9 m, c'etait un TROU NOIR dans le mur du bar — la plus grande surface sombre du champ, juste sous l'enseigne. Un tableau de scores est retroeclaire : l'emissif est module par l'albedo texel par texel, donc le fond reste sombre et seul le lettrage s'allume.",
       "ecran": "plat",
-      "_ecran": "« ecran »: « plat » — LA CLE QUI MANQUAIT, et le defaut qu'elle corrige a ete mesure.\nCe materiau est celui que le moteur PILOTE (cle « scoreboard » en tete de ce fichier) : une cible de rendu vivante lui est posee a chaque image. Or `ns_render.c` en deduisait « ceci est un ecran » et n'avait qu'un seul traitement d'ecran, celui du TUBE : courbure en barillet, lignes de balayage, masque de phosphore, coins assombris. Le televiseur du bar recevait donc le rendu d'une borne de 1985.\nMESURE, capture 1600x900 a 1,60 m de la dalle (--camera=free --pos=0,1.503,5.40 --yaw=90) : les deux filets horizontaux du tableau, DROITS dans l'image dessinee, sortaient bombes de 4,45 px vers le haut et 5,69 px vers le bas sur une corde de 800 px. Et le masque de phosphore compte 640 colonnes sur 1,70 m, soit 1,34 px de periode a ce cadrage, les lignes de balayage 480 sur 0,85 m soit 0,90 px : tous deux SOUS la limite d'echantillonnage, donc ce qu'ils produisaient n'etait pas un grain de tube mais du moire.\nL'emissif passe de (1 ; 0,9 ; 0,72) a du blanc : la teinte ambree etait celle d'un panneau retroeclaire au tungstene. Un panneau OLED est etalonne autour du blanc D65 et c'est a sa NEUTRALITE qu'on le reconnait a cote d'un neon. Force 1,6 -> 1,9 : la dalle du bar est la surface la plus lumineuse du mur nord, elle doit dominer l'enseigne qui la surplombe.\nRugosite 0,40 -> 0,05. Le shader la ramene de toute facon vers 0,035 pour une dalle plate, mais la valeur declaree doit dire la verite sur la matiere : c'est une glace, pas un carton mat."
+      "_ecran": "« ecran »: « plat » — LA CLE QUI MANQUAIT, et le defaut qu'elle corrige a ete mesure.\nCe materiau est celui que le moteur PILOTE (cle « scoreboard » en tete de ce fichier) : une cible de rendu vivante lui est posee a chaque image. Or `ns_render.c` en deduisait « ceci est un ecran » et n'avait qu'un seul traitement d'ecran, celui du TUBE : courbure en barillet, lignes de balayage, masque de phosphore, coins assombris. Le televiseur du bar recevait donc le rendu d'une borne de 1985.\nMESURE, capture 1600x900 a 1,60 m de la dalle (--camera=free --pos=0,1.503,5.40 --yaw=90) : les deux filets horizontaux du tableau, DROITS dans l'image dessinee, sortaient bombes de 4,45 px vers le haut et 5,69 px vers le bas sur une corde de 800 px. Et le masque de phosphore compte 640 colonnes sur 1,70 m, soit 1,34 px de periode a ce cadrage, les lignes de balayage 480 sur 0,85 m soit 0,90 px : tous deux SOUS la limite d'echantillonnage, donc ce qu'ils produisaient n'etait pas un grain de tube mais du moire.\nL'emissif passe de (1 ; 0,9 ; 0,72) a du blanc : la teinte ambree etait celle d'un panneau retroeclaire au tungstene. Un panneau OLED est etalonne autour du blanc D65 et c'est a sa NEUTRALITE qu'on le reconnait a cote d'un neon. Force 1,6 -> 1,9 : la dalle du bar est la surface la plus lumineuse du mur nord, elle doit dominer l'enseigne qui la surplombe.\nRugosite 0,40 -> 0,05. Le shader la ramene de toute facon vers 0,035 pour une dalle plate, mais la valeur declaree doit dire la verite sur la matiere : c'est une glace, pas un carton mat.",
+      "_force": "Même correction que l'enseigne, et la même mesure : la ligne d'en-tête du tableau brûlait dans la vue « bar » depuis que le crépi derrière elle est passé de 26 à 87 de médiane. 1,9 -> 1,6, et pas plus bas : c'est le matériau que le moteur surcharge pour y écrire le classement en direct (clé « scoreboard » en tête de fichier), et l'essai à 1,35 lui a coûté 1,5 point de « brule » sur la vue « bar » et 0,4 sur la moyenne des huit — un tableau de scores EST une source de la salle, pas seulement un texte."
     },
     {
       "name": "ciel",
@@ -1542,11 +1547,11 @@
       "_": "L'ampoule DANS la cage. Un luminaire dont on ne voit pas la source se lit comme un objet decoratif, pas comme une lampe — et la salle s'interdit l'inverse depuis A5 : une lumiere sans objet visible.\nSANS TEXTURE, et c'est une correction. Elle portait `painted_panel.jpg` pave a 20 cm : sur une bille de 9 cm on ne voyait donc qu'un FRAGMENT du motif, etire, et `texgen` en avait tire une carte de normales qui le mettait en relief. Le resultat, mesure sur une capture a 0,71 m, etait une croute de chou-fleur de 12,6 cm de large la ou l'objet en declare 9. Une ampoule est du VERRE : lisse, uniforme, et ce qu'on en voit vient de ce qu'elle EMET, pas de ce qu'elle renvoie. Sans cle `texture`, roomgen pose -1 et le moteur retombe sur son blanc et sa normale plate : exactement ce qu'il faut. 0,08 de rugosite pour le reflet etroit d'une bulle de verre."
     },
     {
-      "name": "neon_tube_bleu",
+      "name": "neon_tube_cyan",
       "texture": "painted_panel.jpg",
       "baseColor": [
-        0.63,
-        0.8,
+        0.58,
+        0.95,
         1.0,
         1.0
       ],
@@ -1554,31 +1559,35 @@
       "metallic": 0.0,
       "uvMetres": 0.2,
       "emissive": [
-        0.26,
-        0.6,
+        0.1,
+        0.68,
         1.0
       ],
-      "emissiveStrength": 1.1,
-      "_": "Le VERRE d'un tube au neon : il ne renvoie presque rien et il emet. La teinte d'emission est exactement celle de la source qu'il porte — un tube dont le verre serait d'une autre couleur que sa lumiere se remarque immediatement."
+      "emissiveStrength": 3.9,
+      "_": "Le VERRE d'un tube au neon : il ne renvoie presque rien et il emet. La teinte d'emission est exactement celle de la source qu'il porte — un tube dont le verre serait d'une autre couleur que sa lumiere se remarque immediatement.",
+      "_teinte": "LA TEINTE D'UN TUBE NE SE CHOISIT PAS SUR UNE PASTILLE, elle se choisit sur les ALBÉDOS QU'IL ÉCLAIRE — et il a fallu deux mesures pour l'admettre.\nD'ABORD LE NOM : il s'appelait « neon_tube_bleu » et il l'était. gbuffer.frag multiplie l'émissif par l'albédo texel par texel, et (0,26 0,60 1,00) contre (0,63 0,80 1,00) sort à une teinte de 217°, donc dans BLEU (205-265) et non dans CYAN (165-205). Le relevé de la vue « centre » le disait sans qu'on le lise : cyan 0,5 %, bleu 2,6 %. Les trois tubes ouest comptaient dans la mauvaise colonne, et la consigne « rose + cyan » ne les voyait pas.\nPUIS (0,10 0,58 1,00), qui tenait le verre à 192° et perdait tout le reste : la MÊME émission rendait le crépi du mur (0,52 0,44 0,34) à 198°, le plafond à 170° et le béton neutre (0,66 0,62 0,58) à 208°, c'est-à-dire hors famille. Vue « allee » : cyan 8,8 % pour vert 8,2 % et bleu 10,3 % — les deux tiers de la lumière froide de la salle se comptaient ailleurs qu'où on l'avait mise.\n(0,10 0,68 1,00) rend ces trois surfaces à 188°, 191° et 198° d'albédo seul, et la plus excentrée est à 14° de la frontière au lieu de la franchir. Le verre, lui, ne bouge presque pas : 189° contre 192°.",
+      "_force": "1,1 N'ALLUMAIT RIEN, et c'est la consigne « brule » qui le chiffre : elle compte les pixels au-dessus de 200 sur 255, c'est-à-dire le NOMBRE DE SOURCES VISIBLES, et une salle d'arcade en a beaucoup. Les huit vues nommées en donnaient 0,17 à 0,70 % pour 2,0 % demandés, avec vingt-six lumières allumées.\nIL A FALLU DEUX LEVIERS ET NON UN. L'émissif d'abord : à 2,8 la moyenne des huit montait à 1,72 %, encore sous la barre. Un tube de néon a un CŒUR qui sature — c'est ce qui le distingue d'un bandeau peint — et il faut DÉPASSER le seuil de la passe de halo, pas l'effleurer ; à 3,9 le cœur brûle et la courbe ACES garde la teinte du halo, ce qui est écrit dans tonemap.frag et ce qui rend cette voie meilleure que monter la lampe, qui délaverait le mur derrière.\nLA SECTION ENSUITE, et c'était le vrai plafond : un tube de 9 cm vu de six mètres fait un pixel et demi de large sur une image de 1024, donc il ne peut pas brûler grand-chose quelle que soit son émission. Les dix-neuf props de tube gagnent donc en section : 9 -> 11 cm pour les sept qu'on voit de face, au plafond et dans le couloir ; 10 -> 13 cm de haut pour les six des murs, qu'on voit par la tranche ; 7,5 -> 9 pour les six plinthes. C'est la cote d'un profilé de corniche avec son diffuseur, pas celle du verre nu, et la moyenne des huit vues passe de 2,36 à 2,68 %."
     },
     {
       "name": "neon_tube_magenta",
       "texture": "painted_panel.jpg",
       "baseColor": [
+        0.94,
+        0.56,
         1.0,
-        0.6,
-        0.79,
         1.0
       ],
       "roughness": 0.24,
       "metallic": 0.0,
       "uvMetres": 0.2,
       "emissive": [
-        1.0,
-        0.2,
-        0.58
+        0.88,
+        0.1,
+        1.0
       ],
-      "emissiveStrength": 1.1
+      "emissiveStrength": 3.9,
+      "_teinte": "LE ROSE EST VIOLET, ET C'EST UNE MESURE. Il valait (1,00 0,20 0,58), soit 337° : dans ROSE (265-345) mais à 8° du rouge, et un néon n'éclaire jamais une surface seule — il s'ajoute à l'ambiance ambrée du moteur, qui le pousse du mauvais côté de la frontière. La première pose de cette couche l'a montré chiffre en main : la vue « centre » est passée de 6,8 % à 23,8 % de ROUGE, c'est-à-dire que le néon qu'on venait d'ajouter se comptait comme du tungstène.\nÀ (0,88 0,10 1,00) le verre sort à 289° et le crépi qu'il éclaire à 317° : 28° de marge du rouge au lieu de 8, et le mélange avec l'ambiance ne les mange plus. Même dérivation que pour le tube cyan, et même raison — voir son « _teinte ».",
+      "_force": "Même dérivation que le tube cyan, et les deux bougent ensemble : voir « _force » là-bas."
     },
     {
       "name": "cabine_panneau",
@@ -1689,7 +1698,7 @@
       "why": "la photo d'enduit de 2020, sur les 197 m2 de mur du hall. Sa tache dominante fait 12 a 14 mm — du tyrolien projete, pas le crepi ecrase que la description annoncait — et son ecart-type de luminance vaut 32,3 sur 255, c'est-a-dire une ombre PEINTE dans l'albedo que la lumiere de la salle ne justifie nulle part. De pres le mur etait en pop-corn, de loin il gresillait. Remplacee par `mur_crepi.png`, dessinee par `tools/murart` a spectre borne et a reflectance identique sur les trois canaux. Le fichier reste dans `legacy/` ; aucune autre salle ne l'emploie — verifie, `salle-legacy.gltf` ne la reference pas."
     }
   ],
-  "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources. Ici quatre plafonniers faibles balisent la circulation, des néons colorés rasent les murs, et l'essentiel de la lumière vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines qui éclairent.",
+  "_lumieres": "Déclarées, avec leur nom et leur portée. La salle a été RÉÉCLAIRÉE DEUX FOIS.\nD'ABORD VERS LE BAS : vingt plafonniers de 500 avec 11 m de portée éclairaient un supermarché, pas une salle d'arcade — et c'était aussi la moitié du coût par image, puisque chaque passe boucle sur toutes les sources.\nPUIS VERS LE NÉON, parce que le premier réglage avait remplacé un supermarché par un entrepôt au tungstène. Les huit vues nommées mesuraient 87,3 % d'ambre, 1,9 % de rose et 0,2 % de cyan, pour une photo de référence qui est TRAVERSÉE de tubes ; et 35,0 de médiane de luminance pour une salle qui doit être sombre sans être noire.\nAUJOURD'HUI : quatre plafonniers faibles balisent la circulation, DIX-HUIT COURSES DE NÉON portent la couleur — cinq en travers du plafond sous les poutres, six au haut des murs et des deux pans coupés, six en plinthe au pied des rangées, du comptoir et de l'estrade, une dans le couloir d'entrée — et l'essentiel du reste vient des DIX-NEUF ÉCRANS DE BORNES, que le moteur ajoute lui-même. C'est ce qui donne le confiné et le tamisé demandés : dans une vraie salle d'arcade, ce sont les machines et les tubes qui éclairent, et les plafonniers servent à ne pas se cogner.",
   "_intensite": "Le shader intègre color * intensity / (4 pi d^2) (lighting.frag:123). À 3 m sous un plafonnier, cela vaut intensity / 113 : sur une moquette d'albédo linéaire 0,03, il faut donc de l'ordre du millier pour éclairer un sol, pas de la centaine. Les 165 essayés d'abord donnaient une salle noire — et c'est exactement pour cela que celle de 2020 paraissait éclairée : ce n'étaient pas ses lumières ponctuelles qui portaient l'image, mais une dalle émissive de 600 m² au plafond.",
   "_luminaires": "panelSize donne l'emprise du luminaire dans la trame. 1,20 x 0,60 est le format courant d'un pavé de faux plafond : deux dalles. Les X sont donc posés sur un JOINT de trame (-11,10 + 5 x 0,60 = -8,10) et les Z sur un CENTRE de dalle, pour que la paire tombe juste.",
   "lights": [
@@ -1705,7 +1714,7 @@
         0.78,
         0.52
       ],
-      "intensity": 96.0,
+      "intensity": 76.0,
       "range": 5.4,
       "radius": 0.42,
       "ceilingPanel": true,
@@ -1737,7 +1746,7 @@
         0.79,
         0.54
       ],
-      "intensity": 45.0,
+      "intensity": 36.0,
       "range": 3.4,
       "radius": 0.32,
       "flicker": false,
@@ -1769,7 +1778,7 @@
         0.79,
         0.54
       ],
-      "intensity": 45.0,
+      "intensity": 36.0,
       "range": 3.4,
       "radius": 0.32,
       "flicker": false,
@@ -1801,7 +1810,7 @@
         0.83,
         0.63
       ],
-      "intensity": 96.0,
+      "intensity": 32.0,
       "range": 5.6,
       "radius": 0.42,
       "ceilingPanel": true,
@@ -1817,7 +1826,8 @@
           0.0
         ]
       },
-      "_": "Deux plafonniers AU-DESSUS DU CLIENT, pas au-dessus du barman. Ils étaient à z 6,2 quand le comptoir est à 6,3 : la face qu'on regarde en s'approchant était dans leur ombre, et le point de vue `bar` rendait une image entièrement noire — la géométrie était juste, l'éclairage était du mauvais côté du meuble."
+      "_": "Deux plafonniers AU-DESSUS DU CLIENT, pas au-dessus du barman. Ils étaient à z 6,2 quand le comptoir est à 6,3 : la face qu'on regarde en s'approchant était dans leur ombre, et le point de vue `bar` rendait une image entièrement noire — la géométrie était juste, l'éclairage était du mauvais côté du meuble.",
+      "_ambre": "LES VINGT-TROIS SOURCES AMBRÉES DE LA SALLE DESCENDENT DE 18 À 67 %, et ce n'est pas un goût.\nLA CONSIGNE EST QUE L'AMBRE RESTE — c'est le bois, le comptoir, les marquees, et il n'y a pas de salle d'arcade sans lui — mais qu'il cesse de porter TOUTE la masse colorée : les huit vues nommées en mesuraient 87,3 % de moyenne, pour 2,1 % de rose + cyan réunis. Treize courses de néon posées SOUS vingt-quatre sources ambrées ne se seraient pas vues davantage que les six d'avant : une lampe qu'on n'éteint pas reste une lampe qui décide de la teinte de ce qu'elle touche.\nLA BAISSE EST BORNÉE PAR LA MÉDIANE, qui est l'autre consigne et qui tire dans l'autre sens : les huit vues rendent 73,8 pour 55 demandés, il y a donc de la marge, et c'est l'ambre qui la rend puisque c'est lui qui est en trop. Aucune des vingt-trois n'est éteinte, et `plafonnier_toilettes` — la seule qui ne soit pas ambrée — ne bouge pas.\nCELLE-CI TOMBE LE PLUS BAS DE TOUTES, 96 à 32, parce que la vue « bar » est le seul cadrage où un mur nu occupe presque tout le champ : c'est là que le tungstène se voyait le plus, et là qu'il servait le moins."
     },
     {
       "name": "plafonnier_sud",
@@ -1831,7 +1841,7 @@
         0.76,
         0.5
       ],
-      "intensity": 62.0,
+      "intensity": 50.0,
       "range": 5.0,
       "radius": 0.34,
       "flicker": false,
@@ -1854,7 +1864,7 @@
         0.8,
         0.56
       ],
-      "intensity": 78.0,
+      "intensity": 62.0,
       "range": 4.2,
       "radius": 0.3,
       "flicker": false,
@@ -1914,12 +1924,12 @@
         -5.6
       ],
       "color": [
-        0.26,
-        0.6,
+        0.1,
+        0.68,
         1.0
       ],
-      "intensity": 24.0,
-      "range": 4.2,
+      "intensity": 78.0,
+      "range": 7.0,
       "radius": 0.9,
       "repeat": {
         "count": 3,
@@ -1931,7 +1941,8 @@
       },
       "_": "Accent froid sur base chaude — donc visible. Sur base froide il disparaissait.",
       "_poste_19": "SPEC-ATMOSPHERE §3.5 (c). À 2,20 m avec un rayon de 0,55 il lavait LE MUR, deuxième plus grande surface du décor, en bleu : sur `travee_ouest` le mur kaki virait au vert-de-gris, seule lumière froide d'un décor dont le mandat dit « couleurs chaudes ». Remonté à 2,58 il éclaire la corniche (3,10) et le haut du mur, au-dessus de la cimaise (2,42) ; rayon 0,90 parce que c'est un TUBE et pas une ampoule ; intensité 24 parce que le bleu est la seule teinte froide de la salle. L'est reste à 40 : le magenta est chaud.",
-      "_c07": "DEUX CORRECTIONS, dont une que C-07 n'a pas vue parce qu'il ne la cherche pas.\nLe troisieme exemplaire tombait a z 4,0, ou le pan coupe nord-ouest a deja ramene le parement a x -5,653 : il eclairait DEPUIS LA RUE. Son jumeau de l'est tombait a z 6,0, c'est-a-dire dans le couloir d'entree et non sur le mur est. Les trois exemplaires partent maintenant de z -6 et couvrent -6, -2 et +2 — le mur ouest va de -7,135 a 2,539 et le mur est de -7,135 a 3,646 : les six y sont.\nEt ils ont un CORPS. C'etaient six sources sans le moindre triangle : une lumiere coloree qui sortait de rien, sur un mur nu. Voir le prop `tube_neon_ouest`."
+      "_c07": "DEUX CORRECTIONS, dont une que C-07 n'a pas vue parce qu'il ne la cherche pas.\nLe troisieme exemplaire tombait a z 4,0, ou le pan coupe nord-ouest a deja ramene le parement a x -5,653 : il eclairait DEPUIS LA RUE. Son jumeau de l'est tombait a z 6,0, c'est-a-dire dans le couloir d'entree et non sur le mur est. Les trois exemplaires partent maintenant de z -6 et couvrent -6, -2 et +2 — le mur ouest va de -7,135 a 2,539 et le mur est de -7,135 a 3,646 : les six y sont.\nEt ils ont un CORPS. C'etaient six sources sans le moindre triangle : une lumiere coloree qui sortait de rien, sur un mur nu. Voir le prop `tube_neon_ouest`.",
+      "_portee": "24 ET 4,2 M DE PORTÉE : C'ÉTAIT LE VRAI DÉFAUT DES SIX TUBES D'ORIGINE, et il n'était pas dans l'intensité seule. Le shader fenêtre la contribution par (1 - (d/portée)^4)^2, donc à 4,0 m d'une source de 4,2 m de portée il ne reste que 3,2 % de ce que la distance laissait déjà passer : ces six tubes n'éclairaient RIEN au-delà de deux mètres, et la salle n'avait que ça de coloré. 78 et 7,0 m portent le mur entier au lieu d'une flaque autour du verre."
     },
     {
       "name": "neon_mur_est",
@@ -1941,12 +1952,12 @@
         -5.6
       ],
       "color": [
-        1.0,
-        0.2,
-        0.58
+        0.88,
+        0.1,
+        1.0
       ],
-      "intensity": 40.0,
-      "range": 4.2,
+      "intensity": 60.0,
+      "range": 7.0,
       "radius": 0.9,
       "repeat": {
         "count": 3,
@@ -1957,7 +1968,8 @@
         ]
       },
       "_": "Le magenta, l'autre accent. Les deux tubes portent le « néon » que tu demandais ; ce n'est pas à eux d'éclairer la salle.",
-      "_c07": "Meme correction que `neon_mur_ouest` : le troisieme exemplaire etait dans le couloir."
+      "_c07": "Meme correction que `neon_mur_ouest` : le troisieme exemplaire etait dans le couloir.",
+      "_portee": "Même correction, même dérivation que « neon_mur_ouest ». 60 et non 78 : le rose rend 1,5 fois plus qu'un cyan de même flux sur les albédos chauds de cette salle — voir « _niveau » de « neon_poutre_sud », qui porte la mesure."
     },
     {
       "name": "applique_entree",
@@ -1971,7 +1983,7 @@
         0.72,
         0.44
       ],
-      "intensity": 44.0,
+      "intensity": 36.0,
       "range": 3.4,
       "radius": 0.11,
       "repeat": {
@@ -2001,8 +2013,9 @@
         0.76,
         0.48
       ],
-      "intensity": 150.0,
-      "range": 4.2
+      "intensity": 105.0,
+      "range": 4.2,
+      "_ambre": "150 FAISAIT DU BILLARD LA LAMPE LA PLUS FORTE DE LA SALLE, et la vue qui porte son nom le disait : 53,2 % d'ambre pour 14,3 % de néon, la plus mauvaise des huit après le couloir. Une suspension de billard éclaire un TAPIS de 2,50 x 1,30 m, pas une salle : à 105 elle tient toujours 3,3 W/m² au centre du tapis, ce qui est le double de ce que la moquette autour reçoit, et c'est exactement le contraste qu'on lui demande."
     },
     {
       "_": "Suit sa cage. at (-6,900 ; 2,250 ; -0,210) -> (-6,864 ; 2,190 ; -0,100) : écart LOCAL inchangé, 1,8 cm devant la gueule de la cage — la source reste hors du luminaire, ce que `check_lights_not_enclosed` vérifie.",
@@ -2017,7 +2030,7 @@
         0.82,
         0.6
       ],
-      "intensity": 38.0,
+      "intensity": 30.0,
       "range": 3.2,
       "_c07": "DEPLACEE DE 61 CM, et pour une raison qui vaut d'etre ecrite : C-07 avait cesse de la signaler SANS qu'elle ait gagne un luminaire. Il mesure « de la geometrie de prop a moins de 40 cm », sans verifier a QUI elle appartient — et le troisieme tube au neon, pose sur le meme mur, passait a 31,5 cm d'elle. Un controle qui passe pour la mauvaise raison est pire qu'un controle qui echoue. Elle est donc allee dans la travee libre entre `pilier_ouest_2` et le tube, ou une vraie applique tient.",
       "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
@@ -2035,8 +2048,9 @@
         0.83,
         0.62
       ],
-      "intensity": 82.0,
-      "range": 4.4
+      "intensity": 46.0,
+      "range": 4.4,
+      "_ambre": "La source la plus isolée de la salle — elle éclaire la borne de classement depuis 3,04 m de vide, et sa ligne est écrite dans `RG_LIGHT_BODY_DEBT`. Elle tombe de 82 à 46 : l'estrade a maintenant ses deux joues de néon et son nez, donc la marche se lit sans qu'un plafonnier vienne la repeindre en ambre."
     },
     {
       "_": "Les trois trous de la carte de couverture. Elle est calculée sur le SOL, luminaire par luminaire, en 1/d² borné par la portée : 8 % du hall n'y recevait rien du tout, en trois taches nettes — la bande centrale-est (x de 1 à 6, tout le nord), le coin sud-est, et la bande sud entre l'estrade et le mur. Ce ne sont pas des recoins à laisser dans l'ombre : ce sont les surfaces qu'on traverse. Chaleur et portée alignées sur les plafonniers voisins pour que les flaques se recouvrent au lieu de laisser des anneaux noirs entre elles.",
@@ -2051,7 +2065,7 @@
         0.8,
         0.56
       ],
-      "intensity": 88.0,
+      "intensity": 68.0,
       "range": 5.2,
       "radius": 0.42,
       "ceilingPanel": true,
@@ -2081,7 +2095,7 @@
         0.77,
         0.52
       ],
-      "intensity": 74.0,
+      "intensity": 58.0,
       "range": 4.8,
       "radius": 0.42,
       "ceilingPanel": true,
@@ -2103,7 +2117,7 @@
         0.79,
         0.54
       ],
-      "intensity": 72.0,
+      "intensity": 56.0,
       "range": 4.6,
       "radius": 0.42,
       "ceilingPanel": true,
@@ -2125,7 +2139,7 @@
         0.8,
         0.56
       ],
-      "intensity": 62.0,
+      "intensity": 50.0,
       "range": 4.2,
       "radius": 0.1,
       "_source": "La source suit les AMPOULES : au barycentre des deux globes, donc a 0,265 m devant la platine, exactement comme « applique_sud » dont la source est a z -6,748 pour une platine a -7,013. Elle a suivi le demi-tour du luminaire : la platine etant passee de 6,720 a 6,953 et les cages de +X a -X, le barycentre est passe de 6,455 a 6,688. Le laisser a 6,455 aurait mis la lumiere 23 cm DEVANT la gueule des cages, c'est-a-dire nulle part."
@@ -2143,7 +2157,7 @@
         0.79,
         0.54
       ],
-      "intensity": 48.0,
+      "intensity": 36.0,
       "range": 3.8,
       "radius": 0.1,
       "repeat": {
@@ -2154,7 +2168,8 @@
           0.0
         ]
       },
-      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5."
+      "_source": "La source suit les AMPOULES : au barycentre des deux globes, qui sont desormais dans les cages. Elle etait posee sur l'ancienne bille unique, 23 cm en avant de la platine et 13 cm sous les cages — une lumiere qui ne sortait pas de l'objet cense la porter, ce que la salle s'interdit depuis A5.",
+      "_ambre": "48 -> 36 avec les vingt-deux autres sources ambrées de la salle : voir « plafonnier_bar._ambre », qui porte la mesure et le motif. Le « 48 et non 62 » ci-dessus reste vrai de la comparaison qu'il fait — ces quatre-là sont plus faibles que celle du couloir — mais la valeur, elle, a bougé."
     },
     {
       "name": "suspension_comptoir",
@@ -2169,7 +2184,7 @@
         0.83,
         0.62
       ],
-      "intensity": 74.0,
+      "intensity": 40.0,
       "range": 4.4,
       "radius": 0.12,
       "_occlusion": "Posee DEVANT le luminaire et non dedans. La cage d'une applique industrielle est un solide comme un autre pour le lancer de rayons, qui ne connait pas les materiaux emissifs : une source placee a l'interieur s'occulte elle-meme. Symptome caracteristique, et mesure ici comme pour la suspension du billard — tripler l'intensite ne changeait rien (mediane 11 puis 13)."
@@ -2186,7 +2201,7 @@
         0.79,
         0.54
       ],
-      "intensity": 85.0,
+      "intensity": 65.0,
       "range": 4.2,
       "radius": 0.11,
       "_": "1,78 m : SOUS l'ampoule (qui occupe 1,84 a 1,92) et sous la cage. Une source posee dans son propre luminaire est integralement occultee par lui — le lancer de rayons ne connait pas les materiaux emissifs. Ce piege a coute deux fois dans ce projet.",
@@ -2204,7 +2219,7 @@
         0.78,
         0.5
       ],
-      "intensity": 110.0,
+      "intensity": 82.0,
       "range": 3.6,
       "radius": 0.1,
       "_": "SPEC-ATMOSPHERE §3.5 (a), poste 1. SIX suspensions basses, une par lieu du §2.3. Le raisonnement est celui du billard, mesuré : une dalle de faux plafond à 2,74 m, 74 d'intensité et 4,6 m de portée donne 0,49 d'éclairement au sol ; la suspension du billard, à 1,56 m, 150 et 4,2, en donne 3,74 — sept fois et demie plus pour deux fois l'intensité. Le facteur qui travaille est le carré de la distance, pas le réglage. Une salle tamisée ne se règle pas en baissant les plafonniers, elle se règle en DESCENDANT LES LAMPES À LA HAUTEUR DES GENS.",
@@ -2222,7 +2237,7 @@
         0.78,
         0.5
       ],
-      "intensity": 110.0,
+      "intensity": 82.0,
       "range": 3.6,
       "radius": 0.1
     },
@@ -2238,7 +2253,7 @@
         0.78,
         0.5
       ],
-      "intensity": 110.0,
+      "intensity": 82.0,
       "range": 3.6,
       "radius": 0.1,
       "_": "À l'aplomb du plateau du baby-foot (0,87 m) : une lampe de table de jeu, pas un plafonnier."
@@ -2255,7 +2270,7 @@
         0.78,
         0.5
       ],
-      "intensity": 110.0,
+      "intensity": 82.0,
       "range": 3.6,
       "radius": 0.1,
       "_": "La bande sud était la poche la plus profonde de la salle — 5,12 m de tout meuble. Un banc dans le noir ne se voit pas : les postes 1 et 2 sont indissociables."
@@ -2272,7 +2287,7 @@
         0.78,
         0.5
       ],
-      "intensity": 110.0,
+      "intensity": 82.0,
       "range": 3.6,
       "radius": 0.1
     },
@@ -2288,13 +2303,400 @@
         0.78,
         0.5
       ],
-      "intensity": 70.0,
+      "intensity": 55.0,
       "range": 2.8,
       "radius": 0.1,
       "_": "Le bout est du comptoir, là où le §2.3 B pose le monnayeur (poste 7, pas encore fait). Plus haute et plus faible que les cinq autres : on s'y tient debout, on ne s'y assoit pas. Son luminaire est le même, remonté de 15 cm."
+    },
+    {
+      "_": "LES SOURCES DES COURSES DE PLAFOND. Quatre par course et non une : une course fait 13,2 m et le shader intègre intensity/(4 pi d²), donc une source unique au milieu laisserait les deux bouts à 6,6 m, c'est-à-dire à 2,3 % de ce qu'elle donne sous elle. Le pas de 3,30 m tient l'écart entre le point le mieux et le plus mal servi sous 2,2 fois.\nLE RAYON DE 1,10 M N'EST PAS UN RÉGLAGE : c'est la demi-longueur apparente d'un tube vu depuis le plafond à 50 cm. Sans lui la source serait ponctuelle, d2 = 0,25, et la dalle juste au-dessus recevrait 4,8 fois ce qu'elle reçoit — elle sortirait blanche, et un néon qui blanchit son plafond n'est plus un néon.",
+      "name": "neon_poutre_sud",
+      "at": [
+        -4.95,
+        2.5,
+        -4.8
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 120.0,
+      "range": 8.5,
+      "radius": 1.1,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.3,
+          0.0,
+          0.0
+        ]
+      },
+      "_niveau": "LES SOURCES CYAN SONT À 1,30 FOIS LES ROSES, et l'écart est mesuré et non compensé au jugé. Les albédos de cette salle sont chauds — crépi (0,52 0,44 0,34), plafond, bois, bordeaux des poteaux — et un chaud rend beaucoup moins d'une lumière froide que d'une chaude : le même flux cyan sort à 0,66 fois la luminance du même flux rose sur le crépi. Or « teintes » ne compte QUE les pixels au-dessus de 40 sur 255 : à flux égal, la moitié de ce que le cyan touche tombait sous le seuil et ne comptait nulle part. 1,30 ramène les deux familles au même poids dans le relevé, ce qui est la seule chose qu'on cherchait."
+    },
+    {
+      "_": "La source de x = 1,65 tombe dans la coupure des deux tronçons : 35 cm du bout du tronçon ouest en plan, 8 cm en hauteur, soit 0,359 m — sous les 0,40 que C-07 demande entre une source et son luminaire.",
+      "name": "neon_poutre_salon",
+      "at": [
+        -4.95,
+        2.5,
+        -2.4
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 92.0,
+      "range": 8.5,
+      "radius": 1.1,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.3,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Même trame que « neon_poutre_sud ».",
+      "name": "neon_poutre_allee",
+      "at": [
+        -4.95,
+        2.5,
+        0.0
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 120.0,
+      "range": 8.5,
+      "radius": 1.1,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.3,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Même trame que « neon_poutre_sud ».",
+      "name": "neon_poutre_ilot",
+      "at": [
+        -4.95,
+        2.5,
+        2.4
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 92.0,
+      "range": 8.5,
+      "radius": 1.1,
+      "repeat": {
+        "count": 4,
+        "step": [
+          3.3,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Trois et non quatre : la poutre 5 ne fait que 10,50 m, et la course 10,00.",
+      "name": "neon_poutre_bar",
+      "at": [
+        -3.3,
+        2.5,
+        4.8
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 80.0,
+      "range": 8.5,
+      "radius": 1.1,
+      "repeat": {
+        "count": 3,
+        "step": [
+          3.3,
+          0.0,
+          0.0
+        ]
+      },
+      "_niveau": "80 et non les 120 des trois autres courses cyan, et c'est la même mesure que pour « neon_mur_nord » : cette course-ci tombe au-dessus du comptoir, dans le seul cadrage de la salle où un mur nu occupe presque tout le champ. Les 120 y montaient la médiane à 92 pour 55 demandés."
+    },
+    {
+      "_": "12 cm devant le verre, la cote des six sources d'origine : le tube ne doit pas s'éclairer lui-même par l'intérieur.",
+      "name": "neon_mur_sud",
+      "at": [
+        -3.226,
+        2.58,
+        -6.87
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 60.0,
+      "range": 7.0,
+      "radius": 0.9,
+      "repeat": {
+        "count": 3,
+        "step": [
+          3.226,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Même retrait de 12 cm que partout ailleurs.",
+      "name": "neon_mur_nord",
+      "at": [
+        -2.9,
+        2.58,
+        6.87
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 44.0,
+      "range": 7.0,
+      "radius": 0.9,
+      "repeat": {
+        "count": 2,
+        "step": [
+          5.8,
+          0.0,
+          0.0
+        ]
+      },
+      "_niveau": "44 ET NON 78, ET LA VUE « bar » A TRANCHÉ DEUX FOIS. C'est la seule des huit dont le champ est presque entièrement occupé par un mur, à 4,2 m de l'œil : à 78 elle rendait 92 de médiane pour 55 demandés, l'enseigne et le tableau des scores sortaient en blanc plat et le crépi perdait son grain. Le brouillard volumétrique double la peine, puisqu'il s'allume au carré de l'éclairement : le voile laiteux qu'on voyait autour de l'enseigne n'était pas la lampe, c'était l'air devant elle. À 44 le tube reste ce qu'on regarde et le mur redevient un mur."
+    },
+    {
+      "_": "Deux sources sur 4,40 m de tube, à ±1,30 m du milieu le long de l'axe du pan (0,4195 ; 0,9078) et 12 cm en avant de son parement.",
+      "name": "neon_pan_ouest",
+      "at": [
+        -4.496,
+        2.58,
+        5.914
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 78.0,
+      "range": 7.0,
+      "radius": 0.9,
+      "repeat": {
+        "count": 2,
+        "step": [
+          -1.091,
+          0.0,
+          -2.36
+        ]
+      }
+    },
+    {
+      "_": "Le symétrique, au pas symétrique.",
+      "name": "neon_pan_est",
+      "at": [
+        4.496,
+        2.58,
+        5.914
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 60.0,
+      "range": 7.0,
+      "radius": 0.9,
+      "repeat": {
+        "count": 2,
+        "step": [
+          1.091,
+          0.0,
+          -2.36
+        ]
+      }
+    },
+    {
+      "_": "LES SOURCES DES PLINTHES, et leur cote est contrainte des deux côtés. 18 cm de haut et 12 cm en avant du verre : 0,159 m du tube, donc sous les 0,40 de C-07, et assez haut pour que la moquette reçoive autre chose qu'un rasant — à 6 cm le cosinus d'incidence tombe sous 0,1 dès 60 cm et la plinthe n'éclairerait qu'elle-même.",
+      "name": "neon_plinthe_ilot_nord",
+      "at": [
+        -2.245,
+        0.18,
+        1.95
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 72.0,
+      "range": 4.5,
+      "radius": 0.32,
+      "repeat": {
+        "count": 2,
+        "step": [
+          4.5,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Même cote, autre face de l'îlot.",
+      "name": "neon_plinthe_ilot_sud",
+      "at": [
+        -2.245,
+        0.18,
+        -0.568
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 92.0,
+      "range": 4.5,
+      "radius": 0.32,
+      "repeat": {
+        "count": 2,
+        "step": [
+          4.5,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "_": "Deux sources sur 5,40 m de plinthe, à ±1,20 m du milieu.",
+      "name": "neon_plinthe_rangee_ouest",
+      "at": [
+        -5.82,
+        0.18,
+        -1.8
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 72.0,
+      "range": 4.5,
+      "radius": 0.32,
+      "repeat": {
+        "count": 2,
+        "step": [
+          0.0,
+          0.0,
+          2.4
+        ]
+      }
+    },
+    {
+      "_": "Une seule : le comptoir fait 5,40 m et la vue « bar » le prend de face, donc l'écart entre le milieu et les bouts n'y est pas lisible.",
+      "name": "neon_plinthe_bar",
+      "at": [
+        0.0,
+        0.18,
+        5.47
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 70.0,
+      "range": 4.5,
+      "radius": 0.32
+    },
+    {
+      "_": "Une seule, pour 2,50 m de nez d'estrade.",
+      "name": "neon_plinthe_estrade",
+      "at": [
+        0.0,
+        0.18,
+        -2.78
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 72.0,
+      "range": 4.5,
+      "radius": 0.32
+    },
+    {
+      "_": "Trois sources sur 6,40 m, 8 cm sous le verre. Le couloir fait 1,67 m de libre : une source y touche ses deux parements à moins d'un mètre, donc 46 et non les 80 à 120 des courses du hall, qui éclairent une salle de 14 m.",
+      "name": "neon_couloir",
+      "at": [
+        6.1185,
+        2.67,
+        7.0
+      ],
+      "color": [
+        0.88,
+        0.1,
+        1.0
+      ],
+      "intensity": 46.0,
+      "range": 6.0,
+      "radius": 0.8,
+      "repeat": {
+        "count": 3,
+        "step": [
+          0.0,
+          0.0,
+          2.2
+        ]
+      }
+    },
+    {
+      "_": "Deux sources, une par joue, à 18 cm de haut et 12 cm en dehors du verre — la cote des cinq autres plinthes, et 0,159 m du tube, donc sous les 0,40 m que C-07 demande entre une source et son luminaire.",
+      "name": "neon_plinthe_estrade_joue",
+      "at": [
+        -1.42,
+        0.18,
+        -4.665
+      ],
+      "color": [
+        0.1,
+        0.68,
+        1.0
+      ],
+      "intensity": 92.0,
+      "range": 4.5,
+      "radius": 0.32,
+      "repeat": {
+        "count": 2,
+        "step": [
+          2.84,
+          0.0,
+          0.0
+        ]
+      }
     }
   ],
-  "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.",
+  "_poussiere": "Où l'air est chargé. Une zone est une boîte, une densité en grains par mètre cube, un courant d'air et une teinte. Ce n'est pas de la décoration répartie au hasard : la poussière ne se VOIT que dans un faisceau, donc elle est déclarée là où les plafonniers tombent — au-dessus de l'îlot et de l'allée — et nulle part ailleurs. En mettre partout coûterait autant et ne se verrait pas.\nLA COULEUR EST CELLE DU GRAIN, PAS CELLE DE LA LAMPE. Les cinq zones portaient (1,00 0,86 0,66) : c'est-à-dire qu'on avait peint le tungstène DANS la matière, et qu'un faisceau de néon cyan traversant l'îlot en ressortait ambré. Un grain de poussière est gris ; ce qu'on voit de lui vient de ce qui l'éclaire. Les quatre zones du hall passent donc au neutre légèrement froid. Le sas garde sa teinte chaude : il n'a que des appliques à filament, et là le grain EST ambré.",
   "dust": [
     {
       "name": "poussiere_ilot",
@@ -2316,9 +2718,9 @@
       ],
       "size": 0.014,
       "color": [
-        1.0,
-        0.86,
-        0.66
+        0.94,
+        0.95,
+        1.0
       ],
       "brightness": 0.275,
       "_": "Sous les deux rampes de l'îlot : c'est là qu'on joue, et c'est là que les cônes de lumière tombent."
@@ -2343,9 +2745,9 @@
       ],
       "size": 0.014,
       "color": [
-        1.0,
-        0.82,
-        0.6
+        0.94,
+        0.95,
+        1.0
       ],
       "brightness": 0.231,
       "_": "L'allée ouest, sous les plafonniers, jusqu'au billard."
@@ -2370,12 +2772,12 @@
       ],
       "size": 0.014,
       "color": [
-        1.0,
-        0.88,
-        0.7
+        0.96,
+        0.96,
+        1.0
       ],
-      "brightness": 0.303,
-      "_": "Le comptoir, le seul endroit vraiment éclairé de la salle."
+      "brightness": 0.21,
+      "_": "Le comptoir. La brillance tombe de 0,303 a 0,21 : ces grains ont ete regles quand le bar n'avait que deux paves de faux plafond au-dessus de lui, et il y tombe aujourd'hui six sources de plus — la poussiere repond au CARRE de l'eclairement, donc la meme valeur n'y donne plus le meme voile."
     },
     {
       "name": "poussiere_salon",
@@ -2397,9 +2799,9 @@
       ],
       "size": 0.014,
       "color": [
-        1.0,
-        0.84,
-        0.62
+        0.94,
+        0.95,
+        1.0
       ],
       "brightness": 0.26,
       "_": "Le coin salon. Il n'avait pas de zone parce qu'il n'avait pas de lumiere : la poussiere repond au CARRE de l'eclairement, donc semer des grains dans le noir ne donne rien. Maintenant qu'une suspension y tombe, les grains la rendent visible — c'est le faisceau qu'on voit, pas la lampe."
@@ -2425,8 +2827,8 @@
       "size": 0.013,
       "color": [
         1.0,
-        0.86,
-        0.66
+        0.92,
+        0.86
       ],
       "brightness": 0.24,
       "_": "Le sas d'entree, sous son applique. C'est la premiere chose qu'on voit du jeu, et c'est le seul endroit ou l'on regarde la salle de loin : des grains dans l'embrasure donnent sa profondeur au passage."
@@ -7963,7 +8365,7 @@
       "name": "tube_neon_ouest",
       "at": [
         -7.07,
-        2.58,
+        2.55,
         -5.6
       ],
       "yaw": 0.0,
@@ -7980,7 +8382,7 @@
       "parts": [
         {
           "type": "box",
-          "material": "neon_tube_bleu",
+          "material": "neon_tube_cyan",
           "at": [
             0.0,
             0.0,
@@ -7988,19 +8390,20 @@
           ],
           "size": [
             0.05,
-            0.1,
+            0.13,
             1.9
           ],
           "chamfer": 0.012
         }
       ],
-      "_trame": "La trame suit les TRAVEES ENTRE PILIERS, pas une regle graduee. Les trois piliers engages de chaque mur long sont a z -3,963, -0,666 et +2,489 et font 0,486 de cote : ils laissent trois travees de 2,83, 2,81 et 2,67 m. Un tube de 1,90 tient dans chacune, centre a -5,60, -2,32 et +0,96 — un pas de 3,28. C'est le controle de recouvrement qui a impose la mesure : a la trame precedente, le troisieme tube traversait `pilier_ouest_2`."
+      "_trame": "La trame suit les TRAVEES ENTRE PILIERS, pas une regle graduee. Les trois piliers engages de chaque mur long sont a z -3,963, -0,666 et +2,489 et font 0,486 de cote : ils laissent trois travees de 2,83, 2,81 et 2,67 m. Un tube de 1,90 tient dans chacune, centre a -5,60, -2,32 et +0,96 — un pas de 3,28. C'est le controle de recouvrement qui a impose la mesure : a la trame precedente, le troisieme tube traversait `pilier_ouest_2`.",
+      "_section": "13 cm de haut et non 10, en même temps que les dix-sept courses posées avec elles : un tube de 9 à 10 cm vu de six mètres fait un pixel et demi de large sur une image de 1024, et ne peut donc pas brûler quoi que ce soit — voir « _force » du matériau, qui porte la mesure. Le tube DESCEND de 2,58 à 2,55 au lieu de monter : à 2,58 il atteignait 2,71 et pénétrait « poutre_1 » (2,700..2,900), ce que le contrôle de recouvrement a refusé en nommant le sommet exact. Son dessus reste à 2,680 et son jeu de 2,0 cm au parement ne bouge pas."
     },
     {
       "name": "tube_neon_est",
       "at": [
         7.07,
-        2.58,
+        2.55,
         -5.6
       ],
       "yaw": 0.0,
@@ -8025,12 +8428,13 @@
           ],
           "size": [
             0.05,
-            0.1,
+            0.13,
             1.9
           ],
           "chamfer": 0.012
         }
-      ]
+      ],
+      "_section": "Même section, même descente que « tube_neon_ouest »."
     },
     {
       "_": "LES DEUX APPLIQUES DU COULOIR, que C-07 a nommees d'une phrase : « s'appelle applique et n'en a pas ». `applique_entree` posait deux sources a 1,24 et 1,38 m du premier triangle. Meme modele et meme materiau que `applique_sas`, en vis-a-vis sur la joue ouest.\nx 5,52 et non 5,30 : le modele deborde de 0,31 m vers l'arriere, et le parement de la joue ouest est a 5,284 — a 5,30 la cage sortait de 11 cm dans la rue, et le controle des sorties l'a dit avant qu'une capture ne le montre. 5,52 est le symetrique exact de `applique_sas`, qui est a 0,233 m de son propre parement.",
@@ -8326,6 +8730,539 @@
             0.3
           ],
           "chamfer": 0.006
+        }
+      ]
+    },
+    {
+      "_": "LA COUCHE DE NÉON DU PLAFOND, celle de la photo de référence — cinq courses qui traversent la salle de part en part sous les cinq poutres, cyan et rose en alternance. Elle n'existait pas : la salle avait SIX tubes, tous plaqués aux deux murs longs, et les huit vues mesuraient 0,5 % de cyan et 0,6 % de rose contre 80,3 % d'ambre. Une salle d'arcade n'a pas ses néons sur les côtés du champ, elle les a EN TRAVERS.",
+      "name": "neon_poutre_sud",
+      "at": [
+        0.0,
+        2.57,
+        -4.8
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            13.2,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "La course de la poutre 2 est COUPÉE EN DEUX, et le contrôle de recouvrement a imposé la mesure : « pilier_salon » occupe x 1,405..1,891 sur toute la hauteur, donc un tube continu le traversait. Le tronçon ouest s'arrête à x = 1,30 et le tronçon est repart à 2,00 — 10,5 cm de dégagement de chaque côté du poteau, qu'on lit comme un joint et non comme un trou.",
+      "name": "neon_poutre_salon_ouest",
+      "at": [
+        -2.65,
+        2.57,
+        -2.4
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            7.9,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Même course, même hauteur, même règle de pose que « neon_poutre_sud ».",
+      "name": "neon_poutre_salon_est",
+      "at": [
+        4.3,
+        2.57,
+        -2.4
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            4.6,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Même course, même hauteur, même règle de pose que « neon_poutre_sud ».",
+      "name": "neon_poutre_allee",
+      "at": [
+        0.0,
+        2.57,
+        0.0
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            13.2,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Même course, même hauteur, même règle de pose que « neon_poutre_sud ».",
+      "name": "neon_poutre_ilot",
+      "at": [
+        0.0,
+        2.57,
+        2.4
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            13.2,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Même course, même hauteur, même règle de pose que « neon_poutre_sud ».",
+      "name": "neon_poutre_bar",
+      "at": [
+        0.0,
+        2.57,
+        4.8
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre » comme les six tubes d'origine, et pour la même raison : un tube n'a pas de façade, et « mur » déclencherait C-04 qui en réclame une. Il n'est pas non plus suspendu — il est vissé sous la poutre qui le porte, 2 cm sous sa sous-face (poutre 2,700..2,900, tube 2,570..2,680), et C-06 le mesurerait contre la sous-face des rails à 3,084 pour annoncer 40 cm de vide, un verdict faux. C'est le cas déjà écrit pour « suspension_billard », qui pend elle aussi à une poutre et non au plafond.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            10.0,
+            0.11,
+            0.11
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LE MUR SUD N'AVAIT AUCUN NÉON, et c'est le mur qu'on a devant soi dans trois des huit vues. Trois tubes de 1,90 m dans les trois travées entre les quatre pilastres engagés (x ±4,804 et ±1,648, 0,486 de côté) : centrés sur -3,226, 0 et +3,226, la même dérivation que la trame ouest — c'est le poteau qui donne le pas, pas une règle graduée.",
+      "name": "neon_mur_sud",
+      "at": [
+        -3.226,
+        2.55,
+        -6.99
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre », la raison écrite pour « tube_neon_ouest » : un tube n'a pas de façade et C-04, déclenché par la clé « mur », en exigerait une. Le tube est bien à 2,0 cm de son parement, comme les six d'origine.",
+      "pose": "libre",
+      "repeat": {
+        "count": 3,
+        "step": [
+          3.226,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            1.9,
+            0.13,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Le mur du bar, de part et d'autre de l'enseigne. Elle occupe x -1,273..1,273 et monte à 2,508 ; les deux tubes sont à x ±2,9 et vont de 2,550 à 2,680, donc 4,2 cm au-dessus d'elle et 62 cm de côté. La vue « bar » mesurait 95,9 % d'ambre au départ : c'est la seule des huit où le champ est presque entièrement occupé par un mur, et il n'y avait rien dessus.",
+      "name": "neon_mur_nord",
+      "at": [
+        -2.9,
+        2.55,
+        6.99
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre », la raison écrite pour « tube_neon_ouest » : un tube n'a pas de façade et C-04, déclenché par la clé « mur », en exigerait une. Le tube est bien à 2,0 cm de son parement, comme les six d'origine.",
+      "pose": "libre",
+      "repeat": {
+        "count": 2,
+        "step": [
+          5.8,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            2.0,
+            0.13,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LES DEUX PANS COUPÉS, qui ferment le hall au nord et qu'aucune source n'éclairait. Le lacet de 24,8° est celui d'« affiche_ouest_b », posée sur le même pan à (-5,1616 ; 4,7888) avec un lacet de 114,8 — 90° de plus, parce qu'un panneau se déclare par sa normale et un tube par son axe. Le tube fait 4,40 m sur les 5,06 du pan, ce qui laisse 33 cm à chaque bout.",
+      "name": "neon_pan_ouest",
+      "at": [
+        -5.15,
+        2.55,
+        4.784
+      ],
+      "yaw": 24.8,
+      "_pose": "« libre », la raison écrite pour « tube_neon_ouest » : un tube n'a pas de façade et C-04, déclenché par la clé « mur », en exigerait une. Le tube est bien à 2,0 cm de son parement, comme les six d'origine.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.13,
+            4.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Le pan symétrique, au lacet symétrique : 155,2° = 180 - 24,8. « affiche_est_b » y est posée à 245,2, soit les mêmes 90° d'écart.",
+      "name": "neon_pan_est",
+      "at": [
+        5.15,
+        2.55,
+        4.784
+      ],
+      "yaw": 155.2,
+      "_pose": "« libre », la raison écrite pour « tube_neon_ouest » : un tube n'a pas de façade et C-04, déclenché par la clé « mur », en exigerait une. Le tube est bien à 2,0 cm de son parement, comme les six d'origine.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.13,
+            4.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LA PLINTHE DE NÉON AU PIED DES RANGÉES, et c'est elle qui porte la MÉDIANE. Le tiers bas de chaque vue est de la moquette, et la moquette ne recevait de lumière que des plafonniers à 2,74 m : sept des huit vues rendaient moins de 55 de médiane, de 14,5 à 47,3, la huitième étant le couloir d'entrée qui n'a pas de moquette dans le champ. Une source posée à 6 cm du sol éclaire le sol, et une salle d'arcade en a — c'est le bandeau qui court sous les caissons. 7 cm devant la façade des bornes, donc hors du couloir de 80 cm de C-09, qui ignore de toute façon ce qui est sous 30 cm.",
+      "name": "neon_plinthe_ilot_nord",
+      "at": [
+        -2.245,
+        0.0,
+        1.83
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe REPOSE sur la moquette, sa base est à y = 0,000 et « sol_hall » y est aussi. C'est la seule des cinq poses qui dise quelque chose de vérifiable ici, et C-03 la vérifie à 10 mm près.",
+      "pose": "sol",
+      "repeat": {
+        "count": 2,
+        "step": [
+          4.5,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            2.62,
+            0.09,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "L'autre face de l'îlot, dos à dos avec la précédente : les bornes 7 à 12 regardent -Z et leur façade est à z = -0,348.",
+      "name": "neon_plinthe_ilot_sud",
+      "at": [
+        -2.245,
+        0.0,
+        -0.448
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe REPOSE sur la moquette, sa base est à y = 0,000 et « sol_hall » y est aussi. C'est la seule des cinq poses qui dise quelque chose de vérifiable ici, et C-03 la vérifie à 10 mm près.",
+      "pose": "sol",
+      "repeat": {
+        "count": 2,
+        "step": [
+          4.5,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            2.62,
+            0.09,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "La rangée de six bornes du mur ouest. Leur façade regarde +X et tombe à x = -6,040 ; la plinthe est à -5,940, soit 7,5 cm devant.",
+      "name": "neon_plinthe_rangee_ouest",
+      "at": [
+        -5.94,
+        0.0,
+        -0.6
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe REPOSE sur la moquette, sa base est à y = 0,000 et « sol_hall » y est aussi. C'est la seule des cinq poses qui dise quelque chose de vérifiable ici, et C-03 la vérifie à 10 mm près.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.09,
+            5.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Le pied du comptoir. Son caisson descend à z = 5,690 et fait 5,40 m de long ; la plinthe est à 6,5 cm devant lui et 20 cm plus courte, pour qu'on voie qu'elle s'arrête avant le meuble.",
+      "name": "neon_plinthe_bar",
+      "at": [
+        0.0,
+        0.0,
+        5.6
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe REPOSE sur la moquette, sa base est à y = 0,000 et « sol_hall » y est aussi. C'est la seule des cinq poses qui dise quelque chose de vérifiable ici, et C-03 la vérifie à 10 mm près.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            5.0,
+            0.09,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "Le nez de l'estrade, qui est au centre exact de quatre des huit vues et qui est aussi la surface la plus sombre du décor (« sol_sombre », réflectance mesurée 0,0031). Le bord de l'estrade tombe à z = -2,981 ; la plinthe est 5,6 cm devant.",
+      "name": "neon_plinthe_estrade",
+      "at": [
+        0.0,
+        0.0,
+        -2.9
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe REPOSE sur la moquette, sa base est à y = 0,000 et « sol_hall » y est aussi. C'est la seule des cinq poses qui dise quelque chose de vérifiable ici, et C-03 la vérifie à 10 mm près.",
+      "pose": "sol",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            2.5,
+            0.09,
+            0.05
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LE COULOIR D'ENTRÉE N'AVAIT PAS DE NÉON, et c'est la PREMIÈRE chose qu'on voit du jeu : la vue « entree » mesurait 99,5 % d'ambre, 0,0 % de rose, 0,0 % de cyan — la seule des huit vues où la couche de néon n'existait tout simplement pas. Une course de 6,40 m dans l'axe du couloir (x = 6,1185, celui du battant et du bloc de secours), de 2,750 à 2,860, soit 22 cm sous la sous-face des dalles (3,084) et bien au-dessus des deux appliques à 2,15. Elle s'arrête à z = 12,40, 24 cm avant le bloc « SORTIE » du fond.",
+      "name": "neon_couloir",
+      "at": [
+        6.1185,
+        2.75,
+        9.2
+      ],
+      "yaw": 0.0,
+      "_pose": "« libre », la raison des dix-sept autres courses : un tube n'a pas de façade et « mur » déclencherait C-04, qui en exige une. Il n'est pas non plus suspendu au sens de C-06 — il est fixé aux rails du plafond du sas, 22 cm plus haut, et le contrôle mesurerait ce vide-là comme un défaut.",
+      "pose": "libre",
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_magenta",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.11,
+            0.11,
+            6.4
+          ],
+          "chamfer": 0.012
+        }
+      ]
+    },
+    {
+      "_": "LES DEUX JOUES DE L'ESTRADE. Elle est au centre exact de quatre des huit vues et elle est BORDEAUX : « classement » y mesurait 25,8 % de rouge pour 15,9 % de néon, c'est-à-dire que la plus grande masse colorée du champ était la seule surface que la couche de néon ne touchait pas. Deux plinthes cyan de 3,23 m le long de ses grands côtés, à 6,2 cm de son nez (estrade x -1,2135..1,2135), cadrent la marche au lieu de la laisser flotter dans le rouge.",
+      "name": "neon_plinthe_estrade_joue",
+      "at": [
+        -1.3,
+        0.0,
+        -4.665
+      ],
+      "yaw": 0.0,
+      "_pose": "« sol » : la plinthe repose sur la moquette, base à y = 0,000, et « sol_hall » y est aussi. C-03 le vérifie à 10 mm près.",
+      "pose": "sol",
+      "repeat": {
+        "count": 2,
+        "step": [
+          2.6,
+          0.0,
+          0.0
+        ]
+      },
+      "parts": [
+        {
+          "type": "box",
+          "material": "neon_tube_cyan",
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "size": [
+            0.05,
+            0.09,
+            3.23
+          ],
+          "chamfer": 0.012
         }
       ]
     }
