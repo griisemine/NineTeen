@@ -408,16 +408,34 @@ lit comme un meuble de catalogue.
 
 ### Ce que ça coûte, mesuré
 
-Minimum de cinq passages, 1280 × 720, vue `centre`, machine au repos :
+`--bench`, qui mesure le **temps GPU réel** de chaque image, sur 199 images en
+1280 × 720, vue `centre`, machine au repos :
 
-| palier | avant | après |
-|---|---|---|
-| `medium` (défaut) | 11,7 ms — 86 i/s | **15,4 ms — 65 i/s** |
-| `high` | 24,4 ms — 41 i/s | **31,0 ms — 32 i/s** |
+| palier | avant | après | |
+|---|---|---|---|
+| `low` | 6,2 ms — 162 i/s | **8,3 ms — 121 i/s** | + 34 % |
+| `medium` | 17,8 ms — 56 i/s | **18,4 ms — 54 i/s** | **+ 3 %** |
+| `high` | 30,5 ms — 33 i/s | **36,1 ms — 28 i/s** | + 18 % |
 
-Environ +30 %. La mesure au chronomètre est **inutilisable sans le minimum** :
-prise une seule fois pendant que d'autres compilations tournaient, elle donnait
-des écarts de ±40 % et une conclusion fausse.
+**Le palier le plus employé est celui qui paie le moins.** Ce n'est pas un
+hasard : `medium` n'a ni ombre lancée ni indirect tracé, donc les quarante et une
+sources ajoutées n'y coûtent qu'une boucle d'éclairage direct, tandis que `high`
+les rejoue dans le lancer de rayons.
+
+LA MÉTHODE A CHANGÉ LA CONCLUSION, et il faut le dire parce que la première
+version de ce paragraphe était fausse. Mesuré au chronomètre — durée totale de
+deux exécutions à nombres d'images différents, différence divisée par l'écart —
+`medium` ressortait à 11,7 → 15,4 ms, soit + 32 %. Onze fois moins de coût réel
+annoncé comme dix fois plus. Deux raisons, et aucune n'est le hasard : le
+chronomètre compte le chargement de la scène, la construction du BVH et
+l'enregistrement des commandes, dont aucun n'est du temps GPU ; et il compte le
+reste de la machine, ce qui donnait des écarts de ± 40 % tant que d'autres
+compilations tournaient. `--bench` existait depuis le début, et le jeu le dit
+lui-même à chaque arrêt : « ce chiffre ne mesure QUE l'enregistrement des
+commandes ; employer --bench ».
+
+`ultra` reste à 132 ms, soit 7,6 images par seconde. C'est ce que `--help`
+annonce déjà — « superbe en capture, coûteux en temps réel ».
 
 ### Ce qui résiste
 
