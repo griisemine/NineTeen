@@ -145,6 +145,18 @@ typedef struct room_viewmodel {
      * de saccade qu'on ne voit pas sur une capture. */
     ns_v3 wrist_l, wrist_r, prev_wrist_l, prev_wrist_r;
     ns_v3 lean, prev_lean;        /* décalage des deux épaules : se pencher */
+
+    /*
+     * LE CHAMP DE VISION DES BRAS, qui n'est pas constant : il s'ouvre pendant
+     * une partie et se referme après. Le raisonnement complet — et les 32,0
+     * degrés mesurés qui le justifient — est sur `VM_FOV_JEU`, dans le .c.
+     *
+     * Doublé d'un état précédent comme tout le reste de cette structure : il est
+     * simulé au pas fixe et interpolé au rendu. Un champ recalculé par image
+     * d'affichage à partir d'un état simulé toutes les 8 ms ferait respirer le
+     * cadre par paliers, et un zoom qui saccade se voit bien plus qu'un zoom.
+     */
+    float fov, prev_fov;
     bool  primed;                 /* faux avant la première mise à jour */
 
     bool  token_visible;

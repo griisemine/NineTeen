@@ -42,6 +42,43 @@ static void centred(ns_sprite *s, float cx, float y, float scale,
     ns_sprite_text(s, cx - ns_sprite_text_width(text, scale) * 0.5f, y, scale, rgba, text);
 }
 
+/*
+ * LA PLAQUE DES INVITES — la même que `panel`, mais aux coins arrondis.
+ *
+ * Pourquoi une seconde fonction plutôt qu'un arrondi posé sur `panel` : les
+ * autres cadres de cet écran sont des PAGES — le solde, la fin de partie, le
+ * quitte ou double — et une page a un bord franc, qui est ce qui la sépare de
+ * la salle. Les deux invites, elles, sont des ÉTIQUETTES posées
+ * dans l'image : elles doivent se lire comme un objet du jeu et non comme un
+ * bout d'interface collé par-dessus, et c'est l'angle vif qui trahit le second.
+ *
+ * L'arrondi est fait de bandes d'un point de haut, parce que `ns_sprite` ne
+ * sait dessiner que des rectangles. Vingt-quatre rectangles de plus pour un lot
+ * qui en tient 4096 : ça ne se discute pas. Le repère logique étant fixe
+ * (1280 x 720), le rayon de 12 points garde la même proportion aux neuf
+ * résolutions — mesuré à 1280x720 et à 3840x2160, l'arrondi occupe la même
+ * fraction de la plaque.
+ *
+ * Le liseré ne fait plus toute la largeur : il s'arrête au rayon, sinon il
+ * dépasserait des coins qu'il est censé suivre.
+ */
+static void plaque(ns_sprite *s, float x, float y, float w, float h)
+{
+    static const float edge[4] = { 1.00f, 0.72f, 0.34f, 0.34f };
+    const float r = ns_minf(12.0f, ns_minf(w, h) * 0.4f);
+
+    ns_sprite_rect(s, x, y + r, w, h - 2.0f * r, C_PANEL);
+    for (int i = 0; i < (int)r; ++i) {
+        const float d = r - (float)i - 0.5f;
+        const float dx = r - sqrtf(ns_maxf(0.0f, r * r - d * d));
+        ns_sprite_rect(s, x + dx, y + (float)i,            w - 2.0f * dx, 1.0f, C_PANEL);
+        ns_sprite_rect(s, x + dx, y + h - (float)i - 1.0f, w - 2.0f * dx, 1.0f, C_PANEL);
+    }
+
+    ns_sprite_rect(s, x + r, y,            w - 2.0f * r, 2.0f, edge);
+    ns_sprite_rect(s, x + r, y + h - 2.0f, w - 2.0f * r, 2.0f, edge);
+}
+
 /* -------------------------------------------------------------------------- */
 
 static void draw_prompt(ns_sprite *s, const room_hud_state *st)
@@ -75,41 +112,77 @@ static void draw_prompt(ns_sprite *s, const room_hud_state *st)
                      (double)st->cp_multiplicateur, (double)st->cp_duree);
     }
 
+    /*
+     * LE MEILLEUR SCORE LOCAL DE CETTE BORNE, calculé ICI, avant la mise en
+     * page — c'est l'information qui transforme « je peux jouer » en « je peux
+     * faire mieux », et c'est aussi une LIGNE, donc de l'encombrement. La
+     * mesurer après avoir posé la plaque est exactement l'erreur que l'invite
+     * des comptoirs a déjà commise et corrigée.
+     */
+    char sub[64];
+    sub[0] = '\0';
+    {
+        const uint32_t best = ns_scores_best(st->near->game,
+                                             ns_scores_bucket(st->near->difficulty));
+        if (best > 0) SDL_snprintf(sub, sizeof sub, "MEILLEUR : %u", best);
+    }
+
     const float scale = 3.0f;
+    const float prix_scale = 2.4f;
+    const float sub_scale  = 2.0f;
     const float key_w = ns_sprite_text_width("E", scale);
     const float txt_w = ns_sprite_text_width(line, scale);
     const float gap   = 14.0f;
     const float total = key_w + gap * 2.0f + txt_w;
+    const float ligne = ns_sprite_text_height(scale);
 
-    const float prix_scale = 2.4f;
-    const float h = ns_sprite_text_height(scale) + 22.0f
-                  + (prix[0] ? ns_sprite_text_height(prix_scale) + 8.0f : 0.0f);
-    const float y = ROOM_HUD_H * 0.70f;
+    const float prix_h = prix[0] ? ns_sprite_text_height(prix_scale) + 8.0f : 0.0f;
+    const float sub_h  = sub[0]  ? ns_sprite_text_height(sub_scale)  + 8.0f : 0.0f;
+    const float h = ligne + 22.0f + prix_h + sub_h;
+
+    /*
+     * L'INVITE EST ANCRÉE EN BAS, ET C'EST LE MÊME RAISONNEMENT QUE POUR CELLE
+     * DES COMPTOIRS, plus bas dans ce fichier — repris ici parce qu'il n'y avait
+     * été appliqué qu'à moitié.
+     *
+     * Elle était à 0,70 de la hauteur. Mesuré sur une capture prise sur l'ancre
+     * de `borne_arcade_1` — c'est-à-dire à l'endroit exact où elle s'allume :
+     * la plaque tombait EN TRAVERS DE LA DALLE de la borne, et la ligne
+     * « MEILLEUR : 6 » avec elle. Une invite qui propose de jouer en couvrant
+     * l'écran du jeu qu'elle propose se retire elle-même son argument — la
+     * dalle est ce qui donne envie d'appuyer, et c'est la seule chose que cette
+     * plaque n'avait pas le droit de cacher.
+     *
+     * 0,925 de la hauteur pour le BAS de la plaque, exactement comme l'invite
+     * des comptoirs : les deux ne s'affichent jamais ensemble, et les poser au
+     * même endroit fait qu'on ne les cherche jamais.
+     *
+     * Et « MEILLEUR » REJOINT LA PLAQUE au lieu de pendre dessous. Il était
+     * dessiné à `y + h + 6`, c'est-à-dire hors du cadre : une fois la plaque
+     * descendue au ras du bas, cette ligne se serait imprimée sur le bandeau
+     * d'aide — l'erreur exacte que la première version du correctif de la
+     * vitrine a produite, et qu'une capture a montrée.
+     */
+    const float y = ROOM_HUD_H * 0.925f - h;
     const float x = (ROOM_HUD_W - total) * 0.5f;
+    const float larg = ns_maxf(total + 44.0f,
+                               ns_maxf(prix[0] ? ns_sprite_text_width(prix, prix_scale) + 44.0f : 0.0f,
+                                       sub[0]  ? ns_sprite_text_width(sub,  sub_scale)  + 44.0f : 0.0f));
 
-    panel(s, x - 22.0f, y - 11.0f, total + 44.0f, h);
-    if (prix[0]) {
-        centred(s, ROOM_HUD_W * 0.5f,
-                y + ns_sprite_text_height(scale) + 10.0f, prix_scale, C_GOLD, prix);
-    }
+    plaque(s, (ROOM_HUD_W - larg) * 0.5f, y - 11.0f, larg, h);
 
     /* La touche dans un carré : c'est ce qui la distingue du mot qui suit, et
      * c'est la convention que tout le monde lit sans l'avoir apprise. */
-    const float ky = y;
-    ns_sprite_rect(s, x - 7.0f, ky - 5.0f, key_w + 14.0f,
-                   ns_sprite_text_height(scale) + 10.0f, C_KEY);
+    ns_sprite_rect(s, x - 7.0f, y - 5.0f, key_w + 14.0f, ligne + 10.0f, C_KEY);
     static const float dark[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
-    ns_sprite_text(s, x, ky, scale, dark, "E");
-    ns_sprite_text(s, x + key_w + gap * 2.0f, ky, scale, C_TEXT, line);
+    ns_sprite_text(s, x, y, scale, dark, "E");
+    ns_sprite_text(s, x + key_w + gap * 2.0f, y, scale, C_TEXT, line);
 
-    /* Le meilleur score local de CETTE borne, sous l'invite. C'est l'information
-     * qui transforme « je peux jouer » en « je peux faire mieux ». */
-    const uint32_t best = ns_scores_best(st->near->game,
-                                        ns_scores_bucket(st->near->difficulty));
-    if (best > 0) {
-        char sub[64];
-        SDL_snprintf(sub, sizeof sub, "MEILLEUR : %u", best);
-        centred(s, ROOM_HUD_W * 0.5f, y + h + 6.0f, 2.0f, C_DIM, sub);
+    if (prix[0]) {
+        centred(s, ROOM_HUD_W * 0.5f, y + ligne + 10.0f, prix_scale, C_GOLD, prix);
+    }
+    if (sub[0]) {
+        centred(s, ROOM_HUD_W * 0.5f, y + ligne + prix_h + 10.0f, sub_scale, C_DIM, sub);
     }
 }
 
@@ -322,7 +395,7 @@ static void draw_poi_prompt(ns_sprite *s, const room_hud_state *st)
     const float y = ROOM_HUD_H * 0.925f - haut;
     const float x = (ROOM_HUD_W - total) * 0.5f;
 
-    panel(s, (ROOM_HUD_W - larg) * 0.5f, y - 11.0f, larg, haut);
+    plaque(s, (ROOM_HUD_W - larg) * 0.5f, y - 11.0f, larg, haut);
     ns_sprite_rect(s, x - 7.0f, y - 5.0f, key_w + 14.0f, ligne + 10.0f, C_KEY);
     static const float dark[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
     ns_sprite_text(s, x, y, scale, dark, "E");

@@ -117,6 +117,46 @@ void room_viewmodel_read_env(void)
  */
 #define VM_FOV_Y  58.0f
 
+/*
+ * LE CHAMP PENDANT UNE PARTIE, ET POURQUOI IL EN FAUT UN SECOND.
+ *
+ * Le défaut, mesuré, et il coûtait cher : PENDANT UNE PARTIE ON NE VOYAIT PLUS
+ * UNE SEULE MAIN. Sur `borne_arcade_3`, réglages livrés, le sommet du manche
+ * est à **32,0 degrés** sous l'axe du regard, pour 29 de demi-ouverture à 58°.
+ * Les deux mains tombaient donc trois degrés sous le bord bas du cadre — la
+ * capture le montre sans discussion : la dalle joue toute seule, le panneau est
+ * là, et personne n'a de mains. C'est exactement le défaut que `ROOM_VM_PLAY`
+ * avait été ajouté pour corriger, revenu par une autre porte.
+ *
+ * La porte, la voici, et elle explique le chiffre : le POSTE DE JEU avance
+ * l'œil de 27,7 cm vers la dalle dès qu'une partie tourne (`room_poste.h`). Le
+ * corps ne bouge pas et les mains restent sur les commandes ; ce sont donc les
+ * commandes qui descendent dans le champ — de 23,3° debout sur l'ancre à 32,0°
+ * au poste. Le viewmodel n'a jamais su que le poste existait.
+ *
+ * 70° : 35 de demi-ouverture, soit **trois degrés de marge** sur les 32,0
+ * mesurés. La marge n'est pas décorative — `poste.partHauteur` se règle dans
+ * `nineteen.env`, et un poste plus profond descend encore les commandes.
+ *
+ * POURQUOI SEULEMENT EN PARTIE, et pas partout. Le viewmodel est projeté par
+ * SON champ pendant que la salle l'est par celui de la caméra : une main que
+ * l'IK pose exactement sur un bouton n'atterrit pas sur ce bouton à l'écran, et
+ * l'écart croît avec la différence des deux champs. Élargir en permanence
+ * ferait passer cet écart de quatre degrés à huit — sur la fente et sur le
+ * bouton, c'est-à-dire précisément là où l'on REGARDE si le doigt touche. En
+ * partie, le manche et les boutons sont hors cadre de toute façon (le poste
+ * resserre la salle à 46°, donc 23 de demi-ouverture, quand les commandes sont
+ * à 32) : il n'y a rien à côté de quoi la main puisse tomber. L'élargissement
+ * appartient donc à l'état qui crée le problème, et à lui seul.
+ *
+ * 8 par seconde : le poste s'établit en 0,55 s, et à cette vitesse il ne reste
+ * que 1,2 % de l'écart au bout de ce temps-là. Le champ arrive donc AVEC le
+ * poste. Un basculement franc de douze degrés se verrait comme un défaut de
+ * rendu, ce que le poste s'est justement donné du mal à ne pas être.
+ */
+#define VM_FOV_JEU   70.0f
+#define VM_FOV_DAMP  8.0f
+
 /* Durées, en secondes. Elles sont courtes : un geste d'arcade est sec. */
 #define VM_T_REACH   0.42f
 #define VM_T_INSERT  0.55f
@@ -354,6 +394,10 @@ void room_viewmodel_init(room_viewmodel *vm)
     vm->state = ROOM_VM_IDLE;
     vm->forced_pose = VM_FORCE_NONE;
     vm->token_visible = false;
+    /* Le champ part à sa valeur de repos et non à zéro : un `memset` le mettrait
+     * à 0, et le rattrapage exponentiel ferait alors s'ouvrir le cadre depuis
+     * rien pendant la première demi-seconde de jeu. */
+    vm->fov = vm->prev_fov = VM_FOV_Y;
 }
 
 bool room_viewmodel_set_forced_pose(room_viewmodel *vm, const char *name)
@@ -762,6 +806,7 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     vm->prev_insert_push = vm->insert_push;
     vm->prev_choc = vm->choc;
     vm->prev_elapsed = vm->elapsed;
+    vm->prev_fov = vm->fov;
     vm->clock += dt;
 
     /* Le choc retombe tout seul, qu'on soit encore en train de frapper ou non :
@@ -953,6 +998,20 @@ void room_viewmodel_tick(room_viewmodel *vm, const room_camera *cam, float dt)
     vm->lean = ns_v3_make(ns_damp(vm->lean.x, lean_target.x, 9.0f, dt),
                           ns_damp(vm->lean.y, lean_target.y, 9.0f, dt),
                           ns_damp(vm->lean.z, lean_target.z, 9.0f, dt));
+
+    /*
+     * LE CHAMP SUIT L'ÉTAT — voir `VM_FOV_JEU` pour les degrés mesurés.
+     *
+     * Le coup et la relance comptent comme « en partie » quand ils en viennent,
+     * et c'est tout ce qu'ils ont à dire ici : ils INTERROMPENT `ROOM_VM_PLAY`
+     * et y reviennent, le poste ne se lâche pas pour autant, et un cadre qui se
+     * refermerait le temps d'un coup de poing pour se rouvrir aussitôt serait le
+     * seul endroit du jeu où frapper une borne déplacerait la caméra.
+     */
+    const bool en_partie = (vm->state == ROOM_VM_PLAY)
+                        || (vm->state == ROOM_VM_RELANCE)
+                        || (vm->state == ROOM_VM_HIT && vm->hit_from_play);
+    vm->fov = ns_damp(vm->fov, en_partie ? VM_FOV_JEU : VM_FOV_Y, VM_FOV_DAMP, dt);
 
     /* --- cibles des poignets, en espace caméra --------------------------- */
     const ns_camera resolved = room_camera_resolve(cam, NULL, 1.0f);
@@ -1421,5 +1480,5 @@ void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
         out->draw[NS_VM_TOKEN]    = true;
     }
 
-    out->fov_y_degrees = VM_FOV_Y;
+    out->fov_y_degrees = ns_lerpf(vm->prev_fov, vm->fov, alpha);
 }
