@@ -223,7 +223,17 @@ static void print_usage(const char *exe)
         "  --frames=N           nombre d'images à rendre avant la capture (défaut 4)\n"
         "  --width=N --height=N résolution (défaut 1600x900)\n"
         "  --scale=F            échelle de rendu interne, 0.4 à 2.0 — sans elle,\n"
-        "                       c'est le PALIER qui la fixe (0.50 à medium)\n"
+        /*
+         * LES VALEURS SONT RELUES DANS `ns_render_settings_defaults`, PAS
+         * RECOPIÉES DE MÉMOIRE. La ligne annonçait « 0,50 à medium » et c'était
+         * faux deux fois : medium rend à pleine définition (1,00), et 0,50 n'est
+         * la valeur d'aucun des cinq paliers. Un joueur qui lit cette ligne pour
+         * savoir s'il doit forcer `--scale` prend donc sa décision sur un chiffre
+         * inventé — et il la prend justement quand son image lui paraît molle,
+         * c'est-à-dire au pire moment.
+         */
+        "                       c'est le PALIER qui la fixe : 0.60 en potato,\n"
+        "                       0.75 en low, 1.00 en medium, high et ultra\n"
         "  --fullscreen         plein écran\n"
         "  --no-vsync           désactive la synchronisation verticale\n"
         "  --quality=Q          potato | low | medium | high | ultra (défaut medium)\n"
