@@ -1617,6 +1617,112 @@
       ],
       "_": "Le miroir au-dessus du lavabo. C'etait une dalle de MARBRE : un rectangle blanc mat de 1,3 x 0,9 m, la plus grande surface du champ, et rien n'y disait qu'on etait cense s'y voir.\nMetallique a 0,92 et lisse a 0,045 — un vrai miroir — il sortait NOIR : les reflexions lancees ne tournent qu'au palier ultra, et un metal pur sans rien a reflechir n'a plus de diffus pour le sauver. A 0,30 de metal et 0,08 de rugosite, il garde un albedo clair ET accroche le tube fluo en un reflet net : c'est ce reflet qui fait lire un miroir, exactement comme celui de la vitre fait lire une dalle de borne.",
       "_recette": "RECETTE VISUELLE, ET LA CAPTURE EST SANS APPEL : « painted_panel.jpg » est un panneau de BETON PEINT, taches et grumeaux compris. Cadre de face au-dessus du lavabo hommes, le miroir sortait en dalle beige-gris mate de 1,30 x 0,90 m, plus claire que le carrelage blanc qui l'entoure et couverte de coulures. Ce n'etait plus du marbre, mais c'etait du beton : le poste precedent avait corrige la RUGOSITE et le METAL sans changer l'IMAGE, si bien que le reflet net qu'il decrit se posait sur des taches de mur.\nCe moteur n'a pas de reflexion hors du palier ultra. On ne fabrique donc pas un miroir : on fabrique un VERRE TEINTE, qui est ce qu'un miroir montre quand il n'a rien a montrer. Trois choses le font lire, et les trois ensemble :\n  — l'IMAGE. « black_oak_veneer.jpg » est la seule texture unie de l'arbre. A 4,00 m de pavage sur un panneau de 1,30, on n'en voit qu'un tiers de tuile : le fil du bois devient deux ondes larges et douces, qui se lisent comme le trouble d'une glace, la ou les taches du beton se lisaient comme un mur.\n  — la VALEUR. 0,30 / 0,335 / 0,40 : un tiers de ce que la faience renvoie, et froid. Un miroir dans des toilettes tamisees est SOMBRE ; c'est d'etre plus clair que son mur qui trahissait la dalle.\n  — le BORD. Le panneau n'avait aucun cadre : il flottait sur la faience comme une affiche. Un dormant chrome de 4 cm l'entoure maintenant (« cadre du miroir » chez les deux lavabos), et c'est lui qui dit qu'il y a un objet et pas un aplat.\nMetal 0,35 et rugosite 0,05 — le commentaire ci-dessous ecrit 0,30 et 0,08, qui etaient les siens : au-dela de ce voisinage le panneau sort noir, faute de quoi que ce soit a reflechir, et c'est sa mesure a lui qui borne encore le reglage."
+    },
+    {
+      "_": "LA GARNITURE DU CAFÉ. Neuf matériaux pour deux modèles, `plateau_repas` et `gobelet`, générés par `assets/blender/plateau.py`. L'ordre de cette liste n'a aucune importance ; celui de la clé « materials » du prop en a une, parce que roomgen associe les primitives PAR INDICE.",
+      "name": "cafe_rouge",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.52,
+        0.07,
+        0.06,
+        1.0
+      ],
+      "roughness": 0.44,
+      "metallic": 0.0,
+      "uvMetres": 0.3
+    },
+    {
+      "name": "cafe_pain",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.74,
+        0.47,
+        0.19,
+        1.0
+      ],
+      "roughness": 0.82,
+      "metallic": 0.0,
+      "uvMetres": 0.06
+    },
+    {
+      "name": "cafe_salade",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.24,
+        0.44,
+        0.1,
+        1.0
+      ],
+      "roughness": 0.7,
+      "metallic": 0.0,
+      "uvMetres": 0.05
+    },
+    {
+      "name": "cafe_viande",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.19,
+        0.09,
+        0.05,
+        1.0
+      ],
+      "roughness": 0.74,
+      "metallic": 0.0,
+      "uvMetres": 0.05
+    },
+    {
+      "_": "Le rouge de la barquette est plus CLAIR et plus orangé que celui du plateau. Relecture 3D à l'appui : dans le même rouge, la barquette disparaissait dans le plateau — deux volumes de même teinte à dix centimètres ne se séparent que par leur ombre, et un objet de neuf centimètres n'en porte pas assez.",
+      "name": "cafe_carton",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.8,
+        0.2,
+        0.11,
+        1.0
+      ],
+      "roughness": 0.62,
+      "metallic": 0.0,
+      "uvMetres": 0.08
+    },
+    {
+      "name": "cafe_frite",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.88,
+        0.7,
+        0.28,
+        1.0
+      ],
+      "roughness": 0.68,
+      "metallic": 0.0,
+      "uvMetres": 0.03
+    },
+    {
+      "name": "cafe_gobelet",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.88,
+        0.87,
+        0.85,
+        1.0
+      ],
+      "roughness": 0.38,
+      "metallic": 0.0,
+      "uvMetres": 0.1
+    },
+    {
+      "name": "cafe_couvercle",
+      "texture": "painted_panel.jpg",
+      "baseColor": [
+        0.13,
+        0.13,
+        0.15,
+        1.0
+      ],
+      "roughness": 0.42,
+      "metallic": 0.0,
+      "uvMetres": 0.06
     }
   ],
   "_retirees": "Les images de 2020 que la salle reconstruite n'emploie plus. Sept d'entre elles ne sont pas des textures : ce sont des aplats de couleur de 24 x 24 pixels, et `bordeau_uni.jpg` fait 1 x 1. Posées sur un caisson de borne ou sur un distributeur, elles ne donnent ni relief, ni variation, ni prise à la lumière — c'est le plastique mat qu'on voyait. Elles restent dans `legacy/`, intactes, et la salle `--room=legacy` continue de les employer.",
@@ -9264,6 +9370,124 @@
           ],
           "chamfer": 0.012
         }
+      ]
+    },
+    {
+      "_": "LE PLATEAU DU MANGE-DEBOUT NORD. La salle a six bancs, deux mange-debout, un canapé et sa table basse, et il n'y avait RIEN dessus : c'était le seul endroit du décor où l'on voyait que personne n'était jamais venu. Le dessus du mange-debout est à 1,06 — cylindre de plateau posé à 1,02 sur 4 cm d'épaisseur, relevé dans « parts » quinze lignes plus haut. Le plateau fait 36 x 26 cm, ses coins tombent donc à 22,2 cm de l'axe pour un plateau de table de rayon 31 : il ne déborde pas.",
+      "name": "plateau_nord",
+      "at": [
+        4.6,
+        1.06,
+        3.9
+      ],
+      "yaw": 24.0,
+      "pose": "meuble",
+      "poseSur": "mange_debout_nord",
+      "model": "models/plateau_repas/plateau_repas.gltf",
+      "material": "cafe_rouge",
+      "materials": [
+        "cafe_rouge",
+        "cafe_pain",
+        "cafe_salade",
+        "cafe_viande",
+        "cafe_carton",
+        "cafe_frite",
+        "cafe_gobelet",
+        "cafe_couvercle"
+      ]
+    },
+    {
+      "_": "Le gobelet SEUL, sur la table basse et NON sur le mange-debout : quelqu'un est venu à deux. Il était d'abord à 25 cm de l'axe du mange-debout, et roomgen a refusé — « plateau_nord PÉNÈTRE gobelet_nord », sommet (4,817 ; 1,086 ; 3,946). Le calcul était faux d'avoir raisonné sur la LARGEUR du plateau et non sur sa DIAGONALE : 36 x 26 cm donne une demi-diagonale de 22,2 cm, et un plateau tourné de 24 degrés présente ce coin-là. Il faudrait donc 22,2 + 4,4 = 26,6 cm de dégagement pour une table qui n'en offre que 26,6 — la tolérance est nulle. La table basse fait 1,54 m de long : le gobelet y est à 45 cm du plateau, et la question ne se pose plus.",
+      "name": "gobelet_salon",
+      "at": [
+        4.44,
+        0.523,
+        -3.806
+      ],
+      "yaw": 0.0,
+      "pose": "meuble",
+      "poseSur": "table_basse",
+      "model": "models/gobelet/gobelet.gltf",
+      "material": "cafe_gobelet",
+      "materials": [
+        "cafe_gobelet",
+        "cafe_couvercle",
+        "cafe_rouge"
+      ]
+    },
+    {
+      "_": "Le mange-debout ouest, près du comptoir. Un plateau seul, tourné autrement que celui du nord : deux plateaux au même angle se lisent comme une répétition d'objet, ce qu'ils sont, et c'est ce qu'il faut éviter de dire.",
+      "name": "plateau_ouest",
+      "at": [
+        -4.629,
+        1.06,
+        5.32
+      ],
+      "yaw": -37.0,
+      "pose": "meuble",
+      "poseSur": "mange_debout_ouest",
+      "model": "models/plateau_repas/plateau_repas.gltf",
+      "material": "cafe_rouge",
+      "materials": [
+        "cafe_rouge",
+        "cafe_pain",
+        "cafe_salade",
+        "cafe_viande",
+        "cafe_carton",
+        "cafe_frite",
+        "cafe_gobelet",
+        "cafe_couvercle"
+      ]
+    },
+    {
+      "_": "La table basse du salon. Son dessus est à 0,523 — maximum du maillage de CoffeeTable_01, lu dans l'accesseur de position du glTF, et non déduit d'une cote de catalogue.",
+      "name": "plateau_salon",
+      "at": [
+        4.0,
+        0.523,
+        -3.9
+      ],
+      "yaw": 12.0,
+      "pose": "meuble",
+      "poseSur": "table_basse",
+      "model": "models/plateau_repas/plateau_repas.gltf",
+      "material": "cafe_rouge",
+      "materials": [
+        "cafe_rouge",
+        "cafe_pain",
+        "cafe_salade",
+        "cafe_viande",
+        "cafe_carton",
+        "cafe_frite",
+        "cafe_gobelet",
+        "cafe_couvercle"
+      ]
+    },
+    {
+      "_": "Deux gobelets abandonnés sur le comptoir, à 1,06 comme le boombox qui y est déjà. Ils sont à l'OUEST du boombox (x -2,30) et à l'est du jukebox : la seule bande libre du comptoir.",
+      "name": "gobelet_comptoir",
+      "at": [
+        -1.45,
+        1.06,
+        6.05
+      ],
+      "yaw": 0.0,
+      "pose": "meuble",
+      "poseSur": "bar_accueil",
+      "repeat": {
+        "count": 1,
+        "step": [
+          0.22,
+          0.0,
+          -0.06
+        ]
+      },
+      "model": "models/gobelet/gobelet.gltf",
+      "material": "cafe_gobelet",
+      "materials": [
+        "cafe_gobelet",
+        "cafe_couvercle",
+        "cafe_rouge"
       ]
     }
   ],
