@@ -141,6 +141,36 @@ static ns_poi_kind ns_poi_kind_in_name(const char *name)
     return NS_POI_NONE;
 }
 
+/*
+ * CE QUE LA SCÈNE DÉCLARE ET QUE LE MOTEUR N'A PAS PRIS.
+ *
+ * Sept boucles de ce fichier s'arrêtent sur `... && s->X_count < NS_MAX_Y`.
+ * Six lisent une liste et se comparent donc à sa longueur ; la septième balaie
+ * les nœuds d'un glTF, et pour elle le seul fait vérifiable est que le tableau
+ * se soit rempli — c'est écrit à sa fin, pas ici.
+ * C'est correct — un tableau fixe ne peut pas faire mieux — mais c'était MUET,
+ * et le silence est ici particulièrement traître pour deux raisons.
+ *
+ * D'abord, ce qui saute est ce qui a été écrit EN DERNIER, donc ce qu'on vient
+ * d'ajouter, au moment précis où l'on se demande pourquoi on ne le voit pas.
+ *
+ * Ensuite, le symptôme accuse un autre coupable. Un seizième point de vue
+ * déclaré ne serait pas chargé, et `--view=son_nom` répondrait « point de vue
+ * inconnu » — alors qu'il est bien écrit dans la description, et qu'on vient de
+ * l'y lire.
+ *
+ * LES MARGES SONT MINCES, et c'est ce qui rend ce contrôle utile plutôt que
+ * théorique : 15 points de vue sur 16, 104 lumières sur 128, 19 bornes sur 24,
+ * 5 zones de poussière sur 8.
+ */
+static void dire_troncature(const char *quoi, int declares, int places)
+{
+    if (declares > places) {
+        NS_WARN("%d %s déclaré(s) pour %d place(s) : les %d dernier(s) sont "
+                "ignoré(s)", declares, quoi, places, declares - places);
+    }
+}
+
 /* ========================================================================== */
 /* Lumières et bornes (fichiers JSON annexes)                                 */
 /* ========================================================================== */
@@ -224,28 +254,16 @@ static void load_lights(ns_scene *s, const char *lights_logical)
         s->cabinet_count++;
     }
 
+    dire_troncature("borne(s)", cab_count, NS_MAX_CABINETS);
     NS_INFO("%u lumières, %u bornes chargées", s->light_count, s->cabinet_count);
     /*
-     * LE DÉBORDEMENT SE DIT, et c'est le seul endroit du moteur où l'on sache
-     * qu'il a eu lieu : la boucle ci-dessus s'arrête à `NS_MAX_LIGHTS`, donc
-     * `s->light_count` ne dépasse jamais la limite et RIEN en aval ne peut plus
-     * s'en apercevoir. Un contrôle placé dans le rendu serait du code mort — il
-     * y a été écrit, mesuré inatteignable, et déplacé ici.
-     *
-     * C'est le pire endroit du moteur pour être muet. Les sources retirées le
-     * sont dans l'ordre du fichier : ce sont donc les DERNIÈRES DÉCLARÉES qui
-     * disparaissent, c'est-à-dire celles qu'on vient d'ajouter, au moment précis
-     * où l'on se demande pourquoi on ne les voit pas.
-     *
-     * La marge n'est pas théorique. La salle déclare 85 sources et le moteur en
-     * fabrique 19 de plus pour les écrans de bornes, soit 104 sur 128 : il reste
-     * vingt-quatre places, et une seule course de néon par mur les prendrait.
+     * C'est le SEUL endroit du moteur qui sache qu'un débordement a eu lieu :
+     * la boucle ci-dessus s'arrête à `NS_MAX_LIGHTS`, donc `s->light_count` ne
+     * dépasse jamais la limite et rien en aval ne peut plus s'en apercevoir. Le
+     * contrôle avait d'abord été écrit dans le rendu ; il y était inatteignable,
+     * mesuré, et il est ici.
      */
-    if (count > (int)NS_MAX_LIGHTS) {
-        NS_WARN("%d lumières déclarées pour %d places : les %d dernières ne "
-                "seront pas rendues", count, NS_MAX_LIGHTS,
-                count - (int)NS_MAX_LIGHTS);
-    }
+    dire_troncature("lumière(s)", count, NS_MAX_LIGHTS);
     ns_arena_restore(&s->arena, mark);
 }
 
@@ -441,6 +459,10 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
         v->orbit_height = ns_json_get_float(&doc, e, "height", 0.0f);
         s->viewpoint_count++;
     }
+    /* 15 sur 16 aujourd'hui. Le seizieme declare ne serait pas charge, et
+     * `--view=son_nom` repondrait « point de vue inconnu » alors qu'il est
+     * ecrit dans la description : le symptome accuserait la faute de frappe. */
+    dire_troncature("point(s) de vue", view_count, NS_MAX_VIEWPOINTS);
 
     /*
      * Les bornes, telles que la salle les déclare.
@@ -505,6 +527,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
 
             s->cabinet_count++;
         }
+        dire_troncature("borne(s) déclarée(s)", cab_count, NS_MAX_CABINETS);
         s->has_declared_cabinets = true;
     }
 
@@ -531,6 +554,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
         z->brightness = ns_json_get_float(&doc, e, "brightness", 0.5f);
     }
     if (s->dust_count) NS_INFO("%u zone(s) de poussière", s->dust_count);
+    dire_troncature("zone(s) de poussiere", dust_count, NS_MAX_DUST_ZONES);
 
     const ns_json_value *zones = ns_json_get(&doc, root, "soundZones");
     const int zone_count = ns_json_array_count(&doc, zones);
@@ -547,6 +571,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
         z->decay = ns_json_get_float(&doc, e, "decay", 0.0f);
     }
     if (s->sound_zone_count) NS_INFO("%u zone(s) sonore(s)", s->sound_zone_count);
+    dire_troncature("zone(s) sonore(s)", zone_count, NS_MAX_SOUND_ZONES);
 
     const ns_json_value *steps = ns_json_get(&doc, root, "materialFootsteps");
     const int step_count = ns_json_array_count(&doc, steps);
@@ -617,6 +642,7 @@ static void load_scene_sidecar(ns_scene *s, const char *logical)
 
             s->poi_count++;
         }
+        dire_troncature("lieu(x)", poi_count, NS_MAX_POI);
         s->has_declared_pois = true;
     }
 
@@ -1562,6 +1588,14 @@ static void detect_points_of_interest(ns_scene *s, const char *gltf_logical)
         SDL_strlcpy(p->name, node->name, sizeof p->name);
         p->kind = kind;
         p->anchor = pos;
+    }
+    /* Ce repli-ci BALAIE les noeuds du glTF au lieu de lire une liste : le
+     * nombre de candidats n'a donc aucun sens a comparer aux places. Ce qui en
+     * a un, c'est que la boucle se soit arretee parce que le tableau etait
+     * plein — et alors des lieux existent dans le fichier sans etre trouvables. */
+    if (s->poi_count >= NS_MAX_POI) {
+        NS_WARN("%d lieu(x) au maximum : le balayage du glTF s'est arrete plein, "
+                "des lieux du fichier peuvent manquer", NS_MAX_POI);
     }
     cgltf_free(data);
 
