@@ -98,12 +98,24 @@ FAMILLES = (
 
 
 def reduire(source):
-    """Réduit avec `sips`, et rend le chemin du réduit (temporaire)."""
+    """Réduit avec `sips`, et rend le chemin du réduit (temporaire).
+
+    LA CAPTURE ABSENTE EST NOMMÉE ICI, et pas trois appels plus loin. `sips`
+    n'écrit rien quand son entrée n'existe pas, et le décodeur échouait alors
+    sur le TEMPORAIRE — la trace accusait un fichier de /var/folders que
+    personne n'a demandé, au lieu de la capture manquante. Or le cas normal est
+    justement celui-là : une vue dont le rendu a échoué laisse un PNG absent, et
+    c'est le nom de cette vue qu'on veut lire.
+    """
+    if not os.path.isfile(source):
+        raise SystemExit("capture introuvable : %s" % source)
     sortie = tempfile.mktemp(suffix=".png")
     subprocess.run(
         ["sips", "-Z", str(LARGEUR), source, "--out", sortie],
         check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
+    if not os.path.isfile(sortie):
+        raise SystemExit("sips n'a rien écrit pour %s" % source)
     return sortie
 
 

@@ -50,9 +50,16 @@ FOND = (18, 18, 20)
 
 
 def reduire(source):
+    # La capture absente est nommée ICI. `sips` n'écrit rien quand son entrée
+    # manque, et le décodeur échouait alors sur le TEMPORAIRE : la trace
+    # accusait un fichier de /var/folders au lieu de la vue qui n'a pas rendu.
+    if not os.path.isfile(source):
+        raise SystemExit("capture introuvable : %s" % source)
     sortie = tempfile.mktemp(suffix=".png")
     subprocess.run(["sips", "-Z", str(LARGEUR), source, "--out", sortie],
                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if not os.path.isfile(sortie):
+        raise SystemExit("sips n'a rien écrit pour %s" % source)
     return sortie
 
 
