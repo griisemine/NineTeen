@@ -15,6 +15,22 @@ aucun des deux outils existants ne les distinguait : une salle deux fois plus
 claire mais toujours ambrée aurait montré un « écart » énorme sans se rapprocher
 d'un pas de la photo.
 
+CE QU'EST CETTE PHOTO, ET CE QU'ELLE N'EST PAS
+----------------------------------------------
+C'est un AGRANDISSEMENT D'UNE CAPTURE DU JEU LUI-MÊME, et ça se démontre : son
+HUD affiche « JETONS 100072 / TICKETS 19856 / SERIE 1 J », c'est-à-dire au
+chiffre près le portefeuille du propriétaire ; le cadre de fenêtre est celui de
+macOS et porte le titre « Nineteen » ; les frontons nomment DEMINEUR et SNAKE ;
+la moquette est celle de `moquetteart`.
+
+Il faut donc en viser la LUMIÈRE et non les LÉGENDES. L'agrandissement a inventé
+du texte : l'enseigne du fond y lit « RETRO CAFE » là où le jeu écrit NINETEEN,
+et le tableau du bar y porte des mots qui ne sont d'aucune langue. Reproduire
+ces légendes reviendrait à copier une hallucination dans le produit. Les
+consignes ci-dessous ne portent donc que sur des grandeurs photométriques, qui
+sont ce que l'agrandissement n'a PAS inventé : il a rehaussé une lumière, il ne
+l'a pas fabriquée.
+
 CE QU'IL MESURE
 ---------------
 Cinq nombres, et chacun correspond à une phrase qu'on prononce devant l'image :
