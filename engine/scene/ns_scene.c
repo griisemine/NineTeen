@@ -225,6 +225,27 @@ static void load_lights(ns_scene *s, const char *lights_logical)
     }
 
     NS_INFO("%u lumières, %u bornes chargées", s->light_count, s->cabinet_count);
+    /*
+     * LE DÉBORDEMENT SE DIT, et c'est le seul endroit du moteur où l'on sache
+     * qu'il a eu lieu : la boucle ci-dessus s'arrête à `NS_MAX_LIGHTS`, donc
+     * `s->light_count` ne dépasse jamais la limite et RIEN en aval ne peut plus
+     * s'en apercevoir. Un contrôle placé dans le rendu serait du code mort — il
+     * y a été écrit, mesuré inatteignable, et déplacé ici.
+     *
+     * C'est le pire endroit du moteur pour être muet. Les sources retirées le
+     * sont dans l'ordre du fichier : ce sont donc les DERNIÈRES DÉCLARÉES qui
+     * disparaissent, c'est-à-dire celles qu'on vient d'ajouter, au moment précis
+     * où l'on se demande pourquoi on ne les voit pas.
+     *
+     * La marge n'est pas théorique. La salle déclare 85 sources et le moteur en
+     * fabrique 19 de plus pour les écrans de bornes, soit 104 sur 128 : il reste
+     * vingt-quatre places, et une seule course de néon par mur les prendrait.
+     */
+    if (count > (int)NS_MAX_LIGHTS) {
+        NS_WARN("%d lumières déclarées pour %d places : les %d dernières ne "
+                "seront pas rendues", count, NS_MAX_LIGHTS,
+                count - (int)NS_MAX_LIGHTS);
+    }
     ns_arena_restore(&s->arena, mark);
 }
 
@@ -1443,6 +1464,18 @@ static void add_cabinet_screen_lights(ns_scene *s)
         added++;
     }
     if (added) NS_INFO("%u lumières d'écran de borne ajoutées", added);
+    /*
+     * Le même silence que pour les lumières déclarées, et il mord ici EN
+     * SECOND : ces sources sont ajoutées après celles du fichier, donc ce sont
+     * elles qui sautent les premières quand la salle en déclare beaucoup. Une
+     * borne sans lumière d'écran n'éclaire plus son joueur, et rien ne le dit —
+     * on cherche alors du côté du matériau de la dalle, qui n'y est pour rien.
+     */
+    if (added < s->cabinet_count) {
+        NS_WARN("%u borne(s) sur %u sans lumière d'écran : les %d places de "
+                "lumière sont prises", s->cabinet_count - added,
+                s->cabinet_count, NS_MAX_LIGHTS);
+    }
 }
 
 /* ========================================================================== */
