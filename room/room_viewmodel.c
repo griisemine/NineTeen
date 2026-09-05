@@ -138,6 +138,15 @@ void room_viewmodel_read_env(void)
  * mesurés. La marge n'est pas décorative — `poste.partHauteur` se règle dans
  * `nineteen.env`, et un poste plus profond descend encore les commandes.
  *
+ * ELLE A DÉJÀ SERVI POUR UN DEGRÉ, et il faut le savoir avant d'en dépenser un
+ * autre. La main gauche ne vise plus le sommet de la boule mais son CENTRE, un
+ * rayon plus bas, parce qu'on la tient au lieu de la toucher : sur
+ * `borne_arcade_3`, réglages livrés, la cible est passée de 32,04° à 33,02°
+ * sous l'axe du regard. Il reste donc deux degrés, pas trois. Les deux mains
+ * sont toujours entièrement dans le cadre — vérifié en capture, ce n'est pas
+ * une déduction — mais le bout des doigts gauches touche le bord bas, et c'est
+ * la marge qu'il faudra rouvrir si les commandes redescendent.
+ *
  * POURQUOI SEULEMENT EN PARTIE, et pas partout. Le viewmodel est projeté par
  * SON champ pendant que la salle l'est par celui de la caméra : une main que
  * l'IK pose exactement sur un bouton n'atterrit pas sur ce bouton à l'écran, et
@@ -1299,10 +1308,18 @@ static ns_v3 hand_direction(const vm_basis *b, const ns_ik2 *ik, float finger_cu
 }
 
 /*
- * `tip_world`, s'il est fourni, est le point que **le bout du doigt** doit
- * toucher — la fente, ou le bouton.
+ * `cible`, si elle est fournie, est le point du monde sur lequel il faut amener
+ * `ancre` — un point de la MAIN, dans le repère de la main.
  *
- * Sans lui, la machine à états ne peut viser qu'avec le poignet, en soustrayant
+ * L'ancre était forcément le bout du majeur, et c'est ce qui a laissé la main
+ * gauche à côté de sa boule pendant tout le projet. Un bout de doigt est le bon
+ * point pour une fente et pour un bouton : on les touche. Une boule de manche,
+ * on la TIENT — l'ancre est alors le creux de la paume, et la cible le centre
+ * de la boule. La différence n'est pas un réglage : sur une boule de 42 mm elle
+ * vaut 6,1 cm de paume — mesurée par `test_ik`, 8,6 cm du centre contre 2,5 —
+ * et c'est exactement l'écart entre une main qui empoigne et une main qui tâte.
+ *
+ * Sans elle, la machine à états ne peut viser qu'avec le poignet, en soustrayant
  * une longueur de main devinée le long d'une direction qu'elle ne connaît pas
  * encore : la main est fléchie d'un angle qui dépend de la solution de l'IK,
  * laquelle dépend de la cible. Mesuré, ce serpent qui se mord la queue laissait
@@ -1317,7 +1334,7 @@ static ns_v3 hand_direction(const vm_basis *b, const ns_ik2 *ik, float finger_cu
  */
 static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
                      ns_v3 shoulder_cam, ns_v3 wrist_cam, float finger_curl,
-                     const ns_v3 *tip_world)
+                     const ns_v3 *cible, ns_v3 ancre)
 {
     const int sleeve  = right ? NS_VM_SLEEVE_R  : NS_VM_SLEEVE_L;
     const int forearm = right ? NS_VM_FOREARM_R : NS_VM_FOREARM_L;
@@ -1334,18 +1351,6 @@ static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
 
     ns_ik2 ik = ns_ik_two_bone(shoulder, wrist, pole, VM_UPPER, VM_FORE);
     ns_v3  dir = hand_direction(b, &ik, finger_curl);
-
-    /*
-     * Le bout du doigt, tel qu'il est RÉELLEMENT dans le maillage.
-     *
-     * Tant que la main était une paume plate prolongée de quatre tubes droits,
-     * « poignet + une longueur de main le long de l'axe » était une
-     * approximation acceptable. Elle ne l'est plus : la main est modélisée
-     * fléchie, et le bout du majeur est à 6,5 cm côté PAUME de cet axe. Viser
-     * l'axe posait donc les deux mains six centimètres sous les commandes —
-     * mesuré sur capture, et parfaitement visible.
-     */
-    const ns_v3 tip_local = ns_viewmodel_fingertip(right);
 
     /*
      * QUATRE itérations correctrices — c'en était deux, et il a fallu doubler.
@@ -1368,10 +1373,10 @@ static void pose_arm(ns_viewmodel_pose *out, const vm_basis *b, bool right,
      * deux tours et sont tenus à quatre — et les chiffres sont meilleurs que
      * ceux de la main plate, qui plafonnait à 3,0 cm du manche.
      */
-    for (int pass = 0; tip_world && pass < 4; ++pass) {
+    for (int pass = 0; cible && pass < 4; ++pass) {
         const ns_m4 h = hand_matrix(ik.end, dir, b->up);
-        const ns_v3 tip = hand_point(h, tip_local);
-        wrist = clamp_reach(shoulder, ns_v3_add(wrist, ns_v3_sub(*tip_world, tip)),
+        const ns_v3 at = hand_point(h, ancre);
+        wrist = clamp_reach(shoulder, ns_v3_add(wrist, ns_v3_sub(*cible, at)),
                             VM_REACH);
         ik = ns_ik_two_bone(shoulder, wrist, pole, VM_UPPER, VM_FORE);
         dir = hand_direction(b, &ik, finger_curl);
@@ -1432,29 +1437,55 @@ void room_viewmodel_pose(const room_viewmodel *vm, const room_camera *cam,
     }
 
     /*
-     * En jeu, les DEUX mains visent — et c'est le seul moment où la gauche a une
-     * cible de bout de doigt.
+     * Sur le manche, les DEUX mains visent — et c'est le seul moment où la
+     * gauche vise.
      *
      * Sans ça, `hand_direction` prolongeait simplement l'avant-bras avec une
      * flexion fixe : les mains arrivaient au-dessus des commandes, doigts
      * tendus vers l'avant, à survoler un manche qu'elles ne touchaient pas. Le
      * mécanisme pour les poser existait depuis A7 — la seconde résolution
-     * corrective qui amène le BOUT du doigt sur un point — et n'était employé
-     * que pour la fente et le bouton.
+     * corrective qui amène un point de la main sur un point du monde — et
+     * n'était employé que pour la fente et le bouton.
+     *
+     * ELLE VISE AVEC LA PAUME, ET C'EST TOUT LE SUJET. Amener le bout du majeur
+     * sur le sommet de la boule — ce qui était écrit ici — donne un doigt qui
+     * touche et une boule qui reste DEHORS : la paume finit à 8,6 cm du centre
+     * pour 2,1 de rayon, le poing se referme à côté, et sur une capture rapprochée
+     * la main flotte contre le manche au lieu de le tenir. Ce n'était pas un
+     * réglage à retoucher, c'était la mauvaise ancre : 5,6 cm séparent le creux
+     * de la paume du bout du majeur, et aucune prise sur une boule de 42 mm ne
+     * peut mettre les deux au même endroit.
+     *
+     * La paume sur le centre plus un rayon, donc, et la boule passe sous les
+     * têtes métacarpiennes avec les doigts refermés devant — vérifié en image,
+     * et tenu par `test_ik` sur trois faits : paume posée, majeur passé de
+     * l'autre côté du centre, boule non traversée.
+     *
+     * LA RELANCE EST DU VOYAGE, et elle n'y était pas. Le poignet gauche, lui,
+     * l'était déjà — la branche des cibles ci-dessus traite les deux états
+     * ensemble — mais la main gauche perdait son ancre en entrant en relance et
+     * la retrouvait en sortant. Elle sautait donc de 4,5 cm à chaque bout d'un
+     * geste de 500 ms, dans les deux sens, sur la main qu'on venait justement
+     * de décider de NE PAS bouger. C'est le genre de défaut qui ne se voit
+     * qu'en jeu et qu'on met sur le compte du hasard.
      */
     ns_v3 tip_l_target;
     const ns_v3 *tip_l = NULL;
-    if (vm->state == ROOM_VM_PLAY && vm->has_target) {
-        tip_l_target = vm->target_stick;
+    if ((vm->state == ROOM_VM_PLAY || vm->state == ROOM_VM_RELANCE) && vm->has_target) {
+        /* L'ancre désigne le sommet de la boule ; on empoigne son CENTRE. */
+        tip_l_target = ns_v3_sub(vm->target_stick,
+                                 ns_v3_make(0.0f, ROOM_VM_BALL_R, 0.0f));
         tip_l = &tip_l_target;
+    }
+    if (vm->state == ROOM_VM_PLAY && vm->has_target) {
         /* Le doigt droit se pose sur les boutons et les enfonce au battement. */
         tip_target = ns_v3_add(vm->target_panel,
                                ns_v3_make(0.0f, 0.010f * (1.0f - press), 0.0f));
         tip = &tip_target;
     }
 
-    pose_arm(out, &b, false, sl, wl, 0.0f, tip_l);
-    pose_arm(out, &b, true,  sr, wr, press, tip);
+    pose_arm(out, &b, false, sl, wl, 0.0f, tip_l, ns_viewmodel_grip(ROOM_VM_BALL_R));
+    pose_arm(out, &b, true,  sr, wr, press, tip, ns_viewmodel_fingertip(true));
 
     /*
      * Le jeton, pincé au bout de la main droite, sa tranche vers la fente. Le

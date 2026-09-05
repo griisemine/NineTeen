@@ -132,6 +132,35 @@ typedef struct ns_viewmodel_pose {
  */
 ns_v3 ns_viewmodel_fingertip(bool right);
 
+/*
+ * LE CREUX DE LA PAUME, ET LE CENTRE DE CE QU'ELLE EMPOIGNE.
+ *
+ * Un bout de doigt est le bon point à viser pour une fente ou un bouton : ce
+ * sont des choses qu'on TOUCHE. Une boule de manche, non — on la TIENT, et
+ * c'est une autre géométrie. Dans ce maillage, 5,6 cm séparent le creux de la
+ * paume du bout du majeur : viser l'un, c'est manquer l'autre d'autant. Amener
+ * le majeur sur la boule laisse donc la paume à 8,6 cm de son centre — mesuré
+ * par `test_ik` — c'est-à-dire 6,5 cm au-dessus de sa surface, le poing refermé
+ * à côté et la boule touchée du bout du doigt comme on tâte un objet qu'on ne
+ * prend pas. C'est le reproche que le propriétaire a fait de la main gauche, et
+ * la capture le montre sans discussion.
+ *
+ * `ns_viewmodel_palm()` rend donc le point de la face PALMAIRE sur lequel une
+ * boule s'appuie, et `ns_viewmodel_grip()` le CENTRE d'une boule de rayon
+ * `radius` posée dessus — la paume regarde −Y, le centre est donc un rayon plus
+ * bas. Amener ce centre-là sur le centre de la boule met la boule DANS le
+ * poing : elle passe sous les têtes métacarpiennes, et les quatre nœuds du
+ * majeur se referment devant elle entre 7 et 13 mm de sa surface pour une
+ * boule de 42 mm — le doigt l'enveloppe sur toute sa longueur au lieu de la
+ * pointer.
+ *
+ * Les deux sont CALCULÉS sur les cotes du maillage, comme le bout du doigt, et
+ * pour la même raison : une retouche de l'épaisseur de la main ne doit pas
+ * pouvoir laisser l'IK viser un creux qui n'existe plus.
+ */
+ns_v3 ns_viewmodel_palm(void);
+ns_v3 ns_viewmodel_grip(float radius);
+
 /* Poser une pose neutre : rien de dessiné. Un `SDL_zero` ferait la même chose,
  * mais l'appelant ne doit pas avoir à le savoir. */
 void ns_viewmodel_pose_clear(ns_viewmodel_pose *p);

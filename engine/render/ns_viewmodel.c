@@ -327,6 +327,28 @@ static const float VM_PHALANX[3]     = { 0.45f, 0.31f, 0.24f };
 #define VM_KNUCKLE_Z (-0.098f)
 
 /*
+ * La PAUME, en cinq sections — hissée hors de `vm_hand` pour que
+ * `ns_viewmodel_palm()` lise les mêmes cotes que le maillage.
+ *
+ * Elle part exactement au rayon où l'avant-bras s'arrête — c'est ce qui
+ * supprime le ressaut du poignet — s'élargit jusqu'à l'arche métacarpienne,
+ * puis se rétrécit un peu avant la ligne des jointures. Elle est aussi CREUSÉE
+ * côté paume : le centre de section descend en Y, ce qui donne le creux dans
+ * lequel une boule de manche vient se loger.
+ *
+ * Recopier la dernière section dans l'accesseur aurait marché jusqu'à la
+ * première retouche de l'épaisseur de la main — après quoi le bras aurait posé
+ * la paume 3 mm dans la boule ou 3 mm au-dessus, sans que rien ne le dise.
+ */
+static const vm_node VM_PALM[5] = {
+    { 0.0f,  0.0000f,  0.000f, 0.0275f, 0.0190f },   /* le poignet */
+    { 0.0f, -0.0030f, -0.026f, 0.0340f, 0.0175f },
+    { 0.0f, -0.0055f, -0.055f, 0.0400f, 0.0165f },   /* l'arche, au plus large */
+    { 0.0f, -0.0060f, -0.082f, 0.0410f, 0.0158f },
+    { 0.0f, -0.0050f, VM_KNUCKLE_Z, 0.0385f, 0.0150f },
+};
+
+/*
  * Les quatre nœuds d'un doigt — la jointure et les trois articulations.
  *
  * Isolé de la construction du maillage pour UNE raison, et elle vaut la
@@ -372,6 +394,30 @@ ns_v3 ns_viewmodel_fingertip(bool right)
     return ns_v3_make(n[3].x, n[3].y, n[3].z);
 }
 
+/*
+ * Le creux de la paume, sur la ligne des jointures.
+ *
+ * `V = T x X` pointe vers −Y pour toute pièce balayée vers −Z — c'est le même
+ * fait que `vm_dorsal()` exploite — donc la face palmaire d'une section est son
+ * centre MOINS son demi-épaisseur en Y. La ligne des jointures plutôt que
+ * l'arche : c'est sous les têtes métacarpiennes qu'une boule d'arcade s'appuie,
+ * pas au milieu de la paume, et 4,3 cm séparent les deux.
+ *
+ * Le X est nul : la paume est symétrique, la main gauche et la droite ont le
+ * même creux. Seuls le pouce et l'éventail des doigts changent de côté.
+ */
+ns_v3 ns_viewmodel_palm(void)
+{
+    const vm_node *n = &VM_PALM[4];
+    return ns_v3_make(n->x, n->y - n->ry, n->z);
+}
+
+ns_v3 ns_viewmodel_grip(float radius)
+{
+    const ns_v3 p = ns_viewmodel_palm();
+    return ns_v3_make(p.x, p.y - radius, p.z);
+}
+
 static void vm_finger(vm_build *b, float sx, int i)
 {
     vm_node n[4];
@@ -384,23 +430,9 @@ static void vm_hand(vm_build *b, bool right)
 {
     const float sx = right ? 1.0f : -1.0f;   /* le pouce change de côté */
 
-    /*
-     * La PAUME, en cinq sections. Elle part exactement au rayon où l'avant-bras
-     * s'arrête — c'est ce qui supprime le ressaut du poignet — s'élargit jusqu'à
-     * l'arche métacarpienne, puis se rétrécit un peu avant la ligne des
-     * jointures. Elle est aussi CREUSÉE côté paume : le centre de section
-     * descend en Y, ce qui donne le creux dans lequel une boule de manche vient
-     * se loger.
-     */
-    const vm_node palm[5] = {
-        { 0.0f,  0.0000f,  0.000f, 0.0275f, 0.0190f },   /* le poignet */
-        { 0.0f, -0.0030f, -0.026f, 0.0340f, 0.0175f },
-        { 0.0f, -0.0055f, -0.055f, 0.0400f, 0.0165f },   /* l'arche, au plus large */
-        { 0.0f, -0.0060f, -0.082f, 0.0410f, 0.0158f },
-        { 0.0f, -0.0050f, VM_KNUCKLE_Z, 0.0385f, 0.0150f },
-    };
+    /* La PAUME : cinq sections, décrites en tête de fichier avec `VM_PALM`. */
     b->part = (float)NS_VM_PART_PALM;
-    vm_sweep(b, palm, 5, VM_SIDES, VM_CAP_NONE, VM_CAP_DOME);
+    vm_sweep(b, VM_PALM, 5, VM_SIDES, VM_CAP_NONE, VM_CAP_DOME);
 
     /*
      * L'ÉMINENCE THÉNAR — le muscle à la base du pouce. Sans elle la main est

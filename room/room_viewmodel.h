@@ -35,6 +35,24 @@
 #include "room_camera.h"
 
 /*
+ * LE RAYON DE LA BOULE DU MANCHE, en mètres.
+ *
+ * `stick_top` désigne le SOMMET de la boule — c'est la sémantique des quatre
+ * ancres, écrite dans `roomgen.c` : des points qu'on touche. Pour EMPOIGNER il
+ * faut le centre, donc le rayon, et `ns_cabinet` ne le porte pas : la salle
+ * décrit des points, pas des volumes.
+ *
+ * C'est donc la seule cote de ce fichier qui vive aussi ailleurs —
+ * `assets/blender/borne.py`, `BOULE_R`. Elle est ici parce qu'un manche
+ * d'arcade est une pièce standard : une boule de 42 mm, la même sur les
+ * dix-neuf bornes et sur toutes les bornes du monde. Une divergence de 3 mm
+ * enfoncerait la paume de 3 mm dans la boule, ce qui ne se voit pas — et c'est
+ * précisément pourquoi elle est déclarée en un endroit nommé plutôt que
+ * glissée dans une expression.
+ */
+#define ROOM_VM_BALL_R 0.021f
+
+/*
  * Les états, dans l'ordre où ils s'enchaînent pendant une interaction.
  *
  * Repos, marche et course ne sont pas trois états mais **un seul** : le passage

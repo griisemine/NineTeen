@@ -325,14 +325,18 @@ static void test_walk_swing_follows_distance(void)
  * moteur où est son bout de doigt, ce qui laisse au test le seul rôle qu'il
  * doit avoir : vérifier que la pose l'amène sur la commande.
  */
-static ns_v3 fingertip(const ns_viewmodel_pose *pose, int hand)
+static ns_v3 on_hand(const ns_viewmodel_pose *pose, int hand, ns_v3 p)
 {
     const ns_m4 *h = &pose->segment[hand];
-    const ns_v3 p = ns_viewmodel_fingertip(hand == NS_VM_HAND_R);
     return ns_v3_make(
         h->m[0][0] * p.x + h->m[1][0] * p.y + h->m[2][0] * p.z + h->m[3][0],
         h->m[0][1] * p.x + h->m[1][1] * p.y + h->m[2][1] * p.z + h->m[3][1],
         h->m[0][2] * p.x + h->m[1][2] * p.y + h->m[2][2] * p.z + h->m[3][2]);
+}
+
+static ns_v3 fingertip(const ns_viewmodel_pose *pose, int hand)
+{
+    return on_hand(pose, hand, ns_viewmodel_fingertip(hand == NS_VM_HAND_R));
 }
 
 static void test_sequence(void)
@@ -449,9 +453,11 @@ static void test_play_hands_on_controls(void)
     for (int i = 0; i < 120; ++i) room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
 
     /* La même borne que `test_sequence`, plus le manche. Les trois ancres
-     * désignent des points qu'on TOUCHE : la fente, le dessus des pastilles, le
-     * sommet de la boule — 10,2 cm au-dessus de la tôle, cotes de
-     * `build_cabinet`. C'est la pose qui ajoute l'épaisseur de la main. */
+     * désignent une SURFACE : la fente, le dessus des pastilles, le sommet de la
+     * boule — 10,2 cm au-dessus de la tôle, cotes de `build_cabinet`. C'est la
+     * pose qui ajoute l'épaisseur de la main, et pour le manche l'épaisseur de
+     * la boule : on ne touche pas une boule, on la tient, et la tenir se juge
+     * sur son centre. */
     ns_cabinet cab;
     memset(&cab, 0, sizeof cab);
     SDL_strlcpy(cab.name, "borne_test", sizeof cab.name);
@@ -466,30 +472,135 @@ static void test_play_hands_on_controls(void)
     CHECK(room_viewmodel_is_playing(&vm), "on est en jeu");
     CHECK(!vm.token_visible, "le jeton n'est plus en main : il est dans la machine");
 
+    /*
+     * LE CENTRE DE LA BOULE, ET POURQUOI ON NE MESURE PLUS SUR SON SOMMET.
+     *
+     * L'ancre est le sommet ; la boule est en dessous, d'un rayon. Une prise se
+     * juge sur le centre parce que c'est le seul point dont on puisse dire s'il
+     * est DEDANS ou DEHORS.
+     */
+    const ns_v3 boule = ns_v3_sub(cab.stick_top,
+                                  ns_v3_make(0.0f, ROOM_VM_BALL_R, 0.0f));
+
     /* Deux secondes : le penchement est amorti, il lui faut le temps d'arriver. */
-    float best_l = 1e9f, best_r = 1e9f, max_press = 0.0f;
+    float best_r = 1e9f, max_press = 0.0f;
+    ns_viewmodel_pose pose;
     for (int i = 0; i < 240; ++i) {
         room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
         if (i == 150) room_viewmodel_tap(&vm);       /* un battement d'aile */
         max_press = ns_maxf(max_press, vm.press_depth);
 
-        ns_viewmodel_pose pose;
         room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
         for (int s = 0; s < NS_VM_SEGMENT_COUNT; ++s) {
             CHECK(finite_m4(&pose.segment[s]), "pas %d, segment %d : matrice finie", i, s);
         }
         CHECK(room_viewmodel_is_playing(&vm), "on reste en jeu tant qu'on ne l'arrête pas");
 
-        best_l = ns_minf(best_l, ns_v3_dist(fingertip(&pose, NS_VM_HAND_L), cab.stick_top));
         best_r = ns_minf(best_r, ns_v3_dist(fingertip(&pose, NS_VM_HAND_R), cab.panel_centre));
     }
 
-    printf("  jeu : doigt gauche à %.3f m du manche, droit à %.3f m des boutons\n",
-           (double)best_l, (double)best_r);
-    /* Trois centimètres, le même seuil que la séquence du jeton — et pour la
-     * même raison : c'est la distance à laquelle une main se voit flotter
-     * au-dessus de ce qu'elle est censée tenir. */
-    CHECK(best_l < 0.03f, "la main gauche tient le manche (%.3f m)", (double)best_l);
+    /*
+     * LA PRISE, JUGÉE SUR UNE SECONDE DE JEU ÉTABLI, ET AU PIRE INSTANT.
+     *
+     * Deux pièges évités ici, et le second m'a coûté une version du test.
+     *
+     * Un minimum pris sur toute la montée dirait « à un moment la paume est
+     * passée près de la boule » — ce qu'une main qui la traverse en chemin
+     * satisfait aussi bien qu'une main qui s'y pose. On ne mesure donc qu'après
+     * les deux secondes d'amortissement.
+     *
+     * Et une seule image ne suffit pas : les mains en partie portent un
+     * tremblement de ±3,5 mm à 11 rad/s, soit une période de 571 ms. Juger sur
+     * la dernière image, c'est juger sur une phase tirée au sort, et un seuil
+     * réglé dessus se met à dépendre du nombre d'images du test. Cent vingt
+     * images couvrent une période entière ; on garde de chacune la valeur la
+     * plus défavorable.
+     */
+    float paume_l = 0.0f, dedans_l = -1.0f, doigt_l = 1e9f, sommet_l = 1e9f;
+    for (int i = 0; i < 120; ++i) {
+        room_viewmodel_tick(&vm, &cam, 1.0f / 120.0f);
+        room_viewmodel_pose(&vm, &cam, 1.0f, &pose);
+
+        const ns_v3 paume  = on_hand(&pose, NS_VM_HAND_L, ns_viewmodel_palm());
+        const ns_v3 majeur = fingertip(&pose, NS_VM_HAND_L);
+        const float pd = ns_v3_dist(paume, boule);
+        const float td = ns_v3_dist(majeur, boule);
+        paume_l = ns_maxf(paume_l, pd);
+        doigt_l = ns_minf(doigt_l, td);
+        /* Mesurée et imprimée sans être vérifiée : c'est la grandeur que
+         * l'ancien critère bornait à 3 cm, et la voir ici dit d'un coup d'œil
+         * pourquoi il ne pouvait pas passer sur une main qui tient. */
+        sommet_l = ns_minf(sommet_l, ns_v3_dist(majeur, cab.stick_top));
+        /*
+         * Le COSINUS entre « centre -> paume » et « centre -> bout du majeur ».
+         * Négatif : les deux sont de part et d'autre du centre, donc le doigt a
+         * fait le tour de la boule. Positif : ils sont du même côté, et la main
+         * est posée À CÔTÉ. C'est toute la différence entre tenir et toucher, et
+         * un scalaire suffit à la dire — sans repère de main, sans axe, sans
+         * convention d'orientation à tenir d'accord avec le maillage.
+         */
+        if (pd > 1e-6f && td > 1e-6f) {
+            dedans_l = ns_maxf(dedans_l,
+                               ns_v3_dot(ns_v3_sub(paume, boule),
+                                         ns_v3_sub(majeur, boule)) / (pd * td));
+        }
+    }
+
+    printf("  jeu : paume gauche à %.3f m du centre de la boule (rayon %.3f), "
+           "majeur à %.3f m, cosinus %+.2f ; majeur à %.3f m du SOMMET, que "
+           "l'ancien critère bornait à 0.030 ; doigt droit à %.3f m des boutons\n",
+           (double)paume_l, (double)ROOM_VM_BALL_R, (double)doigt_l,
+           (double)dedans_l, (double)sommet_l, (double)best_r);
+
+    /*
+     * CE QUE CE CRITÈRE REMPLACE, ET POURQUOI L'ANCIEN NE POUVAIT PAS PASSER.
+     *
+     * Il exigeait « bout du majeur à moins de 3 cm du SOMMET de la boule », et
+     * il l'exigeait sur la seule main qui ne touche pas sa commande mais la
+     * TIENT. Aucune prise ne satisfait ça, et ce n'est pas un réglage : la main
+     * est modélisée fléchie, 5,6 cm séparent le creux de la paume du bout du
+     * majeur, et une paume posée sur une boule de 42 mm laisse donc ce bout à
+     * 5,1 cm du sommet — c'est la valeur que la ligne ci-dessus imprime, et
+     * elle vaut 1,7 fois le seuil qu'on exigeait. Le seul moyen de le tenir
+     * était d'écarter la paume et de tendre le majeur jusqu'à la boule,
+     * c'est-à-dire de tâter l'objet au lieu de l'empoigner : la capture
+     * montrait la boule DEHORS, effleurée du bout du doigt, le poing refermé à
+     * côté.
+     *
+     * C'est mot pour mot le reproche que ce fichier s'adresse vingt lignes plus
+     * haut, à propos du bout du doigt et de l'axe du poignet : un test qui
+     * mesure au mauvais endroit est pire qu'un test absent, parce qu'il tient
+     * la faute en place.
+     *
+     * Ce qu'on mesure maintenant est ce qu'on voulait dire : la boule est-elle
+     * dans le poing. Trois faits, aucun réglable :
+     *
+     *   1. LA PAUME EST POSÉE DESSUS. Le creux à un rayon du centre, à 1 cm
+     *      près — au-delà, la main flotte au-dessus.
+     *   2. LE MAJEUR A FAIT LE TOUR. Cosinus négatif : le bout du doigt est de
+     *      l'autre côté du centre que la paume. Une main posée à côté donne un
+     *      cosinus franchement positif ; c'est le fait qui distingue les deux
+     *      poses et il n'a pas de valeur intermédiaire plausible.
+     *   3. LE DOIGT NE TRAVERSE PAS LA BOULE. Au moins un rayon du centre. Un
+     *      critère qui ne dirait que 1 et 2 serait tenu par une main qui
+     *      broie la boule.
+     *
+     * VÉRIFIÉ EN REMETTANT L'ANCIENNE POSE, parce qu'un critère qui passe avant
+     * comme après ne prouve rien. Bout du majeur visant le sommet de la boule,
+     * ce test tombe sur 1 et sur 2 : paume à 86 mm du centre pour 21 de rayon,
+     * cosinus +0,84 — la main est franchement À CÔTÉ. Avec la paume qui vise,
+     * 25 mm et −0,48. Le 3 passe dans les deux cas, et c'est normal : c'est un
+     * garde-fou, pas le discriminant.
+     */
+    CHECK(paume_l < ROOM_VM_BALL_R + 0.010f,
+          "la paume gauche est posée sur la boule (%.3f m du centre pour %.3f de rayon)",
+          (double)paume_l, (double)ROOM_VM_BALL_R);
+    CHECK(dedans_l < 0.0f,
+          "le majeur gauche s'est refermé de l'autre côté de la boule (cosinus %.2f)",
+          (double)dedans_l);
+    CHECK(doigt_l >= ROOM_VM_BALL_R,
+          "et il ne la traverse pas (%.3f m du centre pour %.3f de rayon)",
+          (double)doigt_l, (double)ROOM_VM_BALL_R);
     CHECK(best_r < 0.03f, "la main droite couvre les boutons (%.3f m)", (double)best_r);
     CHECK(max_press > 0.4f, "le battement enfonce l'index (%.2f)", (double)max_press);
 
