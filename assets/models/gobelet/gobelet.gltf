@@ -49,7 +49,7 @@
 		},
 		{
 			"doubleSided":true,
-			"name":"paille",
+			"name":"rouge",
 			"pbrMetallicRoughness":{
 				"baseColorFactor":[
 					0.800000011920929,

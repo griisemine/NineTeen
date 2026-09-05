@@ -65,9 +65,19 @@ import sys
 # Un exportateur qui réordonnerait sa table donnerait un pain en carton.
 # `exporter` le vérifie sur le fichier écrit plutôt que de faire confiance.
 # ---------------------------------------------------------------------------
-MATERIAUX = ["plateau", "pain", "salade", "viande",
-             "carton", "frite", "gobelet", "couvercle", "paille"]
-MAT_GOBELET = ["gobelet", "couvercle", "paille"]
+# HUIT, ET PAS NEUF. `roomgen` n'accepte pas plus de huit matériaux par prop —
+# c'est un tableau local de taille fixe, `int32_t by_index[8]` (roomgen.c:4915),
+# et il arrête le build proprement au neuvième. La contrainte a été rencontrée,
+# pas devinée.
+#
+# Le neuvième était la PAILLE, et c'est elle qu'on fusionne avec le plateau
+# plutôt qu'une autre : les deux sont rouges, et une paille se reconnaît à sa
+# forme — un cylindre de 8 mm penché au-dessus d'un gobelet blanc — pas à sa
+# nuance. Fusionner la salade et la viande, au contraire, aurait coûté le seul
+# vert du modèle.
+MATERIAUX = ["rouge", "pain", "salade", "viande",
+             "carton", "frite", "gobelet", "couvercle"]
+MAT_GOBELET = ["gobelet", "couvercle", "rouge"]
 
 # ---------------------------------------------------------------------------
 # Les cotes, en mètres, toutes mesurables sur un vrai plateau.
@@ -162,7 +172,7 @@ def gobelet(c, cx, cy, cz):
             cx, cy, cz + GO_H + 0.005)
     # 12 degrés. Verticale, la paille se confond avec le bord du gobelet et
     # l'objet redevient un cylindre blanc.
-    c.tronc("paille", 0.004, 0.004, 0.100, cx + 0.010, cy, cz + GO_H + 0.049,
+    c.tronc("rouge", 0.004, 0.004, 0.100, cx + 0.010, cy, cz + GO_H + 0.049,
             seg=8, ry=math.radians(12))
 
 
@@ -198,13 +208,13 @@ def frites(c, cx, cy, cz, tirage):
 
 def plateau(c, tirage):
     """Le plateau, son rebord, et ce qu'on pose dessus."""
-    c.boite("plateau", PL_L, PL_P, PL_FOND, 0.0, 0.0, PL_FOND * 0.5)
+    c.boite("rouge", PL_L, PL_P, PL_FOND, 0.0, 0.0, PL_FOND * 0.5)
     demi_l, demi_p = PL_L * 0.5, PL_P * 0.5
     for sx, sy, cx, cy in ((PL_L, 0.014, 0.0, demi_p - 0.007),
                            (PL_L, 0.014, 0.0, -demi_p + 0.007),
                            (0.014, PL_P - 0.028, demi_l - 0.007, 0.0),
                            (0.014, PL_P - 0.028, -demi_l + 0.007, 0.0)):
-        c.boite("plateau", sx, sy, PL_BORD, cx, cy, PL_FOND + PL_BORD * 0.5)
+        c.boite("rouge", sx, sy, PL_BORD, cx, cy, PL_FOND + PL_BORD * 0.5)
     burger(c, -0.085, 0.010, PL_FOND)
     frites(c, 0.030, -0.055, PL_FOND, tirage)
     gobelet(c, 0.120, 0.030, PL_FOND)
@@ -296,14 +306,13 @@ def exporter(chemin, attendus):
 # en donne 128 — les trois se recomptent à la main, et c'est pour ça qu'ils sont
 # écrits ici plutôt que relevés sur une exécution.
 ATTENDU = {
-    "plateau_repas": {"plateau": 30,       # 5 boîtes
+    "plateau_repas": {"rouge": 40,        # 5 boîtes (30) + la paille (10)
                       "pain": 146,         # 1 cône (18) + 1 dôme (128)
                       "salade": 18, "viande": 18,
                       "carton": 6,         # cône à 4 segments
                       "frite": 36,         # 6 boîtes
-                      "gobelet": 18, "couvercle": 18,
-                      "paille": 10},       # cône à 8 segments
-    "gobelet": {"gobelet": 18, "couvercle": 18, "paille": 10},
+                      "gobelet": 18, "couvercle": 18},
+    "gobelet": {"gobelet": 18, "couvercle": 18, "rouge": 10},
 }
 
 
