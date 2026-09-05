@@ -321,6 +321,19 @@ d'arcade **néon**, traversée de tubes roses et cyan au plafond et en haut des
 murs, avec des cœurs de source qui brûlent. Le rendu montrait un entrepôt au
 tungstène.
 
+**Cette image est un agrandissement d'une capture du jeu lui-même**, et ça se
+démontre : son HUD affiche « JETONS 100072 / TICKETS 19856 / SERIE 1 J »,
+c'est-à-dire au chiffre près le portefeuille du propriétaire ; le cadre de
+fenêtre est celui de macOS et porte le titre « Nineteen » ; les frontons nomment
+DEMINEUR et SNAKE ; la moquette est celle de `moquetteart`. Il faut donc en viser
+la **lumière** et non les **légendes** : l'agrandissement a inventé du texte —
+l'enseigne du fond y lit « RETRO CAFE » là où le jeu écrit NINETEEN, et le
+tableau du bar y porte des mots qui ne sont d'aucune langue. Rien de tout cela
+n'a été reproduit ; le reproduire reviendrait à copier une hallucination dans le
+produit. Ce qui a été visé, ce sont les grandeurs photométriques, qui sont
+justement ce que l'agrandissement n'a pas inventé : il a rehaussé une lumière,
+il ne l'a pas fabriquée.
+
 ### Ce que le défaut coûtait, et pourquoi personne ne pouvait le dire
 
 Aucun outil du dépôt ne savait répondre à la question posée. `vues-diff.py`
