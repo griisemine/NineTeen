@@ -64,6 +64,32 @@
 #define NINETEEN_SERVER_URL ""
 #endif
 
+/*
+ * L'EMPREINTE DE CONSTRUCTION, engendrée à chaque build par `room/CMakeLists.txt`
+ * — le bloc « L'EMPREINTE DE CONSTRUCTION » y explique pourquoi elle est prise
+ * au build et non à la configuration.
+ *
+ * `__has_include` plutôt qu'une inclusion sèche, pour la raison écrite au-dessus
+ * de `NINETEEN_SERVER_URL` : ce fichier doit encore se compiler hors de son
+ * CMakeLists, où l'en-tête engendré n'existe pas. Les replis valent « je ne sais
+ * pas », et `avertir_si_binaire_perime` se tait sur cette valeur-là : mieux vaut
+ * ne rien dire que soupçonner un binaire dont on ignore l'origine.
+ */
+#if defined(__has_include)
+#  if __has_include("ns_buildinfo.h")
+#    include "ns_buildinfo.h"
+#  endif
+#endif
+#ifndef NINETEEN_BUILD_COMMIT
+#define NINETEEN_BUILD_COMMIT "inconnu"
+#endif
+#ifndef NINETEEN_SOURCE_DIR
+#define NINETEEN_SOURCE_DIR ""
+#endif
+#ifndef NINETEEN_BUILD_DIR
+#define NINETEEN_BUILD_DIR ""
+#endif
+
 typedef struct options {
     bool        headless;
     const char *env_path;   /* --env= : le fichier de reglages du personnage */
@@ -303,8 +329,203 @@ static void print_usage(const char *exe)
         "                       press, frappe\n"
         "                       (impose le mode joueur : pas de bras en caméra libre)\n"
         "  --debug-gpu          active les couches de validation du pilote\n"
+        "  --version            DE QUEL binaire il s'agit : version, commit,\n"
+        "                       date de construction, répertoire d'assets. La\n"
+        "                       bannière ci-dessus, elle, est la même sur deux\n"
+        "                       binaires distants de cinq jours\n"
         "  --help               affiche ce message\n",
         NINETEEN_VERSION, exe);
+}
+
+/*
+ * `--version` : L'IDENTITÉ DU BINAIRE QU'ON VIENT DE LANCER.
+ *
+ * Ce que son absence a coûté, mesuré. `cmake --preset` CONFIGURE, il ne
+ * construit pas ; deux lignes de `cmake` qui n'en étaient pas une de build ont
+ * laissé tourner l'exécutable du 1er septembre 21:51 — cinq jours et
+ * vingt-quatre commits en arrière, avec les assets du même jour (`salle.gltf`
+ * de 224199 octets et 499 noms, contre 245344 et 563 le jour même). Interrogé,
+ * il répondait « option inconnue : --version », puis `--help` sortait la MÊME
+ * bannière, mot pour mot, que le binaire du jour. Rien, dans aucune des deux
+ * sorties, ne permettait de les distinguer : une heure perdue à chercher un
+ * travail qui était bien là, dans des sources que le binaire n'avait pas lues.
+ *
+ * Les quatre lignes répondent donc chacune à une question qu'on s'est posée ce
+ * jour-là : quelle version, quel code, de quand, et quels assets — parce que le
+ * décalage se voyait autant dans la salle affichée que dans le code.
+ *
+ * LA DATE VIENT DE `__DATE__`/`__TIME__`, c'est-à-dire de la compilation de CE
+ * fichier, et non d'un horodatage posé par CMake : un horodatage engendré
+ * changerait à chaque build et recompilerait `main.c` pour rien (voir
+ * `room/CMakeLists.txt`). Quand rien n'a changé, `main.c` n'est pas recompilé et
+ * la date reste celle du binaire réellement en place — ce qui est exactement ce
+ * qu'elle doit dire.
+ */
+static void print_version(void)
+{
+    printf("Nineteen %s\n", NINETEEN_VERSION);
+    printf("commit    : %s\n", NINETEEN_BUILD_COMMIT);
+    printf("construit : %s %s\n", __DATE__, __TIME__);
+#ifdef NINETEEN_BUILD_ASSET_DIR
+    printf("assets    : %s\n", NINETEEN_BUILD_ASSET_DIR);
+#else
+    printf("assets    : aucun répertoire compilé\n");
+#endif
+    printf("sources   : %s\n", NINETEEN_SOURCE_DIR[0] ? NINETEEN_SOURCE_DIR : "inconnues");
+}
+
+/* ==========================================================================
+ * Le binaire est-il en retard sur les sources d'où il sort ?
+ * ========================================================================== */
+/*
+ * POURQUOI LE DÉMARRAGE POSE LA QUESTION TOUT SEUL.
+ *
+ * `--version` ne répond qu'à qui la tape, et le jour où l'heure s'est perdue
+ * personne ne l'a tapée — on ne soupçonne pas un binaire d'être vieux, on
+ * soupçonne le code d'être faux. Le seul moment où l'information arrive à temps
+ * est donc le lancement, sans qu'on ait rien demandé.
+ *
+ * ON NE LANCE PAS `git`. Le démarrage de la salle n'a pas à dépendre d'un
+ * exécutable tiers présent dans le PATH, ni à payer un processus pour un
+ * diagnostic ; `.git/HEAD` est un fichier de quarante octets et sa lecture ne se
+ * mesure pas. C'est aussi la seule façon d'être sûr qu'un joueur qui n'a jamais
+ * installé git ne voie jamais ni erreur ni délai.
+ *
+ * QUATRE CAS OÙ L'ON SE TAIT, et chacun a sa raison :
+ *   - le binaire est installé hors du dépôt (le chemin des sources a disparu, ou
+ *     n'a jamais existé) : il n'y a rien à comparer, et un joueur n'a pas à lire
+ *     un message sur un dépôt qu'il n'a pas ;
+ *   - `.git` est un FICHIER et non un répertoire : c'est un worktree, ses refs
+ *     vivent ailleurs, et suivre le renvoi pour trois lignes de diagnostic
+ *     reviendrait à réimplémenter git ;
+ *   - HEAD est détaché : il ne pointe pas sur une branche, l'arbre est déjà dans
+ *     un état que la personne a choisi, et « reconstruis » n'y est pas un
+ *     conseil ;
+ *   - l'arbre est au MÊME commit avec des modifications non commitées : c'est
+ *     l'état normal de quelqu'un qui travaille. Avertir là-dessus ferait crier
+ *     l'avertissement à chaque lancement, et un avertissement permanent finit
+ *     par être lu comme du décor.
+ *
+ * Dans le doute, se taire : un faux positif coûte plus cher que le silence,
+ * puisqu'il apprend à ignorer la ligne qui, un jour, sera vraie.
+ */
+
+/* Coupe au premier blanc ou fin de ligne — les refs git n'en contiennent pas. */
+static void couper_a_la_ligne(char *s)
+{
+    for (char *p = s; *p; ++p) {
+        if (*p == '\n' || *p == '\r' || *p == ' ' || *p == '\t') { *p = '\0'; return; }
+    }
+}
+
+/*
+ * Les refs EMPAQUETÉES. `git gc`, que git déclenche tout seul, remplace les
+ * fichiers de `.git/refs/heads/` par des lignes « <sha> <ref> » dans un unique
+ * `packed-refs`. Ne lire que les fichiers marcherait donc jusqu'au premier
+ * ramassage, puis se tairait pour toujours sans que rien ne le dise — la panne
+ * exacte que ce code est censé rendre impossible.
+ */
+static bool lire_ref_empaquetee(const char *racine, const char *ref,
+                                char *sortie, size_t taille)
+{
+    char chemin[1024];
+    SDL_snprintf(chemin, sizeof chemin, "%s/.git/packed-refs", racine);
+    char *texte = (char *)SDL_LoadFile(chemin, NULL);
+    if (!texte) return false;
+
+    bool trouve = false;
+    for (char *curseur = texte; *curseur && !trouve; ) {
+        char *fin = SDL_strchr(curseur, '\n');
+        const size_t n = fin ? (size_t)(fin - curseur) : SDL_strlen(curseur);
+        char ligne[512];
+        if (n + 1 < sizeof ligne) {
+            SDL_memcpy(ligne, curseur, n);
+            ligne[n] = '\0';
+            /* « <sha sur 40> <ref> ». L'en-tête « # pack-refs … » et les lignes
+             * « ^<sha> » d'objet annoté n'ont pas cette forme et tombent
+             * d'elles-mêmes. */
+            if (SDL_strlen(ligne) > 41 && ligne[40] == ' ') {
+                char *nom = ligne + 41;
+                couper_a_la_ligne(nom);
+                if (SDL_strcmp(nom, ref) == 0) {
+                    ligne[40] = '\0';
+                    SDL_strlcpy(sortie, ligne, taille);
+                    trouve = true;
+                }
+            }
+        }
+        if (!fin) break;
+        curseur = fin + 1;
+    }
+    SDL_free(texte);
+    return trouve;
+}
+
+/* Le commit sur lequel le dépôt <racine> est posé, ou `false` si l'on préfère
+ * se taire — voir les quatre cas au-dessus. */
+static bool lire_tete_du_depot(const char *racine, char *sortie, size_t taille)
+{
+    char chemin[1024];
+    SDL_snprintf(chemin, sizeof chemin, "%s/.git", racine);
+
+    SDL_PathInfo info;
+    if (!SDL_GetPathInfo(chemin, &info)) return false;      /* pas de dépôt ici */
+    if (info.type != SDL_PATHTYPE_DIRECTORY) return false;  /* worktree */
+
+    SDL_snprintf(chemin, sizeof chemin, "%s/.git/HEAD", racine);
+    char *head = (char *)SDL_LoadFile(chemin, NULL);
+    if (!head) return false;
+
+    /* « ref: refs/heads/… ». Tout le reste — un sha nu, donc un HEAD détaché —
+     * n'est pas une situation où « reconstruis » veut dire quelque chose. */
+    bool ok = false;
+    if (SDL_strncmp(head, "ref: ", 5) == 0) {
+        char ref[512];
+        SDL_strlcpy(ref, head + 5, sizeof ref);
+        couper_a_la_ligne(ref);
+        if (ref[0]) {
+            SDL_snprintf(chemin, sizeof chemin, "%s/.git/%s", racine, ref);
+            char *sha = (char *)SDL_LoadFile(chemin, NULL);
+            if (sha) {
+                couper_a_la_ligne(sha);
+                if (SDL_strlen(sha) >= 7) {
+                    SDL_strlcpy(sortie, sha, taille);
+                    ok = true;
+                }
+                SDL_free(sha);
+            } else {
+                ok = lire_ref_empaquetee(racine, ref, sortie, taille);
+            }
+        }
+    }
+    SDL_free(head);
+    return ok;
+}
+
+static void avertir_si_binaire_perime(void)
+{
+    if (NINETEEN_SOURCE_DIR[0] == '\0') return;
+    if (SDL_strcmp(NINETEEN_BUILD_COMMIT, "inconnu") == 0) return;
+
+    char tete[64];
+    if (!lire_tete_du_depot(NINETEEN_SOURCE_DIR, tete, sizeof tete)) return;
+
+    /* Le commit cuit est COURT (sept caractères) et peut porter « -sale » ; le
+     * HEAD lu fait quarante caractères. On compare donc par préfixe, après avoir
+     * retiré le suffixe : un arbre modifié mais posé sur le même commit est
+     * l'état de travail normal, pas un binaire périmé. */
+    char court[64];
+    SDL_strlcpy(court, NINETEEN_BUILD_COMMIT, sizeof court);
+    char *sale = SDL_strstr(court, "-sale");
+    if (sale) *sale = '\0';
+
+    const size_t n = SDL_strlen(court);
+    if (n == 0 || SDL_strncasecmp(tete, court, n) == 0) return;
+
+    NS_WARN("binaire en retard sur ses sources : construit sur le commit %s, le dépôt %s "
+            "est sur %.*s — reconstruisez-le par « cmake --build %s » ; « cmake --preset » "
+            "ne fait que configurer",
+            NINETEEN_BUILD_COMMIT, NINETEEN_SOURCE_DIR, (int)n, tete, NINETEEN_BUILD_DIR);
 }
 
 /* ==========================================================================
@@ -509,6 +730,13 @@ static bool parse_options(int argc, char **argv, options *o)
         const char *a = argv[i];
         if (SDL_strcmp(a, "--help") == 0 || SDL_strcmp(a, "-h") == 0) {
             print_usage(argv[0]);
+            return false;
+        } else if (SDL_strcmp(a, "--version") == 0) {
+            /* `false` vaut « ne lance pas la salle », et `main` en fait un code
+             * de sortie 0 : c'est ce que `--help` fait déjà, et c'est ce qu'un
+             * script d'intégration attend d'une question à laquelle on a
+             * répondu. */
+            print_version();
             return false;
         } else if (SDL_strcmp(a, "--headless") == 0) {
             o->headless = true;
@@ -2186,6 +2414,10 @@ int main(int argc, char **argv)
     ns_log_open_file(log_path);
     ns_log_set_level(NS_LOG_INFO);
     NS_INFO("Nineteen %s — démarrage", NINETEEN_VERSION);
+
+    /* Juste après l'ouverture du journal, pour que la ligne y soit AUSSI : le
+     * jour où l'heure s'est perdue, la console défilait déjà. */
+    avertir_si_binaire_perime();
 
     /*
      * Les REGLAGES DU PERSONNAGE, avant toute chose qui pourrait en lire un.

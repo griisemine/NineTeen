@@ -571,6 +571,94 @@ elles datent l'époque où les deux arbres coexistaient sans que personne le sac
 
 ---
 
+## Le binaire ne savait pas dire lequel il était
+
+La section précédente corrige la documentation qui a fait lancer un exécutable
+périmé. Celle-ci corrige l'autre moitié du même incident : **une fois lancé, rien
+dans ce binaire ne permettait de s'apercevoir qu'il était vieux.**
+
+Les deux exécutables de cette séance — celui du 1er septembre 21 h 51 et celui du
+jour même, cinq jours et vingt-quatre commits plus loin — ont été interrogés côte à
+côte :
+
+```console
+$ ./nineteen --version
+option inconnue : --version
+Nineteen 17.1.0 — salle d'arcade
+```
+
+La même réponse des deux côtés, puis la **même bannière mot pour mot**. La seule
+différence observable était leur taille en octets, 10 163 528 contre 10 170 936 —
+un écart que personne ne regarde et qui ne dit rien de ce qu'il contient. La salle
+affichée, elle, n'était pas la même : `salle.gltf` de **224 199** octets et
+**499** noms d'un côté, **245 344** et **563** de l'autre. Le jeu montrait donc une
+autre pièce et affirmait être la même version.
+
+### `--version`
+
+```console
+$ ./build/bin/nineteen --version
+Nineteen 17.1.0
+commit    : 67205cf-sale
+construit : Sep  6 2026 00:43:40
+assets    : /…/NineTeen/build/assets
+sources   : /…/NineTeen
+```
+
+Code de sortie **0**. `-sale` marque un arbre porteur de modifications non
+commitées au moment de la construction. La date vient de `__DATE__`/`__TIME__`,
+c'est-à-dire de la compilation de `main.c` : quand rien n'a changé, `main.c` n'est
+pas recompilé et la date reste celle du binaire réellement en place, ce qui est
+exactement ce qu'elle doit dire.
+
+### L'avertissement au démarrage
+
+`--version` ne répond qu'à qui la tape, et ce jour-là personne ne l'a tapée : on ne
+soupçonne pas un binaire d'être vieux, on soupçonne le code d'être faux. Le
+démarrage pose donc la question tout seul. Il lit `.git/HEAD` puis la ref pointée
+— **sans lancer `git`** : quarante octets à lire, aucun processus, et rien à
+installer chez un joueur.
+
+```console
+$ ./build/bin/nineteen --headless …
+WARN main.c:528 — binaire en retard sur ses sources : construit sur le commit
+67205cf-sale, le dépôt /…/NineTeen est sur d0b9ada — reconstruisez-le par
+« cmake --build /…/NineTeen/build » ; « cmake --preset » ne fait que configurer
+```
+
+Mesuré dans les deux sens, sur une branche jetable défaite ensuite : HEAD déplacé
+d'un commit, le binaire non reconstruit avertit ; `cmake --build` seul, **sans
+reconfigurer**, le fait taire.
+
+| Cas | Ce qui se passe |
+| --- | --- |
+| HEAD a bougé, binaire pas rebâti | l'avertissement, une seule ligne |
+| Même commit, arbre modifié localement | **silence** — c'est l'état de travail normal |
+| Binaire installé, plus de sources | silence — rien à comparer |
+| `.git` est un fichier (worktree), HEAD détaché | silence — voir plus bas |
+
+### Pourquoi l'empreinte est prise au build et non à la configuration
+
+C'est le point qui décide tout le reste. `cmake --build` **ne reconfigure pas** :
+un commit figé au `cmake -B` serait périmé dès la construction suivante, et
+l'avertissement crierait « tu es en retard » à un binaire qui vient d'être bâti.
+Un avertissement qui se trompe est un avertissement qu'on apprend à ignorer, donc
+pire que pas d'avertissement du tout. `room/CMakeLists.txt` réengendre donc
+`ns_buildinfo.h` à chaque build, et le recopie par `copy_if_different` pour ne pas
+recompiler les 7 000 lignes de `main.c` quand le commit n'a pas bougé — vérifié :
+un build à vide ne réexécute que l'étape d'empreinte.
+
+### Ce qui n'est pas couvert
+
+Le repli sur `.git/packed-refs` — le fichier que `git gc` écrit à la place des refs
+individuelles — est en place et exercé sur le vrai fichier du dépôt par un banc
+d'essai, mais **pas** par une exécution du jeu : le chemin des sources est cuit
+dans le binaire, donc le brancher sur un dépôt fabriqué demanderait un second arbre
+de build entier. Les cas « worktree » et « HEAD détaché » sont mesurés de la même
+façon. Tous trois se taisent par construction : dans le doute, ce code ne dit rien.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui

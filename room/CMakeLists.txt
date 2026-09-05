@@ -24,7 +24,12 @@ add_executable(nineteen
 # a chaque cible (« ignoring duplicate libraries »). Un avertissement qui sort a chaque
 # build est un avertissement que plus personne ne lit.
 target_link_libraries(nineteen PRIVATE nineteen::games)
-target_include_directories(nineteen PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+# Le répertoire de build est dans le chemin d'inclusion pour `ns_buildinfo.h`,
+# le seul en-tête de cette cible qui soit engendré et non écrit — voir le bloc
+# « L'EMPREINTE DE CONSTRUCTION » plus bas.
+target_include_directories(nineteen PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}")
 nineteen_set_warnings(nineteen)
 nineteen_apply_sanitizers(nineteen)
 
@@ -75,9 +80,107 @@ target_compile_definitions(nineteen PRIVATE
     NINETEEN_BUILD_ASSET_DIR="${NINETEEN_GEN_DIR}"
     NINETEEN_VERSION="${PROJECT_VERSION}"
     NINETEEN_SERVER_URL="${NINETEEN_SERVER_URL}"
+    # D'OÙ VIENT CE BINAIRE — les deux chemins que `--version` imprime et dont
+    # `avertir_si_binaire_perime` (room/main.c) se sert pour retrouver le dépôt.
+    # Ils sont fixes pour un répertoire de build donné, donc une définition de
+    # compilation suffit ; le COMMIT, lui, ne l'est pas — voir plus bas.
+    NINETEEN_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    NINETEEN_BUILD_DIR="${CMAKE_BINARY_DIR}"
 )
 
 add_dependencies(nineteen nineteen_assets)
+
+# ==========================================================================
+# L'EMPREINTE DE CONSTRUCTION : quel commit ce binaire-là contient
+# ==========================================================================
+#
+# LE DÉFAUT MESURÉ, et il a coûté une heure. Ces deux lignes CONFIGURENT sans
+# rien construire — `cmake --preset` n'est pas `cmake --build` :
+#
+#     cmake --preset macos-universal
+#     cmake -B build -DNINETEEN_SERVER_URL=http://127.0.0.1:8080 --preset macos-universal
+#
+# Le binaire lancé ensuite datait donc du 1er septembre 21:51, cinq jours et
+# vingt-quatre commits en arrière, avec les assets du même jour — `salle.gltf`
+# de 224199 octets et 499 noms, contre 245344 et 563 aujourd'hui. RIEN NE LE
+# DISAIT : `--version` répondait « option inconnue : --version », et la bannière
+# de `--help` sortait la MÊME phrase mot pour mot sur les deux binaires. Deux
+# exécutables distants de cinq jours étaient indiscernables, et la conclusion
+# légitime a été que le travail n'existait pas.
+#
+# L'EMPREINTE EST PRISE À CHAQUE BUILD, PAS À LA CONFIGURATION, et c'est le
+# point qui décide tout le reste. `cmake --build` ne reconfigure pas : un commit
+# figé au `cmake -B` serait périmé dès la construction suivante, et
+# l'avertissement de `avertir_si_binaire_perime` crierait « tu es en retard » à
+# un binaire qui vient d'être bâti. Un avertissement qui se trompe est un
+# avertissement qu'on apprend à ignorer, donc pire que pas d'avertissement.
+#
+# LA DATE N'EST PAS ICI : elle vient de `__DATE__`/`__TIME__` dans `main.c`. La
+# mettre dans cet en-tête le ferait changer à chaque seconde, donc à chaque
+# build, donc recompiler les 7000 lignes de `main.c` pour rien. `__DATE__` dit
+# d'ailleurs exactement ce qu'on veut savoir : quand ce binaire-ci a été
+# compilé.
+set(NINETEEN_BUILDINFO_H "${CMAKE_CURRENT_BINARY_DIR}/ns_buildinfo.h")
+set(_buildinfo_script    "${CMAKE_CURRENT_BINARY_DIR}/ns_buildinfo.cmake")
+
+# Le script est écrit dans l'arbre de build, à côté de l'en-tête qu'il produit,
+# plutôt que posé dans `cmake/` : il n'a qu'un seul appelant — celui d'en
+# dessous — et les séparer donnerait deux fichiers à garder d'accord au lieu
+# d'un. Les crochets `[==[ … ]==]` empêchent CMake de développer les `${}` ici :
+# ils doivent arriver INTACTS dans le script, qui les évaluera à chaque build.
+file(WRITE "${_buildinfo_script}" [==[
+# Généré par room/CMakeLists.txt — rejoué à CHAQUE construction.
+set(commit "inconnu")
+set(sale "")
+
+# `git` est cherché ICI et jamais au démarrage du jeu. Au build il est présent
+# par construction — on vient de cloner le dépôt ; au démarrage il peut manquer
+# (un paquet installé chez un joueur n'a pas de git), et le lancer coûterait un
+# processus à chaque ouverture de la salle.
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" -C "${RACINE}" rev-parse --short HEAD
+        RESULT_VARIABLE rc OUTPUT_VARIABLE tete
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(rc EQUAL 0 AND tete)
+        set(commit "${tete}")
+        # `--untracked-files=no` : un `.env` oublié à la racine, un `build/` ou
+        # un `.DS_Store` ne sont pas des modifications du dépôt. Les compter
+        # marquerait « sale » à peu près toute construction faite sur une vraie
+        # machine, et un drapeau toujours allumé ne distingue plus rien.
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" -C "${RACINE}" status --porcelain --untracked-files=no
+            OUTPUT_VARIABLE etat OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(NOT etat STREQUAL "")
+            set(sale "-sale")
+        endif()
+    endif()
+endif()
+
+file(WRITE "${SORTIE}.tmp"
+     "/* Généré à chaque construction par room/CMakeLists.txt. Ne pas éditer. */\n"
+     "#ifndef NS_BUILDINFO_H\n"
+     "#define NS_BUILDINFO_H\n"
+     "#define NINETEEN_BUILD_COMMIT \"${commit}${sale}\"\n"
+     "#endif\n")
+
+# `copy_if_different` et non un `file(WRITE)` sur la cible : sans lui l'en-tête
+# est réécrit à chaque build, donc `main.c` recompilé à chaque build alors que
+# son contenu n'a pas bougé.
+execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                        "${SORTIE}.tmp" "${SORTIE}")
+]==])
+
+add_custom_target(nineteen_buildinfo
+    BYPRODUCTS "${NINETEEN_BUILDINFO_H}"
+    COMMAND "${CMAKE_COMMAND}"
+            "-DRACINE=${CMAKE_SOURCE_DIR}"
+            "-DSORTIE=${NINETEEN_BUILDINFO_H}"
+            -P "${_buildinfo_script}"
+    COMMENT "Empreinte de construction (commit git)"
+    VERBATIM)
+add_dependencies(nineteen nineteen_buildinfo)
 
 # --------------------------------------------------------------------------
 # Installation

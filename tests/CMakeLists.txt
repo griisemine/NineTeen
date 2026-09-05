@@ -566,6 +566,14 @@ add_test(NAME determinisme
                  -DDATA=${CMAKE_CURRENT_SOURCE_DIR}/data
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/check_determinism.cmake)
 
+# `--version` : de QUEL binaire s'agit-il. Sans elle, deux exécutables distants
+# de cinq jours étaient indiscernables — le détail est dans le script.
+add_test(NAME version-cli
+         COMMAND ${CMAKE_COMMAND}
+                 -DEXE=$<TARGET_FILE:nineteen>
+                 -DVERSION_ATTENDUE=${PROJECT_VERSION}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/check_version_cli.cmake)
+
 # `--rejouer=` de bout en bout : le format sur disque, son analyse, la reprise
 # de la graine. `ns_test_replay` ne couvre que le rejeu EN MÉMOIRE.
 add_test(NAME rejeu-cli
