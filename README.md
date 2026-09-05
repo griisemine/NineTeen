@@ -42,6 +42,13 @@ cmake --build --preset linux-x64
 ./build/linux-x64/bin/nineteen
 ```
 
+**La deuxième ligne n'est pas décorative** : `cmake --preset` configure et s'arrête, sans rien
+compiler. Sans elle, la troisième lance le binaire que l'arbre contenait déjà — mesuré ici :
+cinq jours et vingt-quatre commits de retard, sans un mot. Et on ne passe **jamais** `-B` à
+côté de `--preset` : il écrase le `binaryDir` du preset et fabrique un second arbre dans
+`build/`, que `./build/linux-x64/bin/nineteen` ne lit pas. Le détail, sortie de `cmake` à
+l'appui, est dans **[docs/JOUER.md](docs/JOUER.md)**.
+
 Dépendances système sur Debian/Ubuntu :
 
 ```sh
@@ -70,6 +77,7 @@ leurs cartes PBR, le BVH est construit. Compter une douzaine de secondes.
 ### Tester
 
 ```sh
+cmake --build --preset linux-x64      # ctest ne compile pas : il lance ce qui existe
 ctest --preset linux-x64
 ```
 

@@ -9,6 +9,7 @@ je suppose, c'est écrit **hypothèse**.
 ## Comment tout ici a été obtenu
 
 ```sh
+cmake --preset macos-universal          # configure ; ne compile rien à lui seul
 cmake --build --preset macos-universal
 ./build/macos-universal/bin/nineteen --headless --screenshot=/tmp/x.png --frames=8 \
     --quality=high --width=1280 --height=720 --view=NOM --no-hud

@@ -508,6 +508,69 @@ palier, définition, échelle et plein écran en ressortent.
 
 ---
 
+## La documentation apprenait à lancer un binaire périmé
+
+Le propriétaire a suivi la documentation, lancé le jeu, et n'a vu **aucune** des
+améliorations de vingt-quatre commits. Les trois lignes qu'il avait sous les yeux
+étaient fausses de deux façons distinctes, et ni l'une ni l'autre ne dit un mot en
+passant.
+
+```sh
+cmake --preset macos-universal
+cmake -B build -DNINETEEN_SERVER_URL=http://127.0.0.1:8080 --preset macos-universal
+./build/macos-universal/bin/nineteen --server=http://127.0.0.1:8080 --temps-reel
+```
+
+**Aucune des deux premières lignes ne compile.** `cmake --preset` configure et
+s'arrête ; il manquait `cmake --build --preset macos-universal -j8`. La troisième
+ligne a donc lancé ce que l'arbre contenait déjà : un binaire du **1er septembre à
+21 h 51**, cinq jours et vingt-quatre commits en arrière. Le `build/CMakeCache.txt`
+de cette séance-là est encore daté du **1er septembre 21 h 46**.
+
+**`-B` écrase le `binaryDir` du preset, en silence.** Vérifié en relançant les deux
+commandes l'une après l'autre :
+
+```console
+$ cmake --preset macos-universal
+-- Build files have been written to: /…/NineTeen/build/macos-universal
+
+$ cmake -B build --preset macos-universal
+-- Build files have been written to: /…/NineTeen/build
+```
+
+Le `-DNINETEEN_SERVER_URL=` de la deuxième ligne atterrissait donc dans `build/`, un
+arbre que la troisième ne lance jamais. Les deux arbres sont toujours sur la machine
+et se contredisent l'un l'autre : `build/CMakeCache.txt` porte
+`CMAKE_CACHEFILE_DIR=…/NineTeen/build`, `build/macos-universal/CMakeCache.txt` porte
+`…/NineTeen/build/macos-universal`, et les deux exécutables ne font pas la même
+taille — **10 163 528** octets contre **10 170 936**.
+
+### Ce qui était faux, page par page
+
+| Page | Le défaut |
+| --- | --- |
+| `docs/DEPLOY.md`, les quatre sources de l'adresse | `cmake -B build -DNINETEEN_SERVER_URL=…` : ni compilation, ni le bon arbre. C'est la ligne que le propriétaire a copiée. |
+| `docs/DEPLOY.md`, « le défaut compilé est vide » | deux `cmake -B build` de plus, mêmes deux défauts |
+| `docs/JOUER.md`, les deux échappatoires hors ligne | configuraient sans jamais compiler |
+| `docs/DESIGN-SALLE.md`, `docs/SPEC-ATMOSPHERE.md` | lançaient le binaire sans ligne de configuration |
+| `README.md`, `docs/JOUER.md` | ne disaient nulle part que `--preset` ne compile pas |
+
+`docs/JOUER.md` porte maintenant la règle à l'endroit où l'on apprend les presets,
+avec la sortie de `cmake` ci-dessus en preuve, et le répertoire de construction
+s'écrit `build/<preset>/` partout — jamais `build/` tout court. Les invocations
+corrigées ont été relancées : configuration en 0,8 s, `cmake --build --preset
+macos-universal -j8` en 12,4 s pour 71 cibles.
+
+### Ce qui reste écrit `build/` exprès
+
+Deux lignes de ce document même : la preuve de la chaîne de score plus haut
+(`./build/bin/nineteen --headless --game=snake …`) et la vérification des textures
+(`build/assets/scene/textures/`). Ce sont des relevés de séances réelles, faites dans
+l'arbre parasite. Les réécrire reviendrait à maquiller une mesure : elles restent, et
+elles datent l'époque où les deux arbres coexistaient sans que personne le sache.
+
+---
+
 ## Ce qui n'a pas changé
 
 Les six décisions de 17.0.0 restent ouvertes, et la première reste la seule qui

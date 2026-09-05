@@ -68,9 +68,11 @@ ligne :
 ```sh
 # SDL3 déjà installé sur le système (paquet, Homebrew, vcpkg)
 cmake --preset linux-x64 -DNINETEEN_USE_SYSTEM_SDL3=ON
+cmake --build --preset linux-x64
 
 # ou : sources SDL3 déjà sur le disque
 cmake --preset linux-x64 -DNINETEEN_SDL3_LOCAL_DIR=/chemin/vers/SDL
+cmake --build --preset linux-x64
 ```
 
 ## Compiler et jouer
@@ -82,6 +84,35 @@ cmake --build --preset linux-x64
 ```
 
 C'est tout. Fenêtre 1600×900, souris capturée, caméra à hauteur d'yeux.
+
+### Les trois lignes comptent, et surtout la deuxième
+
+**`cmake --preset` configure et s'arrête.** Il n'écrit aucun binaire. Sauter la ligne
+`cmake --build` ne produit pas d'erreur : la troisième ligne lance simplement ce qui
+traînait déjà dans l'arbre. Mesuré sur la machine de l'auteur le 6 septembre 2026 — un
+`nineteen` daté du 1er septembre à 21 h 51, **vingt-quatre commits en retard**, lancé
+sans un mot d'avertissement.
+
+**Et on n'écrit jamais `-B` à côté de `--preset`.** `-B` écrase le `binaryDir` du preset
+— `${sourceDir}/build/${presetName}`, déclaré une fois pour toutes dans
+`CMakePresets.json` — silencieusement. Vérifié, les deux commandes lancées à la suite :
+
+```console
+$ cmake --preset macos-universal
+-- Build files have been written to: /Users/griisemine/Documents/GitHub/NineTeen/build/macos-universal
+
+$ cmake -B build --preset macos-universal
+-- Build files have been written to: /Users/griisemine/Documents/GitHub/NineTeen/build
+```
+
+Deux arbres de construction coexistent alors et divergent. Tout ce que porte la seconde
+ligne — un `-DNINETEEN_SERVER_URL=` par exemple — atterrit dans `build/`, que
+`./build/macos-universal/bin/nineteen` ne lit pas. Le preset donne déjà son répertoire :
+on lui passe des `-D`, jamais un `-B`.
+
+Partout dans cette documentation le répertoire de construction s'écrit donc
+`build/<preset>/` — `build/linux-x64/`, `build/macos-universal/`, `build/windows-x64/` —
+et jamais `build/` tout court.
 
 | Touche | |
 |---|---|
@@ -222,6 +253,7 @@ Un tour lent de la salle, sans toucher au clavier.
 ## Vérifier que la machine suit — sans écran ni carte graphique
 
 ```sh
+cmake --build --preset linux-x64      # ctest ne compile pas : il lance ce qui existe
 ctest --preset linux-x64
 ```
 
@@ -257,7 +289,7 @@ salle déclare les mêmes noms dans son propre référentiel.
 Pour produire les huit captures d'un coup :
 
 ```sh
-cmake --build build/linux-x64 --target render-compare
+cmake --build --preset linux-x64 --target render-compare
 ```
 
 ## Où le jeu écrit

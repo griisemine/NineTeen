@@ -34,7 +34,7 @@ d'ailleurs toute origine extérieure.
 Une commande régénère l'ensemble :
 
 ```sh
-cmake --build build/macos-universal -j8        # le média vient du binaire
+cmake --build --preset macos-universal -j8     # le média vient du binaire
 python3 tools/site-media.py
 ```
 
@@ -387,7 +387,7 @@ L'URL peut venir de quatre endroits. Du plus **faible** au plus **fort** :
 
 | # | Source | Où | Change sans… |
 |---|---|---|---|
-| 1 | défaut compilé | `cmake -B build -DNINETEEN_SERVER_URL=http://arcade.example:8080` | — (il faut recompiler) |
+| 1 | défaut compilé | `cmake --preset macos-universal -DNINETEEN_SERVER_URL=http://arcade.example:8080` puis `cmake --build --preset macos-universal` | — (il faut recompiler) |
 | 2 | configuration | `network.serverUrl` dans `settings.cfg` | recompiler |
 | 3 | environnement | `NINETEEN_SERVER_URL=http://…` au lancement | recompiler ni éditer un fichier utilisateur |
 | 4 | ligne de commande | `--server=http://…` | rien du tout |
@@ -413,9 +413,21 @@ la ligne de commande garde toujours le dernier mot.
 #### Le défaut compilé est **vide**, et ça ne changera pas
 
 ```sh
-cmake -B build                                              # → aucune socket, jamais
-cmake -B build -DNINETEEN_SERVER_URL=http://arcade:8080     # → parle à ce serveur
+# → aucune socket, jamais
+cmake --preset macos-universal
+cmake --build --preset macos-universal
+
+# → parle à ce serveur
+cmake --preset macos-universal -DNINETEEN_SERVER_URL=http://arcade:8080
+cmake --build --preset macos-universal
 ```
+
+Les deux lignes vont **toujours** par paire : `cmake --preset` configure et s'arrête, c'est
+`cmake --build` qui recuit l'adresse dans le binaire. Et l'option se passe au preset, sans
+`-B` — `-B build` écraserait le `binaryDir` du preset et poserait l'URL dans un second arbre
+`build/` que `./build/macos-universal/bin/nineteen` ne lit pas. Voir
+[JOUER.md](JOUER.md#les-trois-lignes-comptent-et-surtout-la-deuxième), où la sortie de `cmake`
+le montre.
 
 Un dépôt cloné et bâti tel quel ne parle à personne. C'est la règle du haut de
 `engine/net/ns_online.h` : sans URL configurée, aucune socket n'est ouverte et le fil de travail
