@@ -456,7 +456,36 @@ void ns_render_settings_defaults(ns_render_settings *s, ns_quality quality)
      * au-dessous duquel on cesse de distinguer un caisson d'un mur. Le tamisé se
      * fabrique avec du contraste de couleur, pas en descendant le plancher.
      */
-    s->ambient[0] = 0.112f; s->ambient[1] = 0.086f; s->ambient[2] = 0.062f;
+    /*
+     * LA SALLE N'EST PLUS ÉCLAIRÉE AU TUNGSTÈNE, DONC SON INDIRECT NE L'EST PLUS.
+     *
+     * Le raisonnement au-dessus reste juste et c'est sa PRÉMISSE qui a changé :
+     * l'indirect prend la couleur de ce qui éclaire, et ce qui éclaire cette
+     * salle est maintenant le néon. Les 85 sources déclarées pèsent, en somme de
+     * couleur x intensité, (3861 ; 3358 ; 5065) — le bleu l'emporte. En ajoutant
+     * les dix-neuf écrans de bornes que le moteur fabrique lui-même (30
+     * d'intensité, désaturés à 45 % de teinte, donc quasi blancs), la teinte
+     * moyenne des sources vaut (0,783 ; 0,693 ; 1,000).
+     *
+     * Ce n'est pas encore la couleur du rebond : la lumière repart teintée par
+     * ce qu'elle frappe. Le crépi des murs, la plus grande surface verticale de
+     * la salle, a une réflectance mesurée de (0,3427 ; 0,3338 ; 0,2970) — soit
+     * (1,000 ; 0,974 ; 0,867) normalisée, légèrement chaude. Le produit des deux
+     * donne (0,903 ; 0,778 ; 1,000).
+     *
+     * LA LUMINANCE NE BOUGE PAS. Elle vaut 0,0898 avant comme après, et c'est
+     * délibéré : le niveau était le bon — c'est le plancher au-dessous duquel on
+     * cesse de distinguer un caisson d'un mur — et seule la teinte était périmée.
+     * Un changement de niveau se serait ajouté au changement de teinte, et l'on
+     * n'aurait pas su lequel des deux avait fait quoi.
+     *
+     * Ce que ça coûtait, mesuré : à `high` l'ambiance est multipliée par 2,6, ce
+     * qui donnait (0,291 ; 0,224 ; 0,161) posés sur TOUT ce qu'aucune source
+     * n'atteint. Le crépi du bar, qui occupe presque tout son champ à 4,2 m,
+     * ressortait laiteux et jaune dans une salle par ailleurs rose et cyan — le
+     * seul mur de la salle à ne pas savoir dans quelle pièce il se trouvait.
+     */
+    s->ambient[0] = 0.0988f; s->ambient[1] = 0.0851f; s->ambient[2] = 0.1094f;
     s->ambient_intensity = 1.0f;
 
     s->ssao_radius = 0.45f;
